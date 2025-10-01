@@ -6,6 +6,7 @@ import { OdooSettings } from "@/components/OdooSettings";
 import { OdooFieldMappings } from "@/components/OdooFieldMappings";
 import { PlatformSettings } from "@/components/PlatformSettings";
 import { PlatformFieldMappings } from "@/components/PlatformFieldMappings";
+import { PricingRules } from "@/components/PricingRules";
 import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
 import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
 import { supabase } from "@/integrations/supabase/client";
@@ -186,6 +187,7 @@ const BatchAnalyzer = () => {
               <TabsContent value="platforms" className="space-y-6">
                 <PlatformSettings />
                 <PlatformFieldMappings />
+                <PricingRules />
               </TabsContent>
             </Tabs>
           </TabsContent>

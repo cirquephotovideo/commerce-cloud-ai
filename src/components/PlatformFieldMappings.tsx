@@ -35,7 +35,9 @@ const PLATFORM_FIELDS: Record<string, any[]> = {
   woocommerce: [
     { label: "Name", field: "name" },
     { label: "Description", field: "description" },
+    { label: "Short Description", field: "short_description" },
     { label: "Regular Price", field: "regular_price" },
+    { label: "Sale Price", field: "sale_price" },
     { label: "SKU", field: "sku" },
     { label: "Weight", field: "weight" },
     { label: "Categories", field: "categories" },
@@ -47,6 +49,29 @@ const PLATFORM_FIELDS: Record<string, any[]> = {
     { label: "Reference", field: "reference" },
     { label: "EAN13", field: "ean13" },
     { label: "Weight", field: "weight" },
+    { label: "Default Category", field: "id_category_default" },
+  ],
+  magento: [
+    { label: "Name", field: "name" },
+    { label: "Price", field: "price" },
+    { label: "SKU", field: "sku" },
+    { label: "Weight", field: "weight" },
+    { label: "Description", field: "custom_attributes[description]" },
+    { label: "Attribute Set ID", field: "attribute_set_id" },
+    { label: "Category IDs", field: "custom_attributes[category_ids]" },
+  ],
+  salesforce: [
+    { label: "Name", field: "Name" },
+    { label: "Description", field: "Description" },
+    { label: "Product Code", field: "ProductCode" },
+    { label: "Family", field: "Family" },
+    { label: "Is Active", field: "IsActive" },
+  ],
+  sap: [
+    { label: "Product", field: "Product" },
+    { label: "Product Type", field: "ProductType" },
+    { label: "Description", field: "ProductDescription" },
+    { label: "Base Unit", field: "BaseUnit" },
   ],
 };
 
@@ -175,6 +200,9 @@ export const PlatformFieldMappings = () => {
               <SelectItem value="shopify">🏪 Shopify</SelectItem>
               <SelectItem value="woocommerce">🌐 WooCommerce</SelectItem>
               <SelectItem value="prestashop">🛒 PrestaShop</SelectItem>
+              <SelectItem value="magento">📦 Magento</SelectItem>
+              <SelectItem value="salesforce">☁️ Salesforce</SelectItem>
+              <SelectItem value="sap">🏢 SAP</SelectItem>
             </SelectContent>
           </Select>
         </div>

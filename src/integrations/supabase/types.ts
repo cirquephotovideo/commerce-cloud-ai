@@ -699,6 +699,51 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_pricing_rules: {
+        Row: {
+          apply_to_categories: Json | null
+          created_at: string
+          currency: string
+          fixed_amount: number | null
+          id: string
+          is_active: boolean | null
+          markup_percentage: number | null
+          platform_type: string
+          price_rounding_rule: string | null
+          rule_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          apply_to_categories?: Json | null
+          created_at?: string
+          currency?: string
+          fixed_amount?: number | null
+          id?: string
+          is_active?: boolean | null
+          markup_percentage?: number | null
+          platform_type: string
+          price_rounding_rule?: string | null
+          rule_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          apply_to_categories?: Json | null
+          created_at?: string
+          currency?: string
+          fixed_amount?: number | null
+          id?: string
+          is_active?: boolean | null
+          markup_percentage?: number | null
+          platform_type?: string
+          price_rounding_rule?: string | null
+          rule_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       price_monitoring: {
         Row: {
           competitor_site_id: string | null
