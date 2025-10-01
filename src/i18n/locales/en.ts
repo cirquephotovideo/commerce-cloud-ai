@@ -132,4 +132,90 @@ export const en = {
     create: "Create",
     update: "Update",
   },
+  demo: {
+    title: "Try Our Platform",
+    subtitle: "Discover all our tools in action with real data",
+    tabs: {
+      productAnalysis: "Product Analysis",
+      googleShopping: "Google Shopping",
+      priceMonitoring: "Competitor Prices",
+      batchAnalysis: "Batch Analysis",
+      marketIntelligence: "Market Intelligence",
+      odooIntegration: "Odoo Integration",
+      imageOptimization: "Image Optimization",
+      technicalAnalysis: "Technical Analysis",
+      riskEvaluation: "Risk Assessment",
+    },
+  },
+  testimonials: {
+    title: "They Trust Us",
+    subtitle: "Join thousands of e-commerce professionals transforming their business",
+  },
+  stats: {
+    title: "Results That Speak",
+    clients: "Active Clients",
+    analyzed: "Products Analyzed",
+    saved: "€ Saved",
+    satisfaction: "Customer Satisfaction",
+  },
+  comparison: {
+    title: "Why Choose Us?",
+    subtitle: "Compare us with other market solutions",
+    us: "Our Platform",
+    others: "Competitors",
+    features: {
+      aiPowered: "Advanced AI",
+      realtime: "Real-Time Data",
+      odooIntegration: "Odoo Integration",
+      batchAnalysis: "Batch Analysis",
+      priceMonitoring: "24/7 Price Monitoring",
+      marketIntelligence: "Market Intelligence",
+      support: "Premium Support",
+      updates: "Continuous Updates",
+      customization: "Customization",
+    },
+  },
+  faq: {
+    title: "Frequently Asked Questions",
+    subtitle: "Everything you need to know",
+    questions: {
+      q1: {
+        question: "How does the free trial work?",
+        answer: "14 full days to test all features with no commitment or credit card required.",
+      },
+      q2: {
+        question: "Can I change my plan at any time?",
+        answer: "Yes! Change your plan whenever you want, instantly. You'll be billed pro-rata.",
+      },
+      q3: {
+        question: "What payment methods are accepted?",
+        answer: "Credit card, SEPA transfer, and PayPal. 100% secure payment via Stripe.",
+      },
+      q4: {
+        question: "Are there any hidden fees?",
+        answer: "No hidden fees. The displayed price is the final price. Cancel anytime.",
+      },
+      q5: {
+        question: "How does Odoo integration work?",
+        answer: "1-click connection to your Odoo instance. Automatic bidirectional sync.",
+      },
+      q6: {
+        question: "Can I get a personalized demo?",
+        answer: "Absolutely! Contact us for a demo tailored to your specific needs.",
+      },
+    },
+  },
+  trust: {
+    title: "Your Trust, Our Priority",
+    guarantee: "30-Day Money-Back Guarantee",
+    secure: "100% Secure Payments",
+    gdpr: "GDPR Compliant",
+    support: "24/7 Support",
+  },
+  finalCta: {
+    title: "Ready to Transform Your E-commerce?",
+    subtitle: "Join thousands of professionals already optimizing their business",
+    cta: "Start Free",
+    guarantee: "No commitment • Cancel in 1 click",
+  },
 };

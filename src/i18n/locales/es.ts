@@ -132,4 +132,90 @@ export const es = {
     create: "Crear",
     update: "Actualizar",
   },
+  demo: {
+    title: "Prueba Nuestra Plataforma",
+    subtitle: "Descubre todas nuestras herramientas en acción con datos reales",
+    tabs: {
+      productAnalysis: "Análisis de Producto",
+      googleShopping: "Google Shopping",
+      priceMonitoring: "Precios Competidores",
+      batchAnalysis: "Análisis por Lotes",
+      marketIntelligence: "Inteligencia de Mercado",
+      odooIntegration: "Integración Odoo",
+      imageOptimization: "Optimización de Imágenes",
+      technicalAnalysis: "Análisis Técnico",
+      riskEvaluation: "Evaluación de Riesgos",
+    },
+  },
+  testimonials: {
+    title: "Confían en Nosotros",
+    subtitle: "Únete a miles de profesionales de e-commerce transformando su negocio",
+  },
+  stats: {
+    title: "Resultados Que Hablan",
+    clients: "Clientes Activos",
+    analyzed: "Productos Analizados",
+    saved: "€ Ahorrados",
+    satisfaction: "Satisfacción del Cliente",
+  },
+  comparison: {
+    title: "¿Por Qué Elegirnos?",
+    subtitle: "Compáranos con otras soluciones del mercado",
+    us: "Nuestra Plataforma",
+    others: "Competidores",
+    features: {
+      aiPowered: "IA Avanzada",
+      realtime: "Datos en Tiempo Real",
+      odooIntegration: "Integración Odoo",
+      batchAnalysis: "Análisis por Lotes",
+      priceMonitoring: "Monitoreo de Precios 24/7",
+      marketIntelligence: "Inteligencia de Mercado",
+      support: "Soporte Premium",
+      updates: "Actualizaciones Continuas",
+      customization: "Personalización",
+    },
+  },
+  faq: {
+    title: "Preguntas Frecuentes",
+    subtitle: "Todo lo que necesitas saber",
+    questions: {
+      q1: {
+        question: "¿Cómo funciona la prueba gratuita?",
+        answer: "14 días completos para probar todas las funciones sin compromiso ni tarjeta de crédito.",
+      },
+      q2: {
+        question: "¿Puedo cambiar de plan en cualquier momento?",
+        answer: "¡Sí! Cambia de plan cuando quieras, instantáneamente. Se te facturará proporcionalmente.",
+      },
+      q3: {
+        question: "¿Qué métodos de pago se aceptan?",
+        answer: "Tarjeta de crédito, transferencia SEPA y PayPal. Pago 100% seguro a través de Stripe.",
+      },
+      q4: {
+        question: "¿Hay tarifas ocultas?",
+        answer: "Sin tarifas ocultas. El precio mostrado es el precio final. Cancela en cualquier momento.",
+      },
+      q5: {
+        question: "¿Cómo funciona la integración con Odoo?",
+        answer: "Conexión con 1 clic a tu instancia de Odoo. Sincronización bidireccional automática.",
+      },
+      q6: {
+        question: "¿Puedo obtener una demo personalizada?",
+        answer: "¡Por supuesto! Contáctanos para una demo adaptada a tus necesidades específicas.",
+      },
+    },
+  },
+  trust: {
+    title: "Tu Confianza, Nuestra Prioridad",
+    guarantee: "Garantía de Devolución de Dinero de 30 días",
+    secure: "Pagos 100% Seguros",
+    gdpr: "Cumple con RGPD",
+    support: "Soporte 24/7",
+  },
+  finalCta: {
+    title: "¿Listo para Transformar tu E-commerce?",
+    subtitle: "Únete a miles de profesionales que ya están optimizando su negocio",
+    cta: "Comenzar Gratis",
+    guarantee: "Sin compromiso • Cancela en 1 clic",
+  },
 };

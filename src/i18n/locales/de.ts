@@ -132,4 +132,90 @@ export const de = {
     create: "Erstellen",
     update: "Aktualisieren",
   },
+  demo: {
+    title: "Testen Sie Unsere Plattform",
+    subtitle: "Entdecken Sie alle unsere Tools in Aktion mit echten Daten",
+    tabs: {
+      productAnalysis: "Produktanalyse",
+      googleShopping: "Google Shopping",
+      priceMonitoring: "Konkurrenzpreise",
+      batchAnalysis: "Stapelanalyse",
+      marketIntelligence: "Marktintelligenz",
+      odooIntegration: "Odoo-Integration",
+      imageOptimization: "Bildoptimierung",
+      technicalAnalysis: "Technische Analyse",
+      riskEvaluation: "Risikobewertung",
+    },
+  },
+  testimonials: {
+    title: "Sie Vertrauen Uns",
+    subtitle: "Schließen Sie sich Tausenden von E-Commerce-Profis an, die ihr Geschäft transformieren",
+  },
+  stats: {
+    title: "Ergebnisse Die Sprechen",
+    clients: "Aktive Kunden",
+    analyzed: "Analysierte Produkte",
+    saved: "€ Gespart",
+    satisfaction: "Kundenzufriedenheit",
+  },
+  comparison: {
+    title: "Warum Uns Wählen?",
+    subtitle: "Vergleichen Sie uns mit anderen Marktlösungen",
+    us: "Unsere Plattform",
+    others: "Konkurrenten",
+    features: {
+      aiPowered: "Fortgeschrittene KI",
+      realtime: "Echtzeitdaten",
+      odooIntegration: "Odoo-Integration",
+      batchAnalysis: "Stapelanalyse",
+      priceMonitoring: "24/7 Preisüberwachung",
+      marketIntelligence: "Marktintelligenz",
+      support: "Premium-Support",
+      updates: "Kontinuierliche Updates",
+      customization: "Anpassung",
+    },
+  },
+  faq: {
+    title: "Häufig Gestellte Fragen",
+    subtitle: "Alles, was Sie wissen müssen",
+    questions: {
+      q1: {
+        question: "Wie funktioniert die kostenlose Testversion?",
+        answer: "14 volle Tage, um alle Funktionen ohne Verpflichtung oder Kreditkarte zu testen.",
+      },
+      q2: {
+        question: "Kann ich meinen Plan jederzeit ändern?",
+        answer: "Ja! Ändern Sie Ihren Plan jederzeit sofort. Sie werden anteilig abgerechnet.",
+      },
+      q3: {
+        question: "Welche Zahlungsmethoden werden akzeptiert?",
+        answer: "Kreditkarte, SEPA-Überweisung und PayPal. 100% sichere Zahlung über Stripe.",
+      },
+      q4: {
+        question: "Gibt es versteckte Gebühren?",
+        answer: "Keine versteckten Gebühren. Der angezeigte Preis ist der Endpreis. Jederzeit kündbar.",
+      },
+      q5: {
+        question: "Wie funktioniert die Odoo-Integration?",
+        answer: "1-Klick-Verbindung zu Ihrer Odoo-Instanz. Automatische bidirektionale Synchronisierung.",
+      },
+      q6: {
+        question: "Kann ich eine personalisierte Demo erhalten?",
+        answer: "Auf jeden Fall! Kontaktieren Sie uns für eine auf Ihre spezifischen Bedürfnisse zugeschnittene Demo.",
+      },
+    },
+  },
+  trust: {
+    title: "Ihr Vertrauen, Unsere Priorität",
+    guarantee: "30 Tage Geld-zurück-Garantie",
+    secure: "100% Sichere Zahlungen",
+    gdpr: "DSGVO-konform",
+    support: "24/7 Support",
+  },
+  finalCta: {
+    title: "Bereit, Ihren E-Commerce Zu Transformieren?",
+    subtitle: "Schließen Sie sich Tausenden von Profis an, die bereits ihr Geschäft optimieren",
+    cta: "Kostenlos Starten",
+    guarantee: "Keine Verpflichtung • Mit 1 Klick kündbar",
+  },
 };
