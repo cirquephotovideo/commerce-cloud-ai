@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Search, ShoppingCart, TrendingUp, TrendingDown, ExternalLink, Star } from "lucide-react";
+import { Search, ShoppingCart, TrendingUp, TrendingDown, ExternalLink, Star, Link2, AlertCircle, Clock } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface GoogleShoppingResult {
   id: string;
@@ -32,15 +33,32 @@ interface Statistics {
   merchants: string[];
 }
 
+interface Metadata {
+  provider: string;
+  response_time_ms: number;
+  saved_count: number;
+}
+
 export const GoogleShoppingAnalysis = () => {
+  const { toast } = useToast();
   const [productName, setProductName] = useState("");
+  const [productUrl, setProductUrl] = useState("");
   const [results, setResults] = useState<GoogleShoppingResult[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
+  const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [errorInfo, setErrorInfo] = useState<{ message: string; suggestion?: string; helpUrl?: string } | null>(null);
 
-  const handleSearch = async () => {
-    if (!productName.trim()) {
-      toast.error("Entrez un nom de produit");
+  const handleSearch = async (mode: 'name' | 'url') => {
+    setErrorInfo(null);
+    
+    if (mode === 'name' && !productName.trim()) {
+      toast({ title: "Erreur", description: "Entrez un nom de produit", variant: "destructive" });
+      return;
+    }
+    
+    if (mode === 'url' && !productUrl.trim()) {
+      toast({ title: "Erreur", description: "Entrez une URL de produit", variant: "destructive" });
       return;
     }
 
@@ -48,23 +66,65 @@ export const GoogleShoppingAnalysis = () => {
     
     try {
       const { data, error } = await supabase.functions.invoke('google-shopping-scraper', {
-        body: {
-          productName,
-          maxResults: 10,
-        }
+        body: mode === 'name' 
+          ? { productName, maxResults: 10 }
+          : { productUrl, maxResults: 1 }
       });
 
       if (error) {
-        toast.error("Erreur de recherche");
+        console.error('Function error:', error);
+        
+        // Gérer les erreurs spécifiques
+        if (error.message?.includes('API désactivée') || error.message?.includes('not been used')) {
+          setErrorInfo({
+            message: data?.error || error.message,
+            suggestion: data?.suggestion || "Configurez SERPER_API_KEY pour activer le fallback automatique",
+            helpUrl: data?.helpUrl
+          });
+          toast({ 
+            title: "API Google non disponible", 
+            description: "Le système utilise automatiquement Serper.dev si configuré",
+            variant: "default"
+          });
+        } else {
+          toast({ 
+            title: "Erreur de recherche", 
+            description: error.message,
+            variant: "destructive" 
+          });
+        }
+        return;
+      }
+
+      if (!data.success) {
+        setErrorInfo({
+          message: data.error,
+          suggestion: data.suggestion,
+          helpUrl: data.helpUrl
+        });
+        toast({ 
+          title: "Erreur", 
+          description: data.error,
+          variant: "destructive" 
+        });
         return;
       }
 
       setResults(data.results || []);
       setStatistics(data.statistics || null);
-      toast.success(data.message || "Recherche terminée");
+      setMetadata(data.metadata || null);
+      
+      toast({ 
+        title: "✅ Recherche terminée", 
+        description: `${data.results?.length || 0} produits trouvés et enregistrés via ${data.metadata?.provider || 'inconnu'}`,
+      });
     } catch (error) {
       console.error('Search error:', error);
-      toast.error("Erreur lors de la recherche");
+      toast({ 
+        title: "Erreur", 
+        description: "Erreur lors de la recherche",
+        variant: "destructive" 
+      });
     } finally {
       setIsSearching(false);
     }
@@ -96,22 +156,96 @@ export const GoogleShoppingAnalysis = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label>Produit à rechercher</Label>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Ex: iPhone 15 Pro, Sony A7 IV, MacBook Pro..."
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="flex-1"
-              />
-              <Button onClick={handleSearch} disabled={isSearching}>
-                <Search className="w-4 h-4 mr-2" />
-                {isSearching ? "Recherche..." : "Rechercher"}
-              </Button>
+          {errorInfo && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="space-y-2">
+                  <p className="font-medium">{errorInfo.message}</p>
+                  {errorInfo.suggestion && (
+                    <p className="text-sm">{errorInfo.suggestion}</p>
+                  )}
+                  {errorInfo.helpUrl && (
+                    <a 
+                      href={errorInfo.helpUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm underline flex items-center gap-1"
+                    >
+                      Activer l'API <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <Label>Recherche par nom de produit</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ex: iPhone 15 Pro, Sony A7 IV, MacBook Pro..."
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch('name')}
+                  className="flex-1"
+                />
+                <Button onClick={() => handleSearch('name')} disabled={isSearching}>
+                  <Search className="w-4 h-4 mr-2" />
+                  {isSearching ? "Recherche..." : "Rechercher"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  Ou
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <Label>Analyse depuis une URL directe</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="https://www.fnac.com/produit... ou Google Shopping URL"
+                  value={productUrl}
+                  onChange={(e) => setProductUrl(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch('url')}
+                  className="flex-1"
+                />
+                <Button onClick={() => handleSearch('url')} disabled={isSearching} variant="secondary">
+                  <Link2 className="w-4 h-4 mr-2" />
+                  {isSearching ? "Analyse..." : "Analyser"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Fonctionne avec Google Shopping, Fnac, Darty, Amazon, etc.
+              </p>
             </div>
           </div>
+
+          {metadata && (
+            <div className="flex items-center gap-4 text-xs text-muted-foreground p-2 bg-accent/50 rounded">
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className="text-xs">
+                  {metadata.provider}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {metadata.response_time_ms}ms
+              </div>
+              <div className="flex items-center gap-1">
+                💾 {metadata.saved_count} enregistrés
+              </div>
+            </div>
+          )}
 
           {statistics && (
             <Card className="bg-accent/50">
