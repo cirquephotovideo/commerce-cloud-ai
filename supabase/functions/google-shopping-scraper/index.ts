@@ -36,12 +36,17 @@ serve(async (req) => {
 
     console.log('Recherche Google Shopping pour:', productName);
 
-    // Recherche sur Google Shopping via Custom Search API
-    const searchQuery = `${productName}`;
+    // Recherche optimisée pour les sites e-commerce
+    // Ajout de termes pour cibler les pages de produits avec prix
+    const searchQuery = `${productName} acheter prix`;
     const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(searchQuery)}&num=${maxResults}`;
+    
+    console.log('URL de recherche:', searchUrl);
     
     const searchResponse = await fetch(searchUrl);
     const searchData = await searchResponse.json();
+    
+    console.log('Réponse API complète:', JSON.stringify(searchData, null, 2));
 
     console.log('Résultats trouvés:', searchData.items?.length || 0);
 
