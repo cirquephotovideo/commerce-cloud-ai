@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AnalysisResults } from "./AnalysisResults";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 const analysisTools = [
   { icon: Search, name: "Analyse SEO", description: "Optimisation du référencement" },
@@ -40,6 +41,7 @@ export const AnalyzerSection = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
+  const { canUseFeature } = useSubscription();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -55,8 +57,53 @@ export const AnalyzerSection = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  const trackUsage = async (featureType: string) => {
+    if (!user) return;
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    try {
+      // Check if usage record exists for this month
+      const { data: existing } = await supabase
+        .from("usage_tracking")
+        .select("id, usage_count")
+        .eq("user_id", user.id)
+        .eq("feature_type", featureType)
+        .gte("period_start", startOfMonth.toISOString())
+        .lte("period_end", endOfMonth.toISOString())
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing record
+        await supabase
+          .from("usage_tracking")
+          .update({ usage_count: existing.usage_count + 1 })
+          .eq("id", existing.id);
+      } else {
+        // Create new record
+        await supabase
+          .from("usage_tracking")
+          .insert({
+            user_id: user.id,
+            feature_type: featureType,
+            usage_count: 1,
+            period_start: startOfMonth.toISOString(),
+            period_end: endOfMonth.toISOString(),
+          });
+      }
+    } catch (error) {
+      console.error("Error tracking usage:", error);
+    }
+  };
+
   const analyzeProduct = async () => {
     if (!productInput.trim() || isAnalyzing) return;
+
+    // Check if user can use this feature
+    const canUse = await canUseFeature("product_analyses");
+    if (!canUse) return;
 
     setIsAnalyzing(true);
     setResults(null);
@@ -82,6 +129,9 @@ export const AnalyzerSection = () => {
             });
 
           if (saveError) throw saveError;
+
+          // Track usage
+          await trackUsage("product_analyses");
 
           toast.success("Analyse terminée et sauvegardée !");
         } catch (saveError: any) {

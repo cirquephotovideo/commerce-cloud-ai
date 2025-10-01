@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Star, Trash2, ExternalLink, Upload, Trash } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
+import { SubscriptionStatus } from "@/components/SubscriptionStatus";
 
 interface ProductAnalysis {
   id: string;
@@ -200,6 +201,34 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8">
+        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          <div className="lg:col-span-1">
+            <SubscriptionStatus />
+          </div>
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Statistiques</CardTitle>
+                <CardDescription>Aperçu de votre activité</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold">{analyses.length}</p>
+                    <p className="text-sm text-muted-foreground">Analyses totales</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {analyses.filter(a => a.is_favorite).length}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Favoris</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Mes Analyses de Produits

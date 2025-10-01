@@ -15,6 +15,9 @@ interface Plan {
   price_yearly: number;
   features: any;
   display_order: number;
+  stripe_price_id_monthly?: string;
+  stripe_price_id_yearly?: string;
+  stripe_product_id?: string;
 }
 
 const Pricing = () => {
@@ -79,12 +82,47 @@ const Pricing = () => {
       return;
     }
 
-    toast({
-      title: "Redirection vers le paiement...",
-      description: "Vous allez être redirigé vers Stripe pour finaliser votre abonnement.",
-    });
+    try {
+      const priceId = billingInterval === "monthly" 
+        ? plan.stripe_price_id_monthly 
+        : plan.stripe_price_id_yearly;
 
-    // TODO: Implement Stripe checkout
+      if (!priceId) {
+        toast({
+          title: "Erreur",
+          description: "Configuration du plan non disponible.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentification requise",
+          description: "Veuillez vous connecter pour souscrire à un plan.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId, billingInterval },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (error: any) {
+      console.error("Error creating checkout:", error);
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de créer la session de paiement.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
