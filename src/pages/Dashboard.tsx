@@ -126,7 +126,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {analyses.map((analysis) => (
               <Card key={analysis.id} className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader>
