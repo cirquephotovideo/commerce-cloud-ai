@@ -46,6 +46,36 @@ export type Database = {
           },
         ]
       }
+      export_logs: {
+        Row: {
+          created_at: string
+          error_count: number
+          export_details: Json | null
+          id: string
+          products_count: number
+          success_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          export_details?: Json | null
+          id?: string
+          products_count: number
+          success_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          export_details?: Json | null
+          id?: string
+          products_count?: number
+          success_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
@@ -77,6 +107,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      odoo_configurations: {
+        Row: {
+          created_at: string
+          database_name: string
+          id: string
+          is_active: boolean | null
+          odoo_url: string
+          password_encrypted: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          database_name: string
+          id?: string
+          is_active?: boolean | null
+          odoo_url: string
+          password_encrypted: string
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          database_name?: string
+          id?: string
+          is_active?: boolean | null
+          odoo_url?: string
+          password_encrypted?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
       }
       product_analyses: {
         Row: {

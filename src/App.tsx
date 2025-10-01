@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import { AuthPage } from "./components/AuthPage";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
+import BatchAnalyzer from "./pages/BatchAnalyzer";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/history" element={<History />} />
+          <Route path="/batch-analyzer" element={<BatchAnalyzer />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

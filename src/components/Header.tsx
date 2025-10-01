@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, History, Database } from "lucide-react";
+import { User, LogOut, History, Database, Layers } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -61,6 +61,14 @@ export const Header = () => {
               >
                 <History className="mr-2 h-4 w-4" />
                 Historique
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/batch-analyzer")}
+              >
+                <Layers className="mr-2 h-4 w-4" />
+                Analyse en Lot
               </Button>
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />
