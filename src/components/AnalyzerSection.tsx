@@ -126,41 +126,43 @@ export const AnalyzerSection = () => {
   };
 
   return (
-    <section id="analyzer" className="py-20 px-4 bg-gradient-card">
+    <section id="analyzer" className="py-12 sm:py-16 md:py-20 px-4 bg-gradient-card">
       <div className="container mx-auto max-w-6xl">
-        <div className="text-center mb-12 space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 border border-secondary/20">
-            <BarChart3 className="w-4 h-4 text-secondary" />
-            <span className="text-sm font-medium text-secondary">Analyseur de Produits</span>
+        <div className="text-center mb-8 sm:mb-12 space-y-3 sm:space-y-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-secondary/10 border border-secondary/20">
+            <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 text-secondary" />
+            <span className="text-xs sm:text-sm font-medium text-secondary">Analyseur de Produits</span>
           </div>
-          <h2 className="text-4xl md:text-5xl font-bold">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold px-4">
             9 Outils d'Analyse Automatisée
           </h2>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto px-4">
             Analysez vos produits avec 9 outils spécialisés : SEO, prix, concurrence, 
             tendances et génération de contenu marketing.
           </p>
         </div>
 
-        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6 mb-8 space-y-4">
+        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-4 sm:p-6 mb-6 sm:mb-8 space-y-4">
           <Tabs value={inputType} onValueChange={(v) => setInputType(v as any)} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="name" className="flex items-center gap-2">
-                <Package className="w-4 h-4" />
-                Nom de produit
+            <TabsList className="grid w-full grid-cols-3 h-auto">
+              <TabsTrigger value="name" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-1.5 text-xs sm:text-sm">
+                <Package className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Nom de produit</span>
+                <span className="sm:hidden">Nom</span>
               </TabsTrigger>
-              <TabsTrigger value="barcode" className="flex items-center gap-2">
-                <Barcode className="w-4 h-4" />
-                Code-barres
+              <TabsTrigger value="barcode" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-1.5 text-xs sm:text-sm">
+                <Barcode className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Code-barres</span>
+                <span className="sm:hidden">Code</span>
               </TabsTrigger>
-              <TabsTrigger value="url" className="flex items-center gap-2">
-                <Globe className="w-4 h-4" />
-                URL
+              <TabsTrigger value="url" className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 py-2 sm:py-1.5 text-xs sm:text-sm">
+                <Globe className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span>URL</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex-1 relative">
               {getIcon()}
               <Input
@@ -169,43 +171,43 @@ export const AnalyzerSection = () => {
                 onKeyPress={(e) => e.key === 'Enter' && analyzeProduct()}
                 placeholder={getPlaceholder()}
                 disabled={isAnalyzing}
-                className="pl-10 h-12 bg-background border-border"
+                className="pl-10 h-11 sm:h-12 bg-background border-border text-sm sm:text-base"
               />
             </div>
             <Button 
               onClick={analyzeProduct} 
               disabled={isAnalyzing || !productInput.trim()}
               size="lg"
-              className="shadow-glow"
+              className="shadow-glow w-full sm:w-auto h-11 sm:h-12"
             >
               {isAnalyzing ? (
                 <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Analyse...
+                  <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                  <span className="text-sm sm:text-base">Analyse...</span>
                 </>
               ) : (
                 <>
-                  <Search className="mr-2 h-5 w-5" />
-                  Analyser
+                  <Search className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-sm sm:text-base">Analyser</span>
                 </>
               )}
             </Button>
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {analysisTools.map((tool, idx) => {
             const Icon = tool.icon;
             return (
               <Card
                 key={idx}
-                className="bg-card border-border backdrop-blur-sm hover:border-primary/40 transition-all p-6 space-y-3 group cursor-pointer hover:shadow-card"
+                className="bg-card border-border backdrop-blur-sm hover:border-primary/40 transition-all p-4 sm:p-6 space-y-2 sm:space-y-3 group cursor-pointer hover:shadow-card"
               >
-                <div className="w-12 h-12 rounded-lg bg-gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Icon className="w-6 h-6 text-primary-foreground" />
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold">{tool.name}</h3>
-                <p className="text-sm text-muted-foreground">{tool.description}</p>
+                <h3 className="text-base sm:text-lg font-semibold">{tool.name}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground">{tool.description}</p>
               </Card>
             );
           })}
