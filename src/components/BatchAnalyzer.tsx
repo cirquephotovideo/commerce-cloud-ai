@@ -3,7 +3,8 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Package, Barcode, Link, Loader2 } from "lucide-react";
+import { Package, Barcode, Link, Loader2, Store } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Progress } from "./ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -21,6 +22,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [progress, setProgress] = useState(0);
   const [currentProduct, setCurrentProduct] = useState("");
   const [autoExport, setAutoExport] = useState(false);
+  const [exportPlatform, setExportPlatform] = useState<string>("odoo");
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -115,7 +117,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
     const successCount = results.filter(r => r.success).length;
     toast.success(`Analyse terminée: ${successCount}/${products.length} produits analysés avec succès`);
     
-    // Auto-export to Odoo if enabled
+    // Auto-export to selected platform if enabled
     if (autoExport && successCount > 0) {
       const analysisIds = results
         .filter(r => r.success && r.analysisId)
@@ -123,18 +125,47 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
       if (analysisIds.length > 0) {
         try {
-          toast.info('Export vers Odoo en cours...');
-          const { data: exportData, error: exportError } = await supabase.functions.invoke('export-to-odoo', {
-            body: { analysisIds }
+          const platformDisplayNames: Record<string, string> = {
+            odoo: 'Odoo',
+            shopify: 'Shopify',
+            woocommerce: 'WooCommerce',
+            prestashop: 'PrestaShop',
+            magento: 'Magento',
+            salesforce: 'Salesforce',
+            sap: 'SAP',
+            uber_eats: 'Uber Eats',
+            deliveroo: 'Deliveroo',
+            just_eat: 'Just Eat',
+            windev: 'WinDev'
+          };
+          
+          const platformName = platformDisplayNames[exportPlatform] || exportPlatform;
+          toast.info(`Export vers ${platformName} en cours...`);
+          
+          const { data: exportData, error: exportError } = await supabase.functions.invoke(`export-to-${exportPlatform}`, {
+            body: { analysisIds, analysis_ids: analysisIds }
           });
 
           if (exportError) throw exportError;
 
           const exportSuccess = exportData?.results?.filter((r: any) => r.success).length || 0;
-          toast.success(`${exportSuccess} produits exportés vers Odoo`);
+          toast.success(`${exportSuccess} produits exportés vers ${platformName}`);
         } catch (exportError) {
           console.error('Export error:', exportError);
-          toast.error('Erreur lors de l\'export vers Odoo');
+          const platformDisplayNames: Record<string, string> = {
+            odoo: 'Odoo',
+            shopify: 'Shopify',
+            woocommerce: 'WooCommerce',
+            prestashop: 'PrestaShop',
+            magento: 'Magento',
+            salesforce: 'Salesforce',
+            sap: 'SAP',
+            uber_eats: 'Uber Eats',
+            deliveroo: 'Deliveroo',
+            just_eat: 'Just Eat',
+            windev: 'WinDev'
+          };
+          toast.error(`Erreur lors de l'export vers ${platformDisplayNames[exportPlatform] || exportPlatform}`);
         }
       }
     }
@@ -168,16 +199,45 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           </TabsList>
 
           <TabsContent value={inputType} className="space-y-4">
-            <div className="flex items-center space-x-2 mb-4 p-3 bg-muted/50 rounded-lg">
-              <Switch
-                id="auto-export"
-                checked={autoExport}
-                onCheckedChange={setAutoExport}
-                disabled={isAnalyzing}
-              />
-              <Label htmlFor="auto-export" className="cursor-pointer">
-                Créer automatiquement dans Odoo après l'analyse
-              </Label>
+            <div className="space-y-3 mb-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="auto-export"
+                  checked={autoExport}
+                  onCheckedChange={setAutoExport}
+                  disabled={isAnalyzing}
+                />
+                <Label htmlFor="auto-export" className="cursor-pointer">
+                  Export automatique après l'analyse
+                </Label>
+              </div>
+              
+              {autoExport && (
+                <div className="space-y-2 ml-8">
+                  <Label htmlFor="export-platform" className="text-sm">
+                    <Store className="w-3 h-3 inline mr-1" />
+                    Plateforme de destination
+                  </Label>
+                  <Select value={exportPlatform} onValueChange={setExportPlatform}>
+                    <SelectTrigger id="export-platform" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="odoo">📦 Odoo</SelectItem>
+                      <SelectItem value="shopify">🏪 Shopify</SelectItem>
+                      <SelectItem value="woocommerce">🌐 WooCommerce</SelectItem>
+                      <SelectItem value="prestashop">🛒 PrestaShop</SelectItem>
+                      <SelectItem value="magento">📦 Magento</SelectItem>
+                      <SelectItem value="salesforce">☁️ Salesforce</SelectItem>
+                      <SelectItem value="sap">🏢 SAP</SelectItem>
+                      <SelectItem value="uber_eats">🍔 Uber Eats</SelectItem>
+                      <SelectItem value="deliveroo">🚚 Deliveroo</SelectItem>
+                      <SelectItem value="just_eat">📱 Just Eat</SelectItem>
+                      <SelectItem value="windev">💻 WinDev</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <Textarea

@@ -130,6 +130,7 @@ export const PlatformSettings = () => {
         );
       case 'woocommerce':
       case 'prestashop':
+      case 'magento':
         return (
           <>
             <div className="space-y-2">
@@ -137,6 +138,83 @@ export const PlatformSettings = () => {
               <Input
                 id="platform_url"
                 placeholder="https://your-store.com"
+                value={config.platform_url}
+                onChange={(e) => setConfig({ ...config, platform_url: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_key">API Key</Label>
+              <Input
+                id="api_key"
+                type="password"
+                value={config.api_key_encrypted}
+                onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_secret">API Secret</Label>
+              <Input
+                id="api_secret"
+                type="password"
+                value={config.api_secret_encrypted}
+                onChange={(e) => setConfig({ ...config, api_secret_encrypted: e.target.value })}
+              />
+            </div>
+          </>
+        );
+      case 'salesforce':
+      case 'sap':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="platform_url">Instance URL</Label>
+              <Input
+                id="platform_url"
+                placeholder="https://your-instance.salesforce.com"
+                value={config.platform_url}
+                onChange={(e) => setConfig({ ...config, platform_url: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_key">Client ID</Label>
+              <Input
+                id="api_key"
+                type="password"
+                value={config.api_key_encrypted}
+                onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_secret">Client Secret</Label>
+              <Input
+                id="api_secret"
+                type="password"
+                value={config.api_secret_encrypted}
+                onChange={(e) => setConfig({ ...config, api_secret_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access_token">Access Token</Label>
+              <Input
+                id="access_token"
+                type="password"
+                value={config.access_token_encrypted}
+                onChange={(e) => setConfig({ ...config, access_token_encrypted: e.target.value })}
+              />
+            </div>
+          </>
+        );
+      case 'uber_eats':
+      case 'deliveroo':
+      case 'just_eat':
+      case 'windev':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="platform_url">API URL</Label>
+              <Input
+                id="platform_url"
+                placeholder="https://api.platform.com"
                 value={config.platform_url}
                 onChange={(e) => setConfig({ ...config, platform_url: e.target.value })}
               />
@@ -205,7 +283,7 @@ export const PlatformSettings = () => {
         ) : (
           <>
             {getPlatformFields()}
-            {['shopify', 'woocommerce', 'prestashop'].includes(selectedPlatform) && (
+            {![''].includes(selectedPlatform) && (
               <Button onClick={saveConfiguration} disabled={saving} className="w-full">
                 {saving ? (
                   <>

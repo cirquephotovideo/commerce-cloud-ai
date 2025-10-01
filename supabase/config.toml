@@ -50,3 +50,15 @@ verify_jwt = true
 
 [functions.export-to-sap]
 verify_jwt = true
+
+[functions.export-to-uber_eats]
+verify_jwt = true
+
+[functions.export-to-deliveroo]
+verify_jwt = true
+
+[functions.export-to-just_eat]
+verify_jwt = true
+
+[functions.export-to-windev]
+verify_jwt = true
