@@ -71,7 +71,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Résultats d'Analyse Détaillés</CardTitle>
+            <CardTitle>Mes Analyses de Produits</CardTitle>
             <CardDescription>
               {successCount} produits analysés avec succès sur {results.length}
             </CardDescription>
@@ -90,8 +90,21 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
       </CardHeader>
       <CardContent className="space-y-4">
         <ScrollArea className="h-[600px] pr-4">
-          <div className="space-y-3">
-            {results.map((result, index) => (
+          <Collapsible defaultOpen className="space-y-3">
+            <div className="flex items-center justify-between mb-4 p-3 bg-muted rounded-lg">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-lg">📦 Liste des Produits</h3>
+                <Badge variant="secondary">{results.length} produits</Badge>
+              </div>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            
+            <CollapsibleContent className="space-y-3">
+              {results.map((result, index) => (
               <Card key={index} className={!result.success ? "opacity-50" : ""}>
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3">
@@ -369,8 +382,9 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
         </ScrollArea>
 
         <div className="flex items-center justify-between pt-4 border-t">
