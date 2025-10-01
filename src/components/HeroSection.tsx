@@ -1,8 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Sparkles, TrendingUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import heroBg from "@/assets/hero-bg.jpg";
 
 export const HeroSection = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
     element?.scrollIntoView({ behavior: "smooth" });
@@ -25,28 +30,25 @@ export const HeroSection = () => {
         <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm">
             <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
-            <span className="text-xs sm:text-sm font-medium text-primary">Intelligence Artificielle pour l'E-commerce</span>
+            <span className="text-xs sm:text-sm font-medium text-primary">{t("hero.title")}</span>
           </div>
 
           <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold leading-tight px-4">
-            Optimisez Votre 
-            <span className="bg-gradient-primary bg-clip-text text-transparent"> Commerce </span>
-            avec l'IA
+            {t("hero.title")}
           </h1>
 
           <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl mx-auto px-4">
-            Analysez vos produits, chattez avec l'IA et optimisez votre stratégie commerciale 
-            avec la puissance de l'intelligence artificielle et de la recherche web en temps réel.
+            {t("hero.subtitle")}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center pt-2 sm:pt-4 px-4">
             <Button 
               size="lg"
               className="text-base sm:text-lg shadow-glow hover:shadow-glow transition-all w-full sm:w-auto"
-              onClick={() => scrollToSection('chat')}
+              onClick={() => navigate("/pricing")}
             >
               <Sparkles className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-              Essayer le Chat IA
+              {t("hero.ctaTrial")}
             </Button>
             <Button 
               size="lg"
@@ -55,23 +57,23 @@ export const HeroSection = () => {
               onClick={() => scrollToSection('analyzer')}
             >
               <TrendingUp className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-              Analyser un Produit
+              {t("hero.ctaAnalyze")}
             </Button>
           </div>
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 sm:gap-6 md:gap-8 pt-8 sm:pt-12 max-w-2xl mx-auto px-4">
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-primary">9</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Outils d'Analyse</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-primary">{t("hero.metric1")}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Précision</div>
             </div>
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-secondary">100%</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Alimenté par l'IA</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-secondary">{t("hero.metric2")}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Croissance</div>
             </div>
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-accent">24/7</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Disponible</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-accent">{t("hero.metric3")}</div>
+              <div className="text-xs sm:text-sm text-muted-foreground">Économisé</div>
             </div>
           </div>
         </div>

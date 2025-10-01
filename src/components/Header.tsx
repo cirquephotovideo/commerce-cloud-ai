@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X } from "lucide-react";
+import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { LanguageSelector } from "./LanguageSelector";
+import { useTranslation } from "react-i18next";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export const Header = () => {
@@ -13,6 +15,7 @@ export const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -32,7 +35,7 @@ export const Header = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     toast({
-      title: "Déconnecté",
+      title: t("nav.signOut"),
       description: "À bientôt !",
     });
     setIsOpen(false);
@@ -53,7 +56,7 @@ export const Header = () => {
         className={isMobile ? "w-full justify-start" : ""}
       >
         <Database className="mr-2 h-4 w-4" />
-        Dashboard
+        {t("nav.dashboard")}
       </Button>
       <Button
         variant="ghost"
@@ -62,7 +65,7 @@ export const Header = () => {
         className={isMobile ? "w-full justify-start" : ""}
       >
         <History className="mr-2 h-4 w-4" />
-        Historique
+        {t("nav.history")}
       </Button>
       <Button
         variant="ghost"
@@ -71,7 +74,7 @@ export const Header = () => {
         className={isMobile ? "w-full justify-start" : ""}
       >
         <Layers className="mr-2 h-4 w-4" />
-        Analyse en Lot
+        {t("nav.batchAnalyzer")}
       </Button>
       <Button
         variant="ghost"
@@ -80,7 +83,16 @@ export const Header = () => {
         className={isMobile ? "w-full justify-start" : ""}
       >
         <TrendingUp className="mr-2 h-4 w-4" />
-        Intelligence Marché
+        {t("nav.marketIntelligence")}
+      </Button>
+      <Button
+        variant="ghost"
+        size={isMobile ? "default" : "sm"}
+        onClick={() => handleNavigate("/pricing")}
+        className={isMobile ? "w-full justify-start" : ""}
+      >
+        <DollarSign className="mr-2 h-4 w-4" />
+        {t("nav.pricing")}
       </Button>
       <Button 
         variant="ghost" 
@@ -89,7 +101,7 @@ export const Header = () => {
         className={isMobile ? "w-full justify-start" : ""}
       >
         <LogOut className="mr-2 h-4 w-4" />
-        Déconnexion
+        {t("nav.signOut")}
       </Button>
     </>
   );
@@ -100,42 +112,45 @@ export const Header = () => {
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-primary to-secondary" />
           <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            E-commerce AI
+            ProductIQ
           </h1>
         </div>
         
-        {isMobile ? (
-          <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="sm">
-                {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-[280px] sm:w-[350px]">
-              <nav className="flex flex-col gap-2 mt-8">
-                {user ? (
-                  <NavButtons />
-                ) : (
-                  <Button onClick={() => handleNavigate("/auth")} className="w-full justify-start">
-                    <User className="mr-2 h-4 w-4" />
-                    Connexion
-                  </Button>
-                )}
-              </nav>
-            </SheetContent>
-          </Sheet>
-        ) : (
-          <nav className="flex items-center gap-4">
-            {user ? (
-              <NavButtons />
-            ) : (
-              <Button onClick={() => navigate("/auth")}>
-                <User className="mr-2 h-4 w-4" />
-                Connexion
-              </Button>
-            )}
-          </nav>
-        )}
+        <div className="flex items-center gap-2">
+          <LanguageSelector />
+          {isMobile ? (
+            <Sheet open={isOpen} onOpenChange={setIsOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[280px] sm:w-[350px]">
+                <nav className="flex flex-col gap-2 mt-8">
+                  {user ? (
+                    <NavButtons />
+                  ) : (
+                    <Button onClick={() => handleNavigate("/auth")} className="w-full justify-start">
+                      <User className="mr-2 h-4 w-4" />
+                      {t("nav.signIn")}
+                    </Button>
+                  )}
+                </nav>
+              </SheetContent>
+            </Sheet>
+          ) : (
+            <nav className="flex items-center gap-2">
+              {user ? (
+                <NavButtons />
+              ) : (
+                <Button onClick={() => navigate("/auth")} size="sm">
+                  <User className="mr-2 h-4 w-4" />
+                  {t("nav.signIn")}
+                </Button>
+              )}
+            </nav>
+          )}
+        </div>
       </div>
     </header>
   );
