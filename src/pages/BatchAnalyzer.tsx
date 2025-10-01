@@ -16,6 +16,23 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const getPlatformName = (platform: string): string => {
+  const platformNames: { [key: string]: string } = {
+    odoo: 'Odoo',
+    shopify: 'Shopify',
+    woocommerce: 'WooCommerce',
+    prestashop: 'PrestaShop',
+    magento: 'Magento',
+    salesforce: 'Salesforce',
+    sap: 'SAP',
+    uber_eats: 'Uber Eats',
+    deliveroo: 'Deliveroo',
+    just_eat: 'Just Eat',
+    windev: 'WinDev'
+  };
+  return platformNames[platform] || platform;
+};
+
 const BatchAnalyzer = () => {
   const [results, setResults] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -28,9 +45,11 @@ const BatchAnalyzer = () => {
   const handleSyncCategories = async () => {
     setIsSyncing(true);
     try {
-      toast.info("Synchronisation des catégories Odoo...");
+      const platformName = getPlatformName(exportPlatform);
+      toast.info(`Synchronisation des catégories ${platformName}...`);
       
-      const { data, error } = await supabase.functions.invoke('sync-odoo-categories');
+      const functionName = exportPlatform === 'odoo' ? 'sync-odoo-categories' : `sync-${exportPlatform}-categories`;
+      const { data, error } = await supabase.functions.invoke(functionName);
       
       if (error) throw error;
       
@@ -70,10 +89,7 @@ const BatchAnalyzer = () => {
         return;
       }
 
-      const platformName = exportPlatform === 'odoo' ? 'Odoo' : 
-                          exportPlatform === 'shopify' ? 'Shopify' :
-                          exportPlatform === 'woocommerce' ? 'WooCommerce' :
-                          exportPlatform === 'prestashop' ? 'PrestaShop' : exportPlatform;
+      const platformName = getPlatformName(exportPlatform);
 
       toast.info(`Export vers ${platformName} en cours...`);
 
@@ -109,7 +125,7 @@ const BatchAnalyzer = () => {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Analyse en Lot</h1>
           <p className="text-muted-foreground">
-            Analysez plusieurs produits et exportez-les automatiquement vers Odoo
+            Analysez plusieurs produits et exportez-les automatiquement vers {getPlatformName(exportPlatform)}
           </p>
         </div>
 
@@ -118,7 +134,7 @@ const BatchAnalyzer = () => {
             <TabsTrigger value="analyze">Analyser</TabsTrigger>
             <TabsTrigger value="technical">Analyses Techniques</TabsTrigger>
             <TabsTrigger value="risk">Gestion Risques</TabsTrigger>
-            <TabsTrigger value="settings">Configuration Odoo</TabsTrigger>
+            <TabsTrigger value="settings">Configuration {getPlatformName(exportPlatform)}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="analyze" className="space-y-6">
@@ -136,6 +152,10 @@ const BatchAnalyzer = () => {
                   <SelectItem value="magento">📦 Magento</SelectItem>
                   <SelectItem value="salesforce">☁️ Salesforce</SelectItem>
                   <SelectItem value="sap">🏢 SAP</SelectItem>
+                  <SelectItem value="uber_eats">🍔 Uber Eats</SelectItem>
+                  <SelectItem value="deliveroo">🚴 Deliveroo</SelectItem>
+                  <SelectItem value="just_eat">🍕 Just Eat</SelectItem>
+                  <SelectItem value="windev">💻 WinDev</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -175,7 +195,7 @@ const BatchAnalyzer = () => {
                     ) : (
                       <>
                         <RefreshCw className="w-4 h-4 mr-2" />
-                        Synchroniser les catégories Odoo
+                        Synchroniser les catégories {getPlatformName(exportPlatform)}
                       </>
                     )}
                   </Button>
