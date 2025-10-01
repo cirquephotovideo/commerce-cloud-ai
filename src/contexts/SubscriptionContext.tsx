@@ -17,6 +17,7 @@ interface SubscriptionContextType {
   subscriptionEnd: string | null;
   limits: SubscriptionLimits | null;
   isLoading: boolean;
+  isAdmin: boolean;
   checkSubscription: () => Promise<void>;
   canUseFeature: (feature: keyof SubscriptionLimits) => Promise<boolean>;
   getUsageCount: (feature: keyof SubscriptionLimits) => Promise<number>;
@@ -32,6 +33,7 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
   const [subscriptionEnd, setSubscriptionEnd] = useState<string | null>(null);
   const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const { toast } = useToast();
 
   const checkSubscription = async () => {
@@ -53,6 +55,7 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
       setProductId(data.product_id);
       setSubscriptionEnd(data.subscription_end);
       setLimits(data.limits);
+      setIsAdmin(data.is_admin || false);
 
       // Get plan name if we have a plan_id
       if (data.plan_id) {
@@ -100,6 +103,9 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const canUseFeature = async (feature: keyof SubscriptionLimits): Promise<boolean> => {
+    // Super admins have unlimited access
+    if (isAdmin) return true;
+
     if (!limits) {
       toast({
         title: "Abonnement requis",
@@ -152,6 +158,7 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
         subscriptionEnd,
         limits,
         isLoading,
+        isAdmin,
         checkSubscription,
         canUseFeature,
         getUsageCount,

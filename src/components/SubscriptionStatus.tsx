@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 export const SubscriptionStatus = () => {
-  const { subscribed, planName, limits, isLoading, getUsageCount, subscriptionEnd } = useSubscription();
+  const { subscribed, planName, limits, isLoading, getUsageCount, subscriptionEnd, isAdmin } = useSubscription();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [usage, setUsage] = useState<Record<string, number>>({});
@@ -58,6 +58,47 @@ export const SubscriptionStatus = () => {
       <Card>
         <CardContent className="flex items-center justify-center p-6">
           <Loader2 className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show admin status for super admins
+  if (isAdmin) {
+    return (
+      <Card className="border-primary bg-primary/5">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Accès Administrateur
+              </CardTitle>
+              <CardDescription>
+                Accès illimité à toutes les fonctionnalités
+              </CardDescription>
+            </div>
+            <Badge variant="default" className="bg-primary">Admin</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            {limits && Object.entries(limits).map(([feature]) => {
+              const featureNames: Record<string, string> = {
+                product_analyses: "Analyses de produits",
+                google_shopping_searches: "Recherches Google Shopping",
+                price_alerts: "Alertes prix",
+                image_optimizations: "Optimisations d'images"
+              };
+
+              return (
+                <div key={feature} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{featureNames[feature] || feature}</span>
+                  <span className="font-medium text-primary">Illimité</span>
+                </div>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
     );
