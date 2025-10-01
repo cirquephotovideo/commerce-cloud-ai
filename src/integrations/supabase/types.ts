@@ -331,6 +331,36 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_permissions: {
+        Row: {
+          created_at: string | null
+          enabled_for_admins: boolean | null
+          enabled_for_users: boolean | null
+          feature_description: string | null
+          feature_name: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled_for_admins?: boolean | null
+          enabled_for_users?: boolean | null
+          feature_description?: string | null
+          feature_name: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled_for_admins?: boolean | null
+          enabled_for_users?: boolean | null
+          feature_description?: string | null
+          feature_name?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       market_trends: {
         Row: {
           confidence_score: number | null
@@ -539,6 +569,39 @@ export type Database = {
           source_path?: string
           transformation?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ollama_configurations: {
+        Row: {
+          api_key_encrypted: string | null
+          available_models: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          ollama_url: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          available_models?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          ollama_url: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          available_models?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          ollama_url?: string
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1137,6 +1200,33 @@ export type Database = {
           period_start?: string
           updated_at?: string | null
           usage_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_ai_preferences: {
+        Row: {
+          created_at: string | null
+          fallback_enabled: boolean | null
+          id: string
+          preferred_provider: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fallback_enabled?: boolean | null
+          id?: string
+          preferred_provider?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          fallback_enabled?: boolean | null
+          id?: string
+          preferred_provider?: string | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
