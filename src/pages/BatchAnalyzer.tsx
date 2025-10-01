@@ -4,6 +4,8 @@ import { BatchAnalyzer as BatchAnalyzerComponent } from "@/components/BatchAnaly
 import { DetailedBatchResults } from "@/components/DetailedBatchResults";
 import { OdooSettings } from "@/components/OdooSettings";
 import { OdooFieldMappings } from "@/components/OdooFieldMappings";
+import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
+import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -103,6 +105,8 @@ const BatchAnalyzer = () => {
         <Tabs defaultValue="analyze" className="space-y-6">
           <TabsList>
             <TabsTrigger value="analyze">Analyser</TabsTrigger>
+            <TabsTrigger value="technical">Analyses Techniques</TabsTrigger>
+            <TabsTrigger value="risk">Gestion Risques</TabsTrigger>
             <TabsTrigger value="settings">Configuration Odoo</TabsTrigger>
           </TabsList>
 
@@ -111,6 +115,14 @@ const BatchAnalyzer = () => {
             {results.length > 0 && (
               <DetailedBatchResults results={results} onExport={handleExport} />
             )}
+          </TabsContent>
+
+          <TabsContent value="technical" className="space-y-6">
+            <TechnicalAnalysis />
+          </TabsContent>
+
+          <TabsContent value="risk" className="space-y-6">
+            <RiskAnalysis />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">

@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      compatibility_matrix: {
+        Row: {
+          compatible_products: Json | null
+          created_at: string | null
+          id: string
+          incompatible_products: Json | null
+          product_id: string | null
+          regional_restrictions: Json | null
+          required_accessories: Json | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          compatible_products?: Json | null
+          created_at?: string | null
+          id?: string
+          incompatible_products?: Json | null
+          product_id?: string | null
+          regional_restrictions?: Json | null
+          required_accessories?: Json | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          compatible_products?: Json | null
+          created_at?: string | null
+          id?: string
+          incompatible_products?: Json | null
+          product_id?: string | null
+          regional_restrictions?: Json | null
+          required_accessories?: Json | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compatibility_matrix_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_sites: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_scraped_at: string | null
+          scraping_frequency: string | null
+          site_name: string
+          site_type: string
+          site_url: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_scraped_at?: string | null
+          scraping_frequency?: string | null
+          site_name: string
+          site_type: string
+          site_url: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_scraped_at?: string | null
+          scraping_frequency?: string | null
+          site_name?: string
+          site_type?: string
+          site_url?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string | null
@@ -72,6 +155,42 @@ export type Database = {
           id?: string
           products_count?: number
           success_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      market_trends: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          detected_at: string | null
+          id: string
+          is_read: boolean | null
+          product_category: string | null
+          trend_data: Json
+          trend_type: string
+          user_id: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          detected_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          product_category?: string | null
+          trend_data: Json
+          trend_type: string
+          user_id: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          detected_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          product_category?: string | null
+          trend_data?: Json
+          trend_type?: string
           user_id?: string
         }
         Relationships: []
@@ -219,6 +338,56 @@ export type Database = {
         }
         Relationships: []
       }
+      price_monitoring: {
+        Row: {
+          competitor_site_id: string | null
+          created_at: string | null
+          current_price: number | null
+          id: string
+          previous_price: number | null
+          price_change_percent: number | null
+          product_name: string
+          product_url: string
+          scraped_at: string | null
+          stock_status: string | null
+          user_id: string
+        }
+        Insert: {
+          competitor_site_id?: string | null
+          created_at?: string | null
+          current_price?: number | null
+          id?: string
+          previous_price?: number | null
+          price_change_percent?: number | null
+          product_name: string
+          product_url: string
+          scraped_at?: string | null
+          stock_status?: string | null
+          user_id: string
+        }
+        Update: {
+          competitor_site_id?: string | null
+          created_at?: string | null
+          current_price?: number | null
+          id?: string
+          previous_price?: number | null
+          price_change_percent?: number | null
+          product_name?: string
+          product_url?: string
+          scraped_at?: string | null
+          stock_status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_monitoring_competitor_site_id_fkey"
+            columns: ["competitor_site_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_analyses: {
         Row: {
           analysis_result: Json
@@ -296,6 +465,127 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      risk_assessments: {
+        Row: {
+          analysis_id: string | null
+          authenticity_score: number | null
+          compliance_status: Json | null
+          created_at: string | null
+          id: string
+          return_prediction: Json | null
+          risk_level: string | null
+          updated_at: string | null
+          user_id: string
+          warranty_analysis: Json | null
+        }
+        Insert: {
+          analysis_id?: string | null
+          authenticity_score?: number | null
+          compliance_status?: Json | null
+          created_at?: string | null
+          id?: string
+          return_prediction?: Json | null
+          risk_level?: string | null
+          updated_at?: string | null
+          user_id: string
+          warranty_analysis?: Json | null
+        }
+        Update: {
+          analysis_id?: string | null
+          authenticity_score?: number | null
+          compliance_status?: Json | null
+          created_at?: string | null
+          id?: string
+          return_prediction?: Json | null
+          risk_level?: string | null
+          updated_at?: string | null
+          user_id?: string
+          warranty_analysis?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_assessments_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_specs: {
+        Row: {
+          analysis_id: string | null
+          compatibility_data: Json | null
+          created_at: string | null
+          id: string
+          lifecycle_stage: string | null
+          obsolescence_score: number | null
+          specs_data: Json
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          compatibility_data?: Json | null
+          created_at?: string | null
+          id?: string
+          lifecycle_stage?: string | null
+          obsolescence_score?: number | null
+          specs_data: Json
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string | null
+          compatibility_data?: Json | null
+          created_at?: string | null
+          id?: string
+          lifecycle_stage?: string | null
+          obsolescence_score?: number | null
+          specs_data?: Json
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_specs_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_alerts: {
+        Row: {
+          alert_data: Json
+          alert_type: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          priority: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_data: Json
+          alert_type: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          priority?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_data?: Json
+          alert_type?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          priority?: string | null
+          user_id?: string
         }
         Relationships: []
       }
