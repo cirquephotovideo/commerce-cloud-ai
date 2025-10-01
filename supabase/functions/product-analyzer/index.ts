@@ -105,7 +105,20 @@ Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce fo
   "image_optimization": {
     "quality_score": 80,
     "suggested_angles": ["Angle 1", "Angle 2", "Angle 3"],
-    "background_recommendations": "Recommandations pour le fond",
+    "background_recommendations": "Recommandations pour le fond (couleurs, style, mise en scène)",
+    "lighting_suggestions": "Conseils d'éclairage (naturel, studio, diffus, etc.)",
+    "composition_tips": "Conseils de composition (règle des tiers, point de vue, etc.)",
+    "recommended_colors": ["#FF5733", "#33FF57", "#3357FF"],
+    "photography_style": "Style de photographie recommandé (lifestyle, packshot, ambiance, etc.)",
+    "technical_specs": {
+      "min_resolution": "1200x1200px",
+      "recommended_format": "PNG ou JPEG",
+      "compression_level": "80-90%"
+    },
+    "ai_generation_prompts": [
+      "Prompt 1 pour générer une image d'exemple avec IA",
+      "Prompt 2 pour générer une image d'exemple avec IA"
+    ],
     "recommendations": ["Recommandation 1", "Recommandation 2"]
   },
   "tags_categories": {

@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { ImageOptimization } from "./ImageOptimization";
 import { 
   Search, 
   TrendingUp, 
@@ -8,7 +9,6 @@ import {
   Target, 
   BarChart3, 
   FileText,
-  Image as ImageIcon,
   Tag,
   MessageSquare,
   Star,
@@ -374,33 +374,7 @@ export const AnalysisResults = ({ analysis, productInput, inputType }: AnalysisR
 
       {/* Image Optimization */}
       {analysis.image_optimization && (
-        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
-              <ImageIcon className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold">Optimisation Image</h3>
-              {analysis.image_optimization.quality_score && (
-                <div className="flex items-center gap-2 mt-1">
-                  <Progress value={analysis.image_optimization.quality_score} className="h-2" />
-                  <span className="text-sm font-semibold">{analysis.image_optimization.quality_score}%</span>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {analysis.image_optimization.suggested_angles && (
-            <div>
-              <p className="text-sm font-semibold mb-2">Angles suggérés:</p>
-              <div className="grid grid-cols-3 gap-2">
-                {analysis.image_optimization.suggested_angles.map((angle: string, idx: number) => (
-                  <Badge key={idx} variant="outline" className="justify-center">{angle}</Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
+        <ImageOptimization data={analysis.image_optimization} />
       )}
     </div>
   );
