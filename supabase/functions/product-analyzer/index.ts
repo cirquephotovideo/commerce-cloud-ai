@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,9 +54,13 @@ function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
   return 'product_name';
 }
 
-const analysisPrompt = (productInfo: string, inputType: string, searchResults: SearchResult[]) => {
+const analysisPrompt = (productInfo: string, inputType: string, searchResults: SearchResult[], categories: any[]) => {
   const searchContext = searchResults.length > 0 
     ? `\n\nInformations trouvées sur le web:\n${searchResults.map(r => `- ${r.title}: ${r.description}`).join('\n')}`
+    : '';
+
+  const categoriesContext = categories.length > 0
+    ? `\n\nCatégories Odoo disponibles:\n${categories.map(c => `- ${c.full_path} (ID: ${c.odoo_category_id})`).join('\n')}`
     : '';
 
   return `Analyse complète du produit e-commerce.
@@ -65,6 +70,7 @@ ${inputType === 'url' ? `URL du produit: ${productInfo}` :
   inputType === 'barcode' ? `Code-barres: ${productInfo}` : 
   `Nom du produit: ${productInfo}`}
 ${searchContext}
+${categoriesContext}
 
 Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce format JSON (important: retourne UNIQUEMENT le JSON, pas de texte avant ou après):
 
@@ -125,6 +131,8 @@ Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce fo
     "primary_category": "Catégorie principale",
     "subcategories": ["Sous-catégorie 1", "Sous-catégorie 2"],
     "suggested_tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
+    "odoo_category_id": null,
+    "odoo_category_name": "Si les catégories Odoo sont disponibles, choisis la catégorie la plus appropriée et indique son ID et nom complet, sinon null",
     "recommendations": ["Recommandation 1", "Recommandation 2"]
   },
   "customer_reviews": {
@@ -159,6 +167,34 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
+    // Get Supabase client
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    let userId = null;
+    let categories: any[] = [];
+
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user } } = await supabaseClient.auth.getUser(token);
+      userId = user?.id;
+
+      // Fetch user's Odoo categories
+      if (userId) {
+        const { data: categoriesData } = await supabaseClient
+          .from('odoo_categories')
+          .select('*')
+          .eq('user_id', userId);
+        
+        categories = categoriesData || [];
+        console.log(`Found ${categories.length} Odoo categories for user`);
+      }
+    }
+
     // Detect input type
     const inputType = detectInputType(productInput);
     console.log('Input type detected:', inputType);
@@ -191,7 +227,7 @@ serve(async (req) => {
           },
           {
             role: 'user',
-            content: analysisPrompt(productInput, inputType, searchResults)
+            content: analysisPrompt(productInput, inputType, searchResults, categories)
           }
         ],
       }),

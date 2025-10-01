@@ -7,6 +7,8 @@ import { Package, Barcode, Link, Loader2 } from "lucide-react";
 import { Progress } from "./ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
 
 interface BatchAnalyzerProps {
   onAnalysisComplete: (results: any[]) => void;
@@ -18,6 +20,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProduct, setCurrentProduct] = useState("");
+  const [autoExport, setAutoExport] = useState(false);
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -58,24 +61,37 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
         if (error) throw error;
 
         if (data.success) {
-          // Auto-save to database with image URLs
+          // Auto-save to database with image URLs and category mapping
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            await supabase.from('product_analyses').insert({
+            const insertData: any = {
               user_id: user.id,
               product_url: product,
               analysis_result: data.analysis,
               image_urls: data.imageUrls || [],
               tags: data.analysis?.tags_categories?.suggested_tags || []
+            };
+
+            // Add category mapping if available
+            if (data.analysis?.tags_categories?.odoo_category_id) {
+              insertData.mapped_category_id = String(data.analysis.tags_categories.odoo_category_id);
+              insertData.mapped_category_name = data.analysis.tags_categories.odoo_category_name;
+            }
+
+            const { data: insertedAnalysis } = await supabase
+              .from('product_analyses')
+              .insert(insertData)
+              .select()
+              .single();
+
+            results.push({
+              product,
+              analysis: data.analysis,
+              imageUrls: data.imageUrls || [],
+              success: true,
+              analysisId: insertedAnalysis?.id
             });
           }
-          
-          results.push({
-            product,
-            analysis: data.analysis,
-            imageUrls: data.imageUrls || [],
-            success: true
-          });
         } else {
           results.push({
             product,
@@ -98,6 +114,30 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
     
     const successCount = results.filter(r => r.success).length;
     toast.success(`Analyse terminée: ${successCount}/${products.length} produits analysés avec succès`);
+    
+    // Auto-export to Odoo if enabled
+    if (autoExport && successCount > 0) {
+      const analysisIds = results
+        .filter(r => r.success && r.analysisId)
+        .map(r => r.analysisId);
+
+      if (analysisIds.length > 0) {
+        try {
+          toast.info('Export vers Odoo en cours...');
+          const { data: exportData, error: exportError } = await supabase.functions.invoke('export-to-odoo', {
+            body: { analysisIds }
+          });
+
+          if (exportError) throw exportError;
+
+          const exportSuccess = exportData?.results?.filter((r: any) => r.success).length || 0;
+          toast.success(`${exportSuccess} produits exportés vers Odoo`);
+        } catch (exportError) {
+          console.error('Export error:', exportError);
+          toast.error('Erreur lors de l\'export vers Odoo');
+        }
+      }
+    }
     
     onAnalysisComplete(results);
   };
@@ -128,6 +168,18 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           </TabsList>
 
           <TabsContent value={inputType} className="space-y-4">
+            <div className="flex items-center space-x-2 mb-4 p-3 bg-muted/50 rounded-lg">
+              <Switch
+                id="auto-export"
+                checked={autoExport}
+                onCheckedChange={setAutoExport}
+                disabled={isAnalyzing}
+              />
+              <Label htmlFor="auto-export" className="cursor-pointer">
+                Créer automatiquement dans Odoo après l'analyse
+              </Label>
+            </div>
+
             <Textarea
               placeholder={getPlaceholder()}
               value={batchInput}
