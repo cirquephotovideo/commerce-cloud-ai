@@ -20,8 +20,14 @@ export const de = {
     metric3: "2h gespart/Tag",
   },
   features: {
-    title: "Leistungsstarke Funktionen",
-    subtitle: "Alle Tools, die Sie benötigen, um Ihren Markt zu dominieren",
+    title: "Warum Unsere Plattform Wählen?",
+    subtitle: "Leistungsstarke Tools zur Optimierung Ihres E-Commerce mit künstlicher Intelligenz",
+    webSearch: "Integrierte Websuche",
+    webSearchDesc: "Zugriff auf die neuesten Informationen über automatische Websuche",
+    advancedAI: "Fortgeschrittene KI",
+    advancedAIDesc: "KI-Modelle der neuesten Generation für präzise Analysen",
+    completeAnalysis: "Vollständige Analyse",
+    completeAnalysisDesc: "9 spezialisierte Tools zur Analyse aller Aspekte Ihrer Produkte",
     productAnalysis: {
       title: "KI-Produktanalyse",
       description: "Analysieren Sie jedes Produkt mit unserer fortschrittlichen KI",

@@ -20,8 +20,14 @@ export const it = {
     metric3: "2h risparmiate/giorno",
   },
   features: {
-    title: "Funzionalità Potenti",
-    subtitle: "Tutti gli strumenti di cui hai bisogno per dominare il tuo mercato",
+    title: "Perché Scegliere La Nostra Piattaforma?",
+    subtitle: "Strumenti potenti per ottimizzare il tuo e-commerce con l'intelligenza artificiale",
+    webSearch: "Ricerca Web Integrata",
+    webSearchDesc: "Accesso alle informazioni più recenti tramite ricerca web automatica",
+    advancedAI: "IA Avanzata",
+    advancedAIDesc: "Modelli di IA di ultima generazione per analisi precise",
+    completeAnalysis: "Analisi Completa",
+    completeAnalysisDesc: "9 strumenti specializzati per analizzare tutti gli aspetti dei tuoi prodotti",
     productAnalysis: {
       title: "Analisi Prodotti IA",
       description: "Analizza qualsiasi prodotto in profondità con la nostra IA avanzata",

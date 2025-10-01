@@ -6,6 +6,12 @@ import { en } from './locales/en';
 import { es } from './locales/es';
 import { de } from './locales/de';
 import { it } from './locales/it';
+import { zh } from './locales/zh';
+import { pt } from './locales/pt';
+import { ru } from './locales/ru';
+import { ja } from './locales/ja';
+import { ar } from './locales/ar';
+import { hi } from './locales/hi';
 
 i18n
   .use(LanguageDetector)
@@ -17,6 +23,12 @@ i18n
       es: { translation: es },
       de: { translation: de },
       it: { translation: it },
+      zh: { translation: zh },
+      pt: { translation: pt },
+      ru: { translation: ru },
+      ja: { translation: ja },
+      ar: { translation: ar },
+      hi: { translation: hi },
     },
     fallbackLng: 'fr',
     interpolation: {

@@ -20,8 +20,14 @@ export const en = {
     metric3: "2h saved/day",
   },
   features: {
-    title: "Powerful Features",
-    subtitle: "All the tools you need to dominate your market",
+    title: "Why Choose Our Platform?",
+    subtitle: "Powerful tools to optimize your e-commerce with artificial intelligence",
+    webSearch: "Integrated Web Search",
+    webSearchDesc: "Access to the most recent information via automatic web search",
+    advancedAI: "Advanced AI",
+    advancedAIDesc: "Latest generation AI models for precise analyses",
+    completeAnalysis: "Complete Analysis",
+    completeAnalysisDesc: "9 specialized tools to analyze all aspects of your products",
     productAnalysis: {
       title: "AI Product Analysis",
       description: "Analyze any product in depth with our advanced AI",
@@ -161,6 +167,7 @@ export const en = {
   comparison: {
     title: "Why Choose Us?",
     subtitle: "Compare us with other market solutions",
+    featuresHeader: "Features",
     us: "Our Platform",
     others: "Competitors",
     features: {

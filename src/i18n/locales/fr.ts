@@ -20,8 +20,14 @@ export const fr = {
     metric3: "2h gagnées/jour",
   },
   features: {
-    title: "Fonctionnalités Puissantes",
-    subtitle: "Tous les outils dont vous avez besoin pour dominer votre marché",
+    title: "Pourquoi Choisir Notre Plateforme ?",
+    subtitle: "Des outils puissants pour optimiser votre e-commerce avec l'intelligence artificielle",
+    webSearch: "Recherche Web Intégrée",
+    webSearchDesc: "Accès aux informations les plus récentes via la recherche web automatique",
+    advancedAI: "IA Avancée",
+    advancedAIDesc: "Modèles d'IA de dernière génération pour des analyses précises",
+    completeAnalysis: "Analyse Complète",
+    completeAnalysisDesc: "9 outils spécialisés pour analyser tous les aspects de vos produits",
     productAnalysis: {
       title: "Analyse Produit IA",
       description: "Analysez n'importe quel produit en profondeur avec notre IA avancée",
@@ -161,6 +167,7 @@ export const fr = {
   comparison: {
     title: "Pourquoi Nous Choisir ?",
     subtitle: "Comparez-nous avec les autres solutions du marché",
+    featuresHeader: "Fonctionnalités",
     us: "Notre Plateforme",
     others: "Concurrents",
     features: {

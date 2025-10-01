@@ -161,6 +161,7 @@ export const es = {
   comparison: {
     title: "¿Por Qué Elegirnos?",
     subtitle: "Compáranos con otras soluciones del mercado",
+    featuresHeader: "Funcionalidades",
     us: "Nuestra Plataforma",
     others: "Competidores",
     features: {

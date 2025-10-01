@@ -33,7 +33,7 @@ export const ComparisonSection = () => {
             <thead>
               <tr className="border-b-2 border-primary/20">
                 <th className="text-left py-4 px-6 text-muted-foreground font-normal">
-                  Fonctionnalités
+                  {t("comparison.featuresHeader")}
                 </th>
                 <th className="text-center py-4 px-6 bg-primary/10 rounded-t-lg">
                   <div className="font-bold text-primary text-lg">
