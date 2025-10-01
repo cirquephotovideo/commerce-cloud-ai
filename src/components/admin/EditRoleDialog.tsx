@@ -51,7 +51,7 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
           // Mettre à jour le rôle existant
           const { error } = await supabase
             .from("user_roles")
-            .update({ role: selectedRole })
+            .update({ role: selectedRole as any })
             .eq("user_id", userId);
 
           if (error) throw error;
@@ -61,7 +61,7 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
             .from("user_roles")
             .insert({
               user_id: userId,
-              role: selectedRole
+              role: selectedRole as any
             });
 
           if (error) throw error;

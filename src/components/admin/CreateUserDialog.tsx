@@ -47,7 +47,7 @@ export const CreateUserDialog = ({ open, onOpenChange, onSuccess }: CreateUserDi
             .from("user_roles")
             .insert({
               user_id: authData.user.id,
-              role: formData.role
+              role: formData.role as any
             });
 
           if (roleError) throw roleError;
