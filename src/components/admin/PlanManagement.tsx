@@ -55,13 +55,20 @@ export const PlanManagement = () => {
         .select("*")
         .order("display_order");
 
-      if (error) throw error;
+      if (error) {
+        toast({
+          title: "Erreur de chargement",
+          description: `Impossible de charger les plans: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
+      
       setPlans(data || []);
-    } catch (error) {
-      console.error("Error fetching plans:", error);
+    } catch (error: any) {
       toast({
         title: "Erreur",
-        description: "Impossible de charger les plans",
+        description: error?.message || "Impossible de charger les plans",
         variant: "destructive",
       });
     } finally {
@@ -76,7 +83,14 @@ export const PlanManagement = () => {
         .update({ is_active: !currentStatus })
         .eq("id", planId);
 
-      if (error) throw error;
+      if (error) {
+        toast({
+          title: "Erreur de mise à jour",
+          description: `Impossible de modifier le plan: ${error.message}`,
+          variant: "destructive",
+        });
+        throw error;
+      }
 
       toast({
         title: "Succès",
@@ -84,11 +98,10 @@ export const PlanManagement = () => {
       });
       
       fetchPlans();
-    } catch (error) {
-      console.error("Error updating plan:", error);
+    } catch (error: any) {
       toast({
         title: "Erreur",
-        description: "Impossible de modifier le plan",
+        description: error?.message || "Impossible de modifier le plan",
         variant: "destructive",
       });
     }
