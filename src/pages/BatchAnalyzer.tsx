@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Header } from "@/components/Header";
 import { BatchAnalyzer as BatchAnalyzerComponent } from "@/components/BatchAnalyzer";
 import { BatchResults } from "@/components/BatchResults";
@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function BatchAnalyzer() {
+const BatchAnalyzer = () => {
   const [results, setResults] = useState<any[]>([]);
 
   const handleAnalysisComplete = (newResults: any[]) => {
@@ -92,4 +92,6 @@ export default function BatchAnalyzer() {
       </main>
     </div>
   );
-}
+};
+
+export default BatchAnalyzer;
