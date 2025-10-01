@@ -102,12 +102,20 @@ export default function History() {
   const getProductDescription = (analysis: any) => {
     if (typeof analysis === "string") return "-";
     const desc = analysis?.description || analysis?.product_description || "";
+    // Handle case where description is an object
+    if (typeof desc === "object" && desc !== null) {
+      const descText = desc.suggested_description || desc.current_quality || JSON.stringify(desc);
+      return descText.length > 50 ? descText.substring(0, 50) + "..." : descText || "-";
+    }
     return desc.length > 50 ? desc.substring(0, 50) + "..." : desc || "-";
   };
 
   const getProductTags = (analysis: any) => {
     if (typeof analysis === "string") return [];
-    return analysis?.tags || analysis?.product_tags || [];
+    const tags = analysis?.tags || analysis?.product_tags || [];
+    // Ensure we return an array
+    if (Array.isArray(tags)) return tags;
+    return [];
   };
 
   if (isLoading) {
