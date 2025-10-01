@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign } from "lucide-react";
+import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LanguageSelector } from "./LanguageSelector";
 import { useTranslation } from "react-i18next";
+import { useUserRole } from "@/hooks/useUserRole";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export const Header = () => {
@@ -17,6 +18,7 @@ export const Header = () => {
   const { toast } = useToast();
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const { isSuperAdmin } = useUserRole();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -94,6 +96,17 @@ export const Header = () => {
         <DollarSign className="mr-2 h-4 w-4" />
         {t("nav.pricing")}
       </Button>
+      {isSuperAdmin && (
+        <Button
+          variant="ghost"
+          size={isMobile ? "default" : "sm"}
+          onClick={() => handleNavigate("/admin")}
+          className={isMobile ? "w-full justify-start" : ""}
+        >
+          <Shield className="mr-2 h-4 w-4" />
+          Administration
+        </Button>
+      )}
       <Button 
         variant="ghost" 
         size={isMobile ? "default" : "sm"} 
