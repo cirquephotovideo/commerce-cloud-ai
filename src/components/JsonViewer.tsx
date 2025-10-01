@@ -74,7 +74,21 @@ export const JsonViewer = ({ data }: JsonViewerProps) => {
     return <span>{String(value)}</span>;
   };
 
-  const jsonData = typeof data === "string" ? JSON.parse(data) : data;
+  let jsonData;
+  if (typeof data === "string") {
+    try {
+      jsonData = JSON.parse(data);
+    } catch {
+      // If it's not valid JSON, treat it as plain text
+      return (
+        <div className="bg-muted/50 p-4 rounded-lg">
+          <p className="text-sm whitespace-pre-wrap">{data}</p>
+        </div>
+      );
+    }
+  } else {
+    jsonData = data;
+  }
 
   return (
     <div className="space-y-2">
