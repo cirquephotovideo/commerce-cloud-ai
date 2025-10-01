@@ -94,6 +94,22 @@ export default function History() {
     return analysis?.price || analysis?.product_price || "-";
   };
 
+  const getProductScore = (analysis: any) => {
+    if (typeof analysis === "string") return "-";
+    return analysis?.quality_score || analysis?.score || "-";
+  };
+
+  const getProductDescription = (analysis: any) => {
+    if (typeof analysis === "string") return "-";
+    const desc = analysis?.description || analysis?.product_description || "";
+    return desc.length > 50 ? desc.substring(0, 50) + "..." : desc || "-";
+  };
+
+  const getProductTags = (analysis: any) => {
+    if (typeof analysis === "string") return [];
+    return analysis?.tags || analysis?.product_tags || [];
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -121,72 +137,107 @@ export default function History() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Produit</TableHead>
-                  <TableHead>Catégorie</TableHead>
-                  <TableHead>Prix</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {analyses.length === 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      Aucune analyse trouvée
-                    </TableCell>
+                    <TableHead className="w-[200px]">Produit</TableHead>
+                    <TableHead className="w-[150px]">Catégorie</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="w-[100px]">Prix</TableHead>
+                    <TableHead className="w-[80px]">Score</TableHead>
+                    <TableHead className="w-[150px]">Tags</TableHead>
+                    <TableHead className="w-[100px]">Date</TableHead>
+                    <TableHead className="text-right w-[100px]">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  analyses.map((analysis) => (
-                    <TableRow 
-                      key={analysis.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => setSelectedAnalysis(analysis)}
-                    >
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {analysis.is_favorite && <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />}
-                          <span className="truncate max-w-[200px]">
-                            {getProductName(analysis.analysis_result)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{analysis.mapped_category_name || "-"}</TableCell>
-                      <TableCell>{getProductPrice(analysis.analysis_result)}</TableCell>
-                      <TableCell>
-                        {new Date(analysis.created_at).toLocaleDateString("fr-FR")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(analysis.product_url, "_blank");
-                            }}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteAnalysis(analysis.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                </TableHeader>
+                <TableBody>
+                  {analyses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        Aucune analyse trouvée
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    analyses.map((analysis) => (
+                      <TableRow 
+                        key={analysis.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setSelectedAnalysis(analysis)}
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {analysis.is_favorite && <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />}
+                            <span className="truncate max-w-[180px]">
+                              {getProductName(analysis.analysis_result)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                            {analysis.mapped_category_name || "-"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {getProductDescription(analysis.analysis_result)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          {getProductPrice(analysis.analysis_result)}
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm font-medium">
+                            {getProductScore(analysis.analysis_result)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {getProductTags(analysis.analysis_result).slice(0, 2).map((tag: string, idx: number) => (
+                              <span key={idx} className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
+                                {tag}
+                              </span>
+                            ))}
+                            {getProductTags(analysis.analysis_result).length > 2 && (
+                              <span className="text-xs text-muted-foreground">
+                                +{getProductTags(analysis.analysis_result).length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {new Date(analysis.created_at).toLocaleDateString("fr-FR")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(analysis.product_url, "_blank");
+                              }}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteAnalysis(analysis.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
