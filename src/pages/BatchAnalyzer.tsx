@@ -3,6 +3,7 @@ import { Header } from "@/components/Header";
 import { BatchAnalyzer as BatchAnalyzerComponent } from "@/components/BatchAnalyzer";
 import { DetailedBatchResults } from "@/components/DetailedBatchResults";
 import { OdooSettings } from "@/components/OdooSettings";
+import { OdooFieldMappings } from "@/components/OdooFieldMappings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -132,7 +133,8 @@ const BatchAnalyzer = () => {
                 )}
               </Button>
             </div>
-            <OdooSettings />
+              <OdooSettings />
+              <OdooFieldMappings />
           </TabsContent>
         </Tabs>
       </main>

@@ -180,6 +180,45 @@ export type Database = {
         }
         Relationships: []
       }
+      odoo_field_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          odoo_field: string
+          odoo_field_label: string
+          source_field: string
+          source_path: string
+          transformation: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          odoo_field: string
+          odoo_field_label: string
+          source_field: string
+          source_path: string
+          transformation?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          odoo_field?: string
+          odoo_field_label?: string
+          source_field?: string
+          source_path?: string
+          transformation?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_analyses: {
         Row: {
           analysis_result: Json

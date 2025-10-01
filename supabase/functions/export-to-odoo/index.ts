@@ -164,21 +164,76 @@ async function downloadImageAsBase64(imageUrl: string): Promise<string | null> {
   }
 }
 
-// Map analysis result to Odoo product data with full Odoo 19 fields
-async function mapAnalysisToOdooProduct(analysis: ProductAnalysis, categories: any[]): Promise<any> {
+// Helper to get nested value from object using path
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
+
+// Map analysis result to Odoo product data using custom mappings
+async function mapAnalysisToOdooProduct(
+  analysis: ProductAnalysis, 
+  categories: any[],
+  fieldMappings: any[]
+): Promise<any> {
   const result = analysis.analysis_result;
   
-  // Extract price from pricing analysis
-  let price = 0;
-  if (result.pricing?.estimated_price) {
-    const priceStr = result.pricing.estimated_price.replace(/[^0-9.,]/g, '');
-    price = parseFloat(priceStr.replace(',', '.')) || 0;
+  // Start with default essential fields
+  const productData: any = {
+    sale_ok: true,
+    purchase_ok: false,
+    type: 'consu',
+    website_published: true,
+  };
+
+  // Apply custom field mappings
+  for (const mapping of fieldMappings) {
+    if (!mapping.is_active) continue;
+
+    let value = null;
+
+    // Get value from source path
+    if (mapping.source_path.includes('.')) {
+      value = getNestedValue(result, mapping.source_path);
+    } else {
+      // Direct field access
+      if (mapping.source_path === 'product_name') {
+        value = result.product_name || analysis.product_url;
+      }
+    }
+
+    // Apply transformations based on field type
+    if (value !== null && value !== undefined) {
+      if (mapping.odoo_field === 'list_price' || mapping.odoo_field === 'standard_price') {
+        // Price transformation
+        if (typeof value === 'string') {
+          const priceStr = value.replace(/[^0-9.,]/g, '');
+          value = parseFloat(priceStr.replace(',', '.')) || 0;
+          if (mapping.odoo_field === 'standard_price') {
+            value = value * 0.7; // Estimate cost at 70% of selling price
+          }
+        }
+      } else if (mapping.odoo_field === 'website_meta_keywords' && Array.isArray(value)) {
+        // Keywords array to string
+        value = value.join(', ');
+      } else if (mapping.odoo_field === 'description_sale') {
+        // Truncate description_sale
+        value = String(value).substring(0, 500);
+      }
+
+      productData[mapping.odoo_field] = value;
+    }
   }
 
-  // Get barcode if available
-  const barcode = analysis.product_url.match(/^\d{8,13}$/) ? analysis.product_url : '';
+  // Fallback mappings if not provided by custom mappings
+  if (!productData.name) {
+    productData.name = result.product_name || analysis.product_url;
+  }
+  if (!productData.default_code) {
+    const barcode = analysis.product_url.match(/^\d{8,13}$/) ? analysis.product_url : '';
+    productData.default_code = barcode || `REF-${Date.now()}`;
+  }
 
-  // Find category ID if mapped
+  // Handle category mapping
   let categId = null;
   if (analysis.mapped_category_id) {
     const category = categories.find(c => c.odoo_category_id === parseInt(analysis.mapped_category_id!));
@@ -186,8 +241,6 @@ async function mapAnalysisToOdooProduct(analysis: ProductAnalysis, categories: a
       categId = category.odoo_category_id;
     }
   }
-
-  // Get primary category from analysis if no mapped category
   if (!categId && result.tags_categories?.primary_category) {
     const categoryMatch = categories.find(c => 
       c.category_name.toLowerCase().includes(result.tags_categories.primary_category.toLowerCase()) ||
@@ -197,40 +250,18 @@ async function mapAnalysisToOdooProduct(analysis: ProductAnalysis, categories: a
       categId = categoryMatch.odoo_category_id;
     }
   }
+  if (categId) {
+    productData.categ_id = categId;
+  }
 
   // Download and convert first image to base64 if available
   let imageBase64 = null;
   if (analysis.image_urls && analysis.image_urls.length > 0) {
     console.log(`Downloading image from: ${analysis.image_urls[0]}`);
     imageBase64 = await downloadImageAsBase64(analysis.image_urls[0]);
-  }
-
-  // Build complete product data with Odoo 19 mapping
-  const productData: any = {
-    name: result.product_name || analysis.product_url,
-    description: result.description?.suggested_description || result.description?.optimized_description || '',
-    description_sale: result.description?.suggested_description?.substring(0, 500) || '',
-    list_price: price,
-    standard_price: price * 0.7, // Estimate cost at 70% of selling price
-    default_code: barcode || `REF-${Date.now()}`,
-    barcode: barcode,
-    website_meta_title: result.seo?.title || result.product_name || '',
-    website_meta_description: result.seo?.meta_description || '',
-    website_meta_keywords: result.seo?.keywords?.join(', ') || '',
-    categ_id: categId,
-  };
-
-  // Add image if downloaded successfully
-  if (imageBase64) {
-    productData.image_1920 = imageBase64;
-  }
-
-  // Add weight and volume if available from attributes
-  if (analysis.odoo_attributes?.weight) {
-    productData.weight = parseFloat(analysis.odoo_attributes.weight);
-  }
-  if (analysis.odoo_attributes?.volume) {
-    productData.volume = parseFloat(analysis.odoo_attributes.volume);
+    if (imageBase64) {
+      productData.image_1920 = imageBase64;
+    }
   }
 
   return productData;
@@ -284,6 +315,13 @@ serve(async (req) => {
       .select('*')
       .eq('user_id', user.id);
 
+    // Get custom field mappings
+    const { data: fieldMappings } = await supabase
+      .from('odoo_field_mappings')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true);
+
     // Get analyses
     const { data: analyses, error: analysesError } = await supabase
       .from('product_analyses')
@@ -307,7 +345,7 @@ serve(async (req) => {
 
     for (const analysis of analyses) {
       console.log(`Exporting product: ${analysis.product_url}`);
-      const productData = await mapAnalysisToOdooProduct(analysis, categories || []);
+      const productData = await mapAnalysisToOdooProduct(analysis, categories || [], fieldMappings || []);
       const result = await createOdooProduct(config, uid, productData);
       
       if (result.success) {
