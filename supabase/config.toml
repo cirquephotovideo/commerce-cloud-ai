@@ -1,0 +1,7 @@
+project_id = "ayjdtstugbqoadgipzon"
+
+[functions.ai-chat]
+verify_jwt = false
+
+[functions.product-analyzer]
+verify_jwt = false
