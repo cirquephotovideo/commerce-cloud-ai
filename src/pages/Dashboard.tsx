@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Star, Trash2, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { JsonViewer } from "@/components/JsonViewer";
 
 interface ProductAnalysis {
   id: string;
@@ -176,13 +177,7 @@ export default function Dashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap bg-muted p-4 rounded-lg text-sm">
-                      {typeof analysis.analysis_result === "string"
-                        ? analysis.analysis_result
-                        : JSON.stringify(analysis.analysis_result, null, 2)}
-                    </pre>
-                  </div>
+                  <JsonViewer data={analysis.analysis_result} />
                 </CardContent>
               </Card>
             ))}
