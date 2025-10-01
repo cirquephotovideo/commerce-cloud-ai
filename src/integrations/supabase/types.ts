@@ -543,6 +543,162 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_categories: {
+        Row: {
+          category_name: string
+          created_at: string | null
+          full_path: string
+          id: string
+          last_synced_at: string | null
+          parent_id: string | null
+          parent_name: string | null
+          platform_category_id: string
+          platform_type: string
+          user_id: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string | null
+          full_path: string
+          id?: string
+          last_synced_at?: string | null
+          parent_id?: string | null
+          parent_name?: string | null
+          platform_category_id: string
+          platform_type: string
+          user_id: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string | null
+          full_path?: string
+          id?: string
+          last_synced_at?: string | null
+          parent_id?: string | null
+          parent_name?: string | null
+          platform_category_id?: string
+          platform_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      platform_configurations: {
+        Row: {
+          access_token_encrypted: string | null
+          additional_config: Json | null
+          api_key_encrypted: string | null
+          api_secret_encrypted: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          platform_type: string
+          platform_url: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          additional_config?: Json | null
+          api_key_encrypted?: string | null
+          api_secret_encrypted?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform_type: string
+          platform_url: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          additional_config?: Json | null
+          api_key_encrypted?: string | null
+          api_secret_encrypted?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform_type?: string
+          platform_url?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      platform_export_logs: {
+        Row: {
+          created_at: string
+          error_count: number
+          export_details: Json | null
+          id: string
+          platform_type: string
+          products_count: number
+          success_count: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          export_details?: Json | null
+          id?: string
+          platform_type: string
+          products_count: number
+          success_count?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          export_details?: Json | null
+          id?: string
+          platform_type?: string
+          products_count?: number
+          success_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      platform_field_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          platform_field: string
+          platform_field_label: string
+          platform_type: string
+          source_field: string
+          source_path: string
+          transformation: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform_field: string
+          platform_field_label: string
+          platform_type: string
+          source_field: string
+          source_path: string
+          transformation?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          platform_field?: string
+          platform_field_label?: string
+          platform_type?: string
+          source_field?: string
+          source_path?: string
+          transformation?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       price_monitoring: {
         Row: {
           competitor_site_id: string | null

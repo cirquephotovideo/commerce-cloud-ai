@@ -4,6 +4,8 @@ import { BatchAnalyzer as BatchAnalyzerComponent } from "@/components/BatchAnaly
 import { DetailedBatchResults } from "@/components/DetailedBatchResults";
 import { OdooSettings } from "@/components/OdooSettings";
 import { OdooFieldMappings } from "@/components/OdooFieldMappings";
+import { PlatformSettings } from "@/components/PlatformSettings";
+import { PlatformFieldMappings } from "@/components/PlatformFieldMappings";
 import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
 import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,10 +13,12 @@ import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const BatchAnalyzer = () => {
   const [results, setResults] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [exportPlatform, setExportPlatform] = useState<string>('odoo');
 
   const handleAnalysisComplete = (newResults: any[]) => {
     setResults(newResults);
@@ -46,7 +50,6 @@ const BatchAnalyzer = () => {
 
   const handleExport = async (selectedProducts: any[]) => {
     try {
-      // Get analysis IDs from database
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
@@ -66,9 +69,16 @@ const BatchAnalyzer = () => {
         return;
       }
 
-      toast.info("Export vers Odoo en cours...");
+      const platformName = exportPlatform === 'odoo' ? 'Odoo' : 
+                          exportPlatform === 'shopify' ? 'Shopify' :
+                          exportPlatform === 'woocommerce' ? 'WooCommerce' :
+                          exportPlatform === 'prestashop' ? 'PrestaShop' : exportPlatform;
 
-      const { data, error } = await supabase.functions.invoke('export-to-odoo', {
+      toast.info(`Export vers ${platformName} en cours...`);
+
+      const functionName = exportPlatform === 'odoo' ? 'export-to-odoo' : `export-to-${exportPlatform}`;
+      
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: { analysisIds }
       });
 
@@ -86,7 +96,7 @@ const BatchAnalyzer = () => {
     } catch (error) {
       console.error('Export error:', error);
       toast.error(
-        error instanceof Error ? error.message : "Erreur lors de l'export vers Odoo"
+        error instanceof Error ? error.message : "Erreur lors de l'export"
       );
     }
   };
@@ -111,6 +121,23 @@ const BatchAnalyzer = () => {
           </TabsList>
 
           <TabsContent value="analyze" className="space-y-6">
+            <div className="mb-4">
+              <label className="text-sm font-medium mb-2 block">Export Platform</label>
+              <Select value={exportPlatform} onValueChange={setExportPlatform}>
+                <SelectTrigger className="w-[280px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="odoo">Odoo</SelectItem>
+                  <SelectItem value="shopify">🏪 Shopify</SelectItem>
+                  <SelectItem value="woocommerce">🌐 WooCommerce</SelectItem>
+                  <SelectItem value="prestashop">🛒 PrestaShop</SelectItem>
+                  <SelectItem value="magento">📦 Magento</SelectItem>
+                  <SelectItem value="salesforce">☁️ Salesforce</SelectItem>
+                  <SelectItem value="sap">🏢 SAP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <BatchAnalyzerComponent onAnalysisComplete={handleAnalysisComplete} />
             {results.length > 0 && (
               <DetailedBatchResults results={results} onExport={handleExport} />
@@ -126,27 +153,41 @@ const BatchAnalyzer = () => {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
-            <div className="flex justify-end mb-4">
-              <Button
-                variant="outline"
-                onClick={handleSyncCategories}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Synchronisation...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Synchroniser les catégories Odoo
-                  </>
-                )}
-              </Button>
-            </div>
-              <OdooSettings />
-              <OdooFieldMappings />
+            <Tabs defaultValue="odoo" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="odoo">Odoo</TabsTrigger>
+                <TabsTrigger value="platforms">Other Platforms</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="odoo" className="space-y-6">
+                <div className="flex justify-end mb-4">
+                  <Button
+                    variant="outline"
+                    onClick={handleSyncCategories}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Synchronisation...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Synchroniser les catégories Odoo
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <OdooSettings />
+                <OdooFieldMappings />
+              </TabsContent>
+              
+              <TabsContent value="platforms" className="space-y-6">
+                <PlatformSettings />
+                <PlatformFieldMappings />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
         </Tabs>
       </main>

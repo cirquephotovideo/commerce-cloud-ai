@@ -30,5 +30,8 @@ verify_jwt = true
 [functions.market-intelligence]
 verify_jwt = true
 
-[functions.google-shopping-scraper]
+[functions.export-to-shopify]
+verify_jwt = true
+
+[functions.sync-shopify-categories]
 verify_jwt = true
