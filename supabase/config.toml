@@ -3,6 +3,12 @@ project_id = "ayjdtstugbqoadgipzon"
 [functions.ai-chat]
 verify_jwt = false
 
+[functions.send-email-campaign]
+verify_jwt = true
+
+[functions.manage-newsletter]
+verify_jwt = false
+
 [functions.product-analyzer]
 verify_jwt = false
 

@@ -6,7 +6,10 @@ import { PlanManagement } from "@/components/admin/PlanManagement";
 import { Analytics } from "@/components/admin/Analytics";
 import { BillingManagement } from "@/components/admin/BillingManagement";
 import { SystemLogs } from "@/components/admin/SystemLogs";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText } from "lucide-react";
+import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
+import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaManager";
+import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -29,7 +32,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -49,6 +52,18 @@ const AdminDashboard = () => {
             <TabsTrigger value="logs" className="gap-2">
               <FileText className="h-4 w-4" />
               Logs
+            </TabsTrigger>
+            <TabsTrigger value="email" className="gap-2">
+              <Mail className="h-4 w-4" />
+              Email
+            </TabsTrigger>
+            <TabsTrigger value="social" className="gap-2">
+              <Share2 className="h-4 w-4" />
+              Réseaux
+            </TabsTrigger>
+            <TabsTrigger value="newsletter" className="gap-2">
+              <Bell className="h-4 w-4" />
+              Newsletter
             </TabsTrigger>
           </TabsList>
 
@@ -70,6 +85,18 @@ const AdminDashboard = () => {
 
           <TabsContent value="logs" className="space-y-6">
             <SystemLogs />
+          </TabsContent>
+
+          <TabsContent value="email" className="space-y-6">
+            <EmailMarketing />
+          </TabsContent>
+
+          <TabsContent value="social" className="space-y-6">
+            <SocialMediaManager />
+          </TabsContent>
+
+          <TabsContent value="newsletter" className="space-y-6">
+            <NewsletterManager />
           </TabsContent>
         </Tabs>
       </div>
