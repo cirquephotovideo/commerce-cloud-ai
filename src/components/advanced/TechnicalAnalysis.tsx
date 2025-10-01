@@ -7,8 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wrench, AlertTriangle, CheckCircle2 } from "lucide-react";
 
-export const TechnicalAnalysis = () => {
-  const [productUrl, setProductUrl] = useState("");
+interface TechnicalAnalysisProps {
+  initialUrl?: string;
+}
+
+export const TechnicalAnalysis = ({ initialUrl = "" }: TechnicalAnalysisProps) => {
+  const [productUrl, setProductUrl] = useState(initialUrl);
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 

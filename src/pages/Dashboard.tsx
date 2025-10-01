@@ -6,10 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Star, Trash2, ExternalLink, Upload, Trash } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Star, Trash2, ExternalLink, Upload, Trash, Search, Barcode } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
 import { SubscriptionStatus } from "@/components/SubscriptionStatus";
+import { ProductExportMenu } from "@/components/ProductExportMenu";
+import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
+import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
+import { useAIProvider } from "@/hooks/useAIProvider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ProductAnalysis {
   id: string;
@@ -21,12 +27,17 @@ interface ProductAnalysis {
 
 export default function Dashboard() {
   const [analyses, setAnalyses] = useState<ProductAnalysis[]>([]);
+  const [filteredAnalyses, setFilteredAnalyses] = useState<ProductAnalysis[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState<"url" | "ean">("url");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
+  const { provider, updateProvider } = useAIProvider();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -40,6 +51,26 @@ export default function Dashboard() {
     checkAuth();
   }, [navigate]);
 
+  useEffect(() => {
+    // Filtrer les analyses en fonction de la recherche
+    if (!searchQuery.trim()) {
+      setFilteredAnalyses(analyses);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = analyses.filter(analysis => {
+      if (searchType === "url") {
+        return analysis.product_url.toLowerCase().includes(query);
+      } else {
+        // Recherche par EAN dans analysis_result
+        const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
+        return ean.toLowerCase().includes(query);
+      }
+    });
+    setFilteredAnalyses(filtered);
+  }, [searchQuery, searchType, analyses]);
+
   const loadAnalyses = async () => {
     try {
       const { data, error } = await supabase
@@ -49,6 +80,7 @@ export default function Dashboard() {
 
       if (error) throw error;
       setAnalyses(data || []);
+      setFilteredAnalyses(data || []);
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -105,10 +137,10 @@ export default function Dashboard() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === analyses.length) {
+    if (selectedIds.size === filteredAnalyses.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(analyses.map(a => a.id)));
+      setSelectedIds(new Set(filteredAnalyses.map(a => a.id)));
     }
   };
 
@@ -205,7 +237,26 @@ export default function Dashboard() {
           <div className="lg:col-span-1">
             <SubscriptionStatus />
           </div>
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-4">
+            {/* AI Provider Selector */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Provider IA</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Select value={provider} onValueChange={updateProvider}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lovable">🚀 Lovable AI</SelectItem>
+                    <SelectItem value="ollama">💻 Ollama Cloud (Local)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+
+            {/* Stats Card */}
             <Card>
               <CardHeader>
                 <CardTitle>Statistiques</CardTitle>
@@ -229,20 +280,55 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Search Bar */}
+        {hasPermission('ean_search') && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex gap-4">
+                <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean")}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="url">
+                      <div className="flex items-center gap-2">
+                        <Search className="w-4 h-4" />
+                        Par URL
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ean">
+                      <div className="flex items-center gap-2">
+                        <Barcode className="w-4 h-4" />
+                        Par EAN/Barcode
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder={searchType === "url" ? "Rechercher par URL..." : "Rechercher par code EAN ou barcode..."}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Mes Analyses de Produits
+            Mes Analyses de Produits {searchQuery && `(${filteredAnalyses.length})`}
           </h1>
           {analyses.length > 0 && (
             <div className="flex gap-2 items-center">
               <div className="flex items-center gap-2 mr-4">
                 <Checkbox
                   id="select-all"
-                  checked={selectedIds.size === analyses.length && analyses.length > 0}
+                  checked={selectedIds.size === filteredAnalyses.length && filteredAnalyses.length > 0}
                   onCheckedChange={toggleSelectAll}
                 />
                 <label htmlFor="select-all" className="text-sm cursor-pointer">
-                  Tout sélectionner ({selectedIds.size}/{analyses.length})
+                  Tout sélectionner ({selectedIds.size}/{filteredAnalyses.length})
                 </label>
               </div>
               {selectedIds.size > 0 && (
@@ -287,16 +373,57 @@ export default function Dashboard() {
           )}
         </div>
         
-        {analyses.length === 0 ? (
+        {filteredAnalyses.length === 0 ? (
           <Card className="glass-card">
             <CardContent className="pt-6">
               <p className="text-center text-muted-foreground">
-                Aucune analyse sauvegardée pour le moment.
+                {searchQuery ? "Aucun résultat trouvé" : "Aucune analyse sauvegardée pour le moment."}
               </p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {filteredAnalyses.map((analysis) => {
+              const productName = analysis.analysis_result?.name || "Produit sans nom";
+              const productPrice = analysis.analysis_result?.price || "N/A";
+              
+              return (
+                <Card key={analysis.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2 flex-1">
+                        <Checkbox
+                          checked={selectedIds.has(analysis.id)}
+                          onCheckedChange={() => toggleSelect(analysis.id)}
+                        />
+                        <CardTitle className="text-lg line-clamp-2">{productName}</CardTitle>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleFavorite(analysis.id, analysis.is_favorite)}
+                      >
+                        <Star className={`h-5 w-5 ${analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex gap-2 flex-wrap">
+                      {hasPermission('single_export') && (
+                        <ProductExportMenu analysisId={analysis.id} productName={productName} />
+                      )}
+                      {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
+                        <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
+                      )}
+                      <JsonViewer data={analysis.analysis_result} />
+                      <Button variant="outline" size="sm" onClick={() => deleteAnalysis(analysis.id)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
             {analyses.map((analysis) => (
               <Card key={analysis.id} className="glass-card hover:shadow-lg transition-shadow">
                 <CardHeader>

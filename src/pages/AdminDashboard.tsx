@@ -11,6 +11,8 @@ import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaMana
 import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
 import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
 import { RoleDebugger } from "@/components/admin/RoleDebugger";
+import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
+import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
 import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info } from "lucide-react";
 
 const AdminDashboard = () => {
@@ -34,7 +36,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-10 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-11 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -74,6 +76,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="debug" className="gap-2">
               <Info className="h-4 w-4" />
               Debug
+            </TabsTrigger>
+            <TabsTrigger value="permissions" className="gap-2">
+              <Shield className="h-4 w-4" />
+              Permissions
             </TabsTrigger>
           </TabsList>
 
@@ -115,6 +121,11 @@ const AdminDashboard = () => {
 
           <TabsContent value="debug" className="space-y-6">
             <RoleDebugger />
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-6">
+            <FeaturePermissions />
+            <OllamaConfiguration />
           </TabsContent>
         </Tabs>
       </div>

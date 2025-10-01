@@ -8,8 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ShieldAlert, ShieldCheck, AlertTriangle } from "lucide-react";
 
-export const RiskAnalysis = () => {
-  const [productUrl, setProductUrl] = useState("");
+interface RiskAnalysisProps {
+  initialUrl?: string;
+}
+
+export const RiskAnalysis = ({ initialUrl = "" }: RiskAnalysisProps) => {
+  const [productUrl, setProductUrl] = useState(initialUrl);
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 

@@ -62,3 +62,9 @@ verify_jwt = true
 
 [functions.export-to-windev]
 verify_jwt = true
+
+[functions.ollama-proxy]
+verify_jwt = true
+
+[functions.export-single-product]
+verify_jwt = true
