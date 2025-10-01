@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,21 @@ export const AnalyzerSection = () => {
   const [productUrl, setProductUrl] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const analyzeProduct = async () => {
     if (!productUrl.trim() || isAnalyzing) return;
@@ -49,7 +64,28 @@ export const AnalyzerSection = () => {
       if (error) throw error;
 
       setResults(data);
-      toast.success("Analyse terminée avec succès !");
+
+      // Auto-save if user is logged in
+      if (user && data.success) {
+        try {
+          const { error: saveError } = await supabase
+            .from("product_analyses")
+            .insert({
+              user_id: user.id,
+              product_url: productUrl,
+              analysis_result: data.analysis,
+            });
+
+          if (saveError) throw saveError;
+
+          toast.success("Analyse terminée et sauvegardée !");
+        } catch (saveError: any) {
+          toast.success("Analyse terminée !");
+          toast.error("Erreur de sauvegarde: " + saveError.message);
+        }
+      } else {
+        toast.success(user ? "Analyse terminée avec succès !" : "Analyse terminée ! Connectez-vous pour sauvegarder");
+      }
     } catch (error) {
       console.error('Error:', error);
       toast.error("Erreur lors de l'analyse du produit");
