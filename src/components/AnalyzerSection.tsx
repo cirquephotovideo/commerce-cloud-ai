@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Search, 
   TrendingUp, 
@@ -13,10 +14,13 @@ import {
   Tag,
   Globe,
   MessageSquare,
-  Loader2
+  Loader2,
+  Package,
+  Barcode
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AnalysisResults } from "./AnalysisResults";
 
 const analysisTools = [
   { icon: Search, name: "Analyse SEO", description: "Optimisation du référencement" },
@@ -31,7 +35,8 @@ const analysisTools = [
 ];
 
 export const AnalyzerSection = () => {
-  const [productUrl, setProductUrl] = useState("");
+  const [productInput, setProductInput] = useState("");
+  const [inputType, setInputType] = useState<"url" | "name" | "barcode">("name");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
@@ -51,14 +56,14 @@ export const AnalyzerSection = () => {
   }, []);
 
   const analyzeProduct = async () => {
-    if (!productUrl.trim() || isAnalyzing) return;
+    if (!productInput.trim() || isAnalyzing) return;
 
     setIsAnalyzing(true);
     setResults(null);
 
     try {
       const { data, error } = await supabase.functions.invoke('product-analyzer', {
-        body: { productUrl }
+        body: { productInput }
       });
 
       if (error) throw error;
@@ -72,7 +77,7 @@ export const AnalyzerSection = () => {
             .from("product_analyses")
             .insert({
               user_id: user.id,
-              product_url: productUrl,
+              product_url: productInput,
               analysis_result: data.analysis,
             });
 
@@ -86,11 +91,37 @@ export const AnalyzerSection = () => {
       } else {
         toast.success(user ? "Analyse terminée avec succès !" : "Analyse terminée ! Connectez-vous pour sauvegarder");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
-      toast.error("Erreur lors de l'analyse du produit");
+      if (error.message?.includes('429')) {
+        toast.error("Trop de requêtes. Veuillez réessayer dans quelques instants.");
+      } else {
+        toast.error("Erreur lors de l'analyse du produit");
+      }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const getPlaceholder = () => {
+    switch (inputType) {
+      case "url":
+        return "https://exemple.com/produit";
+      case "barcode":
+        return "3068320115900";
+      default:
+        return "iPhone 15 Pro Max, Sony A7 IV, Nike Air Max...";
+    }
+  };
+
+  const getIcon = () => {
+    switch (inputType) {
+      case "url":
+        return <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />;
+      case "barcode":
+        return <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />;
+      default:
+        return <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -111,22 +142,39 @@ export const AnalyzerSection = () => {
           </p>
         </div>
 
-        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6 mb-8">
+        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6 mb-8 space-y-4">
+          <Tabs value={inputType} onValueChange={(v) => setInputType(v as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="name" className="flex items-center gap-2">
+                <Package className="w-4 h-4" />
+                Nom de produit
+              </TabsTrigger>
+              <TabsTrigger value="barcode" className="flex items-center gap-2">
+                <Barcode className="w-4 h-4" />
+                Code-barres
+              </TabsTrigger>
+              <TabsTrigger value="url" className="flex items-center gap-2">
+                <Globe className="w-4 h-4" />
+                URL
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <div className="flex gap-2">
             <div className="flex-1 relative">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              {getIcon()}
               <Input
-                value={productUrl}
-                onChange={(e) => setProductUrl(e.target.value)}
+                value={productInput}
+                onChange={(e) => setProductInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && analyzeProduct()}
-                placeholder="Entrez l'URL du produit à analyser..."
+                placeholder={getPlaceholder()}
                 disabled={isAnalyzing}
                 className="pl-10 h-12 bg-background border-border"
               />
             </div>
             <Button 
               onClick={analyzeProduct} 
-              disabled={isAnalyzing || !productUrl.trim()}
+              disabled={isAnalyzing || !productInput.trim()}
               size="lg"
               className="shadow-glow"
             >
@@ -163,13 +211,14 @@ export const AnalyzerSection = () => {
           })}
         </div>
 
-        {results && (
-          <Card className="mt-8 bg-card border-border backdrop-blur-sm shadow-card p-6">
-            <h3 className="text-2xl font-bold mb-4">Résultats de l'Analyse</h3>
-            <pre className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {JSON.stringify(results, null, 2)}
-            </pre>
-          </Card>
+        {results && results.analysis && (
+          <div className="mt-8">
+            <AnalysisResults 
+              analysis={results.analysis} 
+              productInput={results.productInput}
+              inputType={results.inputType}
+            />
+          </div>
         )}
       </div>
     </section>
