@@ -52,25 +52,28 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
       try {
         const { data, error } = await supabase.functions.invoke('product-analyzer', {
-          body: { productInput: product }
+          body: { productInput: product, includeImages: true }
         });
 
         if (error) throw error;
 
         if (data.success) {
-          // Auto-save to database
+          // Auto-save to database with image URLs
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
             await supabase.from('product_analyses').insert({
               user_id: user.id,
               product_url: product,
-              analysis_result: data.analysis
+              analysis_result: data.analysis,
+              image_urls: data.imageUrls || [],
+              tags: data.analysis?.tags_categories?.suggested_tags || []
             });
           }
           
           results.push({
             product,
             analysis: data.analysis,
+            imageUrls: data.imageUrls || [],
             success: true
           });
         } else {

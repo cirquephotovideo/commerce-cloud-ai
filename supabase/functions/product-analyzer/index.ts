@@ -151,7 +151,7 @@ serve(async (req) => {
   }
 
   try {
-    const { productInput } = await req.json();
+    const { productInput, includeImages = true } = await req.json();
     console.log('Analyzing product:', productInput);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -236,12 +236,39 @@ serve(async (req) => {
       };
     }
 
+    // Search for product images if requested
+    let imageUrls: string[] = [];
+    if (includeImages) {
+      console.log('Searching for product images...');
+      try {
+        const GOOGLE_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+        const GOOGLE_CX = Deno.env.get('GOOGLE_SEARCH_CX');
+
+        if (GOOGLE_API_KEY && GOOGLE_CX) {
+          const imageSearchQuery = encodeURIComponent(`${productInput} product high quality`);
+          const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${imageSearchQuery}&searchType=image&num=5&imgSize=large&imgType=photo`;
+
+          const imageResponse = await fetch(searchUrl);
+          if (imageResponse.ok) {
+            const imageData = await imageResponse.json();
+            imageUrls = (imageData.items || []).map((item: any) => item.link).filter(Boolean);
+            console.log(`Found ${imageUrls.length} images`);
+          }
+        } else {
+          console.log('Google Search API not configured');
+        }
+      } catch (imageError) {
+        console.error('Error searching images:', imageError);
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
         productInput,
         inputType,
         analysis: analysisResult,
+        imageUrls,
         searchResultsCount: searchResults.length,
         timestamp: new Date().toISOString()
       }),

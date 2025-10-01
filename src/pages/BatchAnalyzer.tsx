@@ -1,17 +1,44 @@
 import React, { useState } from "react";
 import { Header } from "@/components/Header";
 import { BatchAnalyzer as BatchAnalyzerComponent } from "@/components/BatchAnalyzer";
-import { BatchResults } from "@/components/BatchResults";
+import { DetailedBatchResults } from "@/components/DetailedBatchResults";
 import { OdooSettings } from "@/components/OdooSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 
 const BatchAnalyzer = () => {
   const [results, setResults] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleAnalysisComplete = (newResults: any[]) => {
     setResults(newResults);
+  };
+
+  const handleSyncCategories = async () => {
+    setIsSyncing(true);
+    try {
+      toast.info("Synchronisation des catégories Odoo...");
+      
+      const { data, error } = await supabase.functions.invoke('sync-odoo-categories');
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast.success(`${data.categories_synced} catégories synchronisées avec succès`);
+      } else {
+        toast.error(data.error || "Erreur lors de la synchronisation");
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error(
+        error instanceof Error ? error.message : "Erreur lors de la synchronisation"
+      );
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleExport = async (selectedProducts: any[]) => {
@@ -81,11 +108,30 @@ const BatchAnalyzer = () => {
           <TabsContent value="analyze" className="space-y-6">
             <BatchAnalyzerComponent onAnalysisComplete={handleAnalysisComplete} />
             {results.length > 0 && (
-              <BatchResults results={results} onExport={handleExport} />
+              <DetailedBatchResults results={results} onExport={handleExport} />
             )}
           </TabsContent>
 
-          <TabsContent value="settings">
+          <TabsContent value="settings" className="space-y-6">
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="outline"
+                onClick={handleSyncCategories}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Synchronisation...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Synchroniser les catégories Odoo
+                  </>
+                )}
+              </Button>
+            </div>
             <OdooSettings />
           </TabsContent>
         </Tabs>

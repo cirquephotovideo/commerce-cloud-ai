@@ -108,6 +108,42 @@ export type Database = {
           },
         ]
       }
+      odoo_categories: {
+        Row: {
+          category_name: string
+          created_at: string | null
+          full_path: string
+          id: string
+          last_synced_at: string | null
+          odoo_category_id: number
+          parent_id: number | null
+          parent_name: string | null
+          user_id: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string | null
+          full_path: string
+          id?: string
+          last_synced_at?: string | null
+          odoo_category_id: number
+          parent_id?: number | null
+          parent_name?: string | null
+          user_id: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string | null
+          full_path?: string
+          id?: string
+          last_synced_at?: string | null
+          odoo_category_id?: number
+          parent_id?: number | null
+          parent_name?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       odoo_configurations: {
         Row: {
           created_at: string
@@ -149,8 +185,13 @@ export type Database = {
           analysis_result: Json
           created_at: string | null
           id: string
+          image_urls: Json | null
           is_favorite: boolean | null
+          mapped_category_id: string | null
+          mapped_category_name: string | null
+          odoo_attributes: Json | null
           product_url: string
+          tags: Json | null
           updated_at: string | null
           user_id: string
         }
@@ -158,8 +199,13 @@ export type Database = {
           analysis_result: Json
           created_at?: string | null
           id?: string
+          image_urls?: Json | null
           is_favorite?: boolean | null
+          mapped_category_id?: string | null
+          mapped_category_name?: string | null
+          odoo_attributes?: Json | null
           product_url: string
+          tags?: Json | null
           updated_at?: string | null
           user_id: string
         }
@@ -167,8 +213,13 @@ export type Database = {
           analysis_result?: Json
           created_at?: string | null
           id?: string
+          image_urls?: Json | null
           is_favorite?: boolean | null
+          mapped_category_id?: string | null
+          mapped_category_name?: string | null
+          odoo_attributes?: Json | null
           product_url?: string
+          tags?: Json | null
           updated_at?: string | null
           user_id?: string
         }
