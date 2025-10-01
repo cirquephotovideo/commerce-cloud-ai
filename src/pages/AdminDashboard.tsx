@@ -5,7 +5,8 @@ import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
 import { Analytics } from "@/components/admin/Analytics";
 import { BillingManagement } from "@/components/admin/BillingManagement";
-import { Shield, Users, Package, BarChart3, DollarSign } from "lucide-react";
+import { SystemLogs } from "@/components/admin/SystemLogs";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -28,7 +29,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -44,6 +45,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="billing" className="gap-2">
               <DollarSign className="h-4 w-4" />
               Facturation
+            </TabsTrigger>
+            <TabsTrigger value="logs" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Logs
             </TabsTrigger>
           </TabsList>
 
@@ -61,6 +66,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="billing" className="space-y-6">
             <BillingManagement />
+          </TabsContent>
+
+          <TabsContent value="logs" className="space-y-6">
+            <SystemLogs />
           </TabsContent>
         </Tabs>
       </div>

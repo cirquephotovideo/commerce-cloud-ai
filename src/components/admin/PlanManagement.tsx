@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Edit, Plus, Eye, EyeOff } from "lucide-react";
+import { EditPlanDialog } from "./EditPlanDialog";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ export const PlanManagement = () => {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -91,16 +93,13 @@ export const PlanManagement = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle>Gestion des Plans</CardTitle>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nouveau Plan
-          </Button>
-        </div>
-      </CardHeader>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Gestion des Plans</CardTitle>
+          </div>
+        </CardHeader>
       <CardContent>
         {loading ? (
           <div className="text-center py-8">Chargement...</div>
@@ -139,7 +138,14 @@ export const PlanManagement = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setEditingPlan(plan);
+                          setEditDialogOpen(true);
+                        }}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
@@ -158,5 +164,13 @@ export const PlanManagement = () => {
         )}
       </CardContent>
     </Card>
+
+    <EditPlanDialog
+      open={editDialogOpen}
+      onOpenChange={setEditDialogOpen}
+      plan={editingPlan}
+      onSuccess={fetchPlans}
+    />
+    </>
   );
 };

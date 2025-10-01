@@ -6,13 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Search, UserX, UserCheck } from "lucide-react";
+import { Search, UserPlus, Shield } from "lucide-react";
+import { CreateUserDialog } from "./CreateUserDialog";
+import { EditRoleDialog } from "./EditRoleDialog";
 
 interface UserData {
   id: string;
   email: string;
   full_name: string;
   created_at: string;
+  role?: string;
   subscription?: {
     status: string;
     plan: {
@@ -25,6 +28,9 @@ export const UserManagement = () => {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editRoleDialogOpen, setEditRoleDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,7 +39,7 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: profilesData, error: profilesError } = await supabase
         .from("profiles")
         .select(`
           id,
@@ -47,9 +53,24 @@ export const UserManagement = () => {
         `)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (profilesError) throw profilesError;
 
-      setUsers(data || []);
+      // Récupérer les rôles des utilisateurs
+      const { data: rolesData, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+
+      if (rolesError) throw rolesError;
+
+      // Mapper les rôles aux utilisateurs
+      const rolesMap = new Map(rolesData?.map(r => [r.user_id, r.role]) || []);
+      
+      const usersWithRoles = (profilesData || []).map(user => ({
+        ...user,
+        role: rolesMap.get(user.id) || "user"
+      }));
+
+      setUsers(usersWithRoles);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast({
@@ -83,21 +104,28 @@ export const UserManagement = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Gestion des Utilisateurs</CardTitle>
-        <div className="flex gap-2 mt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Rechercher par email ou nom..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Gestion des Utilisateurs</CardTitle>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <UserPlus className="mr-2 h-4 w-4" />
+              Créer un compte
+            </Button>
           </div>
-        </div>
-      </CardHeader>
+          <div className="flex gap-2 mt-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                placeholder="Rechercher par email ou nom..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </CardHeader>
       <CardContent>
         {loading ? (
           <div className="text-center py-8">Chargement...</div>
@@ -107,6 +135,7 @@ export const UserManagement = () => {
               <TableRow>
                 <TableHead>Email</TableHead>
                 <TableHead>Nom</TableHead>
+                <TableHead>Rôle</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Inscription</TableHead>
@@ -119,6 +148,13 @@ export const UserManagement = () => {
                   <TableCell className="font-medium">{user.email}</TableCell>
                   <TableCell>{user.full_name || "-"}</TableCell>
                   <TableCell>
+                    <Badge variant={user.role === "super_admin" ? "default" : "secondary"}>
+                      {user.role === "super_admin" ? "Super Admin" : 
+                       user.role === "admin" ? "Admin" : 
+                       user.role === "moderator" ? "Modérateur" : "Utilisateur"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     {(user.subscription as any)?.[0]?.subscription_plans?.name || "Free"}
                   </TableCell>
                   <TableCell>
@@ -129,8 +165,16 @@ export const UserManagement = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="outline">
-                        Détails
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedUser({ id: user.id, email: user.email, role: user.role || "user" });
+                          setEditRoleDialogOpen(true);
+                        }}
+                      >
+                        <Shield className="h-4 w-4 mr-1" />
+                        Rôle
                       </Button>
                     </div>
                   </TableCell>
@@ -146,5 +190,21 @@ export const UserManagement = () => {
         )}
       </CardContent>
     </Card>
+
+    <CreateUserDialog 
+      open={createDialogOpen}
+      onOpenChange={setCreateDialogOpen}
+      onSuccess={fetchUsers}
+    />
+
+    <EditRoleDialog
+      open={editRoleDialogOpen}
+      onOpenChange={setEditRoleDialogOpen}
+      userId={selectedUser?.id || null}
+      userEmail={selectedUser?.email || ""}
+      currentRole={selectedUser?.role || "user"}
+      onSuccess={fetchUsers}
+    />
+    </>
   );
 };

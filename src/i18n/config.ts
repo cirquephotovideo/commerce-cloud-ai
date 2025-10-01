@@ -8,7 +8,7 @@ import { de } from './locales/de';
 import { it } from './locales/it';
 import { zh } from './locales/zh';
 import { pt } from './locales/pt';
-import { ru } from './locales/ru';
+import { uk } from './locales/uk';
 import { ja } from './locales/ja';
 import { ar } from './locales/ar';
 import { hi } from './locales/hi';
@@ -25,7 +25,7 @@ i18n
       it: { translation: it },
       zh: { translation: zh },
       pt: { translation: pt },
-      ru: { translation: ru },
+      uk: { translation: uk },
       ja: { translation: ja },
       ar: { translation: ar },
       hi: { translation: hi },
