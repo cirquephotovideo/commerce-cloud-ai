@@ -9,7 +9,8 @@ import { SystemLogs } from "@/components/admin/SystemLogs";
 import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
 import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaManager";
 import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell } from "lucide-react";
+import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -32,7 +33,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-9 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -64,6 +65,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="newsletter" className="gap-2">
               <Bell className="h-4 w-4" />
               Newsletter
+            </TabsTrigger>
+            <TabsTrigger value="apikeys" className="gap-2">
+              <Key className="h-4 w-4" />
+              API Keys
             </TabsTrigger>
           </TabsList>
 
@@ -97,6 +102,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="newsletter" className="space-y-6">
             <NewsletterManager />
+          </TabsContent>
+
+          <TabsContent value="apikeys" className="space-y-6">
+            <APIKeyManagement />
           </TabsContent>
         </Tabs>
       </div>

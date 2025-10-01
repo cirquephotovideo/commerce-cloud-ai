@@ -3,11 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Mail, TrendingUp } from "lucide-react";
+import { Users, Mail, TrendingUp, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { NewsletterEditor } from "./NewsletterEditor";
+import { Button } from "@/components/ui/button";
 
 export const NewsletterManager = () => {
   const [subscribers, setSubscribers] = useState<any[]>([]);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   useEffect(() => {
     fetchSubscribers();
@@ -42,11 +45,17 @@ export const NewsletterManager = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">Newsletter</h2>
-        <p className="text-muted-foreground">
-          Gérez vos abonnés à la newsletter
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold">Newsletter</h2>
+          <p className="text-muted-foreground">
+            Gérez vos abonnés et créez des newsletters
+          </p>
+        </div>
+        <Button onClick={() => setEditorOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Créer une newsletter
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -115,6 +124,12 @@ export const NewsletterManager = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <NewsletterEditor
+        open={editorOpen}
+        onOpenChange={setEditorOpen}
+        onSuccess={fetchSubscribers}
+      />
     </div>
   );
 };

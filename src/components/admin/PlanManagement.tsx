@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Edit, Plus, Eye, EyeOff } from "lucide-react";
 import { EditPlanDialog } from "./EditPlanDialog";
+import { CreatePlanDialog } from "./CreatePlanDialog";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export const PlanManagement = () => {
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -98,6 +100,10 @@ export const PlanManagement = () => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Gestion des Plans</CardTitle>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Créer un plan
+            </Button>
           </div>
         </CardHeader>
       <CardContent>
@@ -110,6 +116,7 @@ export const PlanManagement = () => {
                 <TableHead>Plan</TableHead>
                 <TableHead>Prix/mois</TableHead>
                 <TableHead>Prix/an</TableHead>
+                <TableHead>Limites</TableHead>
                 <TableHead>Statut</TableHead>
                 <TableHead>Stripe Product ID</TableHead>
                 <TableHead>Actions</TableHead>
@@ -126,6 +133,19 @@ export const PlanManagement = () => {
                   </TableCell>
                   <TableCell>{plan.price_monthly}€</TableCell>
                   <TableCell>{plan.price_yearly ? `${plan.price_yearly}€` : "-"}</TableCell>
+                  <TableCell>
+                    <div className="text-xs space-y-1">
+                      {plan.limits?.product_analyses && (
+                        <div>Analyses: {plan.limits.product_analyses}</div>
+                      )}
+                      {plan.limits?.price_alerts && (
+                        <div>Alertes: {plan.limits.price_alerts}</div>
+                      )}
+                      {plan.limits?.google_shopping && (
+                        <div>Shopping: {plan.limits.google_shopping}</div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {plan.is_active ? (
                       <Badge className="bg-green-500">Actif</Badge>
@@ -169,6 +189,12 @@ export const PlanManagement = () => {
       open={editDialogOpen}
       onOpenChange={setEditDialogOpen}
       plan={editingPlan}
+      onSuccess={fetchPlans}
+    />
+    
+    <CreatePlanDialog
+      open={createDialogOpen}
+      onOpenChange={setCreateDialogOpen}
       onSuccess={fetchPlans}
     />
     </>

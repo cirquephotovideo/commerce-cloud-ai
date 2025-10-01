@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,25 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-interface Plan {
-  id: string;
-  name: string;
-  description: string;
-  price_monthly: number;
-  price_yearly: number | null;
-  currency: string;
-  limits?: any;
-  features?: any;
-}
-
-interface EditPlanDialogProps {
+interface CreatePlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  plan: Plan | null;
   onSuccess: () => void;
 }
 
-export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlanDialogProps) => {
+export const CreatePlanDialog = ({ open, onOpenChange, onSuccess }: CreatePlanDialogProps) => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -36,36 +24,19 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
     product_analyses: 0,
     price_alerts: 0,
     google_shopping: 0,
-    image_optimizations: 0
+    image_optimizations: 0,
+    display_order: 0
   });
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (plan) {
-      setFormData({
-        name: plan.name,
-        description: plan.description,
-        price_monthly: plan.price_monthly,
-        price_yearly: plan.price_yearly || 0,
-        currency: plan.currency,
-        product_analyses: plan.limits?.product_analyses || 0,
-        price_alerts: plan.limits?.price_alerts || 0,
-        google_shopping: plan.limits?.google_shopping || 0,
-        image_optimizations: plan.limits?.image_optimizations || 0
-      });
-    }
-  }, [plan]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plan) return;
-    
     setLoading(true);
 
     try {
       const { error } = await supabase
         .from("subscription_plans")
-        .update({
+        .insert({
           name: formData.name,
           description: formData.description,
           price_monthly: formData.price_monthly,
@@ -76,24 +47,39 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
             price_alerts: formData.price_alerts,
             google_shopping: formData.google_shopping,
             image_optimizations: formData.image_optimizations
-          }
-        })
-        .eq("id", plan.id);
+          },
+          features: [],
+          display_order: formData.display_order,
+          is_active: true
+        });
 
       if (error) throw error;
 
       toast({
         title: "Succès",
-        description: "Plan modifié avec succès",
+        description: "Plan créé avec succès",
+      });
+
+      setFormData({
+        name: "",
+        description: "",
+        price_monthly: 0,
+        price_yearly: 0,
+        currency: "EUR",
+        product_analyses: 0,
+        price_alerts: 0,
+        google_shopping: 0,
+        image_optimizations: 0,
+        display_order: 0
       });
 
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
-      console.error("Error updating plan:", error);
+      console.error("Error creating plan:", error);
       toast({
         title: "Erreur",
-        description: error.message || "Impossible de modifier le plan",
+        description: error.message || "Impossible de créer le plan",
         variant: "destructive",
       });
     } finally {
@@ -103,11 +89,11 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Modifier le plan</DialogTitle>
+          <DialogTitle>Créer un nouveau plan</DialogTitle>
           <DialogDescription>
-            Modifier les informations et les prix du plan d'abonnement
+            Créer un nouveau plan d'abonnement avec ses prix et limites
           </DialogDescription>
         </DialogHeader>
         
@@ -134,7 +120,7 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="price_monthly">Prix mensuel (€) *</Label>
               <Input
@@ -159,17 +145,17 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
                 onChange={(e) => setFormData({ ...formData, price_yearly: parseFloat(e.target.value) })}
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="currency">Devise</Label>
-            <Input
-              id="currency"
-              value={formData.currency}
-              onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-              placeholder="EUR"
-              maxLength={3}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="display_order">Ordre d'affichage</Label>
+              <Input
+                id="display_order"
+                type="number"
+                min="0"
+                value={formData.display_order}
+                onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
+              />
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -228,7 +214,7 @@ export const EditPlanDialog = ({ open, onOpenChange, plan, onSuccess }: EditPlan
               Annuler
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? "Enregistrement..." : "Enregistrer"}
+              {loading ? "Création..." : "Créer le plan"}
             </Button>
           </div>
         </form>
