@@ -17,12 +17,17 @@ interface TechnicalAnalysisProps {
 export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: TechnicalAnalysisProps) => {
   const [productUrl, setProductUrl] = useState(initialUrl);
   const [productName, setProductName] = useState("");
+  const [barcodeInput, setBarcodeInput] = useState("");
   const [inputType, setInputType] = useState<"url" | "name" | "barcode">("url");
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAnalyze = async () => {
-    const inputValue = inputType === "url" ? productUrl : productName;
+    const inputValue = inputType === "url" 
+      ? productUrl 
+      : inputType === "barcode" 
+        ? barcodeInput 
+        : productName;
     
     if (!inputValue.trim()) {
       toast.error(`Entrez ${inputType === "url" ? "une URL" : inputType === "name" ? "un nom" : "un code barres"} de produit`);
@@ -43,7 +48,14 @@ export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: Techni
     setIsAnalyzing(false);
 
     if (error) {
-      toast.error("Erreur d'analyse");
+      console.error('Erreur analyse:', error);
+      toast.error("Erreur d'analyse : " + (error.message || "Erreur inconnue"));
+      return;
+    }
+
+    if (data?.error) {
+      console.error('Erreur dans les données:', data);
+      toast.error("L'analyse a échoué : " + data.error);
       return;
     }
 
@@ -98,8 +110,8 @@ export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: Techni
                 <Label>Code-barres / EAN</Label>
                 <Input
                   placeholder="Ex: 3700123456789"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
                 />
               </div>
             </TabsContent>

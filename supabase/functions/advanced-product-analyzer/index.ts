@@ -45,7 +45,17 @@ serve(async (req) => {
 
     // Technical Analysis
     if (analysisTypes.includes('technical')) {
-      const technicalPrompt = `Analyse technique approfondie du produit: ${productIdentifier}
+      let platformInstructions = '';
+      if (platform && platform !== 'auto') {
+        platformInstructions = `\n\nSource prioritaire: ${platform}
+Utilise les données spécifiques à cette plateforme pour l'analyse.`;
+      }
+
+      const technicalPrompt = `Analyse technique approfondie du produit: ${productIdentifier}${platformInstructions}
+      
+      IMPORTANT: Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après.
+      Ne commence PAS par "Voici", "Il semblerait", etc.
+      Commence directement par { et termine par }.
       
       Fournis:
       1. Nom du produit identifié
@@ -97,7 +107,35 @@ serve(async (req) => {
       });
 
       const techData = await techResponse.json();
-      results.technical = JSON.parse(techData.choices[0].message.content);
+      let technicalResult;
+
+      try {
+        // Extraire le JSON du message
+        let content = techData.choices[0].message.content;
+        
+        // Nettoyer le contenu si nécessaire
+        content = content.trim();
+        
+        // Si ça commence par du texte, chercher le JSON
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          content = jsonMatch[0];
+        }
+        
+        technicalResult = JSON.parse(content);
+      } catch (parseError) {
+        console.error('Erreur parsing JSON:', parseError);
+        console.error('Contenu reçu:', techData.choices[0].message.content);
+        
+        // Retourner une structure par défaut
+        technicalResult = {
+          product_name: productInput,
+          error: "Impossible de parser la réponse de l'IA",
+          raw_response: techData.choices[0].message.content
+        };
+      }
+
+      results.technical = technicalResult;
     }
 
     // Commercial Optimization

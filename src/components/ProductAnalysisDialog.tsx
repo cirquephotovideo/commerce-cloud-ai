@@ -27,7 +27,7 @@ export const ProductAnalysisDialog = ({ productUrl, productName }: ProductAnalys
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Analyses Avancées - {productName}</DialogTitle>
+          <DialogTitle>Analyses Avancées - {productName || productUrl.split('/').pop() || 'Produit'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mb-4">
