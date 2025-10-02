@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, ExternalLink, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { JsonViewer } from "@/components/JsonViewer";
+import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
+import { Badge } from "@/components/ui/badge";
+import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
 
 interface ProductAnalysis {
   id: string;
@@ -154,7 +156,9 @@ export default function History() {
                     <TableHead>Description</TableHead>
                     <TableHead className="w-[100px]">Prix</TableHead>
                     <TableHead className="w-[80px]">Score</TableHead>
-                    <TableHead className="w-[150px]">Tags</TableHead>
+                    <TableHead className="w-[80px]">🔧 Répara.</TableHead>
+                    <TableHead className="w-[80px]">🌱 Éco</TableHead>
+                    <TableHead className="w-[100px]">📋 HS Code</TableHead>
                     <TableHead className="w-[100px]">Date</TableHead>
                     <TableHead className="text-right w-[100px]">Actions</TableHead>
                   </TableRow>
@@ -162,7 +166,7 @@ export default function History() {
                 <TableBody>
                   {analyses.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                         Aucune analyse trouvée
                       </TableCell>
                     </TableRow>
@@ -200,18 +204,40 @@ export default function History() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {getProductTags(analysis.analysis_result).slice(0, 2).map((tag: string, idx: number) => (
-                              <span key={idx} className="text-xs px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">
-                                {tag}
-                              </span>
-                            ))}
-                            {getProductTags(analysis.analysis_result).length > 2 && (
-                              <span className="text-xs text-muted-foreground">
-                                +{getProductTags(analysis.analysis_result).length - 2}
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const repairability = getRepairabilityData(analysis);
+                            return repairability?.score ? (
+                              <Badge variant={repairability.score >= 7 ? "default" : repairability.score >= 5 ? "secondary" : "destructive"} className="text-xs">
+                                {repairability.score}/10
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const environmental = getEnvironmentalData(analysis);
+                            return environmental?.ecoScore ? (
+                              <Badge variant="default" className="text-xs bg-green-600">
+                                {environmental.ecoScore}/10
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const hsCode = getHSCodeData(analysis);
+                            return hsCode?.code ? (
+                              <Badge variant="outline" className="text-xs font-mono">
+                                {hsCode.code}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            );
+                          })()}
                         </TableCell>
                         <TableCell className="text-sm">
                           {new Date(analysis.created_at).toLocaleDateString("fr-FR")}
@@ -254,11 +280,11 @@ export default function History() {
             <CardHeader>
               <CardTitle>Détails de l'Analyse</CardTitle>
               <CardDescription>
-                {getProductName(selectedAnalysis.analysis_result)}
+                Informations complètes sur le produit analysé
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <JsonViewer data={selectedAnalysis.analysis_result} />
+              <DetailedAnalysisView analysis={selectedAnalysis} />
             </CardContent>
           </Card>
         )}
