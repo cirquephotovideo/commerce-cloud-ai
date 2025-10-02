@@ -70,7 +70,7 @@ serve(async (req) => {
     };
 
     const categoriesText = taxonomyData.categories
-      .map(cat => `ID: ${taxonomyType === 'google' ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
+      .map(cat => `ID: ${'id' in cat ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
       .join('\n');
 
     const prompt = `Tu es un expert en catégorisation e-commerce. Analyse ce produit et trouve la catégorie la plus appropriée dans la taxonomie ${taxonomyType === 'google' ? 'Google Shopping' : 'Amazon'}.
@@ -129,7 +129,7 @@ Réponds uniquement avec un JSON suivant ce format exact:
     const otherTaxonomyData = otherTaxonomyType === 'google' ? GOOGLE_TAXONOMY : AMAZON_TAXONOMY;
     
     const otherCategoriesText = otherTaxonomyData.categories
-      .map(cat => `ID: ${otherTaxonomyType === 'google' ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
+      .map(cat => `ID: ${'id' in cat ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
       .join('\n');
 
     const otherPrompt = `${prompt.split('Catégories disponibles:')[0]}Catégories disponibles:\n${otherCategoriesText}`;
