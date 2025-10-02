@@ -9,9 +9,10 @@ import { Wrench, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface TechnicalAnalysisProps {
   initialUrl?: string;
+  platform?: string;
 }
 
-export const TechnicalAnalysis = ({ initialUrl = "" }: TechnicalAnalysisProps) => {
+export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: TechnicalAnalysisProps) => {
   const [productUrl, setProductUrl] = useState(initialUrl);
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -28,6 +29,7 @@ export const TechnicalAnalysis = ({ initialUrl = "" }: TechnicalAnalysisProps) =
       body: {
         productUrl,
         analysisTypes: ['technical'],
+        platform,
       }
     });
 

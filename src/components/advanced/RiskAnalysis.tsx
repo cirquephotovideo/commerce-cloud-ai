@@ -10,9 +10,10 @@ import { ShieldAlert, ShieldCheck, AlertTriangle } from "lucide-react";
 
 interface RiskAnalysisProps {
   initialUrl?: string;
+  platform?: string;
 }
 
-export const RiskAnalysis = ({ initialUrl = "" }: RiskAnalysisProps) => {
+export const RiskAnalysis = ({ initialUrl = "", platform = "auto" }: RiskAnalysisProps) => {
   const [productUrl, setProductUrl] = useState(initialUrl);
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -29,6 +30,7 @@ export const RiskAnalysis = ({ initialUrl = "" }: RiskAnalysisProps) => {
       body: {
         productUrl,
         analysisTypes: ['risk'],
+        platform,
       }
     });
 

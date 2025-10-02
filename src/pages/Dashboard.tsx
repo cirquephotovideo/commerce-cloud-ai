@@ -14,7 +14,7 @@ import { SubscriptionStatus } from "@/components/SubscriptionStatus";
 import { ProductExportMenu } from "@/components/ProductExportMenu";
 import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { useAIProvider } from "@/hooks/useAIProvider";
+import { AIProviderSettings } from "@/components/AIProviderSettings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ProductAnalysis {
@@ -37,7 +37,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
-  const { provider, updateProvider } = useAIProvider();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -238,25 +237,8 @@ export default function Dashboard() {
             <SubscriptionStatus />
           </div>
           <div className="lg:col-span-2 space-y-4">
-            {/* AI Provider Selector */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Provider IA</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Select value={provider} onValueChange={updateProvider}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="lovable">🚀 Lovable AI</SelectItem>
-                    <SelectItem value="ollama">💻 Ollama Cloud (Local)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </CardContent>
-            </Card>
-
-            {/* Stats Card */}
+            <AIProviderSettings />
+            
             <Card>
               <CardHeader>
                 <CardTitle>Statistiques</CardTitle>
@@ -382,10 +364,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredAnalyses.map((analysis) => {
               const productName = analysis.analysis_result?.name || "Produit sans nom";
-              const productPrice = analysis.analysis_result?.price || "N/A";
               
               return (
                 <Card key={analysis.id} className="hover:shadow-lg transition-shadow">
@@ -424,64 +405,6 @@ export default function Dashboard() {
                 </Card>
               );
             })}
-            {analyses.map((analysis) => (
-              <Card key={analysis.id} className="glass-card hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start gap-3">
-                    <Checkbox
-                      checked={selectedIds.has(analysis.id)}
-                      onCheckedChange={() => toggleSelect(analysis.id)}
-                      className="mt-1"
-                    />
-                    <div className="flex-1">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        {analysis.product_url}
-                        <a
-                          href={analysis.product_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:text-primary/80"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      </CardTitle>
-                      <CardDescription>
-                        {new Date(analysis.created_at).toLocaleDateString("fr-FR", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => toggleFavorite(analysis.id, analysis.is_favorite)}
-                      >
-                        <Star
-                          className={`h-5 w-5 ${
-                            analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""
-                          }`}
-                        />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteAnalysis(analysis.id)}
-                      >
-                        <Trash2 className="h-5 w-5 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <JsonViewer data={analysis.analysis_result} />
-                </CardContent>
-              </Card>
-            ))}
           </div>
         )}
       </main>
