@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube, Package, Clock } from "lucide-react";
+import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube, Package, Clock, AlertTriangle, Eye, EyeOff, Save } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -483,6 +483,21 @@ export const APIKeyManagement = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Avertissement si les secrets Cloud ne sont pas configurés */}
+              {apiKeys.find(k => k.service === 'Amazon' && !k.envVar.includes('AMAZON_CLIENT_ID')) && (
+                <Alert className="border-orange-500">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>⚠️ Recommandation sécurité :</strong> Pour une meilleure protection, configurez les secrets Amazon dans Lovable Cloud au lieu de les stocker en base :
+                    <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_CLIENT_ID</code></li>
+                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_CLIENT_SECRET</code></li>
+                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_REFRESH_TOKEN</code></li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>

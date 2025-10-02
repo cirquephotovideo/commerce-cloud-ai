@@ -282,31 +282,46 @@ serve(async (req) => {
       lastTested: now,
     });
 
-    // Amazon Seller API
+    // Vérifier les credentials Amazon (secrets d'environnement en priorité)
+    const amazonClientId = Deno.env.get('AMAZON_CLIENT_ID');
+    const amazonClientSecret = Deno.env.get('AMAZON_CLIENT_SECRET');
+    const amazonRefreshToken = Deno.env.get('AMAZON_REFRESH_TOKEN');
+    
+    const amazonEnvConfigured = !!(amazonClientId && amazonClientSecret && amazonRefreshToken);
+
+    // Vérifier aussi la base de données comme fallback
     const { data: amazonCreds } = await supabase
       .from('amazon_credentials')
       .select('*')
       .eq('is_active', true)
       .maybeSingle();
+
+    const amazonDbConfigured = !!amazonCreds;
+    const amazonConfigured = amazonEnvConfigured || amazonDbConfigured;
     
     let amazonValid = false;
-    if (amazonCreds) {
+
+    if (amazonDbConfigured && amazonCreds) {
       // Check if there's a valid token
       const { data: token } = await supabase
         .from('amazon_access_tokens')
         .select('*')
         .eq('credential_id', amazonCreds.id)
+        .gt('expires_at', new Date().toISOString())
         .order('generated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       
-      amazonValid = token ? new Date(token.expires_at) > new Date() : false;
+      amazonValid = !!token;
+    } else if (amazonEnvConfigured) {
+      // Si configuré via env, considérer comme valide
+      amazonValid = true;
     }
     
     keys.push({
       name: 'Amazon Seller API',
-      envVar: 'amazon_credentials',
-      configured: !!amazonCreds,
+      envVar: amazonEnvConfigured ? 'AMAZON_CLIENT_ID, AMAZON_CLIENT_SECRET, AMAZON_REFRESH_TOKEN' : 'amazon_credentials',
+      configured: amazonConfigured,
       valid: amazonValid,
       service: 'Amazon',
       lastTested: now,

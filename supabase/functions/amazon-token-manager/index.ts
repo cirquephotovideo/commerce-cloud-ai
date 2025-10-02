@@ -18,28 +18,50 @@ serve(async (req) => {
 
     console.log('[AMAZON-TOKEN] Checking for valid access token...');
 
-    // 1. Récupérer les credentials actifs
-    const { data: credentials, error: credError } = await supabase
-      .from('amazon_credentials')
-      .select('*')
-      .eq('is_active', true)
-      .single();
+    // 1. Essayer d'abord les secrets d'environnement
+    let clientId = Deno.env.get('AMAZON_CLIENT_ID');
+    let clientSecret = Deno.env.get('AMAZON_CLIENT_SECRET');
+    let refreshToken = Deno.env.get('AMAZON_REFRESH_TOKEN');
+    let marketplaceId = 'A13V1IB3VIYZZH'; // Défaut France
+    let credentialsId: string | null = null;
 
-    if (credError || !credentials) {
-      throw new Error('Amazon credentials not configured');
+    // 2. Fallback vers la base de données si les secrets ne sont pas configurés
+    if (!clientId || !clientSecret || !refreshToken) {
+      console.log('[AMAZON-TOKEN] Environment secrets not found, fetching from database...');
+      const { data: credentials, error: credError } = await supabase
+        .from('amazon_credentials')
+        .select('*')
+        .eq('is_active', true)
+        .single();
+
+      if (credError || !credentials) {
+        throw new Error('Amazon credentials not configured in environment or database');
+      }
+
+      clientId = credentials.client_id;
+      clientSecret = credentials.client_secret_encrypted;
+      refreshToken = credentials.refresh_token_encrypted;
+      marketplaceId = credentials.marketplace_id;
+      credentialsId = credentials.id;
+      
+      console.log('[AMAZON-TOKEN] Credentials loaded from database:', credentials.id);
+    } else {
+      console.log('[AMAZON-TOKEN] Using credentials from environment secrets');
     }
 
-    console.log('[AMAZON-TOKEN] Credentials found:', credentials.id);
-
-    // 2. Vérifier si un token valide existe
-    const { data: existingToken } = await supabase
-      .from('amazon_access_tokens')
-      .select('*')
-      .eq('credential_id', credentials.id)
-      .gt('expires_at', new Date().toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // 3. Vérifier si un token valide existe (uniquement si on a un credentialsId de la DB)
+    let existingToken = null;
+    if (credentialsId) {
+      const { data } = await supabase
+        .from('amazon_access_tokens')
+        .select('*')
+        .eq('credential_id', credentialsId)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      existingToken = data;
+    }
 
     if (existingToken) {
       console.log('[AMAZON-TOKEN] Valid token found, expires at:', existingToken.expires_at);
@@ -54,15 +76,20 @@ serve(async (req) => {
 
     console.log('[AMAZON-TOKEN] No valid token, generating new one...');
 
-    // 3. Générer un nouveau token
+    // 4. Vérifier que toutes les credentials sont présentes
+    if (!clientId || !clientSecret || !refreshToken) {
+      throw new Error('Missing required Amazon credentials');
+    }
+
+    // 5. Générer un nouveau token
     const tokenResponse = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'refresh_token',
-        refresh_token: credentials.refresh_token_encrypted,
-        client_id: credentials.client_id,
-        client_secret: credentials.client_secret_encrypted,
+        refresh_token: refreshToken,
+        client_id: clientId,
+        client_secret: clientSecret,
       }),
     });
 
@@ -75,29 +102,35 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     console.log('[AMAZON-TOKEN] New token generated successfully');
 
-    // 4. Stocker le nouveau token
+    // 6. Stocker le nouveau token (uniquement si on a un credentialsId de la DB)
     const expiresAt = new Date(Date.now() + 3600 * 1000); // +1 heure
-    const { data: savedToken, error: saveError } = await supabase
-      .from('amazon_access_tokens')
-      .insert({
-        access_token: tokenData.access_token,
-        expires_at: expiresAt.toISOString(),
-        credential_id: credentials.id,
-      })
-      .select()
-      .single();
+    let savedToken = null;
+    
+    if (credentialsId) {
+      const { data, error: saveError } = await supabase
+        .from('amazon_access_tokens')
+        .insert({
+          access_token: tokenData.access_token,
+          expires_at: expiresAt.toISOString(),
+          credential_id: credentialsId,
+        })
+        .select()
+        .single();
 
-    if (saveError) {
-      console.error('[AMAZON-TOKEN] Save error:', saveError);
-      throw saveError;
+      if (saveError) {
+        console.error('[AMAZON-TOKEN] Save error:', saveError);
+      } else {
+        savedToken = data;
+        console.log('[AMAZON-TOKEN] Token saved, expires at:', expiresAt);
+      }
+    } else {
+      console.log('[AMAZON-TOKEN] Token generated from env secrets, not stored in DB');
     }
-
-    console.log('[AMAZON-TOKEN] Token saved, expires at:', expiresAt);
 
     return new Response(
       JSON.stringify({ 
-        access_token: savedToken.access_token,
-        expires_at: savedToken.expires_at,
+        access_token: tokenData.access_token,
+        expires_at: expiresAt.toISOString(),
         generated: true
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
