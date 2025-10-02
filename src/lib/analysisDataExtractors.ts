@@ -25,14 +25,17 @@ export const getRepairabilityData = (analysis: any): RepairabilityData | null =>
                          analysis?.repairability ||
                          analysis?.analysis_result?.technical?.repairability;
     
+    console.log('Repairability data found:', repairability);
+    
     if (!repairability) return null;
 
     return {
       score: typeof repairability.score === 'number' ? repairability.score : 
-             typeof repairability.index === 'number' ? repairability.index : null,
-      ease: repairability.ease || repairability.easOfRepair || 'Non spécifié',
-      spareParts: repairability.spareParts || repairability.sparePartsAvailability || 'Non spécifié',
-      durability: repairability.durability || 'Non spécifié'
+             typeof repairability.index === 'number' ? repairability.index : 
+             typeof repairability.durability_score === 'number' ? repairability.durability_score : null,
+      ease: repairability.ease || repairability.ease_of_repair || repairability.easOfRepair || 'Non spécifié',
+      spareParts: repairability.spareParts || repairability.spare_parts_availability || repairability.sparePartsAvailability || 'Non spécifié',
+      durability: repairability.durability || repairability.durability_score?.toString() || 'Non spécifié'
     };
   } catch (error) {
     console.error('Error extracting repairability data:', error);
@@ -46,14 +49,17 @@ export const getEnvironmentalData = (analysis: any): EnvironmentalData | null =>
                          analysis?.environmental_impact ||
                          analysis?.analysis_result?.technical?.environmental_impact;
     
+    console.log('Environmental data found:', environmental);
+    
     if (!environmental) return null;
 
     return {
       ecoScore: typeof environmental.eco_score === 'number' ? environmental.eco_score :
                 typeof environmental.ecoScore === 'number' ? environmental.ecoScore : null,
-      co2Emissions: environmental.co2_emissions || environmental.carbonFootprint || 'Non disponible',
+      co2Emissions: environmental.carbon_footprint || environmental.co2_emissions || environmental.carbonFootprint || 'Non disponible',
       recyclability: environmental.recyclability || environmental.recyclable || 'Non spécifié',
-      certifications: Array.isArray(environmental.certifications) ? environmental.certifications : []
+      certifications: Array.isArray(environmental.eco_certifications) ? environmental.eco_certifications : 
+                     Array.isArray(environmental.certifications) ? environmental.certifications : []
     };
   } catch (error) {
     console.error('Error extracting environmental data:', error);
@@ -67,10 +73,12 @@ export const getHSCodeData = (analysis: any): HSCodeData | null => {
                    analysis?.hs_code ||
                    analysis?.analysis_result?.technical?.hs_code;
     
+    console.log('HS Code data found:', hsCode);
+    
     if (!hsCode) return null;
 
     return {
-      code: hsCode.code || hsCode.hs_code || '',
+      code: hsCode.code || '',
       description: hsCode.description || hsCode.category || 'Non disponible'
     };
   } catch (error) {
