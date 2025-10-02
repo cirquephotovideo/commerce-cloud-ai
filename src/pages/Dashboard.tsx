@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Star, Trash2, ExternalLink, Upload, Trash, Search, Barcode } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
 import { SubscriptionStatus } from "@/components/SubscriptionStatus";
@@ -15,7 +15,13 @@ import { ProductExportMenu } from "@/components/ProductExportMenu";
 import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { AIProviderSettings } from "@/components/AIProviderSettings";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 
 interface ProductAnalysis {
   id: string;
