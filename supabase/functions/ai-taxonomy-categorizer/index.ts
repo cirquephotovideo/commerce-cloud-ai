@@ -55,8 +55,8 @@ serve(async (req) => {
       throw new Error('Product analysis not found');
     }
 
-    // Load taxonomy file from frontend URL
-    const frontendUrl = 'https://fd63d493-bace-4dec-b509-380d11e36a5a.lovableproject.com';
+    // Load taxonomy file from deployed URL
+    const frontendUrl = 'https://commerce-cloud-ai.lovable.app';
     const taxonomyUrl = `${frontendUrl}/taxonomies/${taxonomyType}-taxonomy-fr.json`;
     console.log('Loading taxonomy from:', taxonomyUrl);
     const taxonomyResponse = await fetch(taxonomyUrl);
@@ -154,7 +154,8 @@ Si tu n'es pas sûr, mets un score de confiance plus bas. Le secondary_category 
 
     // Also categorize with the other taxonomy for comparison
     const otherTaxonomyType = taxonomyType === 'google' ? 'amazon' : 'google';
-    const otherTaxonomyUrl = `${frontendUrl}/taxonomies/${otherTaxonomyType}-taxonomy-fr.json`;
+    const taxonomyFrontendUrl = 'https://commerce-cloud-ai.lovable.app';
+    const otherTaxonomyUrl = `${taxonomyFrontendUrl}/taxonomies/${otherTaxonomyType}-taxonomy-fr.json`;
     console.log('Loading other taxonomy from:', otherTaxonomyUrl);
     const otherTaxonomyResponse = await fetch(otherTaxonomyUrl);
     if (!otherTaxonomyResponse.ok) {
