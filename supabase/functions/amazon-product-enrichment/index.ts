@@ -11,9 +11,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Cache pour éviter "Body already consumed"
+  let requestBodyCache: any = null;
+  let analysisIdRef: string | null = null;
+
   try {
-    const requestBody = await req.json();
-    const { analysis_id, ean, asin, product_name } = requestBody;
+    requestBodyCache = await req.json();
+    const { analysis_id, ean, asin, product_name } = requestBodyCache;
     let productName = product_name;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -26,6 +30,7 @@ serve(async (req) => {
     let productEan: string | undefined = ean;
     let productAsin: string | undefined = asin;
     let analysisId = analysis_id;
+    analysisIdRef = analysis_id; // Cache l'ID pour le catch
     let currentAnalysis: any = null;
 
     // 1. Si analysis_id fourni, récupérer les infos
@@ -103,6 +108,7 @@ serve(async (req) => {
       }
 
       analysisId = newAnalysis.id;
+      analysisIdRef = newAnalysis.id; // Mettre à jour le cache
     }
 
     // Vérifier qu'on a au moins un identifiant
@@ -155,6 +161,13 @@ serve(async (req) => {
       .maybeSingle();
 
     const marketplaceId = credentials?.marketplace_id || 'A13V1IB3VIYZZH';
+    
+    console.log('[AMAZON-ENRICH] Search config:', { 
+      marketplaceId, 
+      hasAsin: !!productAsin, 
+      hasEan: !!productEan, 
+      hasName: !!productName 
+    });
 
     // 4. Appeler Amazon SP-API Catalog Items
     const catalogUrl = 'https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items';
@@ -182,6 +195,12 @@ serve(async (req) => {
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+      } else {
+        console.error('[AMAZON-ENRICH] Amazon API error (ASIN):', {
+          status: amazonResponse.status,
+          statusText: amazonResponse.statusText,
+          body: await amazonResponse.text()
+        });
       }
     }
 
@@ -205,6 +224,12 @@ serve(async (req) => {
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+      } else {
+        console.error('[AMAZON-ENRICH] Amazon API error (EAN):', {
+          status: amazonResponse.status,
+          statusText: amazonResponse.statusText,
+          body: await amazonResponse.text()
+        });
       }
     }
 
@@ -227,19 +252,40 @@ serve(async (req) => {
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+      } else {
+        console.error('[AMAZON-ENRICH] Amazon API error (KEYWORDS):', {
+          status: amazonResponse.status,
+          statusText: amazonResponse.statusText,
+          body: await amazonResponse.text()
+        });
       }
     }
 
     console.log('[AMAZON-ENRICH] Data received:', amazonData?.items?.length || 0, 'items via', searchMethod);
 
     if (!amazonData?.items || amazonData.items.length === 0) {
-      // Marquer comme "not_found"
+      // Marquer comme "not_found" et retourner 404 (pas d'exception)
       await supabase
         .from('product_analyses')
-        .update({ amazon_enrichment_status: 'not_found' })
+        .update({ 
+          amazon_enrichment_status: 'not_found',
+          amazon_last_attempt: new Date().toISOString()
+        })
         .eq('id', analysisId);
       
-      throw new Error('Product not found on Amazon');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          status: 'not_found',
+          message: 'Product not found on Amazon',
+          searchMethod,
+          identifiers: { ean: productEan, asin: productAsin, name: productName }
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // 5. Parser et formater les données
@@ -326,35 +372,49 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('[AMAZON-ENRICH] Error:', error);
     
-    // Marquer comme "error" ou "not_found" selon le type d'erreur
-    const status = error.message?.includes('not found') ? 'not_found' : 'error';
+    // Déterminer le code HTTP selon le type d'erreur
+    let httpStatus = 500;
+    let errorStatus = 'error';
     
-    try {
-      // Récupérer analysisId depuis les params de la requête
-      const { analysis_id: errorAnalysisId } = await req.json().catch(() => ({}));
-      
-      // Tenter de mettre à jour le statut (si on a un analysisId)
-      if (errorAnalysisId) {
+    if (error.message?.includes('not authenticated') || error.message?.includes('User not authenticated')) {
+      httpStatus = 401;
+      errorStatus = 'error';
+    } else if (error.message?.includes('not found') || error.message?.includes('analysis not found')) {
+      httpStatus = 404;
+      errorStatus = 'not_found';
+    } else if (error.message?.includes('Token error')) {
+      httpStatus = 502;
+      errorStatus = 'error';
+    }
+    
+    // Mettre à jour le statut en base (si on a un analysisIdRef)
+    if (analysisIdRef) {
+      try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabaseClient = createClient(supabaseUrl, supabaseKey);
         
         await supabaseClient
           .from('product_analyses')
-          .update({ amazon_enrichment_status: status })
-          .eq('id', errorAnalysisId);
+          .update({ 
+            amazon_enrichment_status: errorStatus,
+            amazon_last_attempt: new Date().toISOString()
+          })
+          .eq('id', analysisIdRef);
+      } catch (updateError) {
+        console.error('[AMAZON-ENRICH] Failed to update status:', updateError);
       }
-    } catch (updateError) {
-      console.error('[AMAZON-ENRICH] Failed to update status:', updateError);
     }
     
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: error.message || 'Unknown error',
+        code: errorStatus,
         details: error.toString()
       }),
       { 
-        status: 500,
+        status: httpStatus,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );

@@ -61,11 +61,19 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
 
       await loadAmazonData();
     } catch (error: any) {
-      toast({
-        title: "❌ Erreur",
-        description: error.message,
-        variant: "destructive",
-      });
+      // Si 404, afficher un message neutre (produit introuvable)
+      if (error?.status === 404) {
+        toast({
+          title: "ℹ️ Produit introuvable",
+          description: "Ce produit n'a pas été trouvé sur Amazon.",
+        });
+      } else {
+        toast({
+          title: "❌ Erreur",
+          description: error.message || "Impossible de récupérer les données Amazon.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setRefreshing(false);
     }

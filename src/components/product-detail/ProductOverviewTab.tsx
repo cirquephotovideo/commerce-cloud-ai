@@ -143,11 +143,20 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
       setHasAmazonData(true);
     } catch (error: any) {
       console.error('Amazon enrichment error:', error);
-      toast({
-        title: "❌ Erreur Amazon",
-        description: error.message || "Impossible d'enrichir avec Amazon. Veuillez réessayer.",
-        variant: "destructive",
-      });
+      
+      // Si 404, afficher un message neutre (produit introuvable)
+      if (error?.status === 404) {
+        toast({
+          title: "ℹ️ Produit introuvable",
+          description: "Ce produit n'a pas été trouvé sur Amazon.",
+        });
+      } else {
+        toast({
+          title: "❌ Erreur Amazon",
+          description: error.message || "Impossible d'enrichir avec Amazon. Veuillez réessayer.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsEnrichingAmazon(false);
     }
