@@ -52,6 +52,39 @@ export const BatchResults = ({ results, onExport }: BatchResultsProps) => {
   const successCount = results.filter(r => r.success).length;
   const selectedCount = selectedIndices.size;
 
+  // Helper functions for robust data extraction
+  const getPrice = (result: any) => {
+    if (!result.analysis) return "N/A";
+    
+    // Try multiple possible paths
+    const price = result.analysis?.pricing?.estimated_price ||
+                  result.analysis?.price ||
+                  result.analysis?.product_price;
+                  
+    if (!price) return "N/A";
+    
+    // Extract number from price string
+    const match = String(price).match(/[\d,.]+/);
+    return match ? `${match[0]}€` : "N/A";
+  };
+
+  const getScore = (result: any) => {
+    if (!result.analysis) return 0;
+    
+    return result.analysis?.global_report?.overall_score ||
+           result.analysis?.score ||
+           result.analysis?.quality_score ||
+           0;
+  };
+
+  const getCategory = (result: any) => {
+    if (!result.analysis) return null;
+    
+    return result.analysis?.tags_categories?.primary_category ||
+           result.analysis?.category ||
+           null;
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -105,31 +138,33 @@ export const BatchResults = ({ results, onExport }: BatchResultsProps) => {
 
                       {result.success && result.analysis && (
                         <div className="grid grid-cols-2 gap-2 text-sm">
-                          {result.analysis.pricing?.estimated_price && (
-                            <div>
-                              <span className="text-muted-foreground">Prix: </span>
-                              <span className="font-medium">
-                                {result.analysis.pricing.estimated_price}
-                              </span>
-                            </div>
-                          )}
-                          {result.analysis.tags_categories?.primary_category && (
+                          <div>
+                            <span className="text-muted-foreground">Prix: </span>
+                            <span className="font-medium">
+                              {getPrice(result)}
+                            </span>
+                          </div>
+                          {getCategory(result) && (
                             <div>
                               <span className="text-muted-foreground">Catégorie: </span>
                               <span className="font-medium">
-                                {result.analysis.tags_categories.primary_category}
+                                {getCategory(result)}
                               </span>
                             </div>
                           )}
-                          {result.analysis.global_report?.overall_score && (
-                            <div>
-                              <span className="text-muted-foreground">Score: </span>
-                              <span className="font-medium">
-                                {result.analysis.global_report.overall_score}/100
-                              </span>
-                            </div>
-                          )}
+                          <div>
+                            <span className="text-muted-foreground">Score: </span>
+                            <span className="font-medium">
+                              {getScore(result)}/100
+                            </span>
+                          </div>
                         </div>
+                      )}
+                      
+                      {result.success && result.analysis?.error && (
+                        <p className="text-sm text-orange-600">
+                          ⚠️ Analyse partielle: {result.analysis.error}
+                        </p>
                       )}
 
                       {!result.success && result.error && (

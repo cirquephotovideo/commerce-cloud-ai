@@ -33,20 +33,32 @@ export const CompetitiveHistoryTable = ({
 
   const getProductName = (analysis: any) => {
     return analysis.analysis_result?.product_name || 
-           analysis.analysis_result?.name || 
-           "Produit";
+           analysis.product_name ||
+           "Produit sans nom";
   };
 
   const getProductPrice = (analysis: any) => {
-    const priceStr = analysis.analysis_result?.price_analysis?.current_price || 
-                     analysis.analysis_result?.price || 
-                     "N/A";
-    return typeof priceStr === 'string' ? parseFloat(priceStr.replace(/[^0-9.]/g, '')) : priceStr;
+    const result = analysis.analysis_result || analysis;
+    
+    // Try multiple possible paths for price
+    const priceStr = result?.pricing?.estimated_price ||
+                     result?.price_analysis?.current_price ||
+                     result?.price ||
+                     "0";
+    
+    // Extract number from string
+    const match = String(priceStr).match(/[\d,.]+/);
+    if (!match) return 0;
+    
+    return parseFloat(match[0].replace(',', '.'));
   };
 
   const getProductScore = (analysis: any) => {
-    return analysis.analysis_result?.global_report?.product_score || 
-           analysis.analysis_result?.score || 
+    const result = analysis.analysis_result || analysis;
+    
+    return result?.global_report?.overall_score ||
+           result?.global_report?.product_score ||
+           result?.score ||
            0;
   };
 

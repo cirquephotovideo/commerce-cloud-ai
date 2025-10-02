@@ -72,7 +72,11 @@ ${inputType === 'url' ? `URL du produit: ${productInfo}` :
 ${searchContext}
 ${categoriesContext}
 
-Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce format JSON (important: retourne UNIQUEMENT le JSON, pas de texte avant ou après):
+IMPORTANT: 
+- Retourne UNIQUEMENT le JSON, sans texte markdown, sans balises de code
+- Sois concis: description_long max 200 mots, recommendations max 2 par section
+- Si tu manques d'info, utilise "N/A" ou null
+- STRUCTURE EXACTE requise (JSON valide):
 
 {
   "product_name": "Nom du produit identifié",
@@ -285,18 +289,49 @@ serve(async (req) => {
     // Clean up the response to extract pure JSON
     analysisContent = analysisContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    // Try to parse as JSON
+    // Helper to extract field from partial JSON
+    const extractField = (content: string, field: string): string => {
+      const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i');
+      const match = content.match(regex);
+      return match ? match[1] : 'N/A';
+    };
+
+    // Try to parse as JSON with robust error handling
     let analysisResult;
     try {
       analysisResult = JSON.parse(analysisContent);
     } catch (parseError) {
-      console.error('Failed to parse JSON response:', parseError);
-      console.error('Raw content:', analysisContent);
-      // Return the raw content if JSON parsing fails
-      analysisResult = {
-        raw_analysis: analysisContent,
-        error: 'Could not parse structured response'
-      };
+      console.error('JSON parse failed, attempting cleanup...', parseError);
+      
+      // Try to repair truncated JSON
+      let cleanedContent = analysisContent.trim();
+      
+      // Close unclosed braces/brackets
+      const openBraces = (cleanedContent.match(/{/g) || []).length;
+      const closeBraces = (cleanedContent.match(/}/g) || []).length;
+      if (openBraces > closeBraces) {
+        cleanedContent += '}'.repeat(openBraces - closeBraces);
+      }
+      
+      try {
+        analysisResult = JSON.parse(cleanedContent);
+        console.log('Successfully repaired JSON');
+      } catch (secondError) {
+        console.error('Second parse failed, extracting basic data');
+        // Extract at least basic data
+        analysisResult = {
+          product_name: extractField(cleanedContent, 'product_name'),
+          description: extractField(cleanedContent, 'description'),
+          pricing: { 
+            estimated_price: extractField(cleanedContent, 'estimated_price') 
+          },
+          global_report: {
+            overall_score: 0
+          },
+          error: 'Partial data extracted from incomplete response',
+          raw_analysis: analysisContent.substring(0, 500) // Store first 500 chars for debug
+        };
+      }
     }
 
     // Search for product images if requested

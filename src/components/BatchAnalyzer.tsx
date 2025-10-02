@@ -63,6 +63,22 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
         if (error) throw error;
 
         if (data.success) {
+          // Validate analysis structure before saving
+          if (!data.analysis || typeof data.analysis !== 'object') {
+            console.error('Invalid analysis structure:', data);
+            results.push({
+              product,
+              error: 'Structure d\'analyse invalide',
+              success: false
+            });
+            continue;
+          }
+          
+          // Warn if missing essential fields
+          if (!data.analysis.product_name) {
+            console.warn('Missing product_name in analysis for:', product);
+          }
+          
           // Auto-save to database with image URLs and category mapping
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
@@ -78,6 +94,11 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             if (data.analysis?.tags_categories?.odoo_category_id) {
               insertData.mapped_category_id = String(data.analysis.tags_categories.odoo_category_id);
               insertData.mapped_category_name = data.analysis.tags_categories.odoo_category_name;
+            }
+
+            // Store raw_analysis for debugging if present
+            if (data.analysis.raw_analysis) {
+              console.log('Partial analysis detected, storing raw data for:', product);
             }
 
             const { data: insertedAnalysis } = await supabase
