@@ -265,9 +265,14 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
                         Google
                       </Badge>
                       <div className="flex-1 space-y-2">
-                        <p className="text-sm font-medium leading-relaxed">
-                          {googleTaxonomy.category_path}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium leading-relaxed">
+                            {googleTaxonomy.category_path}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            ID: {googleTaxonomy.category_id}
+                          </p>
+                        </div>
                         <div className="flex items-center gap-2">
                           <Progress 
                             value={googleTaxonomy.confidence_score} 
@@ -288,9 +293,14 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
                         Amazon
                       </Badge>
                       <div className="flex-1 space-y-2">
-                        <p className="text-sm font-medium leading-relaxed">
-                          {amazonTaxonomy.category_path}
-                        </p>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium leading-relaxed">
+                            {amazonTaxonomy.category_path}
+                          </p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            ID: {amazonTaxonomy.category_id}
+                          </p>
+                        </div>
                         <div className="flex items-center gap-2">
                           <Progress 
                             value={amazonTaxonomy.confidence_score} 

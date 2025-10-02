@@ -30,23 +30,20 @@ export const TaxonomyBadges = ({ analysisId }: TaxonomyBadgesProps) => {
   const googleMapping = mappings.find(m => m.taxonomy_type === 'google');
   const amazonMapping = mappings.find(m => m.taxonomy_type === 'amazon');
 
-  const getShortPath = (path: string) => {
-    const parts = path.split('>').map(p => p.trim());
-    return parts[parts.length - 1] || path;
-  };
-
   return (
     <div className="flex gap-2 flex-wrap">
       {googleMapping && (
-        <Badge variant="outline" className="text-xs">
-          <ShoppingCart className="w-3 h-3 mr-1" />
-          {getShortPath(googleMapping.category_path)}
+        <Badge variant="outline" className="text-xs flex items-center gap-1">
+          <ShoppingCart className="w-3 h-3" />
+          <span className="font-mono text-muted-foreground">[{googleMapping.category_id}]</span>
+          <span>{googleMapping.category_path}</span>
         </Badge>
       )}
       {amazonMapping && (
-        <Badge variant="secondary" className="text-xs">
-          <Package className="w-3 h-3 mr-1" />
-          {getShortPath(amazonMapping.category_path)}
+        <Badge variant="secondary" className="text-xs flex items-center gap-1">
+          <Package className="w-3 h-3" />
+          <span className="font-mono text-muted-foreground">[{amazonMapping.category_id}]</span>
+          <span>{amazonMapping.category_path}</span>
         </Badge>
       )}
     </div>
