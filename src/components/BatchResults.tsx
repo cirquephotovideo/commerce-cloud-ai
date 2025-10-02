@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { CheckSquare, Square, Upload } from "lucide-react";
+import { CheckSquare, Square, Upload, ShoppingCart, Package } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BatchResult {
   product: string;
@@ -20,6 +21,34 @@ interface BatchResultsProps {
 
 export const BatchResults = ({ results, onExport }: BatchResultsProps) => {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [taxonomyMappings, setTaxonomyMappings] = useState<Map<string, any[]>>(new Map());
+
+  useEffect(() => {
+    const loadTaxonomies = async () => {
+      const analysisIds = results
+        .filter(r => r.success && r.analysis?.id)
+        .map(r => r.analysis.id);
+      
+      if (analysisIds.length === 0) return;
+      
+      const { data } = await supabase
+        .from('product_taxonomy_mappings')
+        .select('*')
+        .in('analysis_id', analysisIds);
+      
+      const mappings = new Map();
+      data?.forEach(mapping => {
+        if (!mappings.has(mapping.analysis_id)) {
+          mappings.set(mapping.analysis_id, []);
+        }
+        mappings.get(mapping.analysis_id).push(mapping);
+      });
+      
+      setTaxonomyMappings(mappings);
+    };
+    
+    loadTaxonomies();
+  }, [results]);
 
   const toggleSelection = (index: number) => {
     const newSelection = new Set(selectedIndices);
@@ -137,27 +166,56 @@ export const BatchResults = ({ results, onExport }: BatchResultsProps) => {
                       </div>
 
                       {result.success && result.analysis && (
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Prix: </span>
-                            <span className="font-medium">
-                              {getPrice(result)}
-                            </span>
-                          </div>
-                          {getCategory(result) && (
+                        <div className="space-y-2 text-sm">
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <span className="text-muted-foreground">Catégorie: </span>
+                              <span className="text-muted-foreground">Prix: </span>
                               <span className="font-medium">
-                                {getCategory(result)}
+                                {getPrice(result)}
                               </span>
                             </div>
-                          )}
-                          <div>
-                            <span className="text-muted-foreground">Score: </span>
-                            <span className="font-medium">
-                              {getScore(result)}/100
-                            </span>
+                            <div>
+                              <span className="text-muted-foreground">Score: </span>
+                              <span className="font-medium">
+                                {getScore(result)}/100
+                              </span>
+                            </div>
                           </div>
+                          {(() => {
+                            const mappings = taxonomyMappings.get(result.analysis.id) || [];
+                            const googleTaxonomy = mappings.find(m => m.taxonomy_type === 'google');
+                            const amazonTaxonomy = mappings.find(m => m.taxonomy_type === 'amazon');
+                            
+                            if (googleTaxonomy || amazonTaxonomy) {
+                              return (
+                                <div className="flex flex-col gap-1 pt-2">
+                                  {googleTaxonomy && (
+                                    <div className="flex items-center gap-1 text-xs">
+                                      <Badge variant="outline" className="flex items-center gap-1 shrink-0">
+                                        <ShoppingCart className="w-3 h-3" />
+                                        <span className="font-mono">[{googleTaxonomy.category_id}]</span>
+                                      </Badge>
+                                      <span className="font-medium truncate">
+                                        {googleTaxonomy.category_path}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {amazonTaxonomy && (
+                                    <div className="flex items-center gap-1 text-xs">
+                                      <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+                                        <Package className="w-3 h-3" />
+                                        <span className="font-mono">[{amazonTaxonomy.category_id}]</span>
+                                      </Badge>
+                                      <span className="font-medium truncate">
+                                        {amazonTaxonomy.category_path}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                       )}
                       

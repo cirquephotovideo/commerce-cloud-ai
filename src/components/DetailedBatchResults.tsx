@@ -1,13 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { CheckSquare, Square, Upload, ChevronDown, ChevronUp, Image as ImageIcon } from "lucide-react";
+import { CheckSquare, Square, Upload, ChevronDown, ChevronUp, Image as ImageIcon, ShoppingCart, Package } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { Separator } from "./ui/separator";
 import { ProductImageGallery } from "./ProductImageGallery";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BatchResult {
   product: string;
@@ -25,6 +26,34 @@ interface DetailedBatchResultsProps {
 export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResultsProps) => {
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
+  const [taxonomyMappings, setTaxonomyMappings] = useState<Map<string, any[]>>(new Map());
+
+  useEffect(() => {
+    const loadTaxonomies = async () => {
+      const analysisIds = results
+        .filter(r => r.success && r.analysis?.id)
+        .map(r => r.analysis.id);
+      
+      if (analysisIds.length === 0) return;
+      
+      const { data } = await supabase
+        .from('product_taxonomy_mappings')
+        .select('*')
+        .in('analysis_id', analysisIds);
+      
+      const mappings = new Map();
+      data?.forEach(mapping => {
+        if (!mappings.has(mapping.analysis_id)) {
+          mappings.set(mapping.analysis_id, []);
+        }
+        mappings.get(mapping.analysis_id).push(mapping);
+      });
+      
+      setTaxonomyMappings(mappings);
+    };
+    
+    loadTaxonomies();
+  }, [results]);
 
   const toggleSelection = (index: number) => {
     const newSelection = new Set(selectedIndices);
@@ -144,14 +173,44 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                               </p>
                             </div>
                           )}
-                          {result.analysis.tags_categories?.primary_category && (
-                            <div className="p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs">Catégorie</p>
-                              <p className="font-semibold">
-                                {result.analysis.tags_categories.primary_category}
-                              </p>
-                            </div>
-                          )}
+                          {(() => {
+                            const mappings = taxonomyMappings.get(result.analysis.id) || [];
+                            const googleTaxonomy = mappings.find(m => m.taxonomy_type === 'google');
+                            const amazonTaxonomy = mappings.find(m => m.taxonomy_type === 'amazon');
+                            
+                            if (googleTaxonomy || amazonTaxonomy) {
+                              return (
+                                <div className="col-span-2 p-3 bg-muted rounded-lg">
+                                  <p className="text-muted-foreground text-xs mb-2">Taxonomies</p>
+                                  <div className="flex flex-col gap-2">
+                                    {googleTaxonomy && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Badge variant="outline" className="flex items-center gap-1 shrink-0">
+                                          <ShoppingCart className="w-3 h-3" />
+                                          <span className="font-mono">[{googleTaxonomy.category_id}]</span>
+                                        </Badge>
+                                        <span className="font-semibold truncate">
+                                          {googleTaxonomy.category_path}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {amazonTaxonomy && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+                                          <Package className="w-3 h-3" />
+                                          <span className="font-mono">[{amazonTaxonomy.category_id}]</span>
+                                        </Badge>
+                                        <span className="font-semibold truncate">
+                                          {amazonTaxonomy.category_path}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
                           {result.analysis.global_report?.overall_score && (
                             <div className="p-3 bg-muted rounded-lg">
                               <p className="text-muted-foreground text-xs">Score Global</p>
