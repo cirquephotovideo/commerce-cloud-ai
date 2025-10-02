@@ -110,7 +110,9 @@ export const GoogleShoppingAnalysis = () => {
         return;
       }
 
-      setResults(data.results || []);
+      // Trier les résultats par prix croissant
+      const sortedResults = (data.results || []).sort((a, b) => a.price - b.price);
+      setResults(sortedResults);
       setStatistics(data.statistics || null);
       setMetadata(data.metadata || null);
       

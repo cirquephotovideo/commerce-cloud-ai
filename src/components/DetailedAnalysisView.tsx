@@ -362,17 +362,89 @@ export const DetailedAnalysisView = ({ analysis }: DetailedAnalysisViewProps) =>
             <AccordionItem value="specifications">
               <AccordionTrigger>Spécifications</AccordionTrigger>
               <AccordionContent>
-                <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-96">
-                  {JSON.stringify(analysis?.analysis_result?.technical?.specs_data || {}, null, 2)}
-                </pre>
+                <div className="space-y-4">
+                  {/* Caractéristiques clés */}
+                  {analysis?.analysis_result?.description?.key_features && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Caractéristiques clés</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        {analysis.analysis_result.description.key_features.map((feature: string, i: number) => (
+                          <li key={i}>{feature}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Spécifications techniques */}
+                  {(analysis?.analysis_result?.technical_specs || analysis?.analysis_result?.specs) && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Spécifications techniques</h4>
+                      <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-64">
+                        {JSON.stringify(analysis.analysis_result.technical_specs || analysis.analysis_result.specs, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {/* Détails du capteur */}
+                  {analysis?.analysis_result?.sensor_details && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Détails du capteur</h4>
+                      <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-64">
+                        {JSON.stringify(analysis.analysis_result.sensor_details, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {/* Performance */}
+                  {analysis?.analysis_result?.performance && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Performance</h4>
+                      <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-64">
+                        {JSON.stringify(analysis.analysis_result.performance, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="compatibility">
               <AccordionTrigger>Compatibilité</AccordionTrigger>
               <AccordionContent>
-                <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-96">
-                  {JSON.stringify(analysis?.analysis_result?.technical?.compatibility_data || {}, null, 2)}
-                </pre>
+                <div className="space-y-4">
+                  {/* Compatibilité générale */}
+                  {analysis?.analysis_result?.compatibility && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Compatibilité</h4>
+                      <pre className="text-xs bg-muted p-4 rounded-md overflow-auto max-h-64">
+                        {JSON.stringify(analysis.analysis_result.compatibility, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                  
+                  {/* Objectifs compatibles */}
+                  {analysis?.analysis_result?.compatible_lenses && Array.isArray(analysis.analysis_result.compatible_lenses) && analysis.analysis_result.compatible_lenses.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Objectifs compatibles</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        {analysis.analysis_result.compatible_lenses.map((lens: string, i: number) => (
+                          <li key={i}>{lens}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  
+                  {/* Accessoires */}
+                  {analysis?.analysis_result?.accessories && Array.isArray(analysis.analysis_result.accessories) && analysis.analysis_result.accessories.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold mb-2">Accessoires</h4>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        {analysis.analysis_result.accessories.map((accessory: string, i: number) => (
+                          <li key={i}>{accessory}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="full-analysis">
