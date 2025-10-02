@@ -494,31 +494,37 @@ export default function Dashboard() {
                       </div>
                     )}
                     
-                    <div className="flex gap-2 flex-wrap">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => handleOpenDetail(analysis)}
-                      >
-                        Voir détails
-                      </Button>
-                      <ProductSummaryDialog 
-                        analysis={analysis}
-                        productName={productName}
-                      />
-                      {analysis.image_urls && analysis.image_urls.length > 0 && (
-                        <ProductImageGallery images={analysis.image_urls} productName={productName} />
-                      )}
-                      {hasPermission('single_export') && (
-                        <ProductExportMenu analysisId={analysis.id} productName={productName} />
-                      )}
-                      {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
-                        <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
-                      )}
-                      <JsonViewer data={analysis.analysis_result} />
-                      <Button variant="outline" size="sm" onClick={() => deleteAnalysis(analysis.id)}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                    <div className="space-y-2">
+                      {/* Main Actions Row */}
+                      <div className="flex gap-2 flex-wrap">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleOpenDetail(analysis)}
+                        >
+                          Voir détails
+                        </Button>
+                        <ProductSummaryDialog 
+                          analysis={analysis}
+                          productName={productName}
+                        />
+                        {hasPermission('single_export') && (
+                          <ProductExportMenu analysisId={analysis.id} productName={productName} />
+                        )}
+                      </div>
+                      {/* Secondary Actions Row */}
+                      <div className="flex gap-2 flex-wrap">
+                        {analysis.image_urls && analysis.image_urls.length > 0 && (
+                          <ProductImageGallery images={analysis.image_urls} productName={productName} />
+                        )}
+                        {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
+                          <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
+                        )}
+                        <JsonViewer data={analysis.analysis_result} />
+                        <Button variant="outline" size="sm" onClick={() => deleteAnalysis(analysis.id)}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
