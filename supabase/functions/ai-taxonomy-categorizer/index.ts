@@ -55,9 +55,15 @@ serve(async (req) => {
       throw new Error('Product analysis not found');
     }
 
-    // Load taxonomy file
-    const taxonomyUrl = `${supabaseUrl.replace(/\/[^\/]+$/, '')}/taxonomies/${taxonomyType}-taxonomy-fr.json`;
+    // Load taxonomy file from frontend URL
+    const frontendUrl = 'https://fd63d493-bace-4dec-b509-380d11e36a5a.lovableproject.com';
+    const taxonomyUrl = `${frontendUrl}/taxonomies/${taxonomyType}-taxonomy-fr.json`;
+    console.log('Loading taxonomy from:', taxonomyUrl);
     const taxonomyResponse = await fetch(taxonomyUrl);
+    if (!taxonomyResponse.ok) {
+      console.error('Failed to load taxonomy:', taxonomyResponse.status, taxonomyResponse.statusText);
+      throw new Error(`Taxonomy file not found: ${taxonomyUrl}`);
+    }
     const taxonomyData = await taxonomyResponse.json();
 
     // Extract product info
@@ -148,9 +154,13 @@ Si tu n'es pas sûr, mets un score de confiance plus bas. Le secondary_category 
 
     // Also categorize with the other taxonomy for comparison
     const otherTaxonomyType = taxonomyType === 'google' ? 'amazon' : 'google';
-    const otherTaxonomyUrl = `${supabaseUrl.replace(/\/[^\/]+$/, '')}/taxonomies/${otherTaxonomyType}-taxonomy-fr.json`;
+    const otherTaxonomyUrl = `${frontendUrl}/taxonomies/${otherTaxonomyType}-taxonomy-fr.json`;
+    console.log('Loading other taxonomy from:', otherTaxonomyUrl);
     const otherTaxonomyResponse = await fetch(otherTaxonomyUrl);
-    const otherTaxonomyData = await otherTaxonomyResponse.json();
+    if (!otherTaxonomyResponse.ok) {
+      console.error('Failed to load other taxonomy:', otherTaxonomyResponse.status);
+    }
+    const otherTaxonomyData = otherTaxonomyResponse.ok ? await otherTaxonomyResponse.json() : null;
     
     const otherCategoryList = otherTaxonomyData.categories
       .slice(0, 30)
@@ -175,7 +185,7 @@ Retourne JSON: {"id": "...", "path": "...", "confidence": 0.8}`;
       }),
     });
 
-    if (otherAiResponse.ok) {
+    if (otherTaxonomyData && otherAiResponse.ok) {
       const otherAiData = await otherAiResponse.json();
       const otherContent = otherAiData.choices?.[0]?.message?.content || '';
       try {
