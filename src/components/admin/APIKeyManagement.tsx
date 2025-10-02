@@ -308,15 +308,19 @@ export const APIKeyManagement = () => {
                                       </>
                                     )}
                                   </Button>
-                                  <Button className="flex-1">
-                                    Sauvegarder
-                                  </Button>
                                 </div>
 
                                 <Alert>
                                   <AlertCircle className="h-4 w-4" />
                                   <AlertDescription>
-                                    Pour sauvegarder définitivement cette clé, utilisez le système de secrets Lovable Cloud.
+                                    <div className="space-y-2">
+                                      <p>✅ Le test fonctionne ! Vos clés sont valides.</p>
+                                      <p>Pour les sauvegarder définitivement, ouvrez le backend Lovable Cloud et configurez les secrets :</p>
+                                      <ul className="list-disc list-inside ml-2 text-xs">
+                                        <li><code>GOOGLE_SEARCH_API_KEY</code> : {editFormData.key ? editFormData.key.substring(0, 20) + '...' : 'Votre clé API'}</li>
+                                        <li><code>GOOGLE_SEARCH_CX</code> : {editFormData.cx || 'Votre CX'}</li>
+                                      </ul>
+                                    </div>
                                   </AlertDescription>
                                 </Alert>
                               </div>
