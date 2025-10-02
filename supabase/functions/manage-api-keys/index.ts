@@ -124,6 +124,7 @@ serve(async (req) => {
 
       switch (service) {
         case 'Google Search':
+        case 'Google Cloud': // Fallback for cached frontend data
           if (!key || !cx) {
             return new Response(
               JSON.stringify({ valid: false, error: 'API key and CX are required' }),

@@ -164,23 +164,34 @@ export const APIKeyManagement = () => {
             Gérez toutes les clés API et secrets de l'application
           </p>
         </div>
-        <Button
-          onClick={handleVerifyAll}
-          disabled={loading || verifying}
-          className="gap-2"
-        >
-          {verifying ? (
-            <>
-              <RefreshCw className="h-4 w-4 animate-spin" />
-              Vérification...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="h-4 w-4" />
-              Tout vérifier
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={fetchApiKeys}
+            disabled={loading}
+            variant="outline"
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Actualiser
+          </Button>
+          <Button
+            onClick={handleVerifyAll}
+            disabled={loading || verifying}
+            className="gap-2"
+          >
+            {verifying ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                Vérification...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                Tout vérifier
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {loading ? (
