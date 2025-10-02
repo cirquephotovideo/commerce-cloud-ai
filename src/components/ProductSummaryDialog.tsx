@@ -53,67 +53,74 @@ interface ProductSummaryDialogProps {
 export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDialogProps) {
   const [open, setOpen] = useState(false);
 
-  // Extract product data
-  const images = getProductImages(analysis.analysis_result);
-  const name = getProductName(analysis.analysis_result);
-  const price = getProductPrice(analysis.analysis_result);
-  const score = getProductScore(analysis.analysis_result);
-  const category = getProductCategory(analysis.analysis_result);
+  // Safety check
+  if (!analysis || !analysis.analysis_result) {
+    return null;
+  }
 
-  // Extract additional data
-  const description = analysis.analysis_result?.description?.suggested_description || 
+  // Extract product data
+  const images = getProductImages(analysis.analysis_result) || [];
+  const name = getProductName(analysis.analysis_result) || productName;
+  const price = getProductPrice(analysis.analysis_result) || "";
+  const score = getProductScore(analysis.analysis_result);
+  const category = getProductCategory(analysis.analysis_result) || "";
+
+  // Extract additional data with safety checks
+  const analysisResult = analysis.analysis_result || {};
+  
+  const description = analysisResult?.description?.suggested_description || 
                       analysis.description_long || 
-                      analysis.analysis_result?.description_long || 
+                      analysisResult?.description_long || 
                       "Aucune description disponible";
 
-  const keyFeatures = analysis.analysis_result?.key_features || 
-                      analysis.analysis_result?.features?.key_features || 
+  const keyFeatures = analysisResult?.key_features || 
+                      analysisResult?.features?.key_features || 
                       [];
 
   const pros = analysis.competitive_pros || 
-               analysis.analysis_result?.pros || 
-               analysis.analysis_result?.advantages || 
+               analysisResult?.pros || 
+               analysisResult?.advantages || 
                [];
 
   const cons = analysis.competitive_cons || 
-               analysis.analysis_result?.cons || 
-               analysis.analysis_result?.disadvantages || 
+               analysisResult?.cons || 
+               analysisResult?.disadvantages || 
                [];
 
-  const specifications = analysis.analysis_result?.specifications || 
-                         analysis.analysis_result?.technical_specifications || 
+  const specifications = analysisResult?.specifications || 
+                         analysisResult?.technical_specifications || 
                          {};
 
-  const brand = analysis.analysis_result?.brand || 
-                analysis.analysis_result?.manufacturer || 
+  const brand = analysisResult?.brand || 
+                analysisResult?.manufacturer || 
                 "";
 
-  const availability = analysis.analysis_result?.availability || 
-                       analysis.analysis_result?.stock_status || 
+  const availability = analysisResult?.availability || 
+                       analysisResult?.stock_status || 
                        "En stock";
 
   const reviews = {
-    rating: analysis.analysis_result?.rating || 
-            analysis.analysis_result?.reviews?.rating || 
+    rating: analysisResult?.rating || 
+            analysisResult?.reviews?.rating || 
             0,
-    count: analysis.analysis_result?.review_count || 
-           analysis.analysis_result?.reviews?.count || 
+    count: analysisResult?.review_count || 
+           analysisResult?.reviews?.count || 
            0,
-    summary: analysis.analysis_result?.reviews?.summary || 
-             analysis.analysis_result?.customer_feedback || 
+    summary: analysisResult?.reviews?.summary || 
+             analysisResult?.customer_feedback || 
              ""
   };
 
-  const popularityScore = analysis.analysis_result?.popularity_score || 
-                          analysis.analysis_result?.market_position?.popularity || 
+  const popularityScore = analysisResult?.popularity_score || 
+                          analysisResult?.market_position?.popularity || 
                           0;
 
-  const warranty = analysis.analysis_result?.warranty || 
-                   analysis.analysis_result?.guarantee || 
+  const warranty = analysisResult?.warranty || 
+                   analysisResult?.guarantee || 
                    "";
 
-  const releaseDate = analysis.analysis_result?.release_date || 
-                      analysis.analysis_result?.launch_date || 
+  const releaseDate = analysisResult?.release_date || 
+                      analysisResult?.launch_date || 
                       "";
 
   return (

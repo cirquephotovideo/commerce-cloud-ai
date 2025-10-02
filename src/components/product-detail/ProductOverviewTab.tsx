@@ -13,11 +13,16 @@ interface ProductOverviewTabProps {
 }
 
 export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
-  const images = getProductImages(analysis);
-  const productName = getProductName(analysis);
-  const productPrice = getProductPrice(analysis);
+  // Safety check
+  if (!analysis) {
+    return <div className="p-6 text-center text-muted-foreground">Aucune donnée disponible</div>;
+  }
+
+  const images = getProductImages(analysis) || [];
+  const productName = getProductName(analysis) || "Produit sans nom";
+  const productPrice = getProductPrice(analysis) || "";
   const productScore = getProductScore(analysis);
-  const productCategory = getProductCategory(analysis);
+  const productCategory = getProductCategory(analysis) || "";
   const tags = analysis?.tags || [];
 
   const [mainImage, setMainImage] = useState(images[0] || "");
@@ -58,29 +63,34 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
               </div>
 
               {/* Image Carousel */}
-              {images.length > 1 && (
-                <Carousel className="w-full">
-                  <CarouselContent>
-                    {images.map((img, index) => (
-                      <CarouselItem key={index} className="basis-1/4 md:basis-1/5">
-                        <button
-                          onClick={() => setMainImage(img)}
-                          className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                            mainImage === img ? "border-primary" : "border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <img
-                            src={img}
-                            alt={`${productName} - ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      </CarouselItem>
-                    ))}
-                  </CarouselContent>
-                  <CarouselPrevious />
-                  <CarouselNext />
-                </Carousel>
+              {images && images.length > 1 && (
+                <div className="mt-4">
+                  <Carousel className="w-full">
+                    <CarouselContent>
+                      {images.map((img, index) => (
+                        <CarouselItem key={index} className="basis-1/4 md:basis-1/5">
+                          <button
+                            onClick={() => setMainImage(img)}
+                            className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                              mainImage === img ? "border-primary" : "border-border hover:border-primary/50"
+                            }`}
+                          >
+                            <img
+                              src={img}
+                              alt={`${productName} - ${index + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </button>
+                        </CarouselItem>
+                      ))}
+                    </CarouselContent>
+                    <CarouselPrevious />
+                    <CarouselNext />
+                  </Carousel>
+                </div>
               )}
             </div>
 
