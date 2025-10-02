@@ -16,6 +16,7 @@ import { AIMarketSuggestions } from "@/components/AIMarketSuggestions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
 import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
+import { TaxonomySettings } from "@/components/TaxonomySettings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -239,11 +240,16 @@ const BatchAnalyzer = () => {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
-            <Tabs defaultValue="odoo" className="space-y-4">
+            <Tabs defaultValue="taxonomy" className="space-y-4">
               <TabsList>
+                <TabsTrigger value="taxonomy">Taxonomie</TabsTrigger>
                 <TabsTrigger value="odoo">Odoo</TabsTrigger>
                 <TabsTrigger value="platforms">Other Platforms</TabsTrigger>
               </TabsList>
+              
+              <TabsContent value="taxonomy" className="space-y-6">
+                <TaxonomySettings />
+              </TabsContent>
               
               <TabsContent value="odoo" className="space-y-6">
                 <div className="flex justify-end mb-4">

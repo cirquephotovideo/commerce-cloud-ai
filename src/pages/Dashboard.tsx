@@ -18,6 +18,7 @@ import { AIProviderSettings } from "@/components/AIProviderSettings";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
+import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { 
   Select, 
   SelectContent, 
@@ -72,6 +73,35 @@ export default function Dashboard() {
     };
     checkAuth();
   }, [navigate]);
+
+  // Auto-categorize new analyses
+  useEffect(() => {
+    const categorizNewAnalyses = async () => {
+      for (const analysis of analyses) {
+        // Check if already categorized
+        const { data: existing } = await supabase
+          .from('product_taxonomy_mappings')
+          .select('id')
+          .eq('analysis_id', analysis.id)
+          .maybeSingle();
+        
+        if (!existing) {
+          // Trigger categorization
+          try {
+            await supabase.functions.invoke('ai-taxonomy-categorizer', {
+              body: { analysis_id: analysis.id }
+            });
+          } catch (error) {
+            console.error('Auto-categorization error:', error);
+          }
+        }
+      }
+    };
+
+    if (analyses.length > 0) {
+      categorizNewAnalyses();
+    }
+  }, [analyses]);
 
   useEffect(() => {
     // Filtrer les analyses en fonction de la recherche
@@ -492,9 +522,12 @@ export default function Dashboard() {
                           }}
                         />
                       </div>
-                    )}
-                    
-                    <div className="space-y-2">
+                     )}
+                     
+                     {/* Taxonomy Badges */}
+                     <TaxonomyBadges analysisId={analysis.id} />
+                     
+                     <div className="space-y-2">
                       {/* Main Actions Row */}
                       <div className="flex gap-2 flex-wrap">
                         <Button 

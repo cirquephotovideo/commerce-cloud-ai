@@ -996,6 +996,44 @@ export type Database = {
           },
         ]
       }
+      product_taxonomy_mappings: {
+        Row: {
+          analysis_id: string
+          category_id: string
+          category_path: string
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          taxonomy_type: string
+        }
+        Insert: {
+          analysis_id: string
+          category_id: string
+          category_path: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          taxonomy_type: string
+        }
+        Update: {
+          analysis_id?: string
+          category_id?: string
+          category_path?: string
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          taxonomy_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_taxonomy_mappings_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1210,6 +1248,33 @@ export type Database = {
           stripe_price_id_yearly?: string | null
           stripe_product_id?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      taxonomy_settings: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          taxonomy_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          taxonomy_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          taxonomy_type?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

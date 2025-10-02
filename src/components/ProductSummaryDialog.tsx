@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Dialog, 
   DialogContent, 
@@ -36,7 +36,11 @@ import {
   TrendingUp,
   Package,
   Award,
+  Tag,
+  ShoppingCart,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   getProductImages, 
   getProductName, 
@@ -52,6 +56,7 @@ interface ProductSummaryDialogProps {
 
 export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDialogProps) {
   const [open, setOpen] = useState(false);
+  const [taxonomyMappings, setTaxonomyMappings] = useState<any[]>([]);
 
   // Safety check
   if (!analysis || !analysis.analysis_result) {
@@ -122,6 +127,29 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
   const releaseDate = analysisResult?.release_date || 
                       analysisResult?.launch_date || 
                       "";
+
+  // Load taxonomy mappings
+  useEffect(() => {
+    const loadTaxonomyMappings = async () => {
+      if (!analysis?.id) return;
+      
+      const { data, error } = await supabase
+        .from('product_taxonomy_mappings')
+        .select('*')
+        .eq('analysis_id', analysis.id);
+      
+      if (!error && data) {
+        setTaxonomyMappings(data);
+      }
+    };
+
+    if (open) {
+      loadTaxonomyMappings();
+    }
+  }, [analysis?.id, open]);
+
+  const googleTaxonomy = taxonomyMappings.find(m => m.taxonomy_type === 'google');
+  const amazonTaxonomy = taxonomyMappings.find(m => m.taxonomy_type === 'amazon');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -218,6 +246,73 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
               </div>
             </CardContent>
           </Card>
+
+          {/* Automatic Categorization */}
+          {(googleTaxonomy || amazonTaxonomy) && (
+            <Card className="border-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Tag className="w-5 h-5" />
+                  Catégorisation Automatique
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {googleTaxonomy && (
+                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                      <Badge variant="default" className="mt-0.5">
+                        <ShoppingCart className="w-3 h-3 mr-1" />
+                        Google
+                      </Badge>
+                      <div className="flex-1 space-y-2">
+                        <p className="text-sm font-medium leading-relaxed">
+                          {googleTaxonomy.category_path}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Progress 
+                            value={googleTaxonomy.confidence_score} 
+                            className="h-2 flex-1" 
+                          />
+                          <span className="text-xs font-medium text-muted-foreground min-w-[45px]">
+                            {googleTaxonomy.confidence_score?.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {amazonTaxonomy && (
+                    <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                      <Badge variant="secondary" className="mt-0.5">
+                        <Package className="w-3 h-3 mr-1" />
+                        Amazon
+                      </Badge>
+                      <div className="flex-1 space-y-2">
+                        <p className="text-sm font-medium leading-relaxed">
+                          {amazonTaxonomy.category_path}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Progress 
+                            value={amazonTaxonomy.confidence_score} 
+                            className="h-2 flex-1" 
+                          />
+                          <span className="text-xs font-medium text-muted-foreground min-w-[45px]">
+                            {amazonTaxonomy.confidence_score?.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!googleTaxonomy && !amazonTaxonomy && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Aucune catégorisation automatique disponible
+                    </p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Description */}
           {description && description !== "Aucune description disponible" && (

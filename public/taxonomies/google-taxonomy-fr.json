@@ -1,0 +1,180 @@
+{
+  "version": "2024-10",
+  "categories": [
+    {
+      "id": "1",
+      "path": "Animaux et fournitures pour animaux",
+      "parent_id": null
+    },
+    {
+      "id": "2",
+      "path": "Animaux et fournitures pour animaux > Fournitures pour animaux",
+      "parent_id": "1"
+    },
+    {
+      "id": "3",
+      "path": "Animaux et fournitures pour animaux > Nourriture pour animaux",
+      "parent_id": "1"
+    },
+    {
+      "id": "4",
+      "path": "Art et divertissement",
+      "parent_id": null
+    },
+    {
+      "id": "5",
+      "path": "Art et divertissement > Musique",
+      "parent_id": "4"
+    },
+    {
+      "id": "6",
+      "path": "Vêtements et accessoires",
+      "parent_id": null
+    },
+    {
+      "id": "7",
+      "path": "Vêtements et accessoires > Vêtements",
+      "parent_id": "6"
+    },
+    {
+      "id": "8",
+      "path": "Vêtements et accessoires > Chaussures",
+      "parent_id": "6"
+    },
+    {
+      "id": "9",
+      "path": "Électronique",
+      "parent_id": null
+    },
+    {
+      "id": "10",
+      "path": "Électronique > Ordinateurs",
+      "parent_id": "9"
+    },
+    {
+      "id": "11",
+      "path": "Électronique > Téléphones portables",
+      "parent_id": "9"
+    },
+    {
+      "id": "12",
+      "path": "Électronique > Audio et vidéo",
+      "parent_id": "9"
+    },
+    {
+      "id": "13",
+      "path": "Maison et jardin",
+      "parent_id": null
+    },
+    {
+      "id": "14",
+      "path": "Maison et jardin > Mobilier",
+      "parent_id": "13"
+    },
+    {
+      "id": "15",
+      "path": "Maison et jardin > Décoration",
+      "parent_id": "13"
+    },
+    {
+      "id": "16",
+      "path": "Maison et jardin > Électroménager",
+      "parent_id": "13"
+    },
+    {
+      "id": "17",
+      "path": "Sports et loisirs",
+      "parent_id": null
+    },
+    {
+      "id": "18",
+      "path": "Sports et loisirs > Équipement sportif",
+      "parent_id": "17"
+    },
+    {
+      "id": "19",
+      "path": "Jouets et jeux",
+      "parent_id": null
+    },
+    {
+      "id": "20",
+      "path": "Jouets et jeux > Jouets",
+      "parent_id": "19"
+    },
+    {
+      "id": "21",
+      "path": "Santé et beauté",
+      "parent_id": null
+    },
+    {
+      "id": "22",
+      "path": "Santé et beauté > Produits de beauté",
+      "parent_id": "21"
+    },
+    {
+      "id": "23",
+      "path": "Santé et beauté > Soins de santé",
+      "parent_id": "21"
+    },
+    {
+      "id": "24",
+      "path": "Alimentation, boissons et tabac",
+      "parent_id": null
+    },
+    {
+      "id": "25",
+      "path": "Alimentation, boissons et tabac > Alimentation",
+      "parent_id": "24"
+    },
+    {
+      "id": "26",
+      "path": "Alimentation, boissons et tabac > Boissons",
+      "parent_id": "24"
+    },
+    {
+      "id": "27",
+      "path": "Véhicules et pièces détachées",
+      "parent_id": null
+    },
+    {
+      "id": "28",
+      "path": "Véhicules et pièces détachées > Pièces détachées automobiles",
+      "parent_id": "27"
+    },
+    {
+      "id": "29",
+      "path": "Véhicules et pièces détachées > Accessoires automobiles",
+      "parent_id": "27"
+    },
+    {
+      "id": "30",
+      "path": "Livres et magazines",
+      "parent_id": null
+    },
+    {
+      "id": "31",
+      "path": "Livres et magazines > Livres",
+      "parent_id": "30"
+    },
+    {
+      "id": "32",
+      "path": "Livres et magazines > Magazines",
+      "parent_id": "30"
+    },
+    {
+      "id": "33",
+      "path": "Bagages et sacs",
+      "parent_id": null
+    },
+    {
+      "id": "34",
+      "path": "Bagages et sacs > Bagages",
+      "parent_id": "33"
+    },
+    {
+      "id": "35",
+      "path": "Bagages et sacs > Sacs à main",
+      "parent_id": "33"
+    }
+  ]
+}

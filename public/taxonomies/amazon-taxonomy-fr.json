@@ -1,0 +1,143 @@
+{
+  "version": "2024",
+  "categories": [
+    {
+      "browse_node_id": "13921051",
+      "name": "High-Tech",
+      "path": "High-Tech",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "340858031",
+      "name": "Informatique",
+      "path": "High-Tech > Informatique",
+      "parent_id": "13921051"
+    },
+    {
+      "browse_node_id": "405689",
+      "name": "Smartphones",
+      "path": "High-Tech > Smartphones",
+      "parent_id": "13921051"
+    },
+    {
+      "browse_node_id": "908826",
+      "name": "Audio et vidéo",
+      "path": "High-Tech > Audio et vidéo",
+      "parent_id": "13921051"
+    },
+    {
+      "browse_node_id": "530490",
+      "name": "Livres",
+      "path": "Livres",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "54071011",
+      "name": "Vêtements",
+      "path": "Vêtements",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "197858031",
+      "name": "Vêtements Homme",
+      "path": "Vêtements > Homme",
+      "parent_id": "54071011"
+    },
+    {
+      "browse_node_id": "197857031",
+      "name": "Vêtements Femme",
+      "path": "Vêtements > Femme",
+      "parent_id": "54071011"
+    },
+    {
+      "browse_node_id": "355135011",
+      "name": "Chaussures",
+      "path": "Chaussures et Sacs",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "197383031",
+      "name": "Cuisine et Maison",
+      "path": "Cuisine et Maison",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "57686031",
+      "name": "Électroménager",
+      "path": "Gros électroménager",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "340853031",
+      "name": "Jardin",
+      "path": "Jardin",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "60937031",
+      "name": "Beauté et Parfum",
+      "path": "Beauté et Parfum",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "197860031",
+      "name": "Hygiène et Santé",
+      "path": "Hygiène et Santé",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "468256",
+      "name": "Jouets et Jeux",
+      "path": "Jouets et Jeux",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "530484",
+      "name": "Sports et Loisirs",
+      "path": "Sports et Loisirs",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "364557031",
+      "name": "Animalerie",
+      "path": "Animalerie",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "213080031",
+      "name": "Auto et Moto",
+      "path": "Auto et Moto",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "530490",
+      "name": "Épicerie",
+      "path": "Épicerie",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "530488",
+      "name": "Bijoux",
+      "path": "Bijoux",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "355142011",
+      "name": "Bagages",
+      "path": "Bagages",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "530491",
+      "name": "Bricolage",
+      "path": "Bricolage",
+      "parent_id": null
+    },
+    {
+      "browse_node_id": "327473011",
+      "name": "Bébé et Puériculture",
+      "path": "Bébé et Puériculture",
+      "parent_id": null
+    }
+  ]
+}
