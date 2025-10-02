@@ -277,21 +277,24 @@ serve(async (req) => {
     if (includeImages) {
       console.log('Searching for product images...');
       try {
-        const GOOGLE_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
-        const GOOGLE_CX = Deno.env.get('GOOGLE_SEARCH_CX');
-
-        if (GOOGLE_API_KEY && GOOGLE_CX) {
-          const imageSearchQuery = encodeURIComponent(`${productInput} product high quality`);
-          const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${imageSearchQuery}&searchType=image&num=5&imgSize=large&imgType=photo`;
-
-          const imageResponse = await fetch(searchUrl);
-          if (imageResponse.ok) {
-            const imageData = await imageResponse.json();
-            imageUrls = (imageData.items || []).map((item: any) => item.link).filter(Boolean);
-            console.log(`Found ${imageUrls.length} images`);
+        // Use the search-product-images function for better image results
+        const { data: imageData, error: imageError } = await supabaseClient.functions.invoke(
+          'search-product-images',
+          {
+            body: { 
+              productName: analysisResult.product_name || productInput,
+              maxResults: 8
+            }
           }
+        );
+
+        if (imageError) {
+          console.error('Error invoking search-product-images:', imageError);
+        } else if (imageData?.images) {
+          imageUrls = imageData.images.map((img: any) => img.url).filter(Boolean);
+          console.log(`Found ${imageUrls.length} images via search-product-images function`);
         } else {
-          console.log('Google Search API not configured');
+          console.log('No images found or unexpected response format');
         }
       } catch (imageError) {
         console.error('Error searching images:', imageError);
