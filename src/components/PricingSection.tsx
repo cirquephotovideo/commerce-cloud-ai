@@ -36,7 +36,9 @@ export const PricingSection = () => {
         .order("display_order");
 
       if (error) throw error;
-      setPlans(data || []);
+      // Filter out the Super Admin plan from public display
+      const filteredPlans = (data || []).filter(plan => plan.name !== "Super Admin");
+      setPlans(filteredPlans);
     } catch (error) {
       console.error("Error loading plans:", error);
     } finally {
