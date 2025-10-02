@@ -15,17 +15,25 @@ interface TestKeyRequest {
 // Verify functions for each service
 async function verifyGoogleSearchAPI(apiKey: string, cx: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    const response = await fetch(
-      `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=test`,
-      { method: 'GET' }
-    );
+    const testQuery = 'test';
+    const url = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${testQuery}&num=1`;
+    console.log(`[VERIFY-GOOGLE-SEARCH] Testing with CX: ${cx}, Query: ${testQuery}`);
+    
+    const response = await fetch(url, { method: 'GET' });
+    console.log(`[VERIFY-GOOGLE-SEARCH] Response status: ${response.status}`);
+    
     if (response.ok) {
+      const data = await response.json();
+      console.log(`[VERIFY-GOOGLE-SEARCH] Success - Found ${data.items?.length || 0} results`);
       return { valid: true };
     }
-    const error = await response.text();
-    return { valid: false, error: `Invalid API key or CX: ${error}` };
+    
+    const errorText = await response.text();
+    console.error(`[VERIFY-GOOGLE-SEARCH] Error response: ${errorText}`);
+    return { valid: false, error: `API Error (${response.status}): ${errorText}` };
   } catch (error) {
     const err = error as Error;
+    console.error(`[VERIFY-GOOGLE-SEARCH] Exception:`, err);
     return { valid: false, error: `Connection error: ${err.message}` };
   }
 }
@@ -109,6 +117,7 @@ serve(async (req) => {
     const { action, service, key, cx, url } = await req.json() as TestKeyRequest & { action: string };
 
     console.log(`[MANAGE-API-KEYS] Action: ${action}, Service: ${service}`);
+    console.log(`[MANAGE-API-KEYS] Has key: ${!!key}, Has CX: ${!!cx}, Has URL: ${!!url}`);
 
     if (action === 'test') {
       let result: { valid: boolean; error?: string };

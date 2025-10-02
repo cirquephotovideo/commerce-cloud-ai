@@ -98,7 +98,7 @@ serve(async (req) => {
         envVar: 'GOOGLE_SEARCH_API_KEY',
         configured: true,
         valid: result.valid,
-        service: 'Google Cloud',
+        service: 'Google Search',
         lastTested: now,
         error: result.error,
       });
@@ -107,7 +107,7 @@ serve(async (req) => {
         envVar: 'GOOGLE_SEARCH_CX',
         configured: true,
         valid: result.valid,
-        service: 'Google Cloud',
+        service: 'Google Search',
         lastTested: now,
         error: result.error,
       });
@@ -117,7 +117,7 @@ serve(async (req) => {
         envVar: 'GOOGLE_SEARCH_API_KEY',
         configured: !!googleApiKey,
         valid: false,
-        service: 'Google Cloud',
+        service: 'Google Search',
         lastTested: now,
       });
       keys.push({
@@ -125,7 +125,7 @@ serve(async (req) => {
         envVar: 'GOOGLE_SEARCH_CX',
         configured: !!googleCx,
         valid: false,
-        service: 'Google Cloud',
+        service: 'Google Search',
         lastTested: now,
       });
     }
