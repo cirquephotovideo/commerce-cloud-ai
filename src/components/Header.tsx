@@ -120,7 +120,7 @@ export const Header = () => {
   );
 
   return (
-    <header className="border-b glass-card sticky top-0 z-50">
+    <header className="border-b glass-card sticky top-0 z-50 bg-gradient-to-r from-purple-500/20 via-purple-600/20 to-purple-700/20 backdrop-blur-md">
       <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-primary to-secondary" />

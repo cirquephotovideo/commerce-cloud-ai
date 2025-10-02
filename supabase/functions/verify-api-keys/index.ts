@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from 'https://esm.sh/stripe@14.21.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,19 +22,20 @@ async function verifyGoogleSearchAPI(apiKey: string, cx: string): Promise<{ vali
     );
     return { valid: response.ok };
   } catch (error) {
-    return { valid: false, error: error.message };
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
 async function verifyStripeAPI(apiKey: string): Promise<{ valid: boolean; error?: string }> {
   try {
-    const stripe = new Stripe(apiKey, {
-      apiVersion: '2023-10-16',
+    const response = await fetch('https://api.stripe.com/v1/account', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
     });
-    await stripe.accounts.retrieve();
-    return { valid: true };
+    return { valid: response.ok };
   } catch (error) {
-    return { valid: false, error: error.message };
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -48,7 +48,7 @@ async function verifyResendAPI(apiKey: string): Promise<{ valid: boolean; error?
     });
     return { valid: response.ok };
   } catch (error) {
-    return { valid: false, error: error.message };
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -64,7 +64,7 @@ async function verifySerperAPI(apiKey: string): Promise<{ valid: boolean; error?
     });
     return { valid: response.ok };
   } catch (error) {
-    return { valid: false, error: error.message };
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -73,7 +73,7 @@ async function verifySupabaseURL(url: string): Promise<{ valid: boolean; error?:
     const response = await fetch(`${url}/rest/v1/`);
     return { valid: response.status === 401 || response.status === 200 }; // 401 means it's working but needs auth
   } catch (error) {
-    return { valid: false, error: error.message };
+    return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -284,7 +284,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('[VERIFY-API-KEYS] Error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
