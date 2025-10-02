@@ -80,3 +80,6 @@ verify_jwt = true
 
 [functions.generate-themed-image]
 verify_jwt = true
+
+[functions.subscribe-from-trial]
+verify_jwt = true

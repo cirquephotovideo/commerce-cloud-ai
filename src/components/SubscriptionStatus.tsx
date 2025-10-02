@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CreditCard, TrendingUp } from "lucide-react";
+import { Loader2, CreditCard, TrendingUp, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 export const SubscriptionStatus = () => {
-  const { subscribed, planName, limits, isLoading, getUsageCount, subscriptionEnd, isAdmin } = useSubscription();
+  const { subscribed, planName, limits, isLoading, getUsageCount, subscriptionEnd, isAdmin, isTrial, trialDaysRemaining } = useSubscription();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [usage, setUsage] = useState<Record<string, number>>({});
@@ -99,6 +99,64 @@ export const SubscriptionStatus = () => {
               );
             })}
           </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Afficher le statut d'essai
+  if (isTrial && trialDaysRemaining) {
+    return (
+      <Card className="border-purple-500 bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Essai Gratuit en cours
+              </CardTitle>
+              <CardDescription>
+                Plus que {trialDaysRemaining} jour{trialDaysRemaining > 1 ? 's' : ''} pour profiter du plan Starter gratuitement
+              </CardDescription>
+            </div>
+            <Badge className="bg-gradient-to-r from-purple-600 to-blue-600 text-white">
+              Essai {trialDaysRemaining}j
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Progression de l'essai</span>
+              <span className="font-medium">{Math.round((7 - trialDaysRemaining) / 7 * 100)}%</span>
+            </div>
+            <Progress value={(7 - trialDaysRemaining) / 7 * 100} className="h-2" />
+          </div>
+
+          {limits && Object.entries(limits).map(([feature, limit]) => {
+            const featureNames: Record<string, string> = {
+              product_analyses: "Analyses de produits",
+              google_shopping_searches: "Recherches Google Shopping",
+              price_alerts: "Alertes prix",
+              image_optimizations: "Optimisations d'images"
+            };
+
+            return (
+              <div key={feature} className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">{featureNames[feature] || feature}</span>
+                <span className="font-medium text-purple-600">
+                  {limit === -1 ? "Illimité" : limit}
+                </span>
+              </div>
+            );
+          })}
+
+          <Button 
+            onClick={() => navigate('/pricing')}
+            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+          >
+            Passer à un abonnement
+          </Button>
         </CardContent>
       </Card>
     );

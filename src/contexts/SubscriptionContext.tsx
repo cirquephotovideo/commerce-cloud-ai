@@ -18,9 +18,13 @@ interface SubscriptionContextType {
   limits: SubscriptionLimits | null;
   isLoading: boolean;
   isAdmin: boolean;
+  isTrial: boolean;
+  trialDaysRemaining: number | null;
+  trialExpired: boolean;
   checkSubscription: () => Promise<void>;
   canUseFeature: (feature: keyof SubscriptionLimits) => Promise<boolean>;
   getUsageCount: (feature: keyof SubscriptionLimits) => Promise<number>;
+  refreshSubscription: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -34,6 +38,9 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
   const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | null>(null);
+  const [trialExpired, setTrialExpired] = useState(false);
   const { toast } = useToast();
 
   const checkSubscription = async () => {
@@ -56,6 +63,9 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
       setSubscriptionEnd(data.subscription_end);
       setLimits(data.limits);
       setIsAdmin(data.is_admin || false);
+      setIsTrial(data.is_trial || false);
+      setTrialDaysRemaining(data.trial_days_remaining || null);
+      setTrialExpired(data.trial_expired || false);
 
       // Get plan name if we have a plan_id
       if (data.plan_id) {
@@ -148,6 +158,10 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  const refreshSubscription = async () => {
+    await checkSubscription();
+  };
+
   return (
     <SubscriptionContext.Provider
       value={{
@@ -159,9 +173,13 @@ export const SubscriptionProvider = ({ children }: { children: ReactNode }) => {
         limits,
         isLoading,
         isAdmin,
+        isTrial,
+        trialDaysRemaining,
+        trialExpired,
         checkSubscription,
         canUseFeature,
         getUsageCount,
+        refreshSubscription,
       }}
     >
       {children}

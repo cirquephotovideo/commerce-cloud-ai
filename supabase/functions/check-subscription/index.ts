@@ -99,6 +99,62 @@ serve(async (req) => {
     const customerId = customers.data[0].id;
     logStep("Found Stripe customer", { customerId });
 
+    // Vérifier d'abord s'il y a un essai actif
+    const { data: trialData } = await supabaseClient
+      .from("user_subscriptions")
+      .select("trial_start, trial_end, status, plan_id")
+      .eq("user_id", user.id)
+      .in("status", ["trialing", "active"])
+      .maybeSingle();
+
+    if (trialData && trialData.status === "trialing") {
+      const now = new Date();
+      const trialEnd = new Date(trialData.trial_end);
+      
+      if (now < trialEnd) {
+        // Essai toujours actif
+        const daysRemaining = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        logStep("Active trial found", { daysRemaining, trialEnd: trialData.trial_end });
+
+        // Récupérer les limites du plan Starter
+        const { data: planData } = await supabaseClient
+          .from("subscription_plans")
+          .select("limits, name")
+          .eq("id", trialData.plan_id)
+          .single();
+
+        return new Response(JSON.stringify({
+          subscribed: true,
+          is_trial: true,
+          trial_days_remaining: daysRemaining,
+          trial_end: trialData.trial_end,
+          plan_name: planData?.name || "Starter",
+          limits: planData?.limits || {}
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      } else {
+        // Essai expiré - mettre à jour le statut
+        logStep("Trial expired, updating status");
+        await supabaseClient
+          .from("user_subscriptions")
+          .update({ status: "expired" })
+          .eq("user_id", user.id)
+          .eq("status", "trialing");
+        
+        return new Response(JSON.stringify({
+          subscribed: false,
+          is_trial: false,
+          trial_expired: true,
+          limits: null
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+    }
+
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       status: "active",

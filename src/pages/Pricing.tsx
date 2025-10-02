@@ -39,6 +39,7 @@ const Pricing = () => {
         .from("subscription_plans")
         .select("*")
         .eq("is_active", true)
+        .neq("name", "Super Admin")
         .order("display_order");
 
       if (error) throw error;

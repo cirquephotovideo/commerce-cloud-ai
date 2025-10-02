@@ -1257,6 +1257,53 @@ export type Database = {
           },
         ]
       }
+      trial_conversions: {
+        Row: {
+          billing_interval: string | null
+          conversion_date: string | null
+          converted: boolean | null
+          created_at: string | null
+          id: string
+          selected_plan_id: string | null
+          trial_end: string
+          trial_start: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          billing_interval?: string | null
+          conversion_date?: string | null
+          converted?: boolean | null
+          created_at?: string | null
+          id?: string
+          selected_plan_id?: string | null
+          trial_end: string
+          trial_start: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          billing_interval?: string | null
+          conversion_date?: string | null
+          converted?: boolean | null
+          created_at?: string | null
+          id?: string
+          selected_plan_id?: string | null
+          trial_end?: string
+          trial_start?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_conversions_selected_plan_id_fkey"
+            columns: ["selected_plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usage_tracking: {
         Row: {
           created_at: string | null
