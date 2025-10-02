@@ -7,7 +7,8 @@ All colors MUST be HSL.
 */
 
 @layer base {
-  :root {
+  /* Dark Theme (default) */
+  :root, .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
 
@@ -46,6 +47,96 @@ All colors MUST be HSL.
     /* Shadow tokens */
     --shadow-glow: 0 0 40px hsl(263 70% 60% / 0.3);
     --shadow-card: 0 8px 32px hsl(263 70% 60% / 0.15);
+    
+    /* Animation tokens */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Light Theme */
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 263 70% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 217 91% 50%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 5% 35%;
+
+    --accent: 263 70% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 263 70% 50%;
+
+    --radius: 0.75rem;
+
+    /* Gradient tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(263 70% 50%) 0%, hsl(217 91% 50%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(240 5% 98%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(263 70% 50% / 0.1) 0%, hsl(217 91% 50% / 0.1) 100%);
+    
+    /* Shadow tokens */
+    --shadow-glow: 0 0 40px hsl(263 70% 50% / 0.2);
+    --shadow-card: 0 8px 32px hsl(263 70% 50% / 0.1);
+    
+    /* Animation tokens */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Violet Theme */
+  .violet {
+    --background: 270 50% 8%;
+    --foreground: 270 20% 98%;
+
+    --card: 270 50% 10%;
+    --card-foreground: 270 20% 98%;
+
+    --popover: 270 50% 9%;
+    --popover-foreground: 270 20% 98%;
+
+    --primary: 270 80% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 280 70% 55%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 270 30% 20%;
+    --muted-foreground: 270 20% 70%;
+
+    --accent: 270 80% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 270 30% 25%;
+    --input: 270 30% 25%;
+    --ring: 270 80% 65%;
+
+    --radius: 0.75rem;
+
+    /* Gradient tokens */
+    --gradient-primary: linear-gradient(135deg, hsl(270 80% 65%) 0%, hsl(280 70% 55%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(270 50% 10%) 0%, hsl(270 50% 12%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(270 80% 65% / 0.15) 0%, hsl(280 70% 55% / 0.15) 100%);
+    
+    /* Shadow tokens */
+    --shadow-glow: 0 0 40px hsl(270 80% 65% / 0.4);
+    --shadow-card: 0 8px 32px hsl(270 80% 65% / 0.2);
     
     /* Animation tokens */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

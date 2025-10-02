@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LanguageSelector } from "./LanguageSelector";
+import { ThemeSelector } from "./ThemeSelector";
 import { useTranslation } from "react-i18next";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -129,7 +130,8 @@ export const Header = () => {
           </h1>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <ThemeSelector />
           <LanguageSelector />
           {isMobile ? (
             <Sheet open={isOpen} onOpenChange={setIsOpen}>

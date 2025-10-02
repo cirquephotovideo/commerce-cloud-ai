@@ -151,6 +151,11 @@ export const en = {
       imageOptimization: "Image Optimization",
       technicalAnalysis: "Technical Analysis",
       riskEvaluation: "Risk Assessment",
+      shopify: "Shopify",
+      woocommerce: "WooCommerce",
+      prestashop: "PrestaShop",
+      magento: "Magento",
+      salesforce: "Salesforce",
     },
   },
   testimonials: {

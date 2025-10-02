@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Brain, ShoppingCart, TrendingUp, Layers, Target, 
   Package, Image, Wrench, AlertTriangle, Check, Star,
-  ArrowUpRight, ArrowDownRight
+  ArrowUpRight, ArrowDownRight, ShoppingBag, Truck, Store,
+  Database, Cloud
 } from "lucide-react";
 
 export const InteractiveDemo = () => {
@@ -28,7 +29,7 @@ export const InteractiveDemo = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 w-full h-auto gap-2 bg-card/50 p-2 backdrop-blur-sm">
+          <TabsList className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-14 w-full h-auto gap-2 bg-card/50 p-2 backdrop-blur-sm">
             <TabsTrigger value="productAnalysis" className="flex flex-col items-center gap-1 py-3">
               <Brain className="h-5 w-5" />
               <span className="text-xs hidden lg:inline">Analyse IA</span>
@@ -64,6 +65,26 @@ export const InteractiveDemo = () => {
             <TabsTrigger value="riskEvaluation" className="flex flex-col items-center gap-1 py-3">
               <AlertTriangle className="h-5 w-5" />
               <span className="text-xs hidden lg:inline">Risques</span>
+            </TabsTrigger>
+            <TabsTrigger value="shopify" className="flex flex-col items-center gap-1 py-3">
+              <ShoppingBag className="h-5 w-5" />
+              <span className="text-xs hidden lg:inline">Shopify</span>
+            </TabsTrigger>
+            <TabsTrigger value="woocommerce" className="flex flex-col items-center gap-1 py-3">
+              <Store className="h-5 w-5" />
+              <span className="text-xs hidden lg:inline">WooCommerce</span>
+            </TabsTrigger>
+            <TabsTrigger value="prestashop" className="flex flex-col items-center gap-1 py-3">
+              <Truck className="h-5 w-5" />
+              <span className="text-xs hidden lg:inline">PrestaShop</span>
+            </TabsTrigger>
+            <TabsTrigger value="magento" className="flex flex-col items-center gap-1 py-3">
+              <Database className="h-5 w-5" />
+              <span className="text-xs hidden lg:inline">Magento</span>
+            </TabsTrigger>
+            <TabsTrigger value="salesforce" className="flex flex-col items-center gap-1 py-3">
+              <Cloud className="h-5 w-5" />
+              <span className="text-xs hidden lg:inline">Salesforce</span>
             </TabsTrigger>
           </TabsList>
 
@@ -422,6 +443,243 @@ export const InteractiveDemo = () => {
                       <div className="text-xs text-muted-foreground">27 vendeurs actifs sur ce produit</div>
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="shopify" className="mt-8 animate-fade-in">
+            <Card className="border-2 border-secondary/20 shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingBag className="h-6 w-6 text-secondary" />
+                  Intégration Shopify - E-commerce Moderne
+                </CardTitle>
+                <CardDescription>Synchronisation temps réel avec votre boutique Shopify</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="bg-secondary/10 border border-secondary/20 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-secondary">2.847</div>
+                    <div className="text-sm text-muted-foreground mt-1">Produits Synchronisés</div>
+                  </div>
+                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-primary">156</div>
+                    <div className="text-sm text-muted-foreground mt-1">Optimisés Auto</div>
+                  </div>
+                  <div className="bg-accent/10 border border-accent/20 p-4 rounded-lg text-center">
+                    <div className="text-3xl font-bold text-accent">23K€</div>
+                    <div className="text-sm text-muted-foreground mt-1">CA Amélioré</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Synchronisation bidirectionnelle en temps réel</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Optimisation automatique des descriptions SEO</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Gestion intelligente des variantes et stocks</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Analytics avancé et recommandations de prix</span>
+                  </div>
+                </div>
+                <div className="bg-secondary/10 border border-secondary/20 p-4 rounded-lg">
+                  <p className="text-sm"><strong>Avantage clé :</strong> Interface native Shopify pour un workflow fluide, mise à jour automatique des prix selon vos concurrents Amazon.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="woocommerce" className="mt-8 animate-fade-in">
+            <Card className="border-2 border-accent/20 shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Store className="h-6 w-6 text-accent" />
+                  Intégration WooCommerce - WordPress Puissant
+                </CardTitle>
+                <CardDescription>Connexion parfaite avec WordPress et WooCommerce</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-accent/10 border border-accent/20 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-accent mb-1">1.542 boutiques</div>
+                    <div className="text-sm text-muted-foreground">connectées à notre plateforme</div>
+                  </div>
+                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg">
+                    <div className="text-2xl font-bold text-primary mb-1">98.7% uptime</div>
+                    <div className="text-sm text-muted-foreground">garantie de disponibilité</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Plugin WordPress natif pour intégration 1-clic</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Sync automatique des catégories et attributs</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Compatible avec 50+ extensions WooCommerce</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Optimisation images et SEO automatique</span>
+                  </div>
+                </div>
+                <div className="bg-accent/10 border border-accent/20 p-4 rounded-lg">
+                  <p className="text-sm"><strong>Parfait pour :</strong> Boutiques WordPress existantes, intégration transparente avec votre thème, respect total de votre design.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="prestashop" className="mt-8 animate-fade-in">
+            <Card className="border-2 border-primary/20 shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Truck className="h-6 w-6 text-primary" />
+                  Intégration PrestaShop - Solution Européenne
+                </CardTitle>
+                <CardDescription>Multi-langues et multi-devises natif</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/20">
+                    <div className="text-2xl font-bold text-primary">27 langues</div>
+                    <div className="text-sm text-muted-foreground mt-1">supportées</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/10 rounded-lg border border-secondary/20">
+                    <div className="text-2xl font-bold text-secondary">45 devises</div>
+                    <div className="text-sm text-muted-foreground mt-1">gérées auto</div>
+                  </div>
+                  <div className="text-center p-4 bg-accent/10 rounded-lg border border-accent/20">
+                    <div className="text-2xl font-bold text-accent">12s</div>
+                    <div className="text-sm text-muted-foreground mt-1">sync moyenne</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Module PrestaShop certifié et approuvé</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Traduction automatique des fiches produits</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Gestion multi-boutiques centralisée</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Support RGPD et législation européenne</span>
+                  </div>
+                </div>
+                <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg">
+                  <p className="text-sm"><strong>Idéal pour :</strong> E-commerce européen multi-pays, respect des normes RGPD, expansion internationale facilitée.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="magento" className="mt-8 animate-fade-in">
+            <Card className="border-2 border-secondary/20 shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="h-6 w-6 text-secondary" />
+                  Intégration Magento - Enterprise Grade
+                </CardTitle>
+                <CardDescription>Performance et scalabilité pour grands catalogues</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-secondary/10 border border-secondary/20 p-4 rounded-lg">
+                    <div className="text-3xl font-bold text-secondary mb-1">500K+ produits</div>
+                    <div className="text-sm text-muted-foreground">gérables simultanément</div>
+                  </div>
+                  <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg">
+                    <div className="text-3xl font-bold text-primary mb-1">API REST</div>
+                    <div className="text-sm text-muted-foreground">intégration native</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Compatible Magento 2.4+ (Adobe Commerce)</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Traitement batch ultra-rapide pour gros catalogues</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Gestion multi-sites et multi-stores avancée</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Import/Export CSV massi personnalisable</span>
+                  </div>
+                </div>
+                <div className="bg-secondary/10 border border-secondary/20 p-4 rounded-lg">
+                  <p className="text-sm"><strong>Recommandé pour :</strong> Grandes entreprises, catalogues complexes (+50K produits), architecture B2B/B2C avancée.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="salesforce" className="mt-8 animate-fade-in">
+            <Card className="border-2 border-accent/20 shadow-[var(--shadow-card)]">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Cloud className="h-6 w-6 text-accent" />
+                  Intégration Salesforce - CRM & Commerce Cloud
+                </CardTitle>
+                <CardDescription>Unification du CRM et de l'e-commerce</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-accent/10 rounded-lg border border-accent/20">
+                    <div className="text-2xl font-bold text-accent">100%</div>
+                    <div className="text-sm text-muted-foreground mt-1">Sync CRM</div>
+                  </div>
+                  <div className="text-center p-4 bg-primary/10 rounded-lg border border-primary/20">
+                    <div className="text-2xl font-bold text-primary">360°</div>
+                    <div className="text-sm text-muted-foreground mt-1">Vue Client</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/10 rounded-lg border border-secondary/20">
+                    <div className="text-2xl font-bold text-secondary">+42%</div>
+                    <div className="text-sm text-muted-foreground mt-1">Conversions</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Connexion native Salesforce Commerce Cloud</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Enrichissement produits avec données CRM</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Automatisation marketing cross-canal</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Check className="h-4 w-4" />
+                    <span>Analytics prédictifs et segmentation IA</span>
+                  </div>
+                </div>
+                <div className="bg-accent/10 border border-accent/20 p-4 rounded-lg">
+                  <p className="text-sm"><strong>Parfait pour :</strong> Entreprises utilisant déjà Salesforce, besoin d'unifier ventes et marketing, parcours client personnalisé.</p>
                 </div>
               </CardContent>
             </Card>
