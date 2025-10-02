@@ -5,7 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, TrendingDown, TrendingUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Search, TrendingDown, TrendingUp, Eye } from "lucide-react";
+import { ProductMonitoringDetail } from "./ProductMonitoringDetail";
 
 export const PriceMonitoring = () => {
   const [productName, setProductName] = useState("");
@@ -13,6 +15,8 @@ export const PriceMonitoring = () => {
   const [sites, setSites] = useState<any[]>([]);
   const [monitoring, setMonitoring] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedProductOffers, setSelectedProductOffers] = useState<any[]>([]);
 
   useEffect(() => {
     loadSites();
@@ -37,6 +41,18 @@ export const PriceMonitoring = () => {
       .limit(50);
     
     setMonitoring(data || []);
+  };
+
+  const handleProductClick = async (product: any) => {
+    // Charger toutes les offres pour ce produit
+    const { data } = await supabase
+      .from('price_monitoring')
+      .select('*, competitor_sites(site_name)')
+      .ilike('product_name', `%${product.product_name}%`)
+      .order('current_price', { ascending: true });
+    
+    setSelectedProduct(product);
+    setSelectedProductOffers(data || []);
   };
 
   const handleSearch = async () => {
@@ -128,33 +144,79 @@ export const PriceMonitoring = () => {
       <Card>
         <CardHeader>
           <CardTitle>Historique de Surveillance</CardTitle>
+          <CardDescription>
+            Cliquez sur un produit pour voir tous les détails et offres disponibles
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
             {monitoring.map((item) => {
               const change = getPriceChange(item.current_price, item.previous_price);
+              // Compter les offres similaires
+              const offerCount = monitoring.filter(m => 
+                m.product_name.toLowerCase() === item.product_name.toLowerCase()
+              ).length;
+              
               return (
-                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <div className="font-medium">{item.product_name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {item.competitor_sites?.site_name || 'Site inconnu'}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {new Date(item.scraped_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold">{item.current_price}€</div>
-                    {change !== null && (
-                      <div className={`text-sm flex items-center justify-end ${change > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                        {change > 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
-                        {Math.abs(change).toFixed(1)}%
+                <div 
+                  key={item.id} 
+                  onClick={() => handleProductClick(item)}
+                  className="flex items-center justify-between p-4 border rounded-lg cursor-pointer hover:bg-accent transition-colors group"
+                >
+                  <div className="flex items-start gap-4 flex-1">
+                    {item.image_url && (
+                      <div className="w-16 h-16 flex-shrink-0 rounded border overflow-hidden bg-accent">
+                        <img 
+                          src={item.image_url} 
+                          alt={item.product_name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                     )}
-                    <div className="text-xs text-muted-foreground">
-                      Stock: {item.stock_status}
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium group-hover:text-primary transition-colors">
+                        {item.product_name}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {item.competitor_sites?.site_name || 'Site inconnu'}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(item.scraped_at).toLocaleDateString()}
+                        </div>
+                        {offerCount > 1 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {offerCount} offres
+                          </Badge>
+                        )}
+                        {item.rating && (
+                          <Badge variant="outline" className="text-xs">
+                            ⭐ {item.rating.toFixed(1)}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                  </div>
+                  
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <div className="text-lg font-bold">{item.current_price}€</div>
+                      {change !== null && (
+                        <div className={`text-sm flex items-center justify-end ${change > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {change > 0 ? <TrendingUp className="w-3 h-3 mr-1" /> : <TrendingDown className="w-3 h-3 mr-1" />}
+                          {Math.abs(change).toFixed(1)}%
+                        </div>
+                      )}
+                      <Badge 
+                        variant={item.stock_status === "in_stock" ? "default" : "destructive"}
+                        className="text-xs mt-1"
+                      >
+                        {item.stock_status === "in_stock" ? "En Stock" : "Rupture"}
+                      </Badge>
+                    </div>
+                    
+                    <Eye className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
                 </div>
               );
@@ -167,6 +229,16 @@ export const PriceMonitoring = () => {
           </div>
         </CardContent>
       </Card>
+
+      <ProductMonitoringDetail
+        product={selectedProduct}
+        allOffers={selectedProductOffers}
+        isOpen={!!selectedProduct}
+        onClose={() => {
+          setSelectedProduct(null);
+          setSelectedProductOffers([]);
+        }}
+      />
     </div>
   );
 };

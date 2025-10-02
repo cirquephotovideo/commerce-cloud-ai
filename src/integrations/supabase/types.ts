@@ -812,11 +812,15 @@ export type Database = {
           competitor_site_id: string | null
           created_at: string | null
           current_price: number | null
+          description: string | null
           id: string
+          image_url: string | null
           previous_price: number | null
           price_change_percent: number | null
           product_name: string
           product_url: string
+          rating: number | null
+          reviews_count: number | null
           scraped_at: string | null
           stock_status: string | null
           user_id: string
@@ -825,11 +829,15 @@ export type Database = {
           competitor_site_id?: string | null
           created_at?: string | null
           current_price?: number | null
+          description?: string | null
           id?: string
+          image_url?: string | null
           previous_price?: number | null
           price_change_percent?: number | null
           product_name: string
           product_url: string
+          rating?: number | null
+          reviews_count?: number | null
           scraped_at?: string | null
           stock_status?: string | null
           user_id: string
@@ -838,11 +846,15 @@ export type Database = {
           competitor_site_id?: string | null
           created_at?: string | null
           current_price?: number | null
+          description?: string | null
           id?: string
+          image_url?: string | null
           previous_price?: number | null
           price_change_percent?: number | null
           product_name?: string
           product_url?: string
+          rating?: number | null
+          reviews_count?: number | null
           scraped_at?: string | null
           stock_status?: string | null
           user_id?: string

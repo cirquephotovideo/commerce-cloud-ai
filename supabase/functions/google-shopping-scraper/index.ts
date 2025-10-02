@@ -397,7 +397,7 @@ serve(async (req) => {
         }
       }
 
-      // Sauvegarder dans price_monitoring
+      // Sauvegarder dans price_monitoring avec tous les champs disponibles
       const { data: inserted, error: insertError } = await supabase
         .from('price_monitoring')
         .insert({
@@ -407,6 +407,10 @@ serve(async (req) => {
           competitor_site_id: competitorSiteId,
           current_price: product.price,
           stock_status: product.availability,
+          image_url: product.image || null,
+          description: product.description || null,
+          rating: product.rating || null,
+          reviews_count: product.reviews_count || null,
           scraped_at: new Date().toISOString(),
         })
         .select()
