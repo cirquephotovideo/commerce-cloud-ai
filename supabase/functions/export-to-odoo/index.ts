@@ -169,6 +169,71 @@ function getNestedValue(obj: any, path: string): any {
   return path.split('.').reduce((current, key) => current?.[key], obj);
 }
 
+// Create additional product images in Odoo
+async function createProductImages(
+  config: OdooConfig,
+  uid: number,
+  productTemplateId: number,
+  imageUrls: string[]
+): Promise<{ success: number; failed: number }> {
+  let successCount = 0;
+  let failedCount = 0;
+
+  for (const imageUrl of imageUrls) {
+    try {
+      console.log(`Downloading additional image: ${imageUrl}`);
+      const imageBase64 = await downloadImageAsBase64(imageUrl);
+      
+      if (!imageBase64) {
+        failedCount++;
+        continue;
+      }
+
+      const imageStruct = `
+        <member><name>name</name><value><string>Product Image</string></value></member>
+        <member><name>image_1920</name><value><string>${imageBase64}</string></value></member>
+        <member><name>product_tmpl_id</name><value><int>${productTemplateId}</int></value></member>`;
+
+      const xmlrpcPayload = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${config.database_name}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${config.password_encrypted}</string></value></param>
+    <param><value><string>product.image</string></value></param>
+    <param><value><string>create</string></value></param>
+    <param><value><array><data>
+      <value><struct>${imageStruct}</struct></value>
+    </data></array></value></param>
+  </params>
+</methodCall>`;
+
+      const response = await fetch(`${config.odoo_url}/xmlrpc/2/object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml' },
+        body: xmlrpcPayload,
+      });
+
+      const text = await response.text();
+      const imageIdMatch = text.match(/<int>(\d+)<\/int>/);
+      
+      if (imageIdMatch) {
+        successCount++;
+        console.log(`✓ Additional image created with ID: ${imageIdMatch[1]}`);
+      } else {
+        failedCount++;
+        console.log(`✗ Failed to create additional image`);
+      }
+    } catch (error) {
+      failedCount++;
+      console.error('Error creating product image:', error);
+    }
+  }
+
+  return { success: successCount, failed: failedCount };
+}
+
 // Map analysis result to Odoo product data using custom mappings
 async function mapAnalysisToOdooProduct(
   analysis: ProductAnalysis, 
@@ -224,13 +289,86 @@ async function mapAnalysisToOdooProduct(
     }
   }
 
-  // Fallback mappings if not provided by custom mappings
+  // Extract rich data from analysis_result
+  // Product name - prioritize product_name from analysis_result
   if (!productData.name) {
-    productData.name = result.product_name || analysis.product_url;
+    productData.name = result.product_name || result.title || analysis.product_url;
   }
+
+  // Description - use suggested_description if available
+  if (!productData.description && result.suggested_description) {
+    productData.description = result.suggested_description;
+  }
+
+  // Description sale - combine key features if available
+  if (!productData.description_sale) {
+    let descriptionSale = '';
+    if (result.key_features && Array.isArray(result.key_features)) {
+      descriptionSale = result.key_features.join('\n• ');
+      if (descriptionSale) descriptionSale = '• ' + descriptionSale;
+    }
+    if (result.suggested_description) {
+      descriptionSale = result.suggested_description + '\n\n' + descriptionSale;
+    }
+    if (descriptionSale) {
+      productData.description_sale = descriptionSale.substring(0, 2000);
+    }
+  }
+
+  // Price - extract from various possible locations
+  if (!productData.list_price) {
+    let price = null;
+    if (result.price) {
+      if (typeof result.price === 'string') {
+        const priceStr = result.price.replace(/[^0-9.,]/g, '');
+        price = parseFloat(priceStr.replace(',', '.')) || 0;
+      } else if (typeof result.price === 'number') {
+        price = result.price;
+      }
+    } else if (result.pricing?.current_price) {
+      price = result.pricing.current_price;
+    }
+    if (price) {
+      productData.list_price = price;
+      if (!productData.standard_price) {
+        productData.standard_price = price * 0.7;
+      }
+    }
+  }
+
+  // Default code / Reference
   if (!productData.default_code) {
     const barcode = analysis.product_url.match(/^\d{8,13}$/) ? analysis.product_url : '';
-    productData.default_code = barcode || `REF-${Date.now()}`;
+    productData.default_code = barcode || result.sku || result.reference || `REF-${Date.now()}`;
+  }
+
+  // Barcode / EAN
+  if (!productData.barcode && result.ean) {
+    productData.barcode = result.ean;
+  }
+
+  // SEO Meta data
+  if (!productData.website_meta_title && result.product_name) {
+    productData.website_meta_title = result.product_name.substring(0, 60);
+  }
+  if (!productData.website_meta_description) {
+    const metaDesc = result.suggested_description || result.description || '';
+    productData.website_meta_description = metaDesc.substring(0, 160);
+  }
+  if (!productData.website_meta_keywords) {
+    const keywords = [];
+    if (result.tags && Array.isArray(result.tags)) {
+      keywords.push(...result.tags);
+    }
+    if (result.tags_categories?.all_tags && Array.isArray(result.tags_categories.all_tags)) {
+      keywords.push(...result.tags_categories.all_tags);
+    }
+    if (analysis.tags && Array.isArray(analysis.tags)) {
+      keywords.push(...analysis.tags);
+    }
+    if (keywords.length > 0) {
+      productData.website_meta_keywords = [...new Set(keywords)].join(', ').substring(0, 255);
+    }
   }
 
   // Handle category mapping
@@ -257,7 +395,7 @@ async function mapAnalysisToOdooProduct(
   // Download and convert first image to base64 if available
   let imageBase64 = null;
   if (analysis.image_urls && analysis.image_urls.length > 0) {
-    console.log(`Downloading image from: ${analysis.image_urls[0]}`);
+    console.log(`Downloading main image from: ${analysis.image_urls[0]}`);
     imageBase64 = await downloadImageAsBase64(analysis.image_urls[0]);
     if (imageBase64) {
       productData.image_1920 = imageBase64;
@@ -344,13 +482,23 @@ serve(async (req) => {
     let errorCount = 0;
 
     for (const analysis of analyses) {
-      console.log(`Exporting product: ${analysis.product_url}`);
+      const productName = analysis.analysis_result?.product_name || analysis.product_url;
+      console.log(`Exporting product: ${productName}`);
+      
       const productData = await mapAnalysisToOdooProduct(analysis, categories || [], fieldMappings || []);
       const result = await createOdooProduct(config, uid, productData);
       
-      if (result.success) {
+      if (result.success && result.product_id) {
         successCount++;
         console.log(`✓ Product created with ID: ${result.product_id}`);
+        
+        // Upload additional images if available
+        if (analysis.image_urls && analysis.image_urls.length > 1) {
+          const additionalImages = analysis.image_urls.slice(1);
+          console.log(`Uploading ${additionalImages.length} additional images...`);
+          const imageResult = await createProductImages(config, uid, result.product_id, additionalImages);
+          console.log(`✓ Images: ${imageResult.success} uploaded, ${imageResult.failed} failed`);
+        }
       } else {
         errorCount++;
         console.log(`✗ Failed to create product: ${result.error}`);
