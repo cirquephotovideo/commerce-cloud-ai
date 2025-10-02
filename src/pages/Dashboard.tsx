@@ -17,6 +17,7 @@ import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { AIProviderSettings } from "@/components/AIProviderSettings";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
+import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
 import { 
   Select, 
   SelectContent, 
@@ -501,6 +502,10 @@ export default function Dashboard() {
                       >
                         Voir détails
                       </Button>
+                      <ProductSummaryDialog 
+                        analysis={analysis}
+                        productName={productName}
+                      />
                       {analysis.image_urls && analysis.image_urls.length > 0 && (
                         <ProductImageGallery images={analysis.image_urls} productName={productName} />
                       )}
