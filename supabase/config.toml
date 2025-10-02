@@ -89,3 +89,9 @@ verify_jwt = true
 
 [functions.manage-subscription]
 verify_jwt = true
+
+[functions.amazon-token-manager]
+verify_jwt = false
+
+[functions.amazon-product-enrichment]
+verify_jwt = true

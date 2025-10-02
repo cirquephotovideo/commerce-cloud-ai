@@ -33,6 +33,8 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
   const [mainImage, setMainImage] = useState(images[0] || "");
   const [hasTaxonomy, setHasTaxonomy] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [hasAmazonData, setHasAmazonData] = useState(false);
+  const [isEnrichingAmazon, setIsEnrichingAmazon] = useState(false);
 
   // Extract data from analysis
   const description = analysis?.analysis_result?.description?.suggested_description || analysis?.description_long || "";
@@ -62,6 +64,23 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
     };
     
     checkTaxonomy();
+  }, [analysis?.id]);
+
+  // Check if Amazon data exists
+  useEffect(() => {
+    const checkAmazonData = async () => {
+      if (!analysis?.id) return;
+      
+      const { data } = await supabase
+        .from('amazon_product_data')
+        .select('id')
+        .eq('analysis_id', analysis.id)
+        .maybeSingle();
+      
+      setHasAmazonData(!!data);
+    };
+    
+    checkAmazonData();
   }, [analysis?.id]);
 
   // Generate taxonomy with AI
@@ -100,6 +119,37 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Enrich with Amazon data
+  const handleAmazonEnrichment = async () => {
+    if (!analysis?.id) return;
+    
+    setIsEnrichingAmazon(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('amazon-product-enrichment', {
+        body: { analysis_id: analysis.id }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "✅ Données Amazon synchronisées",
+        description: "Les informations produit Amazon ont été récupérées avec succès",
+      });
+      
+      setHasAmazonData(true);
+    } catch (error: any) {
+      console.error('Amazon enrichment error:', error);
+      toast({
+        title: "❌ Erreur Amazon",
+        description: error.message || "Impossible d'enrichir avec Amazon. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnrichingAmazon(false);
     }
   };
 
@@ -220,6 +270,37 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                     </div>
                   )}
                 </div>
+
+                {/* Amazon Enrichment Section */}
+                <div className="pt-2">
+                  {!hasAmazonData ? (
+                    <Button 
+                      variant="outline"
+                      className="w-full bg-gradient-to-r from-orange-500/10 to-yellow-600/10 border-orange-500/50 hover:border-orange-600 hover:from-orange-500/20 hover:to-yellow-600/20 transition-all group shadow-sm hover:shadow-md"
+                      onClick={handleAmazonEnrichment}
+                      disabled={isEnrichingAmazon}
+                    >
+                      {isEnrichingAmazon ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <span className="text-sm">📦 Synchronisation Amazon...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Package className="w-4 h-4 mr-2 group-hover:animate-bounce text-orange-600" />
+                          <span className="text-sm font-medium">📦 Enrichir avec Amazon Seller</span>
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                      <CheckCircle2 className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" />
+                      <span className="text-sm text-orange-800 dark:text-orange-300 font-medium">
+                        ✅ Données Amazon synchronisées
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Quick Actions */}
@@ -234,61 +315,8 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                 </Button>
                 <Button variant="outline" size="sm">
                   <Download className="w-4 h-4 mr-2" />
-                  Télécharger
+                  Exporter
                 </Button>
-              </div>
-
-              {/* Tags */}
-              {tags && tags.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Tags</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {tags.map((tag: string, i: number) => (
-                      <Badge key={i} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Short Summary */}
-              {description && description.length < 300 && (
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Résumé</h3>
-                  <p className="text-sm leading-relaxed">{description}</p>
-                </div>
-              )}
-
-              {/* Additional Info */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                {releaseDate && (
-                  <div className="flex items-start gap-2">
-                    <Calendar className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Date de sortie</p>
-                      <p className="text-sm font-medium">{releaseDate}</p>
-                    </div>
-                  </div>
-                )}
-                {warranty && (
-                  <div className="flex items-start gap-2">
-                    <ShieldCheck className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Garantie</p>
-                      <p className="text-sm font-medium">{warranty}</p>
-                    </div>
-                  </div>
-                )}
-                {popularityScore !== null && (
-                  <div className="flex items-start gap-2">
-                    <TrendingUp className="w-4 h-4 mt-0.5 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Popularité</p>
-                      <p className="text-sm font-medium">{popularityScore}/10</p>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -14,6 +14,166 @@ export type Database = {
   }
   public: {
     Tables: {
+      amazon_access_tokens: {
+        Row: {
+          access_token: string
+          credential_id: string | null
+          expires_at: string
+          generated_at: string | null
+          id: string
+        }
+        Insert: {
+          access_token: string
+          credential_id?: string | null
+          expires_at: string
+          generated_at?: string | null
+          id?: string
+        }
+        Update: {
+          access_token?: string
+          credential_id?: string | null
+          expires_at?: string
+          generated_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_access_tokens_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      amazon_credentials: {
+        Row: {
+          client_id: string
+          client_secret_encrypted: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          marketplace_id: string
+          refresh_token_encrypted: string
+          updated_at: string | null
+        }
+        Insert: {
+          client_id: string
+          client_secret_encrypted: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          marketplace_id?: string
+          refresh_token_encrypted: string
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          client_secret_encrypted?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          marketplace_id?: string
+          refresh_token_encrypted?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      amazon_product_data: {
+        Row: {
+          analysis_id: string | null
+          asin: string
+          brand: string | null
+          buy_box_price: number | null
+          color: string | null
+          created_at: string | null
+          ean: string | null
+          features: string[] | null
+          id: string
+          images: Json | null
+          item_dimensions: Json | null
+          item_weight: number | null
+          last_synced_at: string | null
+          list_price: number | null
+          lowest_new_price: number | null
+          manufacturer: string | null
+          offer_count_new: number | null
+          package_dimensions: Json | null
+          package_weight: number | null
+          product_type: string | null
+          raw_data: Json | null
+          sales_rank: Json | null
+          size: string | null
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          asin: string
+          brand?: string | null
+          buy_box_price?: number | null
+          color?: string | null
+          created_at?: string | null
+          ean?: string | null
+          features?: string[] | null
+          id?: string
+          images?: Json | null
+          item_dimensions?: Json | null
+          item_weight?: number | null
+          last_synced_at?: string | null
+          list_price?: number | null
+          lowest_new_price?: number | null
+          manufacturer?: string | null
+          offer_count_new?: number | null
+          package_dimensions?: Json | null
+          package_weight?: number | null
+          product_type?: string | null
+          raw_data?: Json | null
+          sales_rank?: Json | null
+          size?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string | null
+          asin?: string
+          brand?: string | null
+          buy_box_price?: number | null
+          color?: string | null
+          created_at?: string | null
+          ean?: string | null
+          features?: string[] | null
+          id?: string
+          images?: Json | null
+          item_dimensions?: Json | null
+          item_weight?: number | null
+          last_synced_at?: string | null
+          list_price?: number | null
+          lowest_new_price?: number | null
+          manufacturer?: string | null
+          offer_count_new?: number | null
+          package_dimensions?: Json | null
+          package_weight?: number | null
+          product_type?: string | null
+          raw_data?: Json | null
+          sales_rank?: Json | null
+          size?: string | null
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_product_data_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: true
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_history: {
         Row: {
           amount: number

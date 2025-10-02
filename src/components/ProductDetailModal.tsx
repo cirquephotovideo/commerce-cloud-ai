@@ -9,6 +9,7 @@ import { ProductAdvancedTab } from "./product-detail/ProductAdvancedTab";
 import { ProductMarketTab } from "./product-detail/ProductMarketTab";
 import { ProductExportTab } from "./product-detail/ProductExportTab";
 import { ProductActionsTab } from "./product-detail/ProductActionsTab";
+import { ProductAmazonTab } from "./product-detail/ProductAmazonTab";
 
 interface ProductAnalysis {
   id: string;
@@ -123,10 +124,11 @@ export const ProductDetailModal = ({
         {/* Tabs Navigation */}
         <div className="px-6 pt-4 border-b bg-background sticky top-[73px] z-10">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid w-full grid-cols-7">
               <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
               <TabsTrigger value="images">Images</TabsTrigger>
               <TabsTrigger value="advanced">Analyses</TabsTrigger>
+              <TabsTrigger value="amazon">📦 Amazon</TabsTrigger>
               <TabsTrigger value="market">Prix & Marché</TabsTrigger>
               <TabsTrigger value="export">Export</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
@@ -165,6 +167,10 @@ export const ProductDetailModal = ({
                 onReload={onReload}
                 onClose={onClose}
               />
+            </TabsContent>
+
+            <TabsContent value="amazon" className="mt-4">
+              <ProductAmazonTab analysis={analysis} />
             </TabsContent>
           </Tabs>
         </div>

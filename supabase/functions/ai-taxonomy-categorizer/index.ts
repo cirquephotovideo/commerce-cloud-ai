@@ -6,6 +6,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Taxonomies intégrées directement pour éviter les erreurs fetch
+const GOOGLE_TAXONOMY = {"version":"2024-10","categories":[{"id":"1","path":"Animaux et fournitures pour animaux","parent_id":null},{"id":"2","path":"Animaux et fournitures pour animaux > Fournitures pour animaux","parent_id":"1"},{"id":"3","path":"Animaux et fournitures pour animaux > Nourriture pour animaux","parent_id":"1"},{"id":"4","path":"Art et divertissement","parent_id":null},{"id":"5","path":"Art et divertissement > Musique","parent_id":"4"},{"id":"6","path":"Vêtements et accessoires","parent_id":null},{"id":"7","path":"Vêtements et accessoires > Vêtements","parent_id":"6"},{"id":"8","path":"Vêtements et accessoires > Chaussures","parent_id":"6"},{"id":"9","path":"Électronique","parent_id":null},{"id":"10","path":"Électronique > Ordinateurs et tablettes","parent_id":"9"},{"id":"11","path":"Électronique > Téléphones et accessoires","parent_id":"9"},{"id":"12","path":"Électronique > Audio et vidéo","parent_id":"9"},{"id":"13","path":"Maison et jardin","parent_id":null},{"id":"14","path":"Maison et jardin > Meubles","parent_id":"13"},{"id":"15","path":"Maison et jardin > Décoration","parent_id":"13"},{"id":"16","path":"Beauté et soins personnels","parent_id":null},{"id":"17","path":"Beauté et soins personnels > Maquillage","parent_id":"16"},{"id":"18","path":"Beauté et soins personnels > Soins de la peau","parent_id":"16"},{"id":"19","path":"Sports et plein air","parent_id":null},{"id":"20","path":"Sports et plein air > Équipement sportif","parent_id":"19"}]};
+
+const AMAZON_TAXONOMY = {"version":"2024","categories":[{"browse_node_id":"13921051","name":"High-Tech","path":"High-Tech","parent_id":null},{"browse_node_id":"340858031","name":"Informatique","path":"High-Tech > Informatique","parent_id":"13921051"},{"browse_node_id":"405689","name":"Smartphones","path":"High-Tech > Smartphones","parent_id":"13921051"},{"browse_node_id":"908826","name":"Audio et vidéo","path":"High-Tech > Audio et vidéo","parent_id":"13921051"},{"browse_node_id":"530490","name":"Livres","path":"Livres","parent_id":null},{"browse_node_id":"301061","name":"Vêtements","path":"Vêtements","parent_id":null},{"browse_node_id":"197858031","name":"Chaussures","path":"Vêtements > Chaussures","parent_id":"301061"},{"browse_node_id":"197649031","name":"Sacs","path":"Vêtements > Sacs","parent_id":"301061"},{"browse_node_id":"57686031","name":"Cuisine et Maison","path":"Cuisine et Maison","parent_id":null},{"browse_node_id":"3937551031","name":"Ustensiles de cuisine","path":"Cuisine et Maison > Ustensiles de cuisine","parent_id":"57686031"}]};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -34,7 +39,6 @@ serve(async (req) => {
 
     const { analysis_id } = await req.json();
 
-    // Get user's taxonomy preference
     const { data: settings } = await supabase
       .from('taxonomy_settings')
       .select('taxonomy_type')
@@ -43,7 +47,6 @@ serve(async (req) => {
 
     const taxonomyType = settings?.taxonomy_type || 'google';
 
-    // Get product analysis
     const { data: analysis, error: analysisError } = await supabase
       .from('product_analyses')
       .select('*')
@@ -55,54 +58,39 @@ serve(async (req) => {
       throw new Error('Product analysis not found');
     }
 
-    // Load taxonomy file from preview URL (static files are served there)
-    const frontendUrl = 'https://fd63d493-bace-4dec-b509-380d11e36a5a.lovableproject.com';
-    const taxonomyUrl = `${frontendUrl}/taxonomies/${taxonomyType}-taxonomy-fr.json`;
-    console.log('Loading taxonomy from:', taxonomyUrl);
-    const taxonomyResponse = await fetch(taxonomyUrl);
-    if (!taxonomyResponse.ok) {
-      console.error('Failed to load taxonomy:', taxonomyResponse.status, taxonomyResponse.statusText);
-      throw new Error(`Taxonomy file not found: ${taxonomyUrl}`);
-    }
-    const taxonomyData = await taxonomyResponse.json();
+    console.log('Using embedded taxonomy:', taxonomyType);
+    const taxonomyData = taxonomyType === 'google' ? GOOGLE_TAXONOMY : AMAZON_TAXONOMY;
 
-    // Extract product info
-    const productName = analysis.analysis_result?.name || '';
-    const description = analysis.analysis_result?.description || '';
-    const currentCategory = analysis.mapped_category_name || '';
+    const productInfo = {
+      name: analysis.analysis_result?.product_name || analysis.analysis_result?.name,
+      description: analysis.analysis_result?.description?.suggested_description,
+      category: analysis.analysis_result?.category,
+      brand: analysis.analysis_result?.brand,
+      price: analysis.analysis_result?.price,
+    };
 
-    // Prepare taxonomy list for AI (limit to 50 most relevant categories)
-    const categoryList = taxonomyData.categories
-      .slice(0, 50)
-      .map((cat: any) => `${cat.id}: ${cat.path}`)
+    const categoriesText = taxonomyData.categories
+      .map(cat => `ID: ${taxonomyType === 'google' ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
       .join('\n');
 
-    // Call AI for categorization
-    const prompt = `Tu es un expert en catégorisation e-commerce. Catégorise ce produit dans la taxonomie ${taxonomyType === 'google' ? 'Google Shopping' : 'Amazon Browse Tree'}.
+    const prompt = `Tu es un expert en catégorisation e-commerce. Analyse ce produit et trouve la catégorie la plus appropriée dans la taxonomie ${taxonomyType === 'google' ? 'Google Shopping' : 'Amazon'}.
 
 Produit:
-- Nom: ${productName}
-- Description: ${description}
-${currentCategory ? `- Catégorie actuelle: ${currentCategory}` : ''}
+- Nom: ${productInfo.name}
+- Description: ${productInfo.description || 'N/A'}
+- Catégorie actuelle: ${productInfo.category || 'N/A'}
+- Marque: ${productInfo.brand || 'N/A'}
+- Prix: ${productInfo.price || 'N/A'}
 
-Voici les principales catégories disponibles:
-${categoryList}
+Catégories disponibles:
+${categoriesText}
 
-Retourne UNIQUEMENT un objet JSON avec cette structure exacte (sans markdown):
+Réponds uniquement avec un JSON suivant ce format exact:
 {
-  "primary_category": {
-    "id": "ID_CATEGORIE",
-    "path": "Chemin > Complet > Catégorie",
-    "confidence": 0.95
-  },
-  "secondary_category": {
-    "id": "ID_CATEGORIE_2",
-    "path": "Chemin > Alternatif",
-    "confidence": 0.75
-  }
-}
-
-Si tu n'es pas sûr, mets un score de confiance plus bas. Le secondary_category est optionnel.`;
+  "category_id": "l'ID de la catégorie la plus appropriée",
+  "category_path": "le chemin complet de la catégorie",
+  "confidence_score": score entre 0 et 1
+}`;
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -112,65 +100,39 @@ Si tu n'es pas sûr, mets un score de confiance plus bas. Le secondary_category 
       },
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'user', content: prompt }
-        ],
+        messages: [{ role: 'user', content: prompt }],
         temperature: 0.3,
       }),
     });
 
     if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API Error:', errorText);
       throw new Error(`AI API error: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
-    const aiContent = aiData.choices?.[0]?.message?.content || '';
+    const aiContent = aiData.choices[0]?.message?.content || '';
+    const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
 
-    // Parse AI response
-    let categorization;
-    try {
-      // Remove markdown code blocks if present
-      const cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      categorization = JSON.parse(cleanContent);
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', aiContent);
-      throw new Error('Invalid AI response format');
-    }
+    if (!result) throw new Error('Invalid AI response');
 
-    // Save both taxonomies
-    const mappings = [];
-    
-    if (categorization.primary_category) {
-      mappings.push({
-        analysis_id,
-        taxonomy_type: taxonomyType,
-        category_id: categorization.primary_category.id,
-        category_path: categorization.primary_category.path,
-        confidence_score: categorization.primary_category.confidence * 100,
-      });
-    }
+    await supabase.from('product_taxonomy_mappings').insert({
+      analysis_id,
+      taxonomy_type: taxonomyType,
+      category_id: result.category_id,
+      category_path: result.category_path,
+      confidence_score: result.confidence_score,
+    });
 
-    // Also categorize with the other taxonomy for comparison
+    // Also categorize with the other taxonomy
     const otherTaxonomyType = taxonomyType === 'google' ? 'amazon' : 'google';
-    const otherTaxonomyUrl = `${frontendUrl}/taxonomies/${otherTaxonomyType}-taxonomy-fr.json`;
-    console.log('Loading other taxonomy from:', otherTaxonomyUrl);
-    const otherTaxonomyResponse = await fetch(otherTaxonomyUrl);
-    if (!otherTaxonomyResponse.ok) {
-      console.error('Failed to load other taxonomy:', otherTaxonomyResponse.status);
-    }
-    const otherTaxonomyData = otherTaxonomyResponse.ok ? await otherTaxonomyResponse.json() : null;
+    const otherTaxonomyData = otherTaxonomyType === 'google' ? GOOGLE_TAXONOMY : AMAZON_TAXONOMY;
     
-    const otherCategoryList = otherTaxonomyData.categories
-      .slice(0, 30)
-      .map((cat: any) => `${cat.id || cat.browse_node_id}: ${cat.path}`)
+    const otherCategoriesText = otherTaxonomyData.categories
+      .map(cat => `ID: ${otherTaxonomyType === 'google' ? cat.id : cat.browse_node_id}, Path: ${cat.path}`)
       .join('\n');
 
-    const otherPrompt = `Catégorise rapidement ce produit: "${productName}" dans ces catégories ${otherTaxonomyType}:
-${otherCategoryList}
-
-Retourne JSON: {"id": "...", "path": "...", "confidence": 0.8}`;
+    const otherPrompt = `${prompt.split('Catégories disponibles:')[0]}Catégories disponibles:\n${otherCategoriesText}`;
 
     const otherAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -185,57 +147,33 @@ Retourne JSON: {"id": "...", "path": "...", "confidence": 0.8}`;
       }),
     });
 
-    if (otherTaxonomyData && otherAiResponse.ok) {
+    if (otherAiResponse.ok) {
       const otherAiData = await otherAiResponse.json();
-      const otherContent = otherAiData.choices?.[0]?.message?.content || '';
-      try {
-        const cleanOtherContent = otherContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const otherCategory = JSON.parse(cleanOtherContent);
-        mappings.push({
+      const otherAiContent = otherAiData.choices[0]?.message?.content || '';
+      const otherJsonMatch = otherAiContent.match(/\{[\s\S]*\}/);
+      const otherResult = otherJsonMatch ? JSON.parse(otherJsonMatch[0]) : null;
+
+      if (otherResult) {
+        await supabase.from('product_taxonomy_mappings').insert({
           analysis_id,
           taxonomy_type: otherTaxonomyType,
-          category_id: otherCategory.id || otherCategory.browse_node_id,
-          category_path: otherCategory.path,
-          confidence_score: (otherCategory.confidence || 0.7) * 100,
+          category_id: otherResult.category_id,
+          category_path: otherResult.category_path,
+          confidence_score: otherResult.confidence_score,
         });
-      } catch (e) {
-        console.error('Failed to parse other taxonomy:', e);
       }
     }
 
-    // Delete existing mappings and insert new ones
-    await supabase
-      .from('product_taxonomy_mappings')
-      .delete()
-      .eq('analysis_id', analysis_id);
-
-    const { error: insertError } = await supabase
-      .from('product_taxonomy_mappings')
-      .insert(mappings);
-
-    if (insertError) {
-      console.error('Insert error:', insertError);
-      throw insertError;
-    }
-
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        categorization,
-        mappings_created: mappings.length 
-      }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Taxonomy categorization error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
