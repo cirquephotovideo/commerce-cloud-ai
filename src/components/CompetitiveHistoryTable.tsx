@@ -62,13 +62,34 @@ export const CompetitiveHistoryTable = ({
            0;
   };
 
+  const getDescriptionLong = (analysis: any) => {
+    // Priority: description_long field > description object's suggested_description > short description
+    if (analysis.description_long) return analysis.description_long;
+    
+    const result = analysis.analysis_result || analysis;
+    if (result?.description_long) return result.description_long;
+    
+    // If description is an object, extract suggested_description
+    if (result?.description && typeof result.description === 'object') {
+      return result.description.suggested_description || null;
+    }
+    
+    // If description is a string, use it
+    if (typeof result?.description === 'string') {
+      return result.description;
+    }
+    
+    return null;
+  };
+
   const handleViewCompetition = async (analysis: any) => {
     const productName = getProductName(analysis);
-    // TODO: Charger les offres depuis price_monitoring
+    const description = getDescriptionLong(analysis);
+    
     setSelectedProduct({
       name: productName,
       image_url: analysis.image_urls?.[0],
-      description: analysis.analysis_result?.description_long || analysis.analysis_result?.description,
+      description: description,
       rating: 4.5,
       stock_status: 'En stock'
     });
@@ -84,9 +105,7 @@ export const CompetitiveHistoryTable = ({
           const productName = getProductName(analysis);
           const price = getProductPrice(analysis);
           const score = getProductScore(analysis);
-          const descriptionLong = analysis.description_long || 
-                                 analysis.analysis_result?.description_long || 
-                                 analysis.analysis_result?.description;
+          const descriptionLong = getDescriptionLong(analysis);
           
           return (
             <Card key={analysis.id} className="p-4">
