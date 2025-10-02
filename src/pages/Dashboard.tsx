@@ -37,7 +37,7 @@ export default function Dashboard() {
   const [analyses, setAnalyses] = useState<ProductAnalysis[]>([]);
   const [filteredAnalyses, setFilteredAnalyses] = useState<ProductAnalysis[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchType, setSearchType] = useState<"url" | "ean">("url");
+  const [searchType, setSearchType] = useState<"url" | "ean" | "name">("name");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
@@ -69,10 +69,14 @@ export default function Dashboard() {
     const filtered = analyses.filter(analysis => {
       if (searchType === "url") {
         return analysis.product_url.toLowerCase().includes(query);
-      } else {
+      } else if (searchType === "ean") {
         // Recherche par EAN dans analysis_result
         const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
         return ean.toLowerCase().includes(query);
+      } else {
+        // Recherche par nom de produit
+        const name = analysis.analysis_result?.name || "";
+        return name.toLowerCase().includes(query);
       }
     });
     setFilteredAnalyses(filtered);
@@ -282,11 +286,17 @@ export default function Dashboard() {
           <Card className="mb-6">
             <CardContent className="pt-6">
               <div className="flex gap-4">
-                <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean")}>
-                  <SelectTrigger className="w-[180px]">
+                <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
+                  <SelectTrigger className="w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="name">
+                      <div className="flex items-center gap-2">
+                        <Search className="w-4 h-4" />
+                        Par Nom du produit
+                      </div>
+                    </SelectItem>
                     <SelectItem value="url">
                       <div className="flex items-center gap-2">
                         <Search className="w-4 h-4" />
@@ -302,7 +312,11 @@ export default function Dashboard() {
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder={searchType === "url" ? "Rechercher par URL..." : "Rechercher par code EAN ou barcode..."}
+                  placeholder={
+                    searchType === "name" ? "Rechercher par nom de produit..." :
+                    searchType === "url" ? "Rechercher par URL..." : 
+                    "Rechercher par code EAN ou barcode..."
+                  }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="flex-1"
