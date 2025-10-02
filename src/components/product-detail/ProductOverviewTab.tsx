@@ -1,18 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
+import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { getProductImages, getProductName, getProductPrice, getProductScore, getProductCategory } from "@/lib/analysisDataExtractors";
-import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info, Zap, Box, Wifi, Battery, Ruler, Weight, Calendar, ShieldCheck, TrendingUp } from "lucide-react";
+import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info, Zap, Box, Wifi, Battery, Ruler, Weight, Calendar, ShieldCheck, TrendingUp, Sparkles, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductOverviewTabProps {
   analysis: any;
 }
 
 export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
+  const { toast } = useToast();
+  
   // Safety check
   if (!analysis) {
     return <div className="p-6 text-center text-muted-foreground">Aucune donnée disponible</div>;
@@ -26,6 +31,8 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
   const tags = analysis?.tags || [];
 
   const [mainImage, setMainImage] = useState(images[0] || "");
+  const [hasTaxonomy, setHasTaxonomy] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Extract data from analysis
   const description = analysis?.analysis_result?.description?.suggested_description || analysis?.description_long || "";
@@ -39,6 +46,62 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
   const popularityScore = analysis?.analysis_result?.popularity_score || null;
   const warranty = analysis?.analysis_result?.warranty || "";
   const releaseDate = analysis?.analysis_result?.release_date || "";
+
+  // Check if taxonomy already exists
+  useEffect(() => {
+    const checkTaxonomy = async () => {
+      if (!analysis?.id) return;
+      
+      const { data, error } = await supabase
+        .from('product_taxonomy_mappings')
+        .select('id')
+        .eq('analysis_id', analysis.id)
+        .limit(1);
+      
+      setHasTaxonomy(!!data && data.length > 0);
+    };
+    
+    checkTaxonomy();
+  }, [analysis?.id]);
+
+  // Generate taxonomy with AI
+  const handleGenerateTaxonomy = async () => {
+    if (!analysis?.id) return;
+    
+    setIsGenerating(true);
+    
+    try {
+      const { error } = await supabase.functions.invoke('ai-taxonomy-categorizer', {
+        body: { analysis_id: analysis.id }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "✅ Catégorisation réussie !",
+        description: "Les taxonomies Google et Amazon ont été générées avec l'IA.",
+      });
+      
+      setHasTaxonomy(true);
+      
+      // Scroll to taxonomy badges after generation
+      setTimeout(() => {
+        document.querySelector('[data-taxonomy-badges]')?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 300);
+    } catch (error) {
+      console.error('Taxonomy generation error:', error);
+      toast({
+        title: "❌ Erreur",
+        description: "Impossible de générer les catégories. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -109,23 +172,52 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                   )}
                 </div>
 
-                {/* Category and Brand */}
-                <div className="flex items-center gap-2 mb-4 flex-wrap">
-                  {productCategory && (
-                    <Badge variant="secondary">
-                      <Box className="w-3 h-3 mr-1" />
-                      {productCategory}
-                    </Badge>
-                  )}
-                  {brand && (
-                    <Badge variant="outline">
-                      {brand}
-                    </Badge>
-                  )}
-                  {availability && (
-                    <Badge variant={availability.toLowerCase().includes('stock') ? 'default' : 'destructive'}>
-                      {availability}
-                    </Badge>
+                {/* Category, Brand and Taxonomy */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {productCategory && (
+                      <Badge variant="secondary">
+                        <Box className="w-3 h-3 mr-1" />
+                        {productCategory}
+                      </Badge>
+                    )}
+                    {brand && (
+                      <Badge variant="outline">
+                        {brand}
+                      </Badge>
+                    )}
+                    {availability && (
+                      <Badge variant={availability.toLowerCase().includes('stock') ? 'default' : 'destructive'}>
+                        {availability}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Taxonomy Section with Auto-Generate Button */}
+                  {!hasTaxonomy ? (
+                    <Button 
+                      variant="outline" 
+                      className="w-full border-2 border-dashed border-primary/50 hover:border-primary hover:bg-primary/5 transition-all group shadow-sm hover:shadow-md"
+                      onClick={handleGenerateTaxonomy}
+                      disabled={isGenerating}
+                    >
+                      {isGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <span className="text-sm">🤖 Catégorisation en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2 group-hover:animate-pulse text-primary" />
+                          <span className="text-sm font-medium">🎯 Générer les taxonomies Google & Amazon avec l'IA</span>
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <div data-taxonomy-badges>
+                      <p className="text-xs text-muted-foreground mb-2 font-medium">Catégories e-commerce</p>
+                      <TaxonomyBadges analysisId={analysis.id} />
+                    </div>
                   )}
                 </div>
               </div>
