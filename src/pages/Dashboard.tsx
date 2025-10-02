@@ -177,15 +177,9 @@ export default function Dashboard() {
     
     setIsExporting(true);
     try {
-      const selectedAnalyses = analyses.filter(a => selectedIds.has(a.id));
-      
       const { data, error } = await supabase.functions.invoke('export-to-odoo', {
         body: { 
-          analyses: selectedAnalyses.map(a => ({
-            id: a.id,
-            product_url: a.product_url,
-            analysis_result: a.analysis_result
-          }))
+          analysisIds: Array.from(selectedIds)
         }
       });
 
