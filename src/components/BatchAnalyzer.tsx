@@ -180,8 +180,21 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
           if (exportError) throw exportError;
 
-          const exportSuccess = exportData?.results?.filter((r: any) => r.success).length || 0;
-          toast.success(`${exportSuccess} produits exportés vers ${platformName}`);
+          // Show detailed success message with created/updated counts
+          const { success_count, created_count = 0, updated_count = 0, error_count = 0 } = exportData || {};
+          const exportSuccess = success_count || exportData?.results?.filter((r: any) => r.success).length || 0;
+          
+          if (exportSuccess > 0) {
+            let message = `${exportSuccess} produit(s) exporté(s)`;
+            if (created_count > 0 || updated_count > 0) {
+              message += ` (${created_count} créé(s), ${updated_count} mis à jour)`;
+            }
+            toast.success(`${platformName}: ${message}`);
+          }
+          
+          if (error_count > 0) {
+            toast.warning(`${error_count} erreur(s) lors de l'export vers ${platformName}`);
+          }
         } catch (exportError) {
           console.error('Export error:', exportError);
           const platformDisplayNames: Record<string, string> = {

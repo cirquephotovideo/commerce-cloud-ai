@@ -213,10 +213,28 @@ export default function Dashboard() {
         throw error;
       }
 
-      toast({
-        title: "Export réussi",
-        description: `${selectedIds.size} produit(s) exporté(s) vers Odoo`,
-      });
+      // Show detailed success message with created/updated counts
+      const { success_count, error_count, created_count = 0, updated_count = 0 } = data || {};
+      
+      if (success_count > 0) {
+        let message = `${success_count} produit(s) exporté(s) vers Odoo`;
+        if (created_count > 0 || updated_count > 0) {
+          message += ` (${created_count} créé(s), ${updated_count} mis à jour)`;
+        }
+        toast({
+          title: "Export réussi",
+          description: message,
+        });
+      }
+      
+      if (error_count > 0) {
+        toast({
+          title: "Export partiel",
+          description: `${error_count} erreur(s) lors de l'export`,
+          variant: "destructive",
+        });
+      }
+      
       setSelectedIds(new Set());
     } catch (error: any) {
       toast({

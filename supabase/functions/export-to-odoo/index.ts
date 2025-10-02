@@ -48,6 +48,236 @@ async function authenticateOdoo(config: OdooConfig): Promise<number> {
   return parseInt(uidMatch[1]);
 }
 
+// Search for existing product in Odoo by barcode, default_code, or name
+async function findExistingProductId(
+  config: OdooConfig,
+  uid: number,
+  productData: any
+): Promise<number | null> {
+  try {
+    // Search by barcode first (most reliable)
+    if (productData.barcode) {
+      console.log(`[SEARCH] Searching by barcode: ${productData.barcode}`);
+      const searchPayload = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${config.database_name}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${config.password_encrypted}</string></value></param>
+    <param><value><string>product.template</string></value></param>
+    <param><value><string>search</string></value></param>
+    <param><value><array><data>
+      <value><array><data>
+        <value><array><data>
+          <value><string>barcode</string></value>
+          <value><string>=</string></value>
+          <value><string>${escapeXml(productData.barcode)}</string></value>
+        </data></array></value>
+      </data></array></value>
+    </data></array></value></param>
+    <param><value><struct>
+      <member><name>limit</name><value><int>1</int></value></member>
+    </struct></value></param>
+  </params>
+</methodCall>`;
+
+      const response = await fetch(`${config.odoo_url}/xmlrpc/2/object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml' },
+        body: searchPayload,
+      });
+
+      const text = await response.text();
+      const idMatch = text.match(/<int>(\d+)<\/int>/);
+      if (idMatch) {
+        console.log(`[SEARCH] Found existing product by barcode, ID: ${idMatch[1]}`);
+        return parseInt(idMatch[1]);
+      }
+    }
+
+    // Search by default_code (reference)
+    if (productData.default_code) {
+      console.log(`[SEARCH] Searching by default_code: ${productData.default_code}`);
+      const searchPayload = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${config.database_name}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${config.password_encrypted}</string></value></param>
+    <param><value><string>product.template</string></value></param>
+    <param><value><string>search</string></value></param>
+    <param><value><array><data>
+      <value><array><data>
+        <value><array><data>
+          <value><string>default_code</string></value>
+          <value><string>=</string></value>
+          <value><string>${escapeXml(productData.default_code)}</string></value>
+        </data></array></value>
+      </data></array></value>
+    </data></array></value></param>
+    <param><value><struct>
+      <member><name>limit</name><value><int>1</int></value></member>
+    </struct></value></param>
+  </params>
+</methodCall>`;
+
+      const response = await fetch(`${config.odoo_url}/xmlrpc/2/object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml' },
+        body: searchPayload,
+      });
+
+      const text = await response.text();
+      const idMatch = text.match(/<int>(\d+)<\/int>/);
+      if (idMatch) {
+        console.log(`[SEARCH] Found existing product by default_code, ID: ${idMatch[1]}`);
+        return parseInt(idMatch[1]);
+      }
+    }
+
+    // Search by name (fallback)
+    if (productData.name) {
+      console.log(`[SEARCH] Searching by name: ${productData.name}`);
+      const searchPayload = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${config.database_name}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${config.password_encrypted}</string></value></param>
+    <param><value><string>product.template</string></value></param>
+    <param><value><string>search</string></value></param>
+    <param><value><array><data>
+      <value><array><data>
+        <value><array><data>
+          <value><string>name</string></value>
+          <value><string>=</string></value>
+          <value><string>${escapeXml(productData.name)}</string></value>
+        </data></array></value>
+      </data></array></value>
+    </data></array></value></param>
+    <param><value><struct>
+      <member><name>limit</name><value><int>1</int></value></member>
+    </struct></value></param>
+  </params>
+</methodCall>`;
+
+      const response = await fetch(`${config.odoo_url}/xmlrpc/2/object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/xml' },
+        body: searchPayload,
+      });
+
+      const text = await response.text();
+      const idMatch = text.match(/<int>(\d+)<\/int>/);
+      if (idMatch) {
+        console.log(`[SEARCH] Found existing product by name, ID: ${idMatch[1]}`);
+        return parseInt(idMatch[1]);
+      }
+    }
+
+    console.log('[SEARCH] No existing product found');
+    return null;
+  } catch (error) {
+    console.error('[SEARCH] Error searching for product:', error);
+    return null;
+  }
+}
+
+// Update existing product in Odoo
+async function updateOdooProduct(
+  config: OdooConfig,
+  uid: number,
+  productId: number,
+  productData: any
+): Promise<{ success: boolean; error?: string; product_id: number }> {
+  try {
+    console.log(`[UPDATE] Updating product ID ${productId}`);
+    
+    // Build the product struct XML with all Odoo 19 fields
+    let productStruct = `
+        <member><name>name</name><value><string>${escapeXml(productData.name || '')}</string></value></member>
+        <member><name>description</name><value><string>${escapeXml(productData.description || '')}</string></value></member>
+        <member><name>description_sale</name><value><string>${escapeXml(productData.description_sale || '')}</string></value></member>
+        <member><name>list_price</name><value><double>${productData.list_price || 0}</double></value></member>
+        <member><name>standard_price</name><value><double>${productData.standard_price || 0}</double></value></member>
+        <member><name>default_code</name><value><string>${escapeXml(productData.default_code || '')}</string></value></member>
+        <member><name>barcode</name><value><string>${escapeXml(productData.barcode || '')}</string></value></member>
+        <member><name>sale_ok</name><value><boolean>1</boolean></value></member>
+        <member><name>purchase_ok</name><value><boolean>0</boolean></value></member>
+        <member><name>type</name><value><string>consu</string></value></member>
+        <member><name>website_published</name><value><boolean>1</boolean></value></member>`;
+
+    // Add category if available
+    if (productData.categ_id) {
+      productStruct += `<member><name>categ_id</name><value><int>${productData.categ_id}</int></value></member>`;
+    }
+
+    // Add SEO fields
+    if (productData.website_meta_title) {
+      productStruct += `<member><name>website_meta_title</name><value><string>${escapeXml(productData.website_meta_title)}</string></value></member>`;
+    }
+    if (productData.website_meta_description) {
+      productStruct += `<member><name>website_meta_description</name><value><string>${escapeXml(productData.website_meta_description)}</string></value></member>`;
+    }
+    if (productData.website_meta_keywords) {
+      productStruct += `<member><name>website_meta_keywords</name><value><string>${escapeXml(productData.website_meta_keywords)}</string></value></member>`;
+    }
+
+    // Add main image if available
+    if (productData.image_1920) {
+      productStruct += `<member><name>image_1920</name><value><string>${productData.image_1920}</string></value></member>`;
+    }
+
+    // Add weight and volume if available
+    if (productData.weight) {
+      productStruct += `<member><name>weight</name><value><double>${productData.weight}</double></value></member>`;
+    }
+    if (productData.volume) {
+      productStruct += `<member><name>volume</name><value><double>${productData.volume}</double></value></member>`;
+    }
+
+    const xmlrpcPayload = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${config.database_name}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${config.password_encrypted}</string></value></param>
+    <param><value><string>product.template</string></value></param>
+    <param><value><string>write</string></value></param>
+    <param><value><array><data>
+      <value><array><data>
+        <value><int>${productId}</int></value>
+      </data></array></value>
+      <value><struct>${productStruct}</struct></value>
+    </data></array></value></param>
+  </params>
+</methodCall>`;
+
+    const response = await fetch(`${config.odoo_url}/xmlrpc/2/object`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/xml' },
+      body: xmlrpcPayload,
+    });
+
+    const text = await response.text();
+    // For write operation, Odoo returns boolean true on success
+    if (text.includes('<boolean>1</boolean>')) {
+      console.log(`[UPDATE] Product ${productId} updated successfully`);
+      return { success: true, product_id: productId };
+    } else {
+      console.error(`[UPDATE] Failed to update product ${productId}`);
+      return { success: false, error: 'Update operation failed', product_id: productId };
+    }
+  } catch (error) {
+    console.error('[UPDATE] Error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error', product_id: productId };
+  }
+}
+
 // Create product in Odoo with full Odoo 19 mapping
 async function createOdooProduct(
   config: OdooConfig,
@@ -55,6 +285,8 @@ async function createOdooProduct(
   productData: any
 ): Promise<{ success: boolean; error?: string; product_id?: number }> {
   try {
+    console.log(`[CREATE] Creating new product: ${productData.name}`);
+    
     // Build the product struct XML with all Odoo 19 fields
     let productStruct = `
         <member><name>name</name><value><string>${escapeXml(productData.name || '')}</string></value></member>
@@ -123,11 +355,15 @@ async function createOdooProduct(
     const productIdMatch = text.match(/<int>(\d+)<\/int>/);
     
     if (productIdMatch) {
-      return { success: true, product_id: parseInt(productIdMatch[1]) };
+      const newProductId = parseInt(productIdMatch[1]);
+      console.log(`[CREATE] Product created successfully with ID: ${newProductId}`);
+      return { success: true, product_id: newProductId };
     } else {
+      console.error('[CREATE] Failed to extract product ID from response');
       return { success: false, error: 'Failed to extract product ID from response' };
     }
   } catch (error) {
+    console.error('[CREATE] Error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -524,32 +760,78 @@ serve(async (req) => {
 
     for (const analysis of analyses) {
       const productName = analysis.analysis_result?.product_name || analysis.product_url;
-      console.log(`Exporting product: ${productName}`);
+      console.log(`\n[EXPORT] Processing product: ${productName}`);
       
-      const productData = await mapAnalysisToOdooProduct(analysis, categories || [], fieldMappings || []);
-      const result = await createOdooProduct(config, uid, productData);
-      
-      if (result.success && result.product_id) {
-        successCount++;
-        console.log(`✓ Product created with ID: ${result.product_id}`);
+      try {
+        const productData = await mapAnalysisToOdooProduct(analysis, categories || [], fieldMappings || []);
         
-        // Upload additional images if available
-        if (analysis.image_urls && analysis.image_urls.length > 1) {
-          const additionalImages = analysis.image_urls.slice(1);
-          console.log(`Uploading ${additionalImages.length} additional images...`);
-          const imageResult = await createProductImages(config, uid, result.product_id, additionalImages);
-          console.log(`✓ Images: ${imageResult.success} uploaded, ${imageResult.failed} failed`);
+        // Check if product already exists
+        const existingProductId = await findExistingProductId(config, uid, productData);
+        
+        let result;
+        let action: 'created' | 'updated';
+        
+        if (existingProductId) {
+          // Update existing product
+          console.log(`[EXPORT] Product exists, updating ID ${existingProductId}`);
+          result = await updateOdooProduct(config, uid, existingProductId, productData);
+          action = 'updated';
+        } else {
+          // Create new product
+          console.log('[EXPORT] Product not found, creating new');
+          result = await createOdooProduct(config, uid, productData);
+          action = 'created';
         }
-      } else {
+        
+        if (result.success && result.product_id) {
+          successCount++;
+          console.log(`[EXPORT] ✓ Product ${action} with ID: ${result.product_id}`);
+          
+          // Upload additional images if available
+          if (analysis.image_urls && analysis.image_urls.length > 1) {
+            const additionalImages = analysis.image_urls.slice(1);
+            console.log(`[EXPORT] Uploading ${additionalImages.length} additional images...`);
+            const imageResult = await createProductImages(config, uid, result.product_id, additionalImages);
+            console.log(`[EXPORT] ✓ Images: ${imageResult.success} uploaded, ${imageResult.failed} failed`);
+            
+            results.push({
+              analysis_id: analysis.id,
+              product_name: productData.name,
+              action,
+              images_uploaded: imageResult.success,
+              images_failed: imageResult.failed,
+              ...result,
+            });
+          } else {
+            results.push({
+              analysis_id: analysis.id,
+              product_name: productData.name,
+              action,
+              ...result,
+            });
+          }
+        } else {
+          errorCount++;
+          console.log(`[EXPORT] ✗ Failed to ${action} product: ${result.error}`);
+          results.push({
+            analysis_id: analysis.id,
+            product_name: productData.name,
+            action: 'failed',
+            ...result,
+          });
+        }
+      } catch (error) {
         errorCount++;
-        console.log(`✗ Failed to create product: ${result.error}`);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[EXPORT] ✗ Error processing product ${productName}:`, errorMsg);
+        results.push({
+          analysis_id: analysis.id,
+          product_name: productName,
+          action: 'failed',
+          success: false,
+          error: errorMsg,
+        });
       }
-
-      results.push({
-        analysis_id: analysis.id,
-        product_name: productData.name,
-        ...result,
-      });
     }
 
     // Log export
@@ -561,7 +843,12 @@ serve(async (req) => {
       export_details: { results },
     });
 
-    console.log(`Export complete: ${successCount} success, ${errorCount} errors`);
+    console.log(`\n[EXPORT] ===== Export complete =====`);
+    console.log(`[EXPORT] Total: ${analyses.length} | Success: ${successCount} | Errors: ${errorCount}`);
+    
+    const createdCount = results.filter(r => r.action === 'created').length;
+    const updatedCount = results.filter(r => r.action === 'updated').length;
+    console.log(`[EXPORT] Created: ${createdCount} | Updated: ${updatedCount}`);
 
     return new Response(
       JSON.stringify({
@@ -569,6 +856,8 @@ serve(async (req) => {
         total: analyses.length,
         success_count: successCount,
         error_count: errorCount,
+        created_count: createdCount,
+        updated_count: updatedCount,
         results,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
