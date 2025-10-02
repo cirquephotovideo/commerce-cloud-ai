@@ -170,6 +170,20 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
       }
     }
     
+    // Déclencher auto-surveillance marché pour chaque produit analysé
+    for (const result of results) {
+      try {
+        await supabase.functions.invoke('auto-market-intelligence', {
+          body: {
+            analysisId: result.id,
+            productName: result.analysis?.product_name || result.productInput
+          }
+        });
+      } catch (marketError) {
+        console.error('Erreur auto-surveillance:', marketError);
+      }
+    }
+    
     onAnalysisComplete(results);
   };
 

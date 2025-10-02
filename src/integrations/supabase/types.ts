@@ -809,6 +809,8 @@ export type Database = {
       }
       price_monitoring: {
         Row: {
+          availability_history: Json | null
+          best_deal_score: number | null
           competitor_site_id: string | null
           created_at: string | null
           current_price: number | null
@@ -817,6 +819,7 @@ export type Database = {
           image_url: string | null
           previous_price: number | null
           price_change_percent: number | null
+          price_trend: number | null
           product_name: string
           product_url: string
           rating: number | null
@@ -826,6 +829,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          availability_history?: Json | null
+          best_deal_score?: number | null
           competitor_site_id?: string | null
           created_at?: string | null
           current_price?: number | null
@@ -834,6 +839,7 @@ export type Database = {
           image_url?: string | null
           previous_price?: number | null
           price_change_percent?: number | null
+          price_trend?: number | null
           product_name: string
           product_url: string
           rating?: number | null
@@ -843,6 +849,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          availability_history?: Json | null
+          best_deal_score?: number | null
           competitor_site_id?: string | null
           created_at?: string | null
           current_price?: number | null
@@ -851,6 +859,7 @@ export type Database = {
           image_url?: string | null
           previous_price?: number | null
           price_change_percent?: number | null
+          price_trend?: number | null
           product_name?: string
           product_url?: string
           rating?: number | null
@@ -872,44 +881,59 @@ export type Database = {
       product_analyses: {
         Row: {
           analysis_result: Json
+          competitive_cons: Json | null
+          competitive_pros: Json | null
           created_at: string | null
+          description_long: string | null
           id: string
           image_urls: Json | null
           is_favorite: boolean | null
           mapped_category_id: string | null
           mapped_category_name: string | null
+          market_position: string | null
           odoo_attributes: Json | null
           product_url: string
           tags: Json | null
           updated_at: string | null
+          use_cases: Json | null
           user_id: string
         }
         Insert: {
           analysis_result: Json
+          competitive_cons?: Json | null
+          competitive_pros?: Json | null
           created_at?: string | null
+          description_long?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
+          market_position?: string | null
           odoo_attributes?: Json | null
           product_url: string
           tags?: Json | null
           updated_at?: string | null
+          use_cases?: Json | null
           user_id: string
         }
         Update: {
           analysis_result?: Json
+          competitive_cons?: Json | null
+          competitive_pros?: Json | null
           created_at?: string | null
+          description_long?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
+          market_position?: string | null
           odoo_attributes?: Json | null
           product_url?: string
           tags?: Json | null
           updated_at?: string | null
+          use_cases?: Json | null
           user_id?: string
         }
         Relationships: [

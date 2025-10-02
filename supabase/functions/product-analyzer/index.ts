@@ -76,6 +76,8 @@ Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce fo
 
 {
   "product_name": "Nom du produit identifié",
+  "description": "description courte (50 caractères max)",
+  "description_long": "description marketing longue et optimisée SEO (200-300 mots) mettant en valeur les bénéfices, caractéristiques et avantages du produit. Cette description doit être persuasive et inclure les principaux mots-clés du produit.",
   "seo": {
     "score": 85,
     "title": "Recommandation pour le titre SEO",
@@ -95,6 +97,10 @@ Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce fo
     "differentiation": "Points de différenciation",
     "recommendations": ["Recommandation 1", "Recommandation 2"]
   },
+  "competitive_pros": ["avantage concurrentiel 1", "avantage 2", "avantage 3"],
+  "competitive_cons": ["inconvénient potentiel 1", "inconvénient 2"],
+  "use_cases": ["cas d'utilisation professionnel 1", "cas d'utilisation particulier 2", "cas d'utilisation 3"],
+  "market_position": "leader/challenger/niche - Explication du positionnement",
   "trends": {
     "market_trend": "Croissance/Stable/Déclin",
     "popularity_score": 75,

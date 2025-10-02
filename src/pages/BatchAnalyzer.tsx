@@ -7,6 +7,13 @@ import { OdooFieldMappings } from "@/components/OdooFieldMappings";
 import { PlatformSettings } from "@/components/PlatformSettings";
 import { PlatformFieldMappings } from "@/components/PlatformFieldMappings";
 import { PricingRules } from "@/components/PricingRules";
+import { GoogleShoppingAnalysis } from "@/components/market/GoogleShoppingAnalysis";
+import { PriceMonitoring } from "@/components/market/PriceMonitoring";
+import { CompetitorSitesManager } from "@/components/market/CompetitorSitesManager";
+import { MarketTrends } from "@/components/market/MarketTrends";
+import { CompetitiveDashboard } from "@/components/CompetitiveDashboard";
+import { AIMarketSuggestions } from "@/components/AIMarketSuggestions";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
 import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
 import { supabase } from "@/integrations/supabase/client";
@@ -130,11 +137,13 @@ const BatchAnalyzer = () => {
         </div>
 
         <Tabs defaultValue="analyze" className="space-y-6">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="analyze">Analyser</TabsTrigger>
-            <TabsTrigger value="technical">Analyses Techniques</TabsTrigger>
-            <TabsTrigger value="risk">Gestion Risques</TabsTrigger>
-            <TabsTrigger value="settings">Configuration {getPlatformName(exportPlatform)}</TabsTrigger>
+            <TabsTrigger value="market">Intelligence Marché</TabsTrigger>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="technical">Technique</TabsTrigger>
+            <TabsTrigger value="risk">Risque</TabsTrigger>
+            <TabsTrigger value="settings">Paramètres</TabsTrigger>
           </TabsList>
 
           <TabsContent value="analyze" className="space-y-6">
@@ -163,6 +172,62 @@ const BatchAnalyzer = () => {
             {results.length > 0 && (
               <DetailedBatchResults results={results} onExport={handleExport} />
             )}
+          </TabsContent>
+
+          <TabsContent value="market" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Intelligence Marché</CardTitle>
+                <CardDescription>
+                  Surveillez automatiquement vos concurrents et les tendances du marché
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="google" className="w-full">
+                  <TabsList>
+                    <TabsTrigger value="google">Google Shopping</TabsTrigger>
+                    <TabsTrigger value="monitoring">Surveillance Prix</TabsTrigger>
+                    <TabsTrigger value="competitors">Sites Concurrents</TabsTrigger>
+                    <TabsTrigger value="trends">Tendances</TabsTrigger>
+                    <TabsTrigger value="ai">Suggestions IA</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="google">
+                    <GoogleShoppingAnalysis />
+                  </TabsContent>
+                  
+                  <TabsContent value="monitoring">
+                    <PriceMonitoring />
+                  </TabsContent>
+                  
+                  <TabsContent value="competitors">
+                    <CompetitorSitesManager />
+                  </TabsContent>
+                  
+                  <TabsContent value="trends">
+                    <MarketTrends />
+                  </TabsContent>
+                  
+                  <TabsContent value="ai">
+                    <AIMarketSuggestions />
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="dashboard" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Dashboard Concurrentiel</CardTitle>
+                <CardDescription>
+                  Vue d'ensemble de vos produits analysés vs le marché
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <CompetitiveDashboard />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="technical" className="space-y-6">
