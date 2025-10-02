@@ -12,8 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { analysis_id, ean, asin } = await req.json();
-    let { product_name: productName } = await req.json();
+    const requestBody = await req.json();
+    const { analysis_id, ean, asin, product_name } = requestBody;
+    let productName = product_name;
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
