@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,6 +88,11 @@ serve(async (req) => {
 
     const keys: KeyStatus[] = [];
     const now = new Date().toISOString();
+    
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Google Search API
     const googleApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY');
@@ -214,7 +220,6 @@ serve(async (req) => {
     });
 
     // Supabase keys
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
     if (supabaseUrl) {
       const result = await verifySupabaseURL(supabaseUrl);
       keys.push({
@@ -274,6 +279,36 @@ serve(async (req) => {
       configured: !!supabaseDbUrl,
       valid: !!supabaseDbUrl,
       service: 'Supabase',
+      lastTested: now,
+    });
+
+    // Amazon Seller API
+    const { data: amazonCreds } = await supabase
+      .from('amazon_credentials')
+      .select('*')
+      .eq('is_active', true)
+      .maybeSingle();
+    
+    let amazonValid = false;
+    if (amazonCreds) {
+      // Check if there's a valid token
+      const { data: token } = await supabase
+        .from('amazon_access_tokens')
+        .select('*')
+        .eq('credential_id', amazonCreds.id)
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      amazonValid = token ? new Date(token.expires_at) > new Date() : false;
+    }
+    
+    keys.push({
+      name: 'Amazon Seller API',
+      envVar: 'amazon_credentials',
+      configured: !!amazonCreds,
+      valid: amazonValid,
+      service: 'Amazon',
       lastTested: now,
     });
 

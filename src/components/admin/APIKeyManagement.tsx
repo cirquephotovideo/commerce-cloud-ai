@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube } from "lucide-react";
+import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube, Package, Clock } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,6 +29,18 @@ export const APIKeyManagement = () => {
   const [editingKey, setEditingKey] = useState<APIKey | null>(null);
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({ key: '', cx: '', url: '' });
+  
+  // Amazon state
+  const [amazonLoading, setAmazonLoading] = useState(false);
+  const [amazonTesting, setAmazonTesting] = useState(false);
+  const [lastToken, setLastToken] = useState<any>(null);
+  const [credentialsId, setCredentialsId] = useState<string | null>(null);
+  const [amazonForm, setAmazonForm] = useState({
+    client_id: '',
+    client_secret: '',
+    refresh_token: '',
+    marketplace_id: 'A13V1IB3VIYZZH',
+  });
 
   const fetchApiKeys = async () => {
     try {
@@ -63,8 +75,43 @@ export const APIKeyManagement = () => {
     }
   };
 
+  const fetchAmazonData = async () => {
+    try {
+      const { data: credentials } = await supabase
+        .from('amazon_credentials')
+        .select('*')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (credentials) {
+        setCredentialsId(credentials.id);
+        setAmazonForm({
+          client_id: credentials.client_id,
+          client_secret: credentials.client_secret_encrypted,
+          refresh_token: credentials.refresh_token_encrypted,
+          marketplace_id: credentials.marketplace_id,
+        });
+
+        const { data: tokenData } = await supabase
+          .from('amazon_access_tokens')
+          .select('*')
+          .eq('credential_id', credentials.id)
+          .order('generated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (tokenData) {
+          setLastToken(tokenData);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching Amazon data:', error);
+    }
+  };
+
   useEffect(() => {
     fetchApiKeys();
+    fetchAmazonData();
   }, []);
 
   const handleVerifyAll = async () => {
@@ -86,6 +133,75 @@ export const APIKeyManagement = () => {
   const handleEditKey = (key: APIKey) => {
     setEditingKey(key);
     setEditFormData({ key: '', cx: '', url: '' });
+  };
+
+  const handleSaveAmazon = async () => {
+    setAmazonLoading(true);
+    try {
+      const dataToSave = {
+        id: credentialsId || undefined,
+        client_id: amazonForm.client_id,
+        client_secret_encrypted: amazonForm.client_secret,
+        refresh_token_encrypted: amazonForm.refresh_token,
+        marketplace_id: amazonForm.marketplace_id,
+        is_active: true,
+      };
+
+      const { data, error } = await supabase
+        .from('amazon_credentials')
+        .upsert(dataToSave)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setCredentialsId(data.id);
+      }
+
+      toast({
+        title: "✅ Credentials sauvegardées",
+        description: "Les clés Amazon ont été enregistrées avec succès",
+      });
+      
+      await fetchApiKeys(); // Refresh to show Amazon in the list
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setAmazonLoading(false);
+    }
+  };
+
+  const handleTestAmazon = async () => {
+    setAmazonTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('amazon-token-manager');
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Connexion réussie",
+        description: `Token Amazon généré avec succès`,
+      });
+
+      setLastToken({
+        access_token: data.access_token,
+        expires_at: data.expires_at,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      toast({
+        title: "❌ Échec de la connexion",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setAmazonTesting(false);
+    }
   };
 
   const handleTestKey = async (key: APIKey) => {
@@ -351,6 +467,118 @@ export const APIKeyManagement = () => {
                     </AlertDescription>
                   </Alert>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Amazon Seller Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                🔐 Configuration Amazon Seller API
+              </CardTitle>
+              <CardDescription>
+                Gérez vos credentials Amazon SP-API pour enrichir automatiquement vos produits avec les données Amazon (prix, images, dimensions, ventes).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Les tokens d'accès sont régénérés automatiquement toutes les heures. Configurez vos credentials une seule fois.
+                </AlertDescription>
+              </Alert>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amazon_client_id">Client ID</Label>
+                  <Input
+                    id="amazon_client_id"
+                    value={amazonForm.client_id}
+                    onChange={(e) => setAmazonForm({ ...amazonForm, client_id: e.target.value })}
+                    placeholder="amzn1.application-oa2-client.XXXXX"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="amazon_client_secret">Client Secret</Label>
+                  <Input
+                    id="amazon_client_secret"
+                    type="password"
+                    value={amazonForm.client_secret}
+                    onChange={(e) => setAmazonForm({ ...amazonForm, client_secret: e.target.value })}
+                    placeholder="amzn1.oa2-cs.v1.XXXXX"
+                  />
+                </div>
+
+                <div className="space-y-2 col-span-2">
+                  <Label htmlFor="amazon_refresh_token">Refresh Token</Label>
+                  <Input
+                    id="amazon_refresh_token"
+                    type="password"
+                    value={amazonForm.refresh_token}
+                    onChange={(e) => setAmazonForm({ ...amazonForm, refresh_token: e.target.value })}
+                    placeholder="Atzr|XXXXX"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="amazon_marketplace_id">Marketplace ID</Label>
+                  <Input
+                    id="amazon_marketplace_id"
+                    value={amazonForm.marketplace_id}
+                    onChange={(e) => setAmazonForm({ ...amazonForm, marketplace_id: e.target.value })}
+                    placeholder="A13V1IB3VIYZZH"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    France: A13V1IB3VIYZZH | Allemagne: A1PA6795UKMFR9 | UK: A1F83G8C2ARO7P
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleSaveAmazon} disabled={amazonLoading}>
+                  {amazonLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                  💾 Sauvegarder
+                </Button>
+                <Button onClick={handleTestAmazon} disabled={amazonTesting || !credentialsId} variant="outline">
+                  {amazonTesting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                  🧪 Tester la connexion
+                </Button>
+              </div>
+
+              {lastToken && (
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      {new Date(lastToken.expires_at) < new Date() ? (
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      )}
+                      Dernier Token Généré
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        Généré le : {new Date(lastToken.generated_at).toLocaleString('fr-FR')}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-4 w-4" />
+                      <span className={new Date(lastToken.expires_at) < new Date() ? "text-orange-500 font-medium" : ""}>
+                        Expire le : {new Date(lastToken.expires_at).toLocaleString('fr-FR')}
+                        {new Date(lastToken.expires_at) < new Date() && " (Expiré - sera régénéré à la prochaine utilisation)"}
+                      </span>
+                    </div>
+                    <code className="block text-xs bg-muted p-2 rounded truncate">
+                      {lastToken.access_token.substring(0, 50)}...
+                    </code>
+                  </CardContent>
+                </Card>
               )}
             </CardContent>
           </Card>
