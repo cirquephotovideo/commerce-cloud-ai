@@ -297,7 +297,9 @@ async function mapAnalysisToOdooProduct(
 
   // Description - use suggested_description if available
   if (!productData.description && result.suggested_description) {
-    productData.description = result.suggested_description;
+    if (typeof result.suggested_description === 'string') {
+      productData.description = result.suggested_description;
+    }
   }
 
   // Description sale - combine key features if available
@@ -307,7 +309,7 @@ async function mapAnalysisToOdooProduct(
       descriptionSale = result.key_features.join('\n• ');
       if (descriptionSale) descriptionSale = '• ' + descriptionSale;
     }
-    if (result.suggested_description) {
+    if (result.suggested_description && typeof result.suggested_description === 'string') {
       descriptionSale = result.suggested_description + '\n\n' + descriptionSale;
     }
     if (descriptionSale) {
@@ -349,11 +351,26 @@ async function mapAnalysisToOdooProduct(
 
   // SEO Meta data
   if (!productData.website_meta_title && result.product_name) {
-    productData.website_meta_title = result.product_name.substring(0, 60);
+    const titleStr = typeof result.product_name === 'string' ? result.product_name : '';
+    if (titleStr) {
+      productData.website_meta_title = titleStr.substring(0, 60);
+    }
   }
   if (!productData.website_meta_description) {
-    const metaDesc = result.suggested_description || result.description || '';
-    productData.website_meta_description = metaDesc.substring(0, 160);
+    let metaDesc = '';
+    if (typeof result.suggested_description === 'string') {
+      metaDesc = result.suggested_description;
+    } else if (result.description) {
+      // If description is an object, try to extract suggested_description from it
+      if (typeof result.description === 'object' && result.description.suggested_description) {
+        metaDesc = result.description.suggested_description;
+      } else if (typeof result.description === 'string') {
+        metaDesc = result.description;
+      }
+    }
+    if (metaDesc) {
+      productData.website_meta_description = metaDesc.substring(0, 160);
+    }
   }
   if (!productData.website_meta_keywords) {
     const keywords = [];
