@@ -26,23 +26,36 @@ export const RiskAnalysis = ({ initialUrl = "", platform = "auto" }: RiskAnalysi
 
     setIsAnalyzing(true);
     
-    const { data, error } = await supabase.functions.invoke('advanced-product-analyzer', {
-      body: {
-        productUrl,
-        analysisTypes: ['risk'],
-        platform,
+    try {
+      const { data, error } = await supabase.functions.invoke('advanced-product-analyzer', {
+        body: {
+          productUrl,
+          analysisTypes: ['risk'],
+          platform,
+        }
+      });
+
+      if (error) {
+        console.error("Risk analysis error:", error);
+        toast.error("Erreur d'analyse: " + (error.message || "Service temporairement indisponible"));
+        setIsAnalyzing(false);
+        return;
       }
-    });
 
-    setIsAnalyzing(false);
+      if (!data || !data.results || !data.results.risk) {
+        toast.warning("Aucune donnée d'analyse disponible pour ce produit");
+        setIsAnalyzing(false);
+        return;
+      }
 
-    if (error) {
-      toast.error("Erreur d'analyse");
-      return;
+      setAnalysis(data.results.risk);
+      toast.success("Analyse des risques terminée");
+    } catch (error: any) {
+      console.error("Risk analysis exception:", error);
+      toast.error("Erreur inattendue lors de l'analyse");
+    } finally {
+      setIsAnalyzing(false);
     }
-
-    setAnalysis(data.results.risk);
-    toast.success("Analyse des risques terminée");
   };
 
   const getRiskColor = (level: string) => {

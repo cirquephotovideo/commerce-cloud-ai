@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 
 export const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -32,7 +33,19 @@ export const AuthPage = () => {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
+      if (isForgotPassword) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Email envoyé",
+          description: "Vérifiez votre boîte mail pour réinitialiser votre mot de passe.",
+        });
+        setIsForgotPassword(false);
+      } else if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -81,17 +94,19 @@ export const AuthPage = () => {
       <Card className="w-full max-w-md glass-card">
         <CardHeader>
           <CardTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            {isLogin ? "Connexion" : "Inscription"}
+            {isForgotPassword ? "Mot de passe oublié" : isLogin ? "Connexion" : "Inscription"}
           </CardTitle>
           <CardDescription>
-            {isLogin
-              ? "Connectez-vous pour accéder à vos analyses"
-              : "Créez un compte pour commencer"}
+            {isForgotPassword
+              ? "Entrez votre email pour réinitialiser votre mot de passe"
+              : isLogin
+                ? "Connectez-vous pour accéder à vos analyses"
+                : "Créez un compte pour commencer"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAuth} className="space-y-4">
-            {!isLogin && (
+            {!isLogin && !isForgotPassword && (
               <div className="space-y-2">
                 <Label htmlFor="fullName">Nom complet</Label>
                 <Input
@@ -115,26 +130,39 @@ export const AuthPage = () => {
                 placeholder="votre@email.com"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                minLength={6}
-              />
-            </div>
+            {!isForgotPassword && (
+              <div className="space-y-2">
+                <Label htmlFor="password">Mot de passe</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  minLength={6}
+                />
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLogin ? "Se connecter" : "S'inscrire"}
+              {isForgotPassword ? "Envoyer le lien" : isLogin ? "Se connecter" : "S'inscrire"}
             </Button>
           </form>
-          <div className="mt-4 text-center">
+          <div className="mt-4 text-center space-y-2">
+            {isLogin && !isForgotPassword && (
+              <button
+                onClick={() => setIsForgotPassword(true)}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors block w-full"
+              >
+                Mot de passe oublié ?
+              </button>
+            )}
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setIsForgotPassword(false);
+              }}
               className="text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               {isLogin

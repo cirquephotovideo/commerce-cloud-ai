@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lightbulb, Package, TrendingDown, Bell, GitCompare, Calendar } from "lucide-react";
@@ -7,6 +8,7 @@ import { toast } from "sonner";
 
 export const AIMarketSuggestions = () => {
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   const suggestions = [
     {
@@ -14,42 +16,52 @@ export const AIMarketSuggestions = () => {
       title: "Bundle Intelligent",
       description: "L'IA suggère des produits complémentaires pour créer des offres groupées attractives",
       action: "Générer des bundles",
-      color: "text-blue-600"
+      color: "text-blue-600",
+      route: "/batch-analyzer"
     },
     {
       icon: TrendingDown,
       title: "Meilleur Moment d'Achat",
       description: "Prédiction des baisses de prix basée sur l'historique et les tendances saisonnières",
       action: "Voir prédictions",
-      color: "text-green-600"
+      color: "text-green-600",
+      route: "/market-intelligence"
     },
     {
       icon: Bell,
       title: "Alerte Stock",
       description: "Notification instantanée quand un produit surveillé revient en stock",
       action: "Configurer alertes",
-      color: "text-orange-600"
+      color: "text-orange-600",
+      route: "/market-intelligence"
     },
     {
       icon: GitCompare,
       title: "Comparaison Automatique",
       description: "Compare automatiquement 2-3 produits similaires pour identifier le meilleur choix",
       action: "Comparer produits",
-      color: "text-purple-600"
+      color: "text-purple-600",
+      route: "/history"
     },
     {
       icon: Calendar,
       title: "Recommandations Saisonnières",
       description: "Tendances et opportunités selon la période (soldes, Black Friday, etc.)",
       action: "Voir tendances",
-      color: "text-pink-600"
+      color: "text-pink-600",
+      route: "/market-intelligence"
     }
   ];
 
-  const handleAction = async (title: string) => {
+  const handleAction = async (suggestion: any) => {
     setLoading(true);
-    toast.info(`Fonctionnalité "${title}" en cours de développement`);
-    setTimeout(() => setLoading(false), 1000);
+    if (suggestion.route) {
+      navigate(suggestion.route);
+      toast.success(`Redirection vers ${suggestion.title}`);
+    } else {
+      toast.info(`Fonctionnalité "${suggestion.title}" en cours de développement`);
+    }
+    setTimeout(() => setLoading(false), 500);
   };
 
   return (
@@ -82,7 +94,7 @@ export const AIMarketSuggestions = () => {
                       variant="outline" 
                       size="sm" 
                       className="w-full"
-                      onClick={() => handleAction(suggestion.title)}
+                      onClick={() => handleAction(suggestion)}
                       disabled={loading}
                     >
                       {suggestion.action}

@@ -9,6 +9,7 @@ import { ComparisonSection } from "@/components/ComparisonSection";
 import { FAQSection } from "@/components/FAQSection";
 import { TrustSignalsSection } from "@/components/TrustSignalsSection";
 import { FinalCTA } from "@/components/FinalCTA";
+import { Footer } from "@/components/Footer";
 
 const Index = () => {
   return (
@@ -26,6 +27,7 @@ const Index = () => {
       <FAQSection />
       <TrustSignalsSection />
       <FinalCTA />
+      <Footer />
     </main>
   );
 };

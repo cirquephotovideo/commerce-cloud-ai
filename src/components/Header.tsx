@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign, Shield } from "lucide-react";
+import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign, Shield, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -96,6 +96,15 @@ export const Header = () => {
       >
         <DollarSign className="mr-2 h-4 w-4" />
         {t("nav.pricing")}
+      </Button>
+      <Button
+        variant="ghost"
+        size={isMobile ? "default" : "sm"}
+        onClick={() => handleNavigate("/contact")}
+        className={isMobile ? "w-full justify-start" : ""}
+      >
+        <Mail className="mr-2 h-4 w-4" />
+        Contact
       </Button>
       {isSuperAdmin && (
         <Button

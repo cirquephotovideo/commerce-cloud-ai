@@ -2,15 +2,27 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, TrendingUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 import heroBg from "@/assets/hero-bg.jpg";
 
 export const HeroSection = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    element?.scrollIntoView({ behavior: "smooth" });
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session);
+    });
+  }, []);
+
+  const handleAnalyzeClick = () => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      navigate("/auth");
+    }
   };
 
   return (
@@ -54,7 +66,7 @@ export const HeroSection = () => {
               size="lg"
               variant="outline"
               className="text-base sm:text-lg border-primary/20 hover:border-primary/40 backdrop-blur-sm w-full sm:w-auto"
-              onClick={() => scrollToSection('analyzer')}
+              onClick={handleAnalyzeClick}
             >
               <TrendingUp className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
               {t("hero.ctaAnalyze")}

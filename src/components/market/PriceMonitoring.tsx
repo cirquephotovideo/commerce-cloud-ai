@@ -68,31 +68,37 @@ export const PriceMonitoring = () => {
 
     setIsSearching(true);
     
-    // Use dual-search-engine for better results
-    const { data, error } = await supabase.functions.invoke('dual-search-engine', {
-      body: {
-        productName,
-        competitorSiteIds: selectedSites,
+    try {
+      const { data, error } = await supabase.functions.invoke('dual-search-engine', {
+        body: {
+          productName,
+          competitorSiteIds: selectedSites,
+        }
+      });
+
+      if (error) {
+        console.error("Price monitoring error:", error);
+        toast.error("Erreur de recherche: " + (error.message || "Service temporairement indisponible"));
+        setIsSearching(false);
+        return;
       }
-    });
 
-    setIsSearching(false);
-
-    if (error) {
-      toast.error("Erreur de recherche");
-      return;
+      const stats = data?.stats;
+      if (stats) {
+        toast.success(
+          `Recherche terminée! ${stats.total_results} offres trouvées (${stats.dual_validated} validées par 2 sources)${stats.promotions_found > 0 ? ` 🔥 ${stats.promotions_found} promotions détectées!` : ''}`
+        );
+      } else {
+        toast.success("Recherche terminée");
+      }
+      
+      loadMonitoring();
+    } catch (error: any) {
+      console.error("Price monitoring exception:", error);
+      toast.error("Erreur inattendue lors de la recherche");
+    } finally {
+      setIsSearching(false);
     }
-
-    const stats = data?.stats;
-    if (stats) {
-      toast.success(
-        `Recherche terminée! ${stats.total_results} offres trouvées (${stats.dual_validated} validées par 2 sources)${stats.promotions_found > 0 ? ` 🔥 ${stats.promotions_found} promotions détectées!` : ''}`
-      );
-    } else {
-      toast.success("Recherche terminée");
-    }
-    
-    loadMonitoring();
   };
 
   const getPriceChange = (current: number, previous: number) => {

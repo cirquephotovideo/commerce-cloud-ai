@@ -8,6 +8,8 @@ import History from "./pages/History";
 import BatchAnalyzer from "./pages/BatchAnalyzer";
 import MarketIntelligence from "./pages/MarketIntelligence";
 import Pricing from "./pages/Pricing";
+import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import SubscriptionWelcome from "./pages/SubscriptionWelcome";
 import NotFound from "./pages/NotFound";
@@ -37,6 +39,8 @@ const App = () => {
         <Route path="/" element={<Index />} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/pricing" element={<Pricing />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/dashboard/welcome" element={<ProtectedRoute><SubscriptionWelcome /></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />

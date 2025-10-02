@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ProductMonitoringDetail } from "./market/ProductMonitoringDetail";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CompetitiveHistoryTableProps {
   analyses: any[];
@@ -88,14 +89,21 @@ export const CompetitiveHistoryTable = ({
     const productName = getProductName(analysis);
     const description = getDescriptionLong(analysis);
     
+    // Charger les vraies données de price_monitoring depuis Supabase
+    const { data: priceData } = await supabase
+      .from('price_monitoring')
+      .select('*, competitor_sites(site_name)')
+      .ilike('product_name', `%${productName}%`)
+      .order('current_price', { ascending: true });
+    
     setSelectedProduct({
       name: productName,
       image_url: analysis.image_urls?.[0],
       description: description,
-      rating: 4.5,
-      stock_status: 'En stock'
+      rating: analysis.analysis_result?.customer_reviews?.average_rating || 4.5,
+      stock_status: analysis.analysis_result?.availability || 'En stock'
     });
-    setAllOffers([]);
+    setAllOffers(priceData || []);
     setShowDetail(true);
   };
 
