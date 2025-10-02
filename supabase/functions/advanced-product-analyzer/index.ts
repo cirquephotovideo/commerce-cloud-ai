@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { productUrl, analysisTypes } = await req.json();
+    const { productInput, inputType = 'url', analysisTypes, platform } = await req.json();
     
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
@@ -27,6 +27,13 @@ serve(async (req) => {
     if (!user) throw new Error("Non authentifié");
 
     console.log('Analyses demandées:', analysisTypes);
+    console.log('Type d\'entrée:', inputType);
+    
+    // Determine the product identifier based on input type
+    let productIdentifier = productInput;
+    if (inputType === 'name' || inputType === 'barcode') {
+      productIdentifier = `${inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}: ${productInput}`;
+    }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY non configurée");
@@ -38,7 +45,7 @@ serve(async (req) => {
 
     // Technical Analysis
     if (analysisTypes.includes('technical')) {
-      const technicalPrompt = `Analyse technique approfondie du produit: ${productUrl}
+      const technicalPrompt = `Analyse technique approfondie du produit: ${productIdentifier}
       
       Fournis:
       1. Compatibilité: Liste les produits compatibles/incompatibles, accessoires requis
@@ -72,7 +79,7 @@ serve(async (req) => {
 
     // Commercial Optimization
     if (analysisTypes.includes('commercial')) {
-      const commercialPrompt = `Optimisation commerciale pour: ${productUrl}
+      const commercialPrompt = `Optimisation commerciale pour: ${productIdentifier}
       
       Calcule:
       1. Marge dynamique recommandée (min/max)
@@ -105,7 +112,7 @@ serve(async (req) => {
 
     // Market Intelligence with Web Search
     if (analysisTypes.includes('market') && GOOGLE_SEARCH_API_KEY && GOOGLE_SEARCH_CX) {
-      const searchQuery = `${productUrl} prix concurrents`;
+      const searchQuery = `${productInput} prix concurrents`;
       const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(searchQuery)}`;
       
       const searchResponse = await fetch(searchUrl);
@@ -143,7 +150,7 @@ serve(async (req) => {
 
     // Risk Assessment
     if (analysisTypes.includes('risk')) {
-      const riskPrompt = `Évaluation des risques pour: ${productUrl}
+      const riskPrompt = `Évaluation des risques pour: ${productIdentifier}
       
       Évalue:
       1. Conformité (CE, RoHS, DEEE) - status de chaque norme

@@ -15,6 +15,7 @@ import { ProductExportMenu } from "@/components/ProductExportMenu";
 import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { AIProviderSettings } from "@/components/AIProviderSettings";
+import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { 
   Select, 
   SelectContent, 
@@ -27,6 +28,7 @@ interface ProductAnalysis {
   id: string;
   product_url: string;
   analysis_result: any;
+  image_urls?: string[];
   is_favorite: boolean;
   created_at: string;
 }
@@ -84,8 +86,15 @@ export default function Dashboard() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setAnalyses(data || []);
-      setFilteredAnalyses(data || []);
+      
+      // Convert image_urls from Json to string[]
+      const processedData = (data || []).map(item => ({
+        ...item,
+        image_urls: Array.isArray(item.image_urls) ? item.image_urls : []
+      })) as ProductAnalysis[];
+      
+      setAnalyses(processedData);
+      setFilteredAnalyses(processedData);
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -395,7 +404,24 @@ export default function Dashboard() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Product Image Preview */}
+                    {analysis.image_urls && analysis.image_urls.length > 0 && (
+                      <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+                        <img
+                          src={analysis.image_urls[0]}
+                          alt={productName}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    
                     <div className="flex gap-2 flex-wrap">
+                      {analysis.image_urls && analysis.image_urls.length > 0 && (
+                        <ProductImageGallery images={analysis.image_urls} productName={productName} />
+                      )}
                       {hasPermission('single_export') && (
                         <ProductExportMenu analysisId={analysis.id} productName={productName} />
                       )}

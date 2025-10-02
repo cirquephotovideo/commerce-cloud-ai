@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Wrench, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface TechnicalAnalysisProps {
   initialUrl?: string;
@@ -14,12 +15,16 @@ interface TechnicalAnalysisProps {
 
 export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: TechnicalAnalysisProps) => {
   const [productUrl, setProductUrl] = useState(initialUrl);
+  const [productName, setProductName] = useState("");
+  const [inputType, setInputType] = useState<"url" | "name" | "barcode">("url");
   const [analysis, setAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleAnalyze = async () => {
-    if (!productUrl.trim()) {
-      toast.error("Entrez une URL de produit");
+    const inputValue = inputType === "url" ? productUrl : productName;
+    
+    if (!inputValue.trim()) {
+      toast.error(`Entrez ${inputType === "url" ? "une URL" : inputType === "name" ? "un nom" : "un code barres"} de produit`);
       return;
     }
 
@@ -27,7 +32,8 @@ export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: Techni
     
     const { data, error } = await supabase.functions.invoke('advanced-product-analyzer', {
       body: {
-        productUrl,
+        productInput: inputValue,
+        inputType,
         analysisTypes: ['technical'],
         platform,
       }
@@ -57,14 +63,46 @@ export const TechnicalAnalysis = ({ initialUrl = "", platform = "auto" }: Techni
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label>URL du Produit</Label>
-            <Input
-              placeholder="https://..."
-              value={productUrl}
-              onChange={(e) => setProductUrl(e.target.value)}
-            />
-          </div>
+          <Tabs value={inputType} onValueChange={(v) => setInputType(v as "url" | "name" | "barcode")}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="url">🔗 Par URL</TabsTrigger>
+              <TabsTrigger value="name">📝 Par Nom</TabsTrigger>
+              <TabsTrigger value="barcode">📷 Par Code Barres</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="url" className="space-y-4">
+              <div>
+                <Label>URL du Produit</Label>
+                <Input
+                  placeholder="https://..."
+                  value={productUrl}
+                  onChange={(e) => setProductUrl(e.target.value)}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="name" className="space-y-4">
+              <div>
+                <Label>Nom du Produit</Label>
+                <Input
+                  placeholder="Ex: iPhone 15 Pro Max"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                />
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="barcode" className="space-y-4">
+              <div>
+                <Label>Code-barres / EAN</Label>
+                <Input
+                  placeholder="Ex: 3700123456789"
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
 
           <Button onClick={handleAnalyze} disabled={isAnalyzing} className="w-full">
             {isAnalyzing ? "Analyse en cours..." : "Analyser"}

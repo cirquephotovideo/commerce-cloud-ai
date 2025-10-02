@@ -7,6 +7,7 @@ import { CheckSquare, Square, Upload, ChevronDown, ChevronUp, Image as ImageIcon
 import { ScrollArea } from "./ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { Separator } from "./ui/separator";
+import { ProductImageGallery } from "./ProductImageGallery";
 
 interface BatchResult {
   product: string;
@@ -174,7 +175,13 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                       {/* Images Gallery */}
                       {result.success && result.imageUrls && result.imageUrls.length > 0 && (
                         <div className="space-y-2">
-                          <p className="text-sm font-medium">Images trouvées:</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium">Images trouvées:</p>
+                            <ProductImageGallery 
+                              images={result.imageUrls} 
+                              productName={result.analysis?.product_name || result.product}
+                            />
+                          </div>
                           <div className="grid grid-cols-5 gap-2">
                             {result.imageUrls.slice(0, 5).map((url, imgIdx) => (
                               <img
