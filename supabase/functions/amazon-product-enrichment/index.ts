@@ -12,18 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const { analysis_id, product_name, ean, asin } = await req.json();
+    const { analysis_id, ean, asin } = await req.json();
+    let { product_name: productName } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('[AMAZON-ENRICH] Starting enrichment:', { analysis_id, product_name, ean, asin });
+    console.log('[AMAZON-ENRICH] Starting enrichment:', { analysis_id, product_name: productName, ean, asin });
 
     let userId: string;
     let productEan: string | undefined = ean;
     let productAsin: string | undefined = asin;
     let analysisId = analysis_id;
+    let currentAnalysis: any = null;
 
     // 1. Si analysis_id fourni, récupérer les infos
     if (analysis_id) {
@@ -37,6 +39,7 @@ serve(async (req) => {
         throw new Error('Product analysis not found');
       }
 
+      currentAnalysis = analysis;
       userId = analysis.user_id;
       
       // Récupérer EAN/ASIN depuis l'analyse si pas fourni
@@ -44,7 +47,24 @@ serve(async (req) => {
         productEan = analysis.analysis_result?.barcode || 
                      analysis.analysis_result?.ean || 
                      analysis.analysis_result?.gtin;
+        
+        // Vérifier si product_url contient un EAN valide (13 chiffres)
+        if (!productEan && analysis.product_url && /^\d{13}$/.test(analysis.product_url)) {
+          console.log('[AMAZON-ENRICH] EAN found in product_url:', analysis.product_url);
+          productEan = analysis.product_url;
+        }
       }
+
+      // Si pas d'EAN/ASIN, récupérer le nom du produit
+      if (!productEan && !productAsin && !productName) {
+        productName = analysis.analysis_result?.product_name;
+      }
+
+      console.log('[AMAZON-ENRICH] Identifiers extracted:', { 
+        productEan, 
+        productAsin, 
+        product_name: productName 
+      });
 
       // Mettre à jour le statut à "pending"
       await supabase
@@ -65,9 +85,9 @@ serve(async (req) => {
         .from('product_analyses')
         .insert({
           user_id: userId,
-          product_url: product_name || ean || asin || '',
+          product_url: productName || ean || asin || '',
           analysis_result: {
-            product_name: product_name,
+            product_name: productName,
             ean: ean,
             asin: asin
           },
@@ -85,15 +105,35 @@ serve(async (req) => {
     }
 
     // Vérifier qu'on a au moins un identifiant
-    if (!productEan && !productAsin && !product_name) {
+    const hasIdentifier = productEan || productAsin || productName;
+    if (!hasIdentifier) {
+      console.error('[AMAZON-ENRICH] Missing identifiers:', {
+        analysis_id: analysisId,
+        productEan,
+        productAsin,
+        product_name: productName,
+        product_url: currentAnalysis?.product_url,
+        analysis_result_keys: Object.keys(currentAnalysis?.analysis_result || {})
+      });
+      
       await supabase
         .from('product_analyses')
-        .update({ amazon_enrichment_status: 'error' })
+        .update({ 
+          amazon_enrichment_status: 'error',
+          amazon_last_attempt: new Date().toISOString()
+        })
         .eq('id', analysisId);
-      throw new Error('No identifier provided (EAN, ASIN, or product name)');
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'No identifier provided (EAN, ASIN, or product name)',
+          details: { productEan, productAsin, product_name: productName }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
     }
 
-    console.log('[AMAZON-ENRICH] Identifiers:', { productEan, productAsin, product_name });
+    console.log('[AMAZON-ENRICH] Identifiers:', { productEan, productAsin, product_name: productName });
 
     // 2. Obtenir le token Amazon valide
     const { data: tokenData, error: tokenError } = await supabase.functions.invoke('amazon-token-manager');
@@ -168,10 +208,10 @@ serve(async (req) => {
     }
 
     // Si toujours pas de résultat, essayer avec le nom du produit (keywords)
-    if (!amazonData?.items?.length && product_name) {
+    if (!amazonData?.items?.length && productName) {
       searchMethod = 'KEYWORDS';
       const params = new URLSearchParams({
-        keywords: product_name,
+        keywords: productName,
         marketplaceIds: marketplaceId,
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
