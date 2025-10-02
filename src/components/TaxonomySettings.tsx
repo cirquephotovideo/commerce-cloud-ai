@@ -25,7 +25,10 @@ export const TaxonomySettings = () => {
   const loadSettings = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from("taxonomy_settings")
@@ -90,9 +93,15 @@ export const TaxonomySettings = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !taxonomyType) {
     return (
       <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tag className="w-5 h-5" />
+            Configuration de la Taxonomie
+          </CardTitle>
+        </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="w-6 h-6 animate-spin" />
         </CardContent>
