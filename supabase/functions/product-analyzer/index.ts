@@ -108,6 +108,27 @@ Effectue une analyse détaillée et structure ta réponse EXACTEMENT selon ce fo
     "key_features": ["Caractéristique 1", "Caractéristique 2", "Caractéristique 3"],
     "recommendations": ["Recommandation 1", "Recommandation 2"]
   },
+  "repairability": {
+    "score": 7.5,
+    "ease_of_repair": "facile/moyen/difficile",
+    "spare_parts_availability": "excellente/bonne/moyenne/limitée",
+    "durability_score": 8.0,
+    "repairability_index": "8.5/10",
+    "recommendations": ["Recommandation 1", "Recommandation 2"]
+  },
+  "hs_code": {
+    "code": "854230",
+    "description": "Description de la catégorie douanière",
+    "tariff_info": "Informations sur les droits de douane applicables"
+  },
+  "environmental_impact": {
+    "carbon_footprint": "Estimation des émissions CO2",
+    "recyclability_score": 7.5,
+    "eco_certifications": ["Energy Star", "EPEAT Gold"],
+    "energy_efficiency": "A++",
+    "eco_score": 8.0,
+    "recommendations": ["Recommandation 1", "Recommandation 2"]
+  },
   "image_optimization": {
     "quality_score": 80,
     "suggested_angles": ["Angle 1", "Angle 2", "Angle 3"],

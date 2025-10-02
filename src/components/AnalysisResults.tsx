@@ -372,6 +372,115 @@ export const AnalysisResults = ({ analysis, productInput, inputType }: AnalysisR
         </Card>
       )}
 
+      {/* Repairability & Environmental Impact */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {analysis.repairability && (
+          <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+                ♻️
+              </div>
+              <h3 className="text-lg font-bold">Indice de Réparabilité</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-center p-4 bg-green-500/10 rounded-lg">
+                <div className="text-4xl font-bold text-green-600">
+                  {analysis.repairability.repairability_index || `${analysis.repairability.score}/10`}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">Score de réparabilité</div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-muted-foreground">Facilité</div>
+                  <Badge variant="outline">{analysis.repairability.ease_of_repair}</Badge>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Durabilité</div>
+                  <div className="font-semibold">{analysis.repairability.durability_score}/10</div>
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Disponibilité pièces</div>
+                <div className="text-sm">{analysis.repairability.spare_parts_availability}</div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {analysis.environmental_impact && (
+          <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+                🌱
+              </div>
+              <h3 className="text-lg font-bold">Impact Environnemental</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-center p-4 bg-green-500/10 rounded-lg">
+                <div className="text-4xl font-bold text-green-600">{analysis.environmental_impact.eco_score}/10</div>
+                <div className="text-sm text-muted-foreground mt-1">Score écologique</div>
+              </div>
+              
+              <div className="space-y-2">
+                <div>
+                  <div className="text-xs text-muted-foreground">Empreinte carbone</div>
+                  <div className="text-sm">{analysis.environmental_impact.carbon_footprint}</div>
+                </div>
+                
+                {analysis.environmental_impact.energy_efficiency && (
+                  <div>
+                    <div className="text-xs text-muted-foreground">Efficacité énergétique</div>
+                    <Badge>{analysis.environmental_impact.energy_efficiency}</Badge>
+                  </div>
+                )}
+                
+                {analysis.environmental_impact.eco_certifications?.length > 0 && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Certifications</div>
+                    <div className="flex flex-wrap gap-1">
+                      {analysis.environmental_impact.eco_certifications.slice(0, 3).map((cert: string, idx: number) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">{cert}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      {/* HS Code */}
+      {analysis.hs_code && (
+        <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-lg bg-gradient-primary flex items-center justify-center">
+              📦
+            </div>
+            <h3 className="text-lg font-bold">Code Douanier (HS Code)</h3>
+          </div>
+          
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Badge variant="default" className="text-xl px-4 py-2">{analysis.hs_code.code}</Badge>
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">{analysis.hs_code.description}</p>
+              </div>
+            </div>
+            
+            {analysis.hs_code.tariff_info && (
+              <div className="p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm">{analysis.hs_code.tariff_info}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Image Optimization */}
       {analysis.image_optimization && (
         <ImageOptimization data={analysis.image_optimization} />

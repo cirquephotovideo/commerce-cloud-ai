@@ -48,17 +48,40 @@ serve(async (req) => {
       const technicalPrompt = `Analyse technique approfondie du produit: ${productIdentifier}
       
       Fournis:
-      1. Compatibilité: Liste les produits compatibles/incompatibles, accessoires requis
-      2. Spécifications: Analyse détaillée des specs techniques
-      3. Obsolescence: Score (0-1) et stade de cycle de vie (new/mature/declining/obsolete)
-      4. Restrictions régionales: Voltage, normes, limitations géographiques
+      1. Nom du produit identifié
+      2. Compatibilité: Liste les produits compatibles/incompatibles, accessoires requis
+      3. Spécifications: Analyse détaillée des specs techniques
+      4. Obsolescence: Score (0-1) et stade de cycle de vie (new/mature/declining/obsolete)
+      5. Restrictions régionales: Voltage, normes, limitations géographiques
+      6. Éco-texte et réparabilité: Score (0-10), facilité, disponibilité pièces, durabilité
+      7. Code douanier HS: Code à 6-8 chiffres avec description
+      8. Impact environnemental: Émissions CO2, recyclabilité, certifications environnementales
       
       Format JSON strict:
       {
+        "product_name": "Nom du produit",
         "compatibility": { "compatible": [], "incompatible": [], "required_accessories": [], "regional_restrictions": {} },
         "specs": { "key_specs": {}, "technical_details": {} },
         "obsolescence_score": 0.0,
-        "lifecycle_stage": "mature"
+        "lifecycle_stage": "mature",
+        "repairability": {
+          "score": 7.5,
+          "ease_of_repair": "facile/moyen/difficile",
+          "spare_parts_availability": "excellente/bonne/moyenne/limitée",
+          "durability_score": 8.0,
+          "repairability_index": "8.5/10"
+        },
+        "hs_code": {
+          "code": "854230",
+          "description": "Description de la catégorie douanière"
+        },
+        "environmental_impact": {
+          "carbon_footprint": "Estimation des émissions CO2",
+          "recyclability_score": 7.5,
+          "eco_certifications": ["Energy Star", "EPEAT Gold"],
+          "energy_efficiency": "A++",
+          "eco_score": 8.0
+        }
       }`;
 
       const techResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

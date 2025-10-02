@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Image as ImageIcon, Download, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Image as ImageIcon, Download, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { ThemedImageGenerator } from "./ThemedImageGenerator";
 
 interface ProductImageGalleryProps {
   images: string[];
@@ -12,6 +13,7 @@ interface ProductImageGalleryProps {
 export const ProductImageGallery = ({ images, productName }: ProductImageGalleryProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [allImages, setAllImages] = useState<string[]>(images || []);
 
   if (!images || images.length === 0) {
     return null;
@@ -42,7 +44,12 @@ export const ProductImageGallery = ({ images, productName }: ProductImageGallery
     }
   };
 
-  const validImages = images.filter(img => img && img.trim() !== '');
+  const validImages = allImages.filter(img => img && img.trim() !== '');
+
+  const handleImageGenerated = (newImageUrl: string) => {
+    setAllImages(prev => [newImageUrl, ...prev]);
+    setCurrentIndex(0);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -52,7 +59,7 @@ export const ProductImageGallery = ({ images, productName }: ProductImageGallery
           Images ({validImages.length})
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>Galerie d'images - {productName || "Produit"}</span>
@@ -60,9 +67,15 @@ export const ProductImageGallery = ({ images, productName }: ProductImageGallery
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* AI Image Generator */}
+          <ThemedImageGenerator 
+            productName={productName || "Produit"} 
+            onImageGenerated={handleImageGenerated}
+          />
+
           {/* Main Image */}
-          <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
+          <div className="relative aspect-[16/10] bg-muted rounded-lg overflow-hidden">
             <img
               src={validImages[currentIndex]}
               alt={`${productName || 'Product'} ${currentIndex + 1}`}
