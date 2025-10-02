@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExternalLink, Star, TrendingDown, TrendingUp, Package } from "lucide-react";
 import { ThemedImageGenerator } from "@/components/ThemedImageGenerator";
+import { PriceHistoryChart } from "./PriceHistoryChart";
+import { OfferComparison } from "./OfferComparison";
 
 interface ProductOffer {
   id: string;
@@ -43,6 +45,12 @@ export const ProductMonitoringDetail = ({
   const sortedOffers = [...allOffers].sort((a, b) => a.current_price - b.current_price);
   const bestPrice = sortedOffers[0]?.current_price;
   const avgPrice = allOffers.reduce((sum, o) => sum + o.current_price, 0) / allOffers.length;
+  
+  // Check if there's a promotion
+  const hasPromo = allOffers.some(offer => {
+    const metadata = offer as any;
+    return metadata.search_metadata?.is_promo;
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -51,16 +59,23 @@ export const ProductMonitoringDetail = ({
           <DialogTitle className="flex items-center gap-2">
             <Package className="w-5 h-5" />
             {product.product_name}
+            {hasPromo && (
+              <Badge variant="destructive" className="animate-pulse ml-2">
+                🔥 PROMO
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="offers">
               Offres ({allOffers.length})
             </TabsTrigger>
-            <TabsTrigger value="images">Génération d'images</TabsTrigger>
+            <TabsTrigger value="comparison">Comparaison</TabsTrigger>
+            <TabsTrigger value="history">Historique</TabsTrigger>
+            <TabsTrigger value="images">Images</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -241,6 +256,18 @@ export const ProductMonitoringDetail = ({
                 </Card>
               );
             })}
+          </TabsContent>
+
+          <TabsContent value="comparison" className="space-y-4">
+            <OfferComparison offers={allOffers as any} />
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-4">
+            <PriceHistoryChart 
+              productName={product.product_name}
+              priceMonitoringId={product.id}
+              timeRange="30d"
+            />
           </TabsContent>
 
           <TabsContent value="images">

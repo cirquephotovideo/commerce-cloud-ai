@@ -5,6 +5,7 @@ import { PriceMonitoring } from "@/components/market/PriceMonitoring";
 import { MarketTrends } from "@/components/market/MarketTrends";
 import { UserAlerts } from "@/components/market/UserAlerts";
 import { GoogleShoppingAnalysis } from "@/components/market/GoogleShoppingAnalysis";
+import { MarketComparison } from "@/components/market/MarketComparison";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const MarketIntelligence = () => {
@@ -20,9 +21,10 @@ const MarketIntelligence = () => {
         </div>
 
         <Tabs defaultValue="google-shopping" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="google-shopping">Google Shopping</TabsTrigger>
             <TabsTrigger value="monitoring">Surveillance Prix</TabsTrigger>
+            <TabsTrigger value="comparison">Comparaison Dual-Engine</TabsTrigger>
             <TabsTrigger value="competitors">Sites Concurrents</TabsTrigger>
             <TabsTrigger value="trends">Tendances</TabsTrigger>
             <TabsTrigger value="alerts">Alertes</TabsTrigger>
@@ -34,6 +36,10 @@ const MarketIntelligence = () => {
 
           <TabsContent value="monitoring" className="space-y-6">
             <PriceMonitoring />
+          </TabsContent>
+
+          <TabsContent value="comparison" className="space-y-6">
+            <MarketComparison />
           </TabsContent>
 
           <TabsContent value="competitors" className="space-y-6">

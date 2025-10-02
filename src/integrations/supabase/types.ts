@@ -807,11 +807,53 @@ export type Database = {
         }
         Relationships: []
       }
+      price_history: {
+        Row: {
+          created_at: string | null
+          id: string
+          price: number
+          price_monitoring_id: string
+          scraped_at: string | null
+          source: string | null
+          stock_status: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          price: number
+          price_monitoring_id: string
+          scraped_at?: string | null
+          source?: string | null
+          stock_status?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          price?: number
+          price_monitoring_id?: string
+          scraped_at?: string | null
+          source?: string | null
+          stock_status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_history_price_monitoring_id_fkey"
+            columns: ["price_monitoring_id"]
+            isOneToOne: false
+            referencedRelation: "price_monitoring"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_monitoring: {
         Row: {
           availability_history: Json | null
           best_deal_score: number | null
           competitor_site_id: string | null
+          confidence_score: number | null
           created_at: string | null
           current_price: number | null
           description: string | null
@@ -825,6 +867,8 @@ export type Database = {
           rating: number | null
           reviews_count: number | null
           scraped_at: string | null
+          search_engine: string | null
+          search_metadata: Json | null
           stock_status: string | null
           user_id: string
         }
@@ -832,6 +876,7 @@ export type Database = {
           availability_history?: Json | null
           best_deal_score?: number | null
           competitor_site_id?: string | null
+          confidence_score?: number | null
           created_at?: string | null
           current_price?: number | null
           description?: string | null
@@ -845,6 +890,8 @@ export type Database = {
           rating?: number | null
           reviews_count?: number | null
           scraped_at?: string | null
+          search_engine?: string | null
+          search_metadata?: Json | null
           stock_status?: string | null
           user_id: string
         }
@@ -852,6 +899,7 @@ export type Database = {
           availability_history?: Json | null
           best_deal_score?: number | null
           competitor_site_id?: string | null
+          confidence_score?: number | null
           created_at?: string | null
           current_price?: number | null
           description?: string | null
@@ -865,6 +913,8 @@ export type Database = {
           rating?: number | null
           reviews_count?: number | null
           scraped_at?: string | null
+          search_engine?: string | null
+          search_metadata?: Json | null
           stock_status?: string | null
           user_id?: string
         }

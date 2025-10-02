@@ -68,9 +68,9 @@ export const PriceMonitoring = () => {
 
     setIsSearching(true);
     
-    const { data, error } = await supabase.functions.invoke('market-intelligence', {
+    // Use dual-search-engine for better results
+    const { data, error } = await supabase.functions.invoke('dual-search-engine', {
       body: {
-        action: 'search',
         productName,
         competitorSiteIds: selectedSites,
       }
@@ -83,7 +83,15 @@ export const PriceMonitoring = () => {
       return;
     }
 
-    toast.success(data.message || "Recherche terminée");
+    const stats = data?.stats;
+    if (stats) {
+      toast.success(
+        `Recherche terminée! ${stats.total_results} offres trouvées (${stats.dual_validated} validées par 2 sources)${stats.promotions_found > 0 ? ` 🔥 ${stats.promotions_found} promotions détectées!` : ''}`
+      );
+    } else {
+      toast.success("Recherche terminée");
+    }
+    
     loadMonitoring();
   };
 

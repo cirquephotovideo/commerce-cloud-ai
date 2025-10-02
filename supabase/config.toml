@@ -30,6 +30,9 @@ verify_jwt = true
 [functions.market-intelligence]
 verify_jwt = true
 
+[functions.dual-search-engine]
+verify_jwt = true
+
 [functions.export-to-shopify]
 verify_jwt = true
 
