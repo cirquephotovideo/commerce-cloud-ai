@@ -112,16 +112,25 @@ serve(async (req) => {
       const trialEnd = new Date(trialData.trial_end);
       
       if (now < trialEnd) {
-        // Essai toujours actif
+        // Essai toujours actif - limiter à 20 produits
         const daysRemaining = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        logStep("Active trial found", { daysRemaining, trialEnd: trialData.trial_end });
-
-        // Récupérer les limites du plan Starter
+        
+        // Récupérer les infos du plan pour le nom
         const { data: planData } = await supabaseClient
           .from("subscription_plans")
-          .select("limits, name")
+          .select("name")
           .eq("id", trialData.plan_id)
           .single();
+
+        // Forcer les limites à 20 produits pendant l'essai
+        const trialLimits = {
+          product_analyses: 20,
+          google_shopping_searches: 20,
+          price_alerts: -1,
+          image_optimizations: -1
+        };
+
+        logStep("Active trial found with 20 product limit", { daysRemaining, trialEnd: trialData.trial_end, limits: trialLimits });
 
         return new Response(JSON.stringify({
           subscribed: true,
@@ -129,7 +138,7 @@ serve(async (req) => {
           trial_days_remaining: daysRemaining,
           trial_end: trialData.trial_end,
           plan_name: planData?.name || "Starter",
-          limits: planData?.limits || {}
+          limits: trialLimits
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,

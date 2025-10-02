@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { PricingCard } from "@/components/PricingCard";
+import { SubscriptionChangeModal } from "@/components/SubscriptionChangeModal";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { Loader2 } from "lucide-react";
 
 interface Plan {
@@ -21,19 +23,22 @@ interface Plan {
 }
 
 const Pricing = () => {
-  const { t } = useTranslation();
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { planId: currentPlanId, refreshSubscription, isTrial } = useSubscription();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
-  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
+  const [changeModalOpen, setChangeModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [changeType, setChangeType] = useState<"upgrade" | "downgrade" | null>(null);
 
   useEffect(() => {
-    loadPlans();
-    loadCurrentSubscription();
+    fetchData();
   }, []);
 
-  const loadPlans = async () => {
+  const fetchData = async () => {
     try {
       const { data, error } = await supabase
         .from("subscription_plans")
@@ -55,34 +60,32 @@ const Pricing = () => {
     }
   };
 
-  const loadCurrentSubscription = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from("user_subscriptions")
-        .select("plan_id")
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) setCurrentPlanId(data.plan_id);
-    } catch (error: any) {
-      console.error("Error loading subscription:", error);
-    }
-  };
-
   const handleSelectPlan = async (plan: Plan) => {
-    if (plan.price_monthly === 0) {
-      toast({
-        title: "Contactez-nous",
-        description: "Pour le plan Enterprise, veuillez nous contacter directement.",
-      });
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      navigate("/auth");
       return;
     }
 
+    // Si l'utilisateur a déjà un plan actif
+    if (currentPlanId && !isTrial) {
+      const currentPlan = plans.find(p => p.id === currentPlanId);
+      if (currentPlan) {
+        const isUpgrade = plan.display_order > currentPlan.display_order;
+        setChangeType(isUpgrade ? "upgrade" : "downgrade");
+        setSelectedPlan(plan);
+        setChangeModalOpen(true);
+        return;
+      }
+    }
+
+    // Nouvel abonnement ou conversion depuis l'essai
+    await processCheckout(plan);
+  };
+
+  const processCheckout = async (plan: Plan) => {
+    setIsProcessing(true);
     try {
       const priceId = billingInterval === "monthly" 
         ? plan.stripe_price_id_monthly 
@@ -91,38 +94,66 @@ const Pricing = () => {
       if (!priceId) {
         toast({
           title: "Erreur",
-          description: "Configuration du plan non disponible.",
+          description: "Prix non disponible pour cette période de facturation",
           variant: "destructive",
         });
         return;
       }
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        toast({
-          title: "Authentification requise",
-          description: "Veuillez vous connecter pour souscrire à un plan.",
-          variant: "destructive",
-        });
-        return;
-      }
+      const functionName = isTrial ? "subscribe-from-trial" : "create-checkout";
+      const body = isTrial 
+        ? { planId: plan.id, billingInterval }
+        : { priceId, billingInterval };
 
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId, billingInterval },
-      });
+      const { data, error } = await supabase.functions.invoke(functionName, { body });
 
       if (error) throw error;
 
       if (data?.url) {
-        window.open(data.url, '_blank');
+        window.location.href = data.url;
       }
-    } catch (error: any) {
-      console.error("Error creating checkout:", error);
+    } catch (error) {
+      console.error("Erreur lors de la création de la session:", error);
       toast({
         title: "Erreur",
-        description: error.message || "Impossible de créer la session de paiement.",
+        description: "Impossible de créer la session de paiement",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmChange = async () => {
+    if (!selectedPlan) return;
+
+    setIsProcessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-subscription", {
+        body: { 
+          newPlanId: selectedPlan.id,
+          billingInterval 
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Plan mis à jour",
+        description: "Votre abonnement a été modifié avec succès",
+      });
+
+      setChangeModalOpen(false);
+      await refreshSubscription();
+    } catch (error) {
+      console.error("Erreur lors du changement de plan:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier votre abonnement",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -134,6 +165,8 @@ const Pricing = () => {
     );
   }
 
+  const currentPlan = plans.find(p => p.id === currentPlanId);
+
   return (
     <main className="min-h-screen bg-background">
       <Header />
@@ -141,10 +174,10 @@ const Pricing = () => {
         <div className="container mx-auto max-w-7xl">
           <div className="text-center mb-12">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
-              {t("pricing.title")}
+              Choisissez votre plan
             </h1>
             <p className="text-lg sm:text-xl text-muted-foreground mb-8">
-              {t("pricing.subtitle")}
+              Des solutions adaptées à tous vos besoins
             </p>
             
             <div className="inline-flex items-center gap-4 bg-muted p-1 rounded-lg">
@@ -153,45 +186,55 @@ const Pricing = () => {
                 onClick={() => setBillingInterval("monthly")}
                 size="sm"
               >
-                {t("pricing.monthly")}
+                Mensuel
               </Button>
               <Button
                 variant={billingInterval === "yearly" ? "default" : "ghost"}
                 onClick={() => setBillingInterval("yearly")}
                 size="sm"
               >
-                {t("pricing.yearly")}
+                Annuel
                 <span className="ml-2 text-xs bg-primary/20 px-2 py-0.5 rounded">
-                  {t("pricing.save")} 17%
+                  Économisez 17%
                 </span>
               </Button>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-            {plans.map((plan, idx) => (
+            {plans.map((plan) => (
               <PricingCard
                 key={plan.id}
-                name={plan.name}
-                description={plan.description || ""}
-                priceMonthly={Number(plan.price_monthly)}
-                priceYearly={Number(plan.price_yearly)}
-                features={Array.isArray(plan.features) ? plan.features : []}
-                isPopular={idx === 1}
-                isCurrent={plan.id === currentPlanId}
+                plan={plan}
                 billingInterval={billingInterval}
-                onSelect={() => handleSelectPlan(plan)}
+                isPopular={plan.name === "Premium"}
+                isCurrentPlan={currentPlanId === plan.id}
+                currentPlanId={currentPlanId}
+                plans={plans}
+                onSelectPlan={handleSelectPlan}
+                disabled={isProcessing}
               />
             ))}
           </div>
 
           <div className="mt-12 text-center">
             <p className="text-sm text-muted-foreground">
-              {t("pricing.trial")}
+              Essai gratuit de 7 jours • Sans engagement • Annulez à tout moment
             </p>
           </div>
         </div>
       </section>
+
+      <SubscriptionChangeModal
+        open={changeModalOpen}
+        onOpenChange={setChangeModalOpen}
+        onConfirm={handleConfirmChange}
+        isLoading={isProcessing}
+        changeType={changeType}
+        currentPlan={currentPlan?.name || ""}
+        newPlan={selectedPlan?.name || ""}
+        billingInterval={billingInterval === "monthly" ? "Mensuel" : "Annuel"}
+      />
     </main>
   );
 };

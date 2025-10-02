@@ -115,7 +115,7 @@ serve(async (req) => {
     logStep("Stripe session created", { sessionId: session.id, url: session.url });
 
     return new Response(
-      JSON.stringify({ url: session.url }),
+      JSON.stringify({ url: session.url, redirect: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {

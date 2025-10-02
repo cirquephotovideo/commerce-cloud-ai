@@ -2,62 +2,78 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
-import { useTranslation } from "react-i18next";
 
 interface PricingCardProps {
-  name: string;
-  description: string;
-  priceMonthly: number;
-  priceYearly: number;
-  features: string[];
-  isPopular?: boolean;
-  isCurrent?: boolean;
+  plan: {
+    id: string;
+    name: string;
+    description: string;
+    price_monthly: number;
+    price_yearly: number;
+    features: any;
+    display_order: number;
+  };
   billingInterval: "monthly" | "yearly";
-  onSelect: () => void;
+  isPopular?: boolean;
+  isCurrentPlan?: boolean;
+  currentPlanId?: string | null;
+  plans?: any[];
+  onSelectPlan: (plan: any) => void;
+  disabled?: boolean;
 }
 
 export const PricingCard = ({
-  name,
-  description,
-  priceMonthly,
-  priceYearly,
-  features,
-  isPopular,
-  isCurrent,
+  plan,
   billingInterval,
-  onSelect,
+  isPopular = false,
+  isCurrentPlan = false,
+  currentPlanId = null,
+  plans = [],
+  onSelectPlan,
+  disabled = false,
 }: PricingCardProps) => {
-  const { t } = useTranslation();
-  const price = billingInterval === "monthly" ? priceMonthly : priceYearly;
-  const displayPrice = price === 0 ? t("pricing.contactUs") : `${price}€`;
+  const price = billingInterval === "monthly" ? plan.price_monthly : plan.price_yearly;
+  const displayPrice = price === 0 ? "Sur devis" : `${price}€`;
+
+  const getButtonText = () => {
+    if (isCurrentPlan) return "Plan actuel";
+    if (!currentPlanId) return "Choisir ce plan";
+    
+    const currentPlan = plans.find(p => p.id === currentPlanId);
+    if (!currentPlan) return "Choisir ce plan";
+    
+    return plan.display_order > currentPlan.display_order 
+      ? "Passer au plan supérieur" 
+      : "Passer au plan inférieur";
+  };
 
   return (
-    <Card className={`relative ${isPopular ? "border-primary shadow-lg scale-105" : ""} ${isCurrent ? "border-accent border-2" : ""}`}>
+    <Card className={`relative ${isPopular ? "border-primary shadow-lg scale-105" : ""} ${isCurrentPlan ? "border-accent border-2" : ""}`}>
       {isPopular && (
         <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-primary">
-          {t("pricing.mostPopular")}
+          Le plus populaire
         </Badge>
       )}
-      {isCurrent && (
+      {isCurrentPlan && (
         <Badge className="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent">
-          {t("pricing.currentPlan")}
+          Votre plan actuel
         </Badge>
       )}
       <CardHeader className="text-center pt-6">
-        <CardTitle className="text-2xl">{name}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <CardTitle className="text-2xl">{plan.name}</CardTitle>
+        <CardDescription>{plan.description}</CardDescription>
         <div className="mt-4">
           <span className="text-4xl font-bold">{displayPrice}</span>
           {price > 0 && (
             <span className="text-muted-foreground">
-              {billingInterval === "monthly" ? t("pricing.perMonth") : t("pricing.perYear")}
+              {billingInterval === "monthly" ? "/mois" : "/an"}
             </span>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <ul className="space-y-3">
-          {features.map((feature, idx) => (
+          {Array.isArray(plan.features) && plan.features.map((feature: string, idx: number) => (
             <li key={idx} className="flex items-start gap-2">
               <Check className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
               <span className="text-sm">{feature}</span>
@@ -66,14 +82,13 @@ export const PricingCard = ({
         </ul>
       </CardContent>
       <CardFooter>
-        <Button 
-          className="w-full" 
-          size="lg"
-          onClick={onSelect}
-          disabled={isCurrent}
+        <Button
+          onClick={() => onSelectPlan(plan)}
+          disabled={isCurrentPlan || disabled}
+          className="w-full"
           variant={isPopular ? "default" : "outline"}
         >
-          {isCurrent ? t("pricing.currentPlan") : price === 0 ? t("pricing.contactUs") : t("pricing.getStarted")}
+          {getButtonText()}
         </Button>
       </CardFooter>
     </Card>

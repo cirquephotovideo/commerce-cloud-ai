@@ -83,3 +83,6 @@ verify_jwt = true
 
 [functions.subscribe-from-trial]
 verify_jwt = true
+
+[functions.manage-subscription]
+verify_jwt = true

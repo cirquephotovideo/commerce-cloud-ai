@@ -98,14 +98,10 @@ export const PricingSection = () => {
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <PricingCard
-                name={plan.name}
-                description={plan.description}
-                priceMonthly={plan.price_monthly}
-                priceYearly={plan.price_yearly}
-                features={Array.isArray(plan.features) ? plan.features : []}
+                plan={plan}
                 isPopular={index === 1}
                 billingInterval={billingInterval}
-                onSelect={() => navigate("/pricing")}
+                onSelectPlan={() => navigate("/pricing")}
               />
             </div>
           ))}

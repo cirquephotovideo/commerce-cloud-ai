@@ -12,8 +12,7 @@ export const TrialExpiredModal = ({ open, onOpenChange }: TrialExpiredModalProps
   const navigate = useNavigate();
 
   const handleViewPlans = () => {
-    onOpenChange(false);
-    navigate('/pricing');
+    window.location.href = '/pricing';
   };
 
   return (
