@@ -90,7 +90,11 @@ export default function History() {
 
   const getProductName = (analysis: any) => {
     if (typeof analysis === "string") return "Produit";
-    return analysis?.product_name || analysis?.name || "Produit";
+    return analysis?.analysis_result?.product_name ||
+           analysis?.analysis_result?.name ||
+           analysis?.product_name || 
+           analysis?.name || 
+           "Produit";
   };
 
   const getProductPrice = (analysis: any) => {

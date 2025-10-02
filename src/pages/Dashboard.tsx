@@ -395,7 +395,9 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredAnalyses.map((analysis) => {
-              const productName = analysis.analysis_result?.name || "Produit sans nom";
+                  const productName = analysis.analysis_result?.product_name || 
+                                      analysis.analysis_result?.name || 
+                                      "Produit sans nom";
               
               return (
                 <Card key={analysis.id} className="hover:shadow-lg transition-shadow">

@@ -32,7 +32,9 @@ export const CompetitiveHistoryTable = ({
   };
 
   const getProductName = (analysis: any) => {
-    return analysis.analysis_result?.product_name || 
+    return analysis.analysis_result?.product_name ||
+           analysis.analysis_result?.name || 
+           analysis.analysis_result?.title || 
            analysis.product_name ||
            "Produit sans nom";
   };

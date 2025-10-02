@@ -109,9 +109,9 @@ export const getProductImages = (analysis: any): string[] => {
 
 export const getProductName = (analysis: any): string => {
   try {
-    return analysis?.analysis_result?.name ||
+    return analysis?.analysis_result?.product_name ||
+           analysis?.analysis_result?.name ||
            analysis?.analysis_result?.title ||
-           analysis?.analysis_result?.product_name ||
            analysis?.analysis_result?.productName ||
            'Produit sans nom';
   } catch (error) {
