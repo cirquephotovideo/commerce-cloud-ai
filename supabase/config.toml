@@ -71,3 +71,6 @@ verify_jwt = true
 
 [functions.verify-api-keys]
 verify_jwt = true
+
+[functions.manage-api-keys]
+verify_jwt = true

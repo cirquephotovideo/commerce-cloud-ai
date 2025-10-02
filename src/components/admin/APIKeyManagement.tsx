@@ -3,10 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle } from "lucide-react";
+import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface APIKey {
   name: string;
@@ -23,6 +26,9 @@ export const APIKeyManagement = () => {
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const [editingKey, setEditingKey] = useState<APIKey | null>(null);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({ key: '', cx: '', url: '' });
 
   const fetchApiKeys = async () => {
     try {
@@ -75,6 +81,51 @@ export const APIKeyManagement = () => {
       title: "Vérification terminée",
       description: "Toutes les clés ont été testées",
     });
+  };
+
+  const handleEditKey = (key: APIKey) => {
+    setEditingKey(key);
+    setEditFormData({ key: '', cx: '', url: '' });
+  };
+
+  const handleTestKey = async (key: APIKey) => {
+    setTestingKey(key.envVar);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-api-keys', {
+        body: {
+          action: 'test',
+          service: key.service,
+          key: editFormData.key,
+          cx: editFormData.cx,
+          url: editFormData.url,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.valid) {
+        toast({
+          title: "Test réussi",
+          description: `La clé ${key.name} est valide`,
+        });
+      } else {
+        toast({
+          title: "Test échoué",
+          description: data.error || "La clé est invalide",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('[TEST-KEY] Error:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de tester la clé",
+        variant: "destructive",
+      });
+    } finally {
+      setTestingKey(null);
+    }
   };
 
   const getStatusBadge = (key: APIKey) => {
@@ -162,6 +213,7 @@ export const APIKeyManagement = () => {
                     <TableHead>Variable</TableHead>
                     <TableHead>Statut</TableHead>
                     <TableHead>Dernière vérification</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -179,6 +231,87 @@ export const APIKeyManagement = () => {
                       <TableCell>{getStatusBadge(key)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(key.lastTested).toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex gap-2 justify-end">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditKey(key)}
+                                className="gap-1"
+                              >
+                                <Edit className="h-3 w-3" />
+                                Éditer
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Éditer {key.name}</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="key">
+                                    {key.service === 'Google Search' ? 'API Key' : 
+                                     key.service === 'Supabase' ? 'URL' : 'Clé API'}
+                                  </Label>
+                                  <Input
+                                    id="key"
+                                    type="password"
+                                    placeholder={`Entrez votre ${key.name}`}
+                                    value={editFormData.key}
+                                    onChange={(e) => setEditFormData({ ...editFormData, key: e.target.value })}
+                                  />
+                                </div>
+                                
+                                {key.service === 'Google Search' && (
+                                  <div className="space-y-2">
+                                    <Label htmlFor="cx">Search Engine ID (CX)</Label>
+                                    <Input
+                                      id="cx"
+                                      type="text"
+                                      placeholder="Entrez votre CX"
+                                      value={editFormData.cx}
+                                      onChange={(e) => setEditFormData({ ...editFormData, cx: e.target.value })}
+                                    />
+                                  </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => handleTestKey(key)}
+                                    disabled={testingKey === key.envVar}
+                                    className="gap-1"
+                                  >
+                                    {testingKey === key.envVar ? (
+                                      <>
+                                        <RefreshCw className="h-3 w-3 animate-spin" />
+                                        Test...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <TestTube className="h-3 w-3" />
+                                        Tester
+                                      </>
+                                    )}
+                                  </Button>
+                                  <Button className="flex-1">
+                                    Sauvegarder
+                                  </Button>
+                                </div>
+
+                                <Alert>
+                                  <AlertCircle className="h-4 w-4" />
+                                  <AlertDescription>
+                                    Pour sauvegarder définitivement cette clé, utilisez le système de secrets Lovable Cloud.
+                                  </AlertDescription>
+                                </Alert>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
