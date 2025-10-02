@@ -89,8 +89,14 @@ export const getHSCodeData = (analysis: any): HSCodeData | null => {
 
 export const getProductImages = (analysis: any): string[] => {
   try {
-    const images = analysis?.image_urls || 
-                   analysis?.analysis_result?.images || 
+    // Priority 1: Images stored in the table (real product images)
+    const storedImages = analysis?.image_urls;
+    if (Array.isArray(storedImages) && storedImages.length > 0) {
+      return storedImages;
+    }
+    
+    // Priority 2: Images in analysis_result
+    const images = analysis?.analysis_result?.images || 
                    analysis?.analysis_result?.image_urls ||
                    [];
     

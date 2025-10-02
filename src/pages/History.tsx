@@ -18,6 +18,7 @@ interface ProductAnalysis {
   mapped_category_name: string | null;
   created_at: string;
   is_favorite: boolean;
+  image_urls: any;
 }
 
 export default function History() {
@@ -43,7 +44,7 @@ export default function History() {
     try {
       const { data, error } = await supabase
         .from("product_analyses")
-        .select("id, product_url, analysis_result, mapped_category_name, created_at, is_favorite")
+        .select("id, product_url, analysis_result, mapped_category_name, created_at, is_favorite, image_urls")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -93,12 +94,18 @@ export default function History() {
 
   const getProductPrice = (analysis: any) => {
     if (typeof analysis === "string") return "-";
-    return analysis?.price || analysis?.product_price || "-";
+    return analysis?.pricing?.estimated_price || 
+           analysis?.price || 
+           analysis?.product_price || 
+           "-";
   };
 
   const getProductScore = (analysis: any) => {
     if (typeof analysis === "string") return "-";
-    return analysis?.quality_score || analysis?.score || "-";
+    const score = analysis?.quality_score || 
+                  analysis?.score || 
+                  analysis?.global_report?.overall_score;
+    return score ? `${score}${typeof score === 'number' && score <= 100 ? '/100' : ''}` : "-";
   };
 
   const getProductDescription = (analysis: any) => {

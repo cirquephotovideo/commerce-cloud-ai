@@ -186,6 +186,157 @@ export const DetailedAnalysisView = ({ analysis }: DetailedAnalysisViewProps) =>
         </Card>
       )}
 
+      {/* SEO Section */}
+      {analysis?.analysis_result?.seo && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              🎯 Optimisation SEO
+              <Badge variant="outline">{analysis.analysis_result.seo.score}/100</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">Titre:</span>
+                <p className="mt-1">{analysis.analysis_result.seo.title}</p>
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Meta Description:</span>
+                <p className="mt-1 text-muted-foreground">{analysis.analysis_result.seo.meta_description}</p>
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Mots-clés:</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {analysis.analysis_result.seo.keywords?.map((keyword: string, i: number) => (
+                    <Badge key={i} variant="secondary">{keyword}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Market Trends Section */}
+      {analysis?.analysis_result?.trends && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              📈 Tendances du Marché
+              <Badge variant="outline">{analysis.analysis_result.trends.popularity_score}/100</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tendance:</span>
+                <span className="font-medium">{analysis.analysis_result.trends.market_trend}</span>
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Perspectives:</span>
+                <p className="mt-1 text-muted-foreground">{analysis.analysis_result.trends.future_outlook}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Optimized Description Section */}
+      {analysis?.analysis_result?.description && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              📝 Description Optimisée
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm">{analysis.analysis_result.description.suggested_description}</p>
+            {analysis.analysis_result.description.key_features && (
+              <div>
+                <span className="font-medium text-sm text-muted-foreground">Caractéristiques clés:</span>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                  {analysis.analysis_result.description.key_features.map((feature: string, i: number) => (
+                    <li key={i}>{feature}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Competitive Analysis Section */}
+      {analysis?.analysis_result?.competition && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              🏆 Analyse Concurrentielle
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="font-medium text-muted-foreground">Principaux concurrents:</span>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {analysis.analysis_result.competition.main_competitors?.map((competitor: string, i: number) => (
+                    <Badge key={i} variant="outline">{competitor}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="font-medium text-muted-foreground">Différenciation:</span>
+                <p className="mt-1 text-muted-foreground">{analysis.analysis_result.competition.differentiation}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Global Report Section */}
+      {analysis?.analysis_result?.global_report && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              📊 Rapport Global
+              <Badge variant="outline">{analysis.analysis_result.global_report.overall_score}/100</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {analysis.analysis_result.global_report.strengths && (
+              <div>
+                <span className="font-medium text-sm text-muted-foreground">Points forts:</span>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                  {analysis.analysis_result.global_report.strengths.map((strength: string, i: number) => (
+                    <li key={i} className="text-green-600">{strength}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {analysis.analysis_result.global_report.weaknesses && (
+              <div>
+                <span className="font-medium text-sm text-muted-foreground">Points faibles:</span>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
+                  {analysis.analysis_result.global_report.weaknesses.map((weakness: string, i: number) => (
+                    <li key={i} className="text-orange-600">{weakness}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {analysis.analysis_result.global_report.recommendations && (
+              <div>
+                <span className="font-medium text-sm text-muted-foreground">Recommandations:</span>
+                <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-muted-foreground">
+                  {analysis.analysis_result.global_report.recommendations.map((rec: string, i: number) => (
+                    <li key={i}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Image Gallery */}
       {images.length > 0 && (
         <Card>
