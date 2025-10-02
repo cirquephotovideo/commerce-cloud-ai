@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.export-single-product]
 verify_jwt = true
+
+[functions.verify-api-keys]
+verify_jwt = true
