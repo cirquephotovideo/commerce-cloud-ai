@@ -146,6 +146,14 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
       if (analysisIds.length > 0) {
         try {
+          // Get current session explicitly
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError || !sessionData.session) {
+            toast.error("Session expirée, veuillez vous reconnecter");
+            return;
+          }
+
           const platformDisplayNames: Record<string, string> = {
             odoo: 'Odoo',
             shopify: 'Shopify',
@@ -164,6 +172,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           toast.info(`Export vers ${platformName} en cours...`);
           
           const { data: exportData, error: exportError } = await supabase.functions.invoke(`export-to-${exportPlatform}`, {
+            headers: {
+              Authorization: `Bearer ${sessionData.session.access_token}`
+            },
             body: { analysisIds, analysis_ids: analysisIds }
           });
 

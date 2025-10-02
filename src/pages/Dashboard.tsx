@@ -177,13 +177,41 @@ export default function Dashboard() {
     
     setIsExporting(true);
     try {
+      // Get current session explicitly
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        toast({
+          title: "Authentification requise",
+          description: "Votre session a expiré, veuillez vous reconnecter.",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('export-to-odoo', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
         body: { 
           analysisIds: Array.from(selectedIds)
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle 401 specifically
+        if (error.message.includes('401') || error.message.toLowerCase().includes('unauthorized')) {
+          toast({
+            title: "Session expirée",
+            description: "Votre session a expiré, veuillez vous reconnecter.",
+            variant: "destructive",
+          });
+          navigate("/auth");
+          return;
+        }
+        throw error;
+      }
 
       toast({
         title: "Export réussi",

@@ -416,16 +416,40 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const authHeader = req.headers.get('Authorization');
+    console.log('[EXPORT-ODOO] Authorization header present:', !!authHeader);
+    
     if (!authHeader) {
-      throw new Error('Missing authorization header');
+      console.error('[EXPORT-ODOO] Missing authorization header');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing authorization header' 
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
     
     if (userError || !user) {
-      throw new Error('Unauthorized');
+      console.error('[EXPORT-ODOO] User verification failed:', userError?.message);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Unauthorized or expired session' 
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
+    
+    console.log('[EXPORT-ODOO] Authenticated user:', user.id);
 
     const { analysisIds } = await req.json();
 
