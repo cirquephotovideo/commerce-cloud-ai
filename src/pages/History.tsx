@@ -11,6 +11,7 @@ import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { CompetitiveHistoryTable } from "@/components/CompetitiveHistoryTable";
 import { Badge } from "@/components/ui/badge";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
+import { ProductDetailModal } from "@/components/ProductDetailModal";
 
 interface ProductAnalysis {
   id: string;
@@ -26,8 +27,35 @@ export default function History() {
   const [analyses, setAnalyses] = useState<ProductAnalysis[]>([]);
   const [selectedAnalysis, setSelectedAnalysis] = useState<ProductAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const handleOpenDetail = (analysis: ProductAnalysis) => {
+    setSelectedAnalysis(analysis);
+    setIsModalOpen(true);
+  };
+
+  const toggleFavorite = async (id: string, currentState: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("product_analyses")
+        .update({ is_favorite: !currentState })
+        .eq("id", id);
+
+      if (error) throw error;
+      loadAnalyses();
+      toast({
+        title: !currentState ? "Ajouté aux favoris" : "Retiré des favoris",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -162,6 +190,7 @@ export default function History() {
                 analyses={analyses}
                 onDelete={deleteAnalysis}
                 onViewDetail={setSelectedAnalysis}
+                onOpenDetail={handleOpenDetail}
               />
             ) : (
               <p className="text-center text-muted-foreground py-8">Aucune analyse trouvée</p>
@@ -183,6 +212,16 @@ export default function History() {
           </Card>
         )}
       </main>
+
+      <ProductDetailModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        analysis={selectedAnalysis}
+        allAnalyses={analyses}
+        onDelete={deleteAnalysis}
+        onToggleFavorite={toggleFavorite}
+        onReload={loadAnalyses}
+      />
     </div>
   );
 }

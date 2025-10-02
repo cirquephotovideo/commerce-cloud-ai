@@ -16,6 +16,7 @@ import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
 import { AIProviderSettings } from "@/components/AIProviderSettings";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
+import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { 
   Select, 
   SelectContent, 
@@ -31,6 +32,12 @@ interface ProductAnalysis {
   image_urls?: string[];
   is_favorite: boolean;
   created_at: string;
+  mapped_category_name?: string | null;
+  tags?: any;
+  description_long?: string;
+  competitive_pros?: any;
+  competitive_cons?: any;
+  use_cases?: any;
 }
 
 export default function Dashboard() {
@@ -42,9 +49,16 @@ export default function Dashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<ProductAnalysis | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
+
+  const handleOpenDetail = (analysis: ProductAnalysis) => {
+    setSelectedAnalysis(analysis);
+    setIsModalOpen(true);
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -448,7 +462,12 @@ export default function Dashboard() {
                           checked={selectedIds.has(analysis.id)}
                           onCheckedChange={() => toggleSelect(analysis.id)}
                         />
-                        <CardTitle className="text-lg line-clamp-2">{productName}</CardTitle>
+                        <CardTitle 
+                          className="text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
+                          onClick={() => handleOpenDetail(analysis)}
+                        >
+                          {productName}
+                        </CardTitle>
                       </div>
                       <Button
                         variant="ghost"
@@ -475,6 +494,13 @@ export default function Dashboard() {
                     )}
                     
                     <div className="flex gap-2 flex-wrap">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleOpenDetail(analysis)}
+                      >
+                        Voir détails
+                      </Button>
                       {analysis.image_urls && analysis.image_urls.length > 0 && (
                         <ProductImageGallery images={analysis.image_urls} productName={productName} />
                       )}
@@ -496,6 +522,16 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+
+      <ProductDetailModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        analysis={selectedAnalysis}
+        allAnalyses={filteredAnalyses}
+        onDelete={deleteAnalysis}
+        onToggleFavorite={toggleFavorite}
+        onReload={loadAnalyses}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ExternalLink, TrendingDown, TrendingUp, Package } from "lucide-react";
+import { ChevronDown, ChevronUp, ExternalLink, TrendingDown, TrendingUp, Package, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -10,12 +10,14 @@ interface CompetitiveHistoryTableProps {
   analyses: any[];
   onDelete: (id: string) => void;
   onViewDetail: (analysis: any) => void;
+  onOpenDetail: (analysis: any) => void;
 }
 
 export const CompetitiveHistoryTable = ({ 
   analyses, 
   onDelete, 
-  onViewDetail 
+  onViewDetail,
+  onOpenDetail 
 }: CompetitiveHistoryTableProps) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -133,7 +135,12 @@ export const CompetitiveHistoryTable = ({
                 <div className="flex-1 space-y-2">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-semibold">{productName}</h3>
+                      <h3 
+                        className="font-bold text-lg cursor-pointer hover:text-primary transition-colors"
+                        onClick={() => onOpenDetail(analysis)}
+                      >
+                        {productName}
+                      </h3>
                       <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                         <span>Prix: {price}€</span>
                         <span>Score: {score}/100</span>
@@ -150,10 +157,18 @@ export const CompetitiveHistoryTable = ({
                       <Button 
                         variant="outline" 
                         size="sm"
+                        onClick={() => onOpenDetail(analysis)}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        Voir détails
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
                         onClick={() => handleViewCompetition(analysis)}
                       >
                         <ExternalLink className="h-4 w-4 mr-1" />
-                        Voir Concurrence
+                        Concurrence
                       </Button>
                       
                       <Button
