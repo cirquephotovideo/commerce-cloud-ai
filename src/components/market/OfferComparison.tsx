@@ -80,7 +80,8 @@ export const OfferComparison = ({ offers }: OfferComparisonProps) => {
               const priceVariation = ((bestOfferPrice - avgPrice) / avgPrice) * 100;
 
               const mainOffer = googleOffer || serperOffer!;
-              const isPromo = mainOffer.search_metadata?.is_promo;
+              const metadata = mainOffer.search_metadata as any;
+              const isPromo = metadata?.is_promo || false;
 
               return (
                 <TableRow key={merchant} className={isBestPrice ? 'bg-green-50 dark:bg-green-950/20' : ''}>
