@@ -22,6 +22,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [progress, setProgress] = useState(0);
   const [currentProduct, setCurrentProduct] = useState("");
   const [autoExport, setAutoExport] = useState(false);
+  const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
 
   const getPlaceholder = () => {
@@ -87,7 +88,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               product_url: product,
               analysis_result: data.analysis,
               image_urls: data.imageUrls || [],
-              tags: data.analysis?.tags_categories?.suggested_tags || []
+              tags: data.analysis?.tags_categories?.suggested_tags || [],
+              amazon_enrichment_status: autoAmazonEnrich ? 'pending' : null,
+              amazon_last_attempt: autoAmazonEnrich ? new Date().toISOString() : null,
             };
 
             // Add category mapping if available
@@ -106,6 +109,21 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               .insert(insertData)
               .select()
               .single();
+
+            // Auto-enrichissement Amazon si activé
+            if (autoAmazonEnrich && insertedAnalysis?.id) {
+              const ean = data.analysis?.barcode || data.analysis?.ean || data.analysis?.gtin;
+              if (ean) {
+                console.log('[BATCH] Triggering Amazon enrichment for:', product);
+                // Fire and forget - ne pas attendre la réponse
+                supabase.functions.invoke('amazon-product-enrichment', {
+                  body: { 
+                    analysis_id: insertedAnalysis.id,
+                    ean: ean
+                  }
+                }).catch(err => console.error('Amazon enrichment error:', err));
+              }
+            }
 
             results.push({
               product,
@@ -259,6 +277,18 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
           <TabsContent value={inputType} className="space-y-4">
             <div className="space-y-3 mb-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="auto-amazon"
+                  checked={autoAmazonEnrich}
+                  onCheckedChange={setAutoAmazonEnrich}
+                  disabled={isAnalyzing}
+                />
+                <Label htmlFor="auto-amazon" className="cursor-pointer">
+                  🔄 Auto-enrichissement Amazon (recommandé)
+                </Label>
+              </div>
+              
               <div className="flex items-center space-x-2">
                 <Switch
                   id="auto-export"

@@ -40,6 +40,8 @@ interface ProductAnalysis {
   competitive_pros?: any;
   competitive_cons?: any;
   use_cases?: any;
+  amazon_enrichment_status?: string | null;
+  amazon_last_attempt?: string | null;
 }
 
 export default function Dashboard() {
@@ -493,12 +495,31 @@ export default function Dashboard() {
                           checked={selectedIds.has(analysis.id)}
                           onCheckedChange={() => toggleSelect(analysis.id)}
                         />
-                        <CardTitle 
-                          className="text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
-                          onClick={() => handleOpenDetail(analysis)}
-                        >
-                          {productName}
-                        </CardTitle>
+                        <div className="flex-1">
+                          <CardTitle 
+                            className="text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
+                            onClick={() => handleOpenDetail(analysis)}
+                          >
+                            {productName}
+                          </CardTitle>
+                          <div className="flex gap-1 mt-1">
+                            {analysis.amazon_enrichment_status === 'success' && (
+                              <Badge variant="secondary" className="text-xs">
+                                📦 Amazon
+                              </Badge>
+                            )}
+                            {analysis.amazon_enrichment_status === 'pending' && (
+                              <Badge variant="outline" className="text-xs">
+                                ⏳ Amazon
+                              </Badge>
+                            )}
+                            {analysis.amazon_enrichment_status === 'not_found' && (
+                              <Badge variant="outline" className="text-xs opacity-50">
+                                ❌ Intro...
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <Button
                         variant="ghost"

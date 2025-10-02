@@ -16,6 +16,7 @@ interface BatchResult {
   imageUrls?: string[];
   error?: string;
   success: boolean;
+  amazonStatus?: string | null;
 }
 
 interface DetailedBatchResultsProps {
@@ -27,6 +28,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [taxonomyMappings, setTaxonomyMappings] = useState<Map<string, any[]>>(new Map());
+  const [enrichingAll, setEnrichingAll] = useState(false);
 
   useEffect(() => {
     const loadTaxonomies = async () => {
@@ -93,8 +95,34 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
     onExport(selectedResults);
   };
 
+  const handleEnrichAll = async () => {
+    setEnrichingAll(true);
+    const toEnrich = results.filter(
+      r => r.success && 
+      r.analysis?.id && 
+      (!r.analysis.amazon_enrichment_status || r.analysis.amazon_enrichment_status === 'error')
+    );
+
+    for (const result of toEnrich) {
+      const ean = result.analysis?.barcode || result.analysis?.ean || result.analysis?.gtin;
+      if (ean) {
+        await supabase.functions.invoke('amazon-product-enrichment', {
+          body: { 
+            analysis_id: result.analysis.id,
+            ean: ean
+          }
+        });
+      }
+    }
+    
+    setEnrichingAll(false);
+  };
+
   const successCount = results.filter(r => r.success).length;
   const selectedCount = selectedIndices.size;
+  const notEnrichedCount = results.filter(
+    r => r.success && (!r.analysis?.amazon_enrichment_status || r.analysis.amazon_enrichment_status === 'error')
+  ).length;
 
   return (
     <Card>
@@ -115,6 +143,17 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
               <Square className="w-4 h-4 mr-2" />
               Tout désélectionner
             </Button>
+            {notEnrichedCount > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleEnrichAll}
+                disabled={enrichingAll}
+              >
+                <Package className="w-4 h-4 mr-2" />
+                {enrichingAll ? 'Enrichissement...' : `Enrichir avec Amazon (${notEnrichedCount})`}
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -154,6 +193,21 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                               <Badge variant="default">Succès</Badge>
                             ) : (
                               <Badge variant="destructive">Erreur</Badge>
+                            )}
+                            {result.success && result.analysis?.amazon_enrichment_status === 'success' && (
+                              <Badge variant="secondary" className="text-xs">
+                                ✅ Amazon
+                              </Badge>
+                            )}
+                            {result.success && result.analysis?.amazon_enrichment_status === 'pending' && (
+                              <Badge variant="outline" className="text-xs">
+                                ⏳ Amazon
+                              </Badge>
+                            )}
+                            {result.success && result.analysis?.amazon_enrichment_status === 'not_found' && (
+                              <Badge variant="outline" className="text-xs opacity-50">
+                                ❌ Introuvable
+                              </Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">

@@ -1090,6 +1090,8 @@ export type Database = {
       }
       product_analyses: {
         Row: {
+          amazon_enrichment_status: string | null
+          amazon_last_attempt: string | null
           analysis_result: Json
           competitive_cons: Json | null
           competitive_pros: Json | null
@@ -1109,6 +1111,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          amazon_enrichment_status?: string | null
+          amazon_last_attempt?: string | null
           analysis_result: Json
           competitive_cons?: Json | null
           competitive_pros?: Json | null
@@ -1128,6 +1132,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          amazon_enrichment_status?: string | null
+          amazon_last_attempt?: string | null
           analysis_result?: Json
           competitive_cons?: Json | null
           competitive_pros?: Json | null

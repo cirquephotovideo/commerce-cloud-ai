@@ -12,35 +12,88 @@ serve(async (req) => {
   }
 
   try {
-    const { analysis_id } = await req.json();
+    const { analysis_id, product_name, ean, asin } = await req.json();
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('[AMAZON-ENRICH] Starting enrichment for analysis:', analysis_id);
+    console.log('[AMAZON-ENRICH] Starting enrichment:', { analysis_id, product_name, ean, asin });
 
-    // 1. Récupérer l'analyse produit
-    const { data: analysis, error: analysisError } = await supabase
-      .from('product_analyses')
-      .select('*, user_id')
-      .eq('id', analysis_id)
-      .single();
+    let userId: string;
+    let productEan: string | undefined = ean;
+    let productAsin: string | undefined = asin;
+    let analysisId = analysis_id;
 
-    if (analysisError || !analysis) {
-      throw new Error('Product analysis not found');
+    // 1. Si analysis_id fourni, récupérer les infos
+    if (analysis_id) {
+      const { data: analysis, error: analysisError } = await supabase
+        .from('product_analyses')
+        .select('*, user_id')
+        .eq('id', analysis_id)
+        .single();
+
+      if (analysisError || !analysis) {
+        throw new Error('Product analysis not found');
+      }
+
+      userId = analysis.user_id;
+      
+      // Récupérer EAN/ASIN depuis l'analyse si pas fourni
+      if (!productEan && !productAsin) {
+        productEan = analysis.analysis_result?.barcode || 
+                     analysis.analysis_result?.ean || 
+                     analysis.analysis_result?.gtin;
+      }
+
+      // Mettre à jour le statut à "pending"
+      await supabase
+        .from('product_analyses')
+        .update({ 
+          amazon_enrichment_status: 'pending',
+          amazon_last_attempt: new Date().toISOString()
+        })
+        .eq('id', analysis_id);
+    } else {
+      // Créer une nouvelle analyse si nécessaire
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      userId = user.id;
+
+      // Créer l'analyse basique
+      const { data: newAnalysis, error: createError } = await supabase
+        .from('product_analyses')
+        .insert({
+          user_id: userId,
+          product_url: product_name || ean || asin || '',
+          analysis_result: {
+            product_name: product_name,
+            ean: ean,
+            asin: asin
+          },
+          amazon_enrichment_status: 'pending',
+          amazon_last_attempt: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError || !newAnalysis) {
+        throw new Error('Failed to create analysis');
+      }
+
+      analysisId = newAnalysis.id;
     }
 
-    const userId = analysis.user_id;
-    const ean = analysis.analysis_result?.barcode || 
-                analysis.analysis_result?.ean || 
-                analysis.analysis_result?.gtin;
-
-    if (!ean) {
-      throw new Error('No EAN/barcode found in product analysis');
+    // Vérifier qu'on a au moins un identifiant
+    if (!productEan && !productAsin && !product_name) {
+      await supabase
+        .from('product_analyses')
+        .update({ amazon_enrichment_status: 'error' })
+        .eq('id', analysisId);
+      throw new Error('No identifier provided (EAN, ASIN, or product name)');
     }
 
-    console.log('[AMAZON-ENRICH] EAN found:', ean);
+    console.log('[AMAZON-ENRICH] Identifiers:', { productEan, productAsin, product_name });
 
     // 2. Obtenir le token Amazon valide
     const { data: tokenData, error: tokenError } = await supabase.functions.invoke('amazon-token-manager');
@@ -64,31 +117,87 @@ serve(async (req) => {
 
     // 4. Appeler Amazon SP-API Catalog Items
     const catalogUrl = 'https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items';
-    const params = new URLSearchParams({
-      identifiers: ean,
-      identifiersType: 'EAN',
-      marketplaceIds: marketplaceId,
-      includedData: 'summaries,attributes,images,productTypes,salesRanks',
-    });
+    
+    let amazonData;
+    let searchMethod: string = 'UNKNOWN';
 
-    console.log('[AMAZON-ENRICH] Calling Amazon API...');
-    const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
-      headers: {
-        'x-amz-access-token': access_token,
-        'Accept': 'application/json',
-      },
-    });
+    // Essayer d'abord avec ASIN si fourni
+    if (productAsin) {
+      searchMethod = 'ASIN';
+      const params = new URLSearchParams({
+        identifiers: productAsin,
+        identifiersType: 'ASIN',
+        marketplaceIds: marketplaceId,
+        includedData: 'summaries,attributes,images,productTypes,salesRanks',
+      });
 
-    if (!amazonResponse.ok) {
-      const errorText = await amazonResponse.text();
-      console.error('[AMAZON-ENRICH] API error:', errorText);
-      throw new Error(`Amazon API error: ${amazonResponse.status} - ${errorText}`);
+      console.log('[AMAZON-ENRICH] Calling Amazon API with ASIN...');
+      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
+        headers: {
+          'x-amz-access-token': access_token,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (amazonResponse.ok) {
+        amazonData = await amazonResponse.json();
+      }
     }
 
-    const amazonData = await amazonResponse.json();
-    console.log('[AMAZON-ENRICH] Data received:', amazonData.items?.length || 0, 'items');
+    // Si pas de résultat avec ASIN, essayer avec EAN
+    if (!amazonData?.items?.length && productEan) {
+      searchMethod = 'EAN';
+      const params = new URLSearchParams({
+        identifiers: productEan,
+        identifiersType: 'EAN',
+        marketplaceIds: marketplaceId,
+        includedData: 'summaries,attributes,images,productTypes,salesRanks',
+      });
 
-    if (!amazonData.items || amazonData.items.length === 0) {
+      console.log('[AMAZON-ENRICH] Calling Amazon API with EAN...');
+      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
+        headers: {
+          'x-amz-access-token': access_token,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (amazonResponse.ok) {
+        amazonData = await amazonResponse.json();
+      }
+    }
+
+    // Si toujours pas de résultat, essayer avec le nom du produit (keywords)
+    if (!amazonData?.items?.length && product_name) {
+      searchMethod = 'KEYWORDS';
+      const params = new URLSearchParams({
+        keywords: product_name,
+        marketplaceIds: marketplaceId,
+        includedData: 'summaries,attributes,images,productTypes,salesRanks',
+      });
+
+      console.log('[AMAZON-ENRICH] Calling Amazon API with keywords...');
+      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
+        headers: {
+          'x-amz-access-token': access_token,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (amazonResponse.ok) {
+        amazonData = await amazonResponse.json();
+      }
+    }
+
+    console.log('[AMAZON-ENRICH] Data received:', amazonData?.items?.length || 0, 'items via', searchMethod);
+
+    if (!amazonData?.items || amazonData.items.length === 0) {
+      // Marquer comme "not_found"
+      await supabase
+        .from('product_analyses')
+        .update({ amazon_enrichment_status: 'not_found' })
+        .eq('id', analysisId);
+      
       throw new Error('Product not found on Amazon');
     }
 
@@ -100,10 +209,10 @@ serve(async (req) => {
     const salesRanks = item.salesRanks || [];
 
     const formattedData = {
-      analysis_id,
+      analysis_id: analysisId,
       user_id: userId,
       asin: item.asin,
-      ean: ean,
+      ean: productEan || item.identifiers?.ean?.[0],
       title: summaries.itemName,
       brand: summaries.brand,
       manufacturer: summaries.manufacturer,
@@ -158,6 +267,12 @@ serve(async (req) => {
 
     console.log('[AMAZON-ENRICH] Data saved successfully');
 
+    // Mettre à jour le statut à "success"
+    await supabase
+      .from('product_analyses')
+      .update({ amazon_enrichment_status: 'success' })
+      .eq('id', analysisId);
+
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -169,6 +284,29 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMAZON-ENRICH] Error:', error);
+    
+    // Marquer comme "error" ou "not_found" selon le type d'erreur
+    const status = error.message?.includes('not found') ? 'not_found' : 'error';
+    
+    try {
+      // Récupérer analysisId depuis les params de la requête
+      const { analysis_id: errorAnalysisId } = await req.json().catch(() => ({}));
+      
+      // Tenter de mettre à jour le statut (si on a un analysisId)
+      if (errorAnalysisId) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabaseClient = createClient(supabaseUrl, supabaseKey);
+        
+        await supabaseClient
+          .from('product_analyses')
+          .update({ amazon_enrichment_status: status })
+          .eq('id', errorAnalysisId);
+      }
+    } catch (updateError) {
+      console.error('[AMAZON-ENRICH] Failed to update status:', updateError);
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error',
