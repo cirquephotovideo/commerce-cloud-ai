@@ -49,22 +49,22 @@ export const Footer = () => {
             <h3 className="font-semibold mb-4">Légal</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="https://arnaudgredai.com/mentions-legales" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                   Mentions Légales
                 </a>
               </li>
               <li>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="https://arnaudgredai.com/cgu" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                   CGU
                 </a>
               </li>
               <li>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="https://arnaudgredai.com/politique-confidentialite" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                   Politique de Confidentialité
                 </a>
               </li>
               <li>
-                <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="https://arnaudgredai.com/cookies" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                   Cookies
                 </a>
               </li>
@@ -75,16 +75,16 @@ export const Footer = () => {
           <div>
             <h3 className="font-semibold mb-4">Suivez-nous</h3>
             <div className="flex gap-4">
-              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://arnaudgredai.com/twitter" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Twitter className="h-5 w-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://arnaudgredai.com/linkedin" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Linkedin className="h-5 w-5" />
               </a>
-              <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://arnaudgredai.com/github" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Github className="h-5 w-5" />
               </a>
-              <a href="mailto:contact@commercecloud.ai" className="text-muted-foreground hover:text-primary transition-colors">
+              <a href="https://arnaudgredai.com/contact" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <Mail className="h-5 w-5" />
               </a>
             </div>
