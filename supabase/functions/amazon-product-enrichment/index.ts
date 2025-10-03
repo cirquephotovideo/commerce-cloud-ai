@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { STSClient, AssumeRoleCommand } from "https://esm.sh/@aws-sdk/client-sts@3.645.0";
+import { SignatureV4 } from "https://esm.sh/@smithy/signature-v4@4.2.0";
+import { Sha256 } from "https://esm.sh/@aws-crypto/sha256-js@5.2.0";
+import { HttpRequest } from "https://esm.sh/@smithy/protocol-http@4.1.7";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -153,14 +157,85 @@ serve(async (req) => {
     const { access_token } = tokenData;
     console.log('[AMAZON-ENRICH] Token obtained');
 
-    // 3. Récupérer le marketplace ID
-    const { data: credentials } = await supabase
+    // 3. Récupérer les credentials AWS et marketplace ID
+    const { data: credentials, error: credError } = await supabase
+      .from('aws_credentials')
+      .select('*')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (credError || !credentials) {
+      throw new Error('AWS credentials not configured in database');
+    }
+
+    const { data: amazonCreds } = await supabase
       .from('amazon_credentials')
       .select('marketplace_id')
       .eq('is_active', true)
       .maybeSingle();
 
-    const marketplaceId = credentials?.marketplace_id || 'A13V1IB3VIYZZH';
+    const marketplaceId = amazonCreds?.marketplace_id || 'A13V1IB3VIYZZH';
+    const region = credentials.region || 'eu-west-1';
+
+    console.log('[AMAZON-ENRICH] AWS config loaded:', { region, marketplaceId });
+
+    // 4. AssumeRole pour obtenir credentials temporaires
+    const stsClient = new STSClient({
+      region,
+      credentials: {
+        accessKeyId: credentials.access_key_id_encrypted,
+        secretAccessKey: credentials.secret_access_key_encrypted,
+      },
+    });
+
+    const assumeRoleCmd = new AssumeRoleCommand({
+      RoleArn: credentials.role_arn,
+      RoleSessionName: `amazon-enrich-${Date.now()}`,
+      DurationSeconds: 3600,
+    });
+
+    const stsResponse = await stsClient.send(assumeRoleCmd);
+    const tempCreds = stsResponse.Credentials;
+
+    if (!tempCreds?.AccessKeyId || !tempCreds?.SecretAccessKey || !tempCreds?.SessionToken) {
+      throw new Error('Failed to assume AWS role');
+    }
+
+    console.log('[AMAZON-ENRICH] STS AssumeRole successful');
+
+    // Helper: Signer une requête Amazon SP-API
+    const signedAmazonRequest = async (path: string, queryParams: URLSearchParams) => {
+      const signer = new SignatureV4({
+        service: 'execute-api',
+        region,
+        credentials: {
+          accessKeyId: tempCreds.AccessKeyId!,
+          secretAccessKey: tempCreds.SecretAccessKey!,
+          sessionToken: tempCreds.SessionToken!,
+        },
+        sha256: Sha256,
+      });
+
+      const url = new URL(`https://sellingpartnerapi-eu.amazon.com${path}?${queryParams}`);
+      const request = new HttpRequest({
+        method: 'GET',
+        protocol: 'https:',
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        headers: {
+          'host': url.hostname,
+          'x-amz-access-token': access_token,
+          'Accept': 'application/json',
+        },
+      });
+
+      const signedRequest = await signer.sign(request);
+      
+      return fetch(url.toString(), {
+        method: signedRequest.method,
+        headers: signedRequest.headers as HeadersInit,
+      });
+    };
     
     console.log('[AMAZON-ENRICH] Search config:', { 
       marketplaceId, 
@@ -169,8 +244,8 @@ serve(async (req) => {
       hasName: !!productName 
     });
 
-    // 4. Appeler Amazon SP-API Catalog Items
-    const catalogUrl = 'https://sellingpartnerapi-eu.amazon.com/catalog/2022-04-01/items';
+    // 5. Appeler Amazon SP-API Catalog Items avec SigV4
+    const catalogPath = '/catalog/2022-04-01/items';
     
     let amazonData;
     let searchMethod: string = 'UNKNOWN';
@@ -185,22 +260,22 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
-      console.log('[AMAZON-ENRICH] Calling Amazon API with ASIN...');
-      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
-        headers: {
-          'x-amz-access-token': access_token,
-          'Accept': 'application/json',
-        },
-      });
+      console.log('[AMAZON-ENRICH] Calling Amazon API with ASIN (SigV4)...', { region, marketplaceId });
+      const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
       } else {
+        const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (ASIN):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
-          body: await amazonResponse.text()
+          body: errorText
         });
+        
+        if (amazonResponse.status === 403) {
+          throw new Error('AWS credentials or IAM permissions issue - Check API Keys configuration');
+        }
       }
     }
 
@@ -214,22 +289,22 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
-      console.log('[AMAZON-ENRICH] Calling Amazon API with EAN...');
-      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
-        headers: {
-          'x-amz-access-token': access_token,
-          'Accept': 'application/json',
-        },
-      });
+      console.log('[AMAZON-ENRICH] Calling Amazon API with EAN (SigV4)...', { region, marketplaceId });
+      const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
       } else {
+        const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (EAN):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
-          body: await amazonResponse.text()
+          body: errorText
         });
+        
+        if (amazonResponse.status === 403) {
+          throw new Error('AWS credentials or IAM permissions issue - Check API Keys configuration');
+        }
       }
     }
 
@@ -242,26 +317,26 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
-      console.log('[AMAZON-ENRICH] Calling Amazon API with keywords...');
-      const amazonResponse = await fetch(`${catalogUrl}?${params}`, {
-        headers: {
-          'x-amz-access-token': access_token,
-          'Accept': 'application/json',
-        },
-      });
+      console.log('[AMAZON-ENRICH] Calling Amazon API with keywords (SigV4)...', { region, marketplaceId });
+      const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
       } else {
+        const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (KEYWORDS):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
-          body: await amazonResponse.text()
+          body: errorText
         });
+        
+        if (amazonResponse.status === 403) {
+          throw new Error('AWS credentials or IAM permissions issue - Check API Keys configuration');
+        }
       }
     }
 
-    console.log('[AMAZON-ENRICH] Data received:', amazonData?.items?.length || 0, 'items via', searchMethod);
+    console.log('[AMAZON-ENRICH] Data received:', amazonData?.items?.length || 0, 'items via', searchMethod, '(region:', region, ')');
 
     if (!amazonData?.items || amazonData.items.length === 0) {
       // Marquer comme "not_found" et retourner 404 (pas d'exception)
