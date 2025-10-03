@@ -8,32 +8,66 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Mail, MapPin, Phone } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Contact = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     subject: "",
-    message: ""
+    message: "",
+    honeypot: "" // Anti-spam honeypot field
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.email || !formData.message) {
-      toast.error("Veuillez remplir tous les champs obligatoires");
+    // Validation
+    if (!formData.name || formData.name.length < 2 || formData.name.length > 100) {
+      toast.error("Le nom doit contenir entre 2 et 100 caractères");
+      return;
+    }
+
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error("Veuillez entrer une adresse email valide");
+      return;
+    }
+
+    if (!formData.message || formData.message.length < 10 || formData.message.length > 2000) {
+      toast.error("Le message doit contenir entre 10 et 2000 caractères");
       return;
     }
 
     setIsSubmitting(true);
     
-    // Simulate sending email
-    setTimeout(() => {
-      toast.success("Message envoyé avec succès! Nous vous répondrons dans les plus brefs délais.");
-      setFormData({ name: "", email: "", subject: "", message: "" });
+    try {
+      const { data, error } = await supabase.functions.invoke("send-contact-email", {
+        body: {
+          name: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          honeypot: formData.honeypot
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error(data.error);
+      } else {
+        toast.success("Message envoyé avec succès ! Nous vous répondrons sous 24-48h.");
+        setFormData({ name: "", email: "", subject: "", message: "", honeypot: "" });
+      }
+    } catch (error: any) {
+      console.error("Erreur d'envoi:", error);
+      toast.error(
+        error.message || "Erreur lors de l'envoi. Veuillez réessayer ou nous contacter à arnaud@gredai.com"
+      );
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -60,6 +94,18 @@ const Contact = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Honeypot field - hidden from users, only bots will fill it */}
+                  <input
+                    type="text"
+                    name="website"
+                    value={formData.honeypot}
+                    onChange={(e) => setFormData({ ...formData, honeypot: e.target.value })}
+                    style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px" }}
+                    tabIndex={-1}
+                    autoComplete="off"
+                    aria-hidden="true"
+                  />
+
                   <div>
                     <Label htmlFor="name">Nom complet *</Label>
                     <Input
@@ -68,6 +114,8 @@ const Contact = () => {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="Votre nom"
                       required
+                      minLength={2}
+                      maxLength={100}
                     />
                   </div>
 
@@ -80,6 +128,7 @@ const Contact = () => {
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       placeholder="votre@email.com"
                       required
+                      maxLength={255}
                     />
                   </div>
 
@@ -90,6 +139,7 @@ const Contact = () => {
                       value={formData.subject}
                       onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                       placeholder="Sujet de votre message"
+                      maxLength={200}
                     />
                   </div>
 
@@ -99,9 +149,11 @@ const Contact = () => {
                       id="message"
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                      placeholder="Votre message..."
+                      placeholder="Votre message (minimum 10 caractères)..."
                       rows={6}
                       required
+                      minLength={10}
+                      maxLength={2000}
                     />
                   </div>
 
