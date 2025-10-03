@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube, Package, Clock, AlertTriangle, Eye, EyeOff, Save } from "lucide-react";
+import { Key, CheckCircle, XCircle, RefreshCw, AlertCircle, Edit, TestTube, Package, Cloud, Eye, EyeOff, Save } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -33,24 +33,28 @@ export const APIKeyManagement = () => {
   // Amazon state
   const [amazonLoading, setAmazonLoading] = useState(false);
   const [amazonTesting, setAmazonTesting] = useState(false);
-  const [lastToken, setLastToken] = useState<any>(null);
-  const [credentialsId, setCredentialsId] = useState<string | null>(null);
-  const [amazonForm, setAmazonForm] = useState({
-    client_id: '',
-    client_secret: '',
-    refresh_token: '',
-    marketplace_id: 'A13V1IB3VIYZZH',
-  });
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [refreshToken, setRefreshToken] = useState('');
+  const [marketplaceId, setMarketplaceId] = useState('A13V1IB3VIYZZH');
+  const [showAmazonSecrets, setShowAmazonSecrets] = useState(false);
+
+  // AWS States
+  const [awsAccessKeyId, setAwsAccessKeyId] = useState('');
+  const [awsSecretAccessKey, setAwsSecretAccessKey] = useState('');
+  const [awsRoleArn, setAwsRoleArn] = useState('');
+  const [awsRegion, setAwsRegion] = useState('eu-west-1');
+  const [awsConfigured, setAwsConfigured] = useState(false);
+  const [awsLastTest, setAwsLastTest] = useState<{ success: boolean; timestamp: string } | null>(null);
+  const [showAwsKeys, setShowAwsKeys] = useState(false);
+  const [testingAws, setTestingAws] = useState(false);
 
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
-      console.log('[API-KEYS] Fetching API keys status...');
-      
       const { data, error } = await supabase.functions.invoke('verify-api-keys');
       
       if (error) {
-        console.error('[API-KEYS] Error:', error);
         toast({
           title: "Erreur",
           description: "Impossible de vérifier les clés API",
@@ -60,11 +64,9 @@ export const APIKeyManagement = () => {
       }
 
       if (data?.keys) {
-        console.log('[API-KEYS] Keys loaded:', data.keys.length);
         setApiKeys(data.keys);
       }
     } catch (error) {
-      console.error('[API-KEYS] Exception:', error);
       toast({
         title: "Erreur",
         description: "Une erreur est survenue",
@@ -77,41 +79,43 @@ export const APIKeyManagement = () => {
 
   const fetchAmazonData = async () => {
     try {
-      const { data: credentials } = await supabase
+      const { data: credData } = await supabase
         .from('amazon_credentials')
         .select('*')
         .eq('is_active', true)
         .maybeSingle();
 
-      if (credentials) {
-        setCredentialsId(credentials.id);
-        setAmazonForm({
-          client_id: credentials.client_id,
-          client_secret: credentials.client_secret_encrypted,
-          refresh_token: credentials.refresh_token_encrypted,
-          marketplace_id: credentials.marketplace_id,
-        });
-
-        const { data: tokenData } = await supabase
-          .from('amazon_access_tokens')
-          .select('*')
-          .eq('credential_id', credentials.id)
-          .order('generated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (tokenData) {
-          setLastToken(tokenData);
-        }
+      if (credData) {
+        setClientId(credData.client_id || '');
+        setMarketplaceId(credData.marketplace_id || '');
       }
     } catch (error) {
       console.error('Error fetching Amazon data:', error);
     }
   };
 
+  const fetchAwsData = async () => {
+    try {
+      const { data } = await supabase
+        .from('aws_credentials')
+        .select('*')
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (data) {
+        setAwsRoleArn(data.role_arn || '');
+        setAwsRegion(data.region || 'eu-west-1');
+        setAwsConfigured(true);
+      }
+    } catch (error) {
+      console.error('Error fetching AWS data:', error);
+    }
+  };
+
   useEffect(() => {
     fetchApiKeys();
     fetchAmazonData();
+    fetchAwsData();
   }, []);
 
   const handleVerifyAll = async () => {
@@ -135,36 +139,71 @@ export const APIKeyManagement = () => {
     setEditFormData({ key: '', cx: '', url: '' });
   };
 
-  const handleSaveAmazon = async () => {
-    setAmazonLoading(true);
+  const handleTestKey = async (key: APIKey) => {
+    setTestingKey(key.envVar);
     try {
-      const dataToSave = {
-        id: credentialsId || undefined,
-        client_id: amazonForm.client_id,
-        client_secret_encrypted: amazonForm.client_secret,
-        refresh_token_encrypted: amazonForm.refresh_token,
-        marketplace_id: amazonForm.marketplace_id,
-        is_active: true,
-      };
-
-      const { data, error } = await supabase
-        .from('amazon_credentials')
-        .upsert(dataToSave)
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('manage-api-keys', {
+        body: {
+          action: 'test',
+          service: key.service.toLowerCase().replace(' ', '_'),
+          key: editFormData.key,
+          cx: editFormData.cx,
+          url: editFormData.url,
+        }
+      });
 
       if (error) throw error;
 
-      if (data) {
-        setCredentialsId(data.id);
+      if (data?.valid) {
+        toast({
+          title: "✅ Test réussi",
+          description: "La clé API est valide",
+        });
+      } else {
+        toast({
+          title: "❌ Test échoué",
+          description: data?.error || "La clé API est invalide",
+          variant: "destructive",
+        });
       }
+    } catch (error: any) {
+      toast({
+        title: "Erreur de test",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
+  const handleSaveAmazon = async () => {
+    setAmazonLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non authentifié');
+
+      const { error } = await supabase
+        .from('amazon_credentials')
+        .upsert({
+          user_id: user.id,
+          client_id: clientId,
+          client_secret_encrypted: clientSecret,
+          refresh_token_encrypted: refreshToken,
+          marketplace_id: marketplaceId,
+          is_active: true,
+        });
+
+      if (error) throw error;
 
       toast({
         title: "✅ Credentials sauvegardées",
         description: "Les clés Amazon ont été enregistrées avec succès",
       });
       
-      await fetchApiKeys(); // Refresh to show Amazon in the list
+      setClientSecret('');
+      setRefreshToken('');
+      await fetchAmazonData();
     } catch (error: any) {
       toast({
         title: "❌ Erreur",
@@ -180,23 +219,20 @@ export const APIKeyManagement = () => {
     setAmazonTesting(true);
     try {
       const { data, error } = await supabase.functions.invoke('amazon-token-manager');
-
+      
       if (error) throw error;
-
+      
+      if (data?.access_token) {
+        toast({
+          title: "Connexion Amazon réussie",
+          description: "Token d'accès généré avec succès",
+        });
+      }
+    } catch (error) {
+      console.error('Amazon test error:', error);
       toast({
-        title: "✅ Connexion réussie",
-        description: `Token Amazon généré avec succès`,
-      });
-
-      setLastToken({
-        access_token: data.access_token,
-        expires_at: data.expires_at,
-        generated_at: new Date().toISOString(),
-      });
-    } catch (error: any) {
-      toast({
-        title: "❌ Échec de la connexion",
-        description: error.message,
+        title: "Erreur de test Amazon",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
@@ -204,43 +240,81 @@ export const APIKeyManagement = () => {
     }
   };
 
-  const handleTestKey = async (key: APIKey) => {
-    setTestingKey(key.envVar);
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('manage-api-keys', {
-        body: {
-          action: 'test',
-          service: key.service,
-          key: editFormData.key,
-          cx: editFormData.cx,
-          url: editFormData.url,
-        },
+  const handleSaveAws = async () => {
+    if (!awsAccessKeyId || !awsSecretAccessKey || !awsRoleArn) {
+      toast({
+        title: "Champs manquants",
+        description: "Veuillez remplir tous les champs AWS requis",
+        variant: "destructive",
       });
+      return;
+    }
+
+    setAmazonLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non authentifié');
+
+      const { error } = await supabase
+        .from('aws_credentials')
+        .upsert({
+          user_id: user.id,
+          access_key_id_encrypted: awsAccessKeyId,
+          secret_access_key_encrypted: awsSecretAccessKey,
+          role_arn: awsRoleArn,
+          region: awsRegion,
+          is_active: true,
+        });
 
       if (error) throw error;
 
-      if (data.valid) {
-        toast({
-          title: "Test réussi",
-          description: `La clé ${key.name} est valide`,
-        });
-      } else {
-        toast({
-          title: "Test échoué",
-          description: data.error || "La clé est invalide",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('[TEST-KEY] Error:', error);
       toast({
-        title: "Erreur",
-        description: "Impossible de tester la clé",
+        title: "Credentials AWS sauvegardées",
+        description: "Configuration AWS enregistrée avec succès",
+      });
+
+      setAwsConfigured(true);
+      setAwsAccessKeyId('');
+      setAwsSecretAccessKey('');
+      fetchAwsData();
+    } catch (error) {
+      console.error('AWS save error:', error);
+      toast({
+        title: "Erreur de sauvegarde AWS",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });
     } finally {
-      setTestingKey(null);
+      setAmazonLoading(false);
+    }
+  };
+
+  const handleTestAws = async () => {
+    setTestingAws(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-aws-sigv4');
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        setAwsLastTest({ success: true, timestamp: new Date().toISOString() });
+        toast({
+          title: "Test AWS SigV4 réussi",
+          description: "Connexion AWS et signature vérifiées",
+        });
+      } else {
+        throw new Error(data?.error || 'Test échoué');
+      }
+    } catch (error) {
+      console.error('AWS test error:', error);
+      setAwsLastTest({ success: false, timestamp: new Date().toISOString() });
+      toast({
+        title: "Erreur de test AWS",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setTestingAws(false);
     }
   };
 
@@ -378,65 +452,10 @@ export const APIKeyManagement = () => {
                                 <DialogTitle>Éditer {key.name}</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4 py-4">
-                                <div className="space-y-2">
-                                  <Label htmlFor="key">
-                                    {key.service === 'Google Search' ? 'API Key' : 
-                                     key.service === 'Supabase' ? 'URL' : 'Clé API'}
-                                  </Label>
-                                  <Input
-                                    id="key"
-                                    type="password"
-                                    placeholder={`Entrez votre ${key.name}`}
-                                    value={editFormData.key}
-                                    onChange={(e) => setEditFormData({ ...editFormData, key: e.target.value })}
-                                  />
-                                </div>
-                                
-                                {key.service === 'Google Search' && (
-                                  <div className="space-y-2">
-                                    <Label htmlFor="cx">Search Engine ID (CX)</Label>
-                                    <Input
-                                      id="cx"
-                                      type="text"
-                                      placeholder="Entrez votre CX"
-                                      value={editFormData.cx}
-                                      onChange={(e) => setEditFormData({ ...editFormData, cx: e.target.value })}
-                                    />
-                                  </div>
-                                )}
-
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    onClick={() => handleTestKey(key)}
-                                    disabled={testingKey === key.envVar}
-                                    className="gap-1"
-                                  >
-                                    {testingKey === key.envVar ? (
-                                      <>
-                                        <RefreshCw className="h-3 w-3 animate-spin" />
-                                        Test...
-                                      </>
-                                    ) : (
-                                      <>
-                                        <TestTube className="h-3 w-3" />
-                                        Tester
-                                      </>
-                                    )}
-                                  </Button>
-                                </div>
-
                                 <Alert>
                                   <AlertCircle className="h-4 w-4" />
-                                  <AlertDescription>
-                                    <div className="space-y-2">
-                                      <p>✅ Le test fonctionne ! Vos clés sont valides.</p>
-                                      <p>Pour les sauvegarder définitivement, ouvrez le backend Lovable Cloud et configurez les secrets :</p>
-                                      <ul className="list-disc list-inside ml-2 text-xs">
-                                        <li><code>GOOGLE_SEARCH_API_KEY</code> : {editFormData.key ? editFormData.key.substring(0, 20) + '...' : 'Votre clé API'}</li>
-                                        <li><code>GOOGLE_SEARCH_CX</code> : {editFormData.cx || 'Votre CX'}</li>
-                                      </ul>
-                                    </div>
+                                  <AlertDescription className="text-xs">
+                                    Pour sauvegarder définitivement, ouvrez le backend et configurez les secrets.
                                   </AlertDescription>
                                 </Alert>
                               </div>
@@ -448,176 +467,242 @@ export const APIKeyManagement = () => {
                   ))}
                 </TableBody>
               </Table>
-              
-              {apiKeys.some(k => k.error) && (
-                <div className="mt-4">
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <div className="space-y-2">
-                        <p className="font-semibold">Erreurs détectées :</p>
-                        <ul className="list-disc list-inside space-y-1">
-                          {apiKeys.filter(k => k.error).map(key => (
-                            <li key={key.envVar} className="text-sm">
-                              <strong>{key.name}</strong>: {key.error}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              )}
             </CardContent>
           </Card>
 
-          {/* Amazon Seller Configuration */}
+          {/* Amazon Seller API Configuration */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                🔐 Configuration Amazon Seller API
+                Configuration Amazon Seller API
               </CardTitle>
               <CardDescription>
-                Gérez vos credentials Amazon SP-API pour enrichir automatiquement vos produits avec les données Amazon (prix, images, dimensions, ventes).
+                Credentials pour accéder à l'API Amazon Selling Partner
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Avertissement si les secrets Cloud ne sont pas configurés */}
-              {apiKeys.find(k => k.service === 'Amazon' && !k.envVar.includes('AMAZON_CLIENT_ID')) && (
-                <Alert className="border-orange-500">
-                  <AlertTriangle className="h-4 w-4" />
+              {clientId && (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>⚠️ Recommandation sécurité :</strong> Pour une meilleure protection, configurez les secrets Amazon dans Lovable Cloud au lieu de les stocker en base :
-                    <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_CLIENT_ID</code></li>
-                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_CLIENT_SECRET</code></li>
-                      <li><code className="bg-muted px-1 py-0.5 rounded">AMAZON_REFRESH_TOKEN</code></li>
-                    </ul>
+                    Amazon Seller API configuré et actif
                   </AlertDescription>
                 </Alert>
               )}
-              
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Les tokens d'accès sont régénérés automatiquement toutes les heures. Configurez vos credentials une seule fois.
-                </AlertDescription>
-              </Alert>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="amazon_client_id">Client ID</Label>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="client-id">Client ID *</Label>
                   <Input
-                    id="amazon_client_id"
-                    value={amazonForm.client_id}
-                    onChange={(e) => setAmazonForm({ ...amazonForm, client_id: e.target.value })}
-                    placeholder="amzn1.application-oa2-client.XXXXX"
+                    id="client-id"
+                    type="text"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder="amzn1.application-oa2-client.xxx"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="amazon_client_secret">Client Secret</Label>
+                <div>
+                  <Label htmlFor="client-secret">Client Secret *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="client-secret"
+                      type={showAmazonSecrets ? "text" : "password"}
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      placeholder="amzn1.oa2-cs.v1.xxx"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowAmazonSecrets(!showAmazonSecrets)}
+                    >
+                      {showAmazonSecrets ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="refresh-token">Refresh Token *</Label>
                   <Input
-                    id="amazon_client_secret"
-                    type="password"
-                    value={amazonForm.client_secret}
-                    onChange={(e) => setAmazonForm({ ...amazonForm, client_secret: e.target.value })}
-                    placeholder="amzn1.oa2-cs.v1.XXXXX"
+                    id="refresh-token"
+                    type={showAmazonSecrets ? "text" : "password"}
+                    value={refreshToken}
+                    onChange={(e) => setRefreshToken(e.target.value)}
+                    placeholder="Atzr|xxx"
                   />
                 </div>
 
-                <div className="space-y-2 col-span-2">
-                  <Label htmlFor="amazon_refresh_token">Refresh Token</Label>
+                <div>
+                  <Label htmlFor="marketplace-id">Marketplace ID</Label>
                   <Input
-                    id="amazon_refresh_token"
-                    type="password"
-                    value={amazonForm.refresh_token}
-                    onChange={(e) => setAmazonForm({ ...amazonForm, refresh_token: e.target.value })}
-                    placeholder="Atzr|XXXXX"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="amazon_marketplace_id">Marketplace ID</Label>
-                  <Input
-                    id="amazon_marketplace_id"
-                    value={amazonForm.marketplace_id}
-                    onChange={(e) => setAmazonForm({ ...amazonForm, marketplace_id: e.target.value })}
+                    id="marketplace-id"
+                    type="text"
+                    value={marketplaceId}
+                    onChange={(e) => setMarketplaceId(e.target.value)}
                     placeholder="A13V1IB3VIYZZH"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    France: A13V1IB3VIYZZH | Allemagne: A1PA6795UKMFR9 | UK: A1F83G8C2ARO7P
+                  <p className="text-xs text-muted-foreground mt-1">
+                    France: A13V1IB3VIYZZH | US: ATVPDKIKX0DER
                   </p>
                 </div>
-              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={handleSaveAmazon} disabled={amazonLoading}>
-                  {amazonLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                  💾 Sauvegarder
-                </Button>
-                <Button onClick={handleTestAmazon} disabled={amazonTesting || !credentialsId} variant="outline">
-                  {amazonTesting ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
-                  🧪 Tester la connexion
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveAmazon}
+                    disabled={amazonLoading}
+                    className="flex-1"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {amazonLoading ? "Sauvegarde..." : "💾 Sauvegarder"}
+                  </Button>
+                  <Button
+                    onClick={handleTestAmazon}
+                    disabled={amazonTesting || !clientId}
+                    variant="outline"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${amazonTesting ? 'animate-spin' : ''}`} />
+                    🧪 Tester
+                  </Button>
+                </div>
               </div>
-
-              {lastToken && (
-                <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      {new Date(lastToken.expires_at) < new Date() ? (
-                        <AlertCircle className="h-4 w-4 text-orange-500" />
-                      ) : (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      )}
-                      Dernier Token Généré
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="h-4 w-4" />
-                      <span>
-                        Généré le : {new Date(lastToken.generated_at).toLocaleString('fr-FR')}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="h-4 w-4" />
-                      <span className={new Date(lastToken.expires_at) < new Date() ? "text-orange-500 font-medium" : ""}>
-                        Expire le : {new Date(lastToken.expires_at).toLocaleString('fr-FR')}
-                        {new Date(lastToken.expires_at) < new Date() && " (Expiré - sera régénéré à la prochaine utilisation)"}
-                      </span>
-                    </div>
-                    <code className="block text-xs bg-muted p-2 rounded truncate">
-                      {lastToken.access_token.substring(0, 50)}...
-                    </code>
-                  </CardContent>
-                </Card>
-              )}
             </CardContent>
           </Card>
 
+          {/* AWS Configuration Card */}
           <Card>
             <CardHeader>
-              <CardTitle>Informations importantes</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Cloud className="h-5 w-5" />
+                Configuration AWS pour Amazon SP-API
+              </CardTitle>
+              <CardDescription>
+                Credentials IAM AWS pour signer les requêtes Signature V4
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                <p>Toutes les clés API sont stockées de manière sécurisée dans Lovable Cloud</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                <p>Les clés ne sont jamais exposées côté client</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                <p>Les tests de validation sont effectués directement auprès des services</p>
-              </div>
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5" />
-                <p>Pour modifier les secrets, utilisez le backend Lovable Cloud</p>
+            <CardContent className="space-y-4">
+              {awsConfigured && clientId ? (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    AWS configuré et actif. Les requêtes Amazon SP-API utilisent SigV4.
+                  </AlertDescription>
+                </Alert>
+              ) : !clientId ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Configurez d'abord Amazon Seller API ci-dessus
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    AWS non configuré. Sans SigV4, les appels Amazon SP-API peuvent échouer.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="aws-access-key">AWS Access Key ID *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="aws-access-key"
+                      type={showAwsKeys ? "text" : "password"}
+                      value={awsAccessKeyId}
+                      onChange={(e) => setAwsAccessKeyId(e.target.value)}
+                      placeholder="AKIAIOSFODNN7EXAMPLE"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowAwsKeys(!showAwsKeys)}
+                    >
+                      {showAwsKeys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="aws-secret-key">AWS Secret Access Key *</Label>
+                  <Input
+                    id="aws-secret-key"
+                    type={showAwsKeys ? "text" : "password"}
+                    value={awsSecretAccessKey}
+                    onChange={(e) => setAwsSecretAccessKey(e.target.value)}
+                    placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="aws-role-arn">AWS Role ARN *</Label>
+                  <Input
+                    id="aws-role-arn"
+                    type="text"
+                    value={awsRoleArn}
+                    onChange={(e) => setAwsRoleArn(e.target.value)}
+                    placeholder="arn:aws:iam::123456789012:role/AmazonSPAPIRole"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Format: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="aws-region">Région AWS</Label>
+                  <select
+                    id="aws-region"
+                    value={awsRegion}
+                    onChange={(e) => setAwsRegion(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="eu-west-1">EU West 1 (Irlande)</option>
+                    <option value="us-east-1">US East 1 (Virginie)</option>
+                    <option value="us-west-2">US West 2 (Oregon)</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleSaveAws}
+                    disabled={amazonLoading}
+                    className="flex-1"
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    {amazonLoading ? "Sauvegarde..." : "💾 Sauvegarder dans Cloud"}
+                  </Button>
+                  <Button
+                    onClick={handleTestAws}
+                    disabled={testingAws || !awsConfigured}
+                    variant="outline"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${testingAws ? 'animate-spin' : ''}`} />
+                    🧪 Tester SigV4
+                  </Button>
+                </div>
+
+                {awsLastTest && (
+                  <Alert variant={awsLastTest.success ? "default" : "destructive"}>
+                    {awsLastTest.success ? (
+                      <CheckCircle className="h-4 w-4" />
+                    ) : (
+                      <XCircle className="h-4 w-4" />
+                    )}
+                    <AlertDescription>
+                      Dernier test: {awsLastTest.success ? "✅ Succès" : "❌ Échec"} - {new Date(awsLastTest.timestamp).toLocaleString()}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Documentation:</strong> Créez un utilisateur IAM avec permissions <code>sts:AssumeRole</code> et attachez la politique Amazon SP-API au rôle cible.
+                  </AlertDescription>
+                </Alert>
               </div>
             </CardContent>
           </Card>

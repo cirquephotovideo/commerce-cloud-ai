@@ -174,6 +174,42 @@ export type Database = {
           },
         ]
       }
+      aws_credentials: {
+        Row: {
+          access_key_id_encrypted: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          region: string
+          role_arn: string
+          secret_access_key_encrypted: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_key_id_encrypted: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          region?: string
+          role_arn: string
+          secret_access_key_encrypted: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_key_id_encrypted?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          region?: string
+          role_arn?: string
+          secret_access_key_encrypted?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       billing_history: {
         Row: {
           amount: number

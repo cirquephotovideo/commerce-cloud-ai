@@ -61,8 +61,16 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
 
       await loadAmazonData();
     } catch (error: any) {
+      // Si 403, demander de vérifier la configuration AWS
+      if (error?.status === 403) {
+        toast({
+          title: "⚠️ Erreur de configuration AWS",
+          description: "Vérifiez vos credentials AWS dans Admin → API Keys",
+          variant: "destructive",
+        });
+      }
       // Si 404, afficher un message neutre (produit introuvable)
-      if (error?.status === 404) {
+      else if (error?.status === 404) {
         toast({
           title: "ℹ️ Produit introuvable",
           description: "Ce produit n'a pas été trouvé sur Amazon.",
