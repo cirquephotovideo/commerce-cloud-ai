@@ -13,7 +13,8 @@ import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
 import { RoleDebugger } from "@/components/admin/RoleDebugger";
 import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
 import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info } from "lucide-react";
+import { AmazonLogs } from "@/components/admin/AmazonLogs";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -36,7 +37,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-11 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-12 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -56,6 +57,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="logs" className="gap-2">
               <FileText className="h-4 w-4" />
               Logs
+            </TabsTrigger>
+            <TabsTrigger value="amazon-logs" className="gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              Amazon
             </TabsTrigger>
             <TabsTrigger value="email" className="gap-2">
               <Mail className="h-4 w-4" />
@@ -101,6 +106,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="logs" className="space-y-6">
             <SystemLogs />
+          </TabsContent>
+
+          <TabsContent value="amazon-logs" className="space-y-6">
+            <AmazonLogs />
           </TabsContent>
 
           <TabsContent value="email" className="space-y-6">
