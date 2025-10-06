@@ -44,9 +44,8 @@ serve(async (req) => {
     }
 
     // Search for product images using Google Custom Search
-    // Prioritize official sources: Amazon, manufacturer sites, official retailers
-    const searchQuery = encodeURIComponent(`${productName} official product image`);
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${searchQuery}&searchType=image&num=${Math.min(maxResults * 2, 10)}&imgSize=large&imgType=photo&safe=active`;
+    const searchQuery = encodeURIComponent(`${productName} product high quality`);
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${searchQuery}&searchType=image&num=${maxResults}&imgSize=large&imgType=photo`;
 
     const response = await fetch(searchUrl);
     
@@ -60,68 +59,16 @@ serve(async (req) => {
 
     const data = await response.json();
     
-    // Liste des domaines officiels fiables
-    const trustedDomains = [
-      'amazon.com', 'amazon.fr', 'amazon.co.uk', 'amazon.de', 'amazon.es', 'amazon.it',
-      'apple.com', 'samsung.com', 'sony.com', 'lg.com', 'dell.com', 'hp.com',
-      'nike.com', 'adidas.com', 'microsoft.com', 'lenovo.com', 'asus.com',
-      'cdiscount.com', 'fnac.com', 'darty.com', 'boulanger.com',
-      'decathlon.com', 'leroy-merlin.fr', 'castorama.fr',
-      'carrefour.fr', 'auchan.fr', 'leclerc.fr'
-    ];
-    
-    // Filtrer et scorer les images selon leur source
-    const scoredImages = (data.items || []).map((item: any) => {
-      const source = item.displayLink?.toLowerCase() || '';
-      let score = 0;
-      
-      // Priorité maximale pour les domaines de confiance
-      const isTrusted = trustedDomains.some(domain => source.includes(domain));
-      if (isTrusted) {
-        score += 100;
-        
-        // Bonus pour Amazon (source très fiable pour images produits)
-        if (source.includes('amazon')) {
-          score += 50;
-        }
-      }
-      
-      // Bonus pour les URLs contenant "product", "official", ou le nom de la marque
-      if (item.link?.toLowerCase().includes('product')) score += 20;
-      if (item.link?.toLowerCase().includes('official')) score += 20;
-      if (item.title?.toLowerCase().includes('official')) score += 15;
-      
-      // Malus pour les sites suspects
-      const suspiciousDomains = ['pinterest', 'ebay', 'aliexpress', 'wish', 'temu'];
-      if (suspiciousDomains.some(domain => source.includes(domain))) {
-        score -= 100;
-      }
-      
-      return {
-        url: item.link,
-        thumbnail: item.image?.thumbnailLink || item.link,
-        title: item.title || '',
-        source: item.displayLink || '',
-        width: item.image?.width,
-        height: item.image?.height,
-        score,
-        isTrusted
-      };
-    })
-    .filter((img: any) => img.score > 0) // Exclure les images avec score négatif
-    .sort((a: any, b: any) => b.score - a.score) // Trier par score
-    .slice(0, maxResults); // Limiter au nombre demandé
-    
-    const images: ImageResult[] = scoredImages.map(({ url, thumbnail, title, source, width, height }: any) => ({
-      url,
-      thumbnail,
-      title,
-      source,
-      width,
-      height
+    const images: ImageResult[] = (data.items || []).map((item: any) => ({
+      url: item.link,
+      thumbnail: item.image?.thumbnailLink || item.link,
+      title: item.title || '',
+      source: item.displayLink || '',
+      width: item.image?.width,
+      height: item.image?.height,
     }));
 
-    console.log(`Found ${images.length} official images for ${productName} (${scoredImages.filter((img: any) => img.isTrusted).length} from trusted sources)`);
+    console.log(`Found ${images.length} images for ${productName}`);
 
     return new Response(
       JSON.stringify({ images, source: 'google', count: images.length }),

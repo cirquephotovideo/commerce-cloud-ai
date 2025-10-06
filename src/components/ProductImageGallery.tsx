@@ -44,7 +44,7 @@ export const ProductImageGallery = ({ images, productName }: ProductImageGallery
     }
   };
 
-  const validImages = allImages.filter(img => typeof img === 'string' && img.trim() !== '');
+  const validImages = allImages.filter(img => img && img.trim() !== '');
 
   const handleImageGenerated = (newImageUrl: string) => {
     setAllImages(prev => [newImageUrl, ...prev]);
