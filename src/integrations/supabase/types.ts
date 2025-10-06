@@ -114,88 +114,172 @@ export type Database = {
       }
       amazon_product_data: {
         Row: {
+          amazon_price: number | null
           analysis_id: string | null
           asin: string
           brand: string | null
+          browse_nodes: Json | null
           buy_box_price: number | null
+          buy_box_seller_id: string | null
+          buy_box_seller_name: string | null
+          buy_box_ship_country: string | null
           color: string | null
+          contributors: Json | null
           created_at: string | null
           ean: string | null
+          fba_new_price: number | null
           features: string[] | null
           id: string
           images: Json | null
+          import_code: string | null
+          is_buy_box_amazon_fulfilled: boolean | null
+          is_buy_box_amazon_seller: boolean | null
+          is_buy_box_out_of_stock: boolean | null
+          is_buy_box_preorder: boolean | null
+          is_trade_in_eligible: boolean | null
+          item_count: number | null
           item_dimensions: Json | null
           item_weight: number | null
           last_synced_at: string | null
           list_price: number | null
+          lowest_collectible_price: number | null
           lowest_new_price: number | null
+          lowest_refurbished_price: number | null
           manufacturer: string | null
+          marketplace: string | null
+          offer_count_collectible: number | null
           offer_count_new: number | null
+          offer_count_refurbished: number | null
           package_dimensions: Json | null
+          package_quantity: number | null
           package_weight: number | null
+          page_count: number | null
+          part_number: string | null
+          prep_pack_fees: number | null
           product_type: string | null
+          publication_date: string | null
           raw_data: Json | null
+          referral_fee_percentage: number | null
+          release_date: string | null
           sales_rank: Json | null
           size: string | null
           title: string | null
+          upc: string | null
           updated_at: string | null
           user_id: string
+          variation_count: number | null
         }
         Insert: {
+          amazon_price?: number | null
           analysis_id?: string | null
           asin: string
           brand?: string | null
+          browse_nodes?: Json | null
           buy_box_price?: number | null
+          buy_box_seller_id?: string | null
+          buy_box_seller_name?: string | null
+          buy_box_ship_country?: string | null
           color?: string | null
+          contributors?: Json | null
           created_at?: string | null
           ean?: string | null
+          fba_new_price?: number | null
           features?: string[] | null
           id?: string
           images?: Json | null
+          import_code?: string | null
+          is_buy_box_amazon_fulfilled?: boolean | null
+          is_buy_box_amazon_seller?: boolean | null
+          is_buy_box_out_of_stock?: boolean | null
+          is_buy_box_preorder?: boolean | null
+          is_trade_in_eligible?: boolean | null
+          item_count?: number | null
           item_dimensions?: Json | null
           item_weight?: number | null
           last_synced_at?: string | null
           list_price?: number | null
+          lowest_collectible_price?: number | null
           lowest_new_price?: number | null
+          lowest_refurbished_price?: number | null
           manufacturer?: string | null
+          marketplace?: string | null
+          offer_count_collectible?: number | null
           offer_count_new?: number | null
+          offer_count_refurbished?: number | null
           package_dimensions?: Json | null
+          package_quantity?: number | null
           package_weight?: number | null
+          page_count?: number | null
+          part_number?: string | null
+          prep_pack_fees?: number | null
           product_type?: string | null
+          publication_date?: string | null
           raw_data?: Json | null
+          referral_fee_percentage?: number | null
+          release_date?: string | null
           sales_rank?: Json | null
           size?: string | null
           title?: string | null
+          upc?: string | null
           updated_at?: string | null
           user_id: string
+          variation_count?: number | null
         }
         Update: {
+          amazon_price?: number | null
           analysis_id?: string | null
           asin?: string
           brand?: string | null
+          browse_nodes?: Json | null
           buy_box_price?: number | null
+          buy_box_seller_id?: string | null
+          buy_box_seller_name?: string | null
+          buy_box_ship_country?: string | null
           color?: string | null
+          contributors?: Json | null
           created_at?: string | null
           ean?: string | null
+          fba_new_price?: number | null
           features?: string[] | null
           id?: string
           images?: Json | null
+          import_code?: string | null
+          is_buy_box_amazon_fulfilled?: boolean | null
+          is_buy_box_amazon_seller?: boolean | null
+          is_buy_box_out_of_stock?: boolean | null
+          is_buy_box_preorder?: boolean | null
+          is_trade_in_eligible?: boolean | null
+          item_count?: number | null
           item_dimensions?: Json | null
           item_weight?: number | null
           last_synced_at?: string | null
           list_price?: number | null
+          lowest_collectible_price?: number | null
           lowest_new_price?: number | null
+          lowest_refurbished_price?: number | null
           manufacturer?: string | null
+          marketplace?: string | null
+          offer_count_collectible?: number | null
           offer_count_new?: number | null
+          offer_count_refurbished?: number | null
           package_dimensions?: Json | null
+          package_quantity?: number | null
           package_weight?: number | null
+          page_count?: number | null
+          part_number?: string | null
+          prep_pack_fees?: number | null
           product_type?: string | null
+          publication_date?: string | null
           raw_data?: Json | null
+          referral_fee_percentage?: number | null
+          release_date?: string | null
           sales_rank?: Json | null
           size?: string | null
           title?: string | null
+          upc?: string | null
           updated_at?: string | null
           user_id?: string
+          variation_count?: number | null
         }
         Relationships: [
           {

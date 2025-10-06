@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, RefreshCw, ExternalLink, TrendingUp, Ruler, Image as ImageIcon } from "lucide-react";
+import { Package, RefreshCw, ExternalLink, TrendingUp, Ruler, Image as ImageIcon, DollarSign, Users } from "lucide-react";
 import {
   Carousel,
   CarouselContent,
@@ -164,6 +164,18 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
               <span className="text-sm font-medium text-muted-foreground">EAN</span>
               <p className="text-sm mt-1">{amazonData.ean || 'N/A'}</p>
             </div>
+            {amazonData.upc && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">UPC</span>
+                <p className="text-sm mt-1">{amazonData.upc}</p>
+              </div>
+            )}
+            {amazonData.part_number && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Numéro de pièce</span>
+                <p className="text-sm mt-1">{amazonData.part_number}</p>
+              </div>
+            )}
           </div>
 
           {amazonData.title && (
@@ -192,6 +204,18 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
                 <p className="text-sm mt-1">{amazonData.product_type}</p>
               </div>
             )}
+            {amazonData.marketplace && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Marketplace</span>
+                <p className="text-sm mt-1">{amazonData.marketplace}</p>
+              </div>
+            )}
+            {amazonData.variation_count > 0 && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Nombre de variations</span>
+                <p className="text-sm mt-1">{amazonData.variation_count}</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -201,12 +225,12 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
+              <DollarSign className="h-5 w-5" />
               Prix et Offres
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4 mb-4">
               {amazonData.list_price && (
                 <div>
                   <span className="text-sm font-medium text-muted-foreground">Prix de liste</span>
@@ -215,22 +239,56 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
               )}
               {amazonData.buy_box_price && (
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Buy Box</span>
-                  <p className="text-lg font-semibold mt-1">{amazonData.buy_box_price} €</p>
+                  <span className="text-sm font-medium text-muted-foreground">Buy Box Neuf</span>
+                  <p className="text-lg font-semibold mt-1 text-primary">{amazonData.buy_box_price} €</p>
                 </div>
               )}
-              {amazonData.lowest_new_price && (
+              {amazonData.amazon_price && (
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Prix le plus bas (neuf)</span>
-                  <p className="text-lg font-semibold mt-1">{amazonData.lowest_new_price} €</p>
+                  <span className="text-sm font-medium text-muted-foreground">Prix Amazon</span>
+                  <p className="text-lg font-semibold mt-1">{amazonData.amazon_price} €</p>
                 </div>
               )}
             </div>
-            {amazonData.offer_count_new && (
-              <p className="text-sm text-muted-foreground mt-3">
-                {amazonData.offer_count_new} offre(s) disponible(s)
-              </p>
-            )}
+            
+            <div className="grid grid-cols-4 gap-4 mb-4">
+              {amazonData.lowest_new_price && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Plus bas Neuf</span>
+                  <p className="text-lg font-semibold mt-1">{amazonData.lowest_new_price} €</p>
+                </div>
+              )}
+              {amazonData.fba_new_price && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">FBA Neuf</span>
+                  <p className="text-lg font-semibold mt-1">{amazonData.fba_new_price} €</p>
+                </div>
+              )}
+              {amazonData.lowest_collectible_price && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Plus bas Collection</span>
+                  <p className="text-lg font-semibold mt-1">{amazonData.lowest_collectible_price} €</p>
+                </div>
+              )}
+              {amazonData.lowest_refurbished_price && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Plus bas Remis à neuf</span>
+                  <p className="text-lg font-semibold mt-1">{amazonData.lowest_refurbished_price} €</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-4 text-sm text-muted-foreground">
+              {amazonData.offer_count_new > 0 && (
+                <span>• {amazonData.offer_count_new} offre(s) neuf</span>
+              )}
+              {amazonData.offer_count_collectible > 0 && (
+                <span>• {amazonData.offer_count_collectible} offre(s) collection</span>
+              )}
+              {amazonData.offer_count_refurbished > 0 && (
+                <span>• {amazonData.offer_count_refurbished} offre(s) remis à neuf</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -389,26 +447,190 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
         </Card>
       )}
 
-      {/* Détails supplémentaires */}
-      {(amazonData.color || amazonData.size) && (
+      {/* Buy Box Information */}
+      {(amazonData.buy_box_seller_id || amazonData.buy_box_seller_name) && (
         <Card>
           <CardHeader>
-            <CardTitle>Détails Supplémentaires</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Informations Buy Box
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              {amazonData.color && (
+            <div className="grid grid-cols-3 gap-4">
+              {amazonData.buy_box_seller_id && (
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Couleur</span>
-                  <p className="text-sm mt-1">{amazonData.color}</p>
+                  <span className="text-sm font-medium text-muted-foreground">ID du vendeur</span>
+                  <p className="text-sm mt-1 font-mono">{amazonData.buy_box_seller_id}</p>
                 </div>
               )}
-              {amazonData.size && (
+              {amazonData.buy_box_seller_name && (
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Taille</span>
-                  <p className="text-sm mt-1">{amazonData.size}</p>
+                  <span className="text-sm font-medium text-muted-foreground">Nom du vendeur</span>
+                  <p className="text-sm mt-1">{amazonData.buy_box_seller_name}</p>
                 </div>
               )}
+              {amazonData.buy_box_ship_country && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Pays d'expédition</span>
+                  <p className="text-sm mt-1">{amazonData.buy_box_ship_country}</p>
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-4 gap-4 mt-4">
+              {amazonData.is_buy_box_amazon_fulfilled !== null && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">FBA</span>
+                  <Badge variant={amazonData.is_buy_box_amazon_fulfilled ? "default" : "secondary"} className="mt-1">
+                    {amazonData.is_buy_box_amazon_fulfilled ? 'Oui' : 'Non'}
+                  </Badge>
+                </div>
+              )}
+              {amazonData.is_buy_box_amazon_seller !== null && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Vendu par Amazon</span>
+                  <Badge variant={amazonData.is_buy_box_amazon_seller ? "default" : "secondary"} className="mt-1">
+                    {amazonData.is_buy_box_amazon_seller ? 'Oui' : 'Non'}
+                  </Badge>
+                </div>
+              )}
+              {amazonData.is_buy_box_preorder !== null && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Précommande</span>
+                  <Badge variant={amazonData.is_buy_box_preorder ? "default" : "secondary"} className="mt-1">
+                    {amazonData.is_buy_box_preorder ? 'Oui' : 'Non'}
+                  </Badge>
+                </div>
+              )}
+              {amazonData.is_buy_box_out_of_stock !== null && (
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Rupture de stock</span>
+                  <Badge variant={amazonData.is_buy_box_out_of_stock ? "destructive" : "default"} className="mt-1">
+                    {amazonData.is_buy_box_out_of_stock ? 'Oui' : 'Non'}
+                  </Badge>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Browse Nodes (Catégories) */}
+      {amazonData.browse_nodes && Array.isArray(amazonData.browse_nodes) && amazonData.browse_nodes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Catégories Amazon
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {amazonData.browse_nodes.map((node: any, idx: number) => (
+                <div key={idx} className="p-3 bg-muted rounded-lg">
+                  <p className="font-medium text-sm">{node.contextFreeName || node.displayName}</p>
+                  {node.id && (
+                    <p className="text-xs text-muted-foreground mt-1">ID: {node.id}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Détails supplémentaires */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Détails Supplémentaires</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            {amazonData.color && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Couleur</span>
+                <p className="text-sm mt-1">{amazonData.color}</p>
+              </div>
+            )}
+            {amazonData.size && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Taille</span>
+                <p className="text-sm mt-1">{amazonData.size}</p>
+              </div>
+            )}
+            {amazonData.package_quantity && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Quantité/paquet</span>
+                <p className="text-sm mt-1">{amazonData.package_quantity}</p>
+              </div>
+            )}
+            {amazonData.item_count && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Nombre d'articles</span>
+                <p className="text-sm mt-1">{amazonData.item_count}</p>
+              </div>
+            )}
+            {amazonData.page_count && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Nombre de pages</span>
+                <p className="text-sm mt-1">{amazonData.page_count}</p>
+              </div>
+            )}
+            {amazonData.publication_date && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Date de publication</span>
+                <p className="text-sm mt-1">{amazonData.publication_date}</p>
+              </div>
+            )}
+            {amazonData.release_date && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Date de sortie</span>
+                <p className="text-sm mt-1">{amazonData.release_date}</p>
+              </div>
+            )}
+            {amazonData.is_trade_in_eligible !== null && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Éligible à l'échange</span>
+                <Badge variant={amazonData.is_trade_in_eligible ? "default" : "secondary"} className="mt-1">
+                  {amazonData.is_trade_in_eligible ? 'Oui' : 'Non'}
+                </Badge>
+              </div>
+            )}
+            {amazonData.referral_fee_percentage && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Commission de référence</span>
+                <p className="text-sm mt-1">{amazonData.referral_fee_percentage}%</p>
+              </div>
+            )}
+            {amazonData.prep_pack_fees && (
+              <div>
+                <span className="text-sm font-medium text-muted-foreground">Frais de préparation</span>
+                <p className="text-sm mt-1">{amazonData.prep_pack_fees} €</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contributors */}
+      {amazonData.contributors && Array.isArray(amazonData.contributors) && amazonData.contributors.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Contributeurs
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {amazonData.contributors.map((contributor: any, idx: number) => (
+                <div key={idx} className="p-3 bg-muted rounded-lg">
+                  <p className="font-medium text-sm">{contributor.value}</p>
+                  {contributor.type && contributor.type !== 'unknown' && (
+                    <p className="text-xs text-muted-foreground mt-1 capitalize">{contributor.type}</p>
+                  )}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

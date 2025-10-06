@@ -504,19 +504,25 @@ serve(async (req) => {
     const attributes = item.attributes || {};
     const images = item.images || [];
     const salesRanks = item.salesRanks || [];
+    const relationships = item.relationships || [];
+    const identifiers = item.identifiers || {};
 
     const formattedData = {
       analysis_id: analysisId,
       user_id: userId,
       asin: item.asin,
-      ean: productEan || item.identifiers?.ean?.[0],
+      ean: productEan || identifiers.ean?.[0],
+      upc: identifiers.upc?.[0],
       title: summaries.itemName,
       brand: summaries.brand,
       manufacturer: summaries.manufacturer,
       product_type: summaries.productType,
+      marketplace: marketplaceId,
       
-      // Prix
+      // Prix - base
       list_price: summaries.msrp?.amount,
+      buy_box_price: summaries.lowestPrice?.amount,
+      lowest_new_price: summaries.lowestPrice?.amount,
       
       // Images
       images: images.map((img: any) => ({
@@ -532,16 +538,42 @@ serve(async (req) => {
       item_weight: attributes.item_weight?.[0]?.value,
       package_weight: attributes.package_weight?.[0]?.value,
       
-      // Ventes
+      // Browse nodes (catégories Amazon)
+      browse_nodes: item.browseClassification?.browseNodes || [],
+      
+      // Rangs de vente
       sales_rank: salesRanks.map((rank: any) => ({
         category: rank.displayGroupTitle,
         rank: rank.rank,
       })),
       
+      // Offres
+      offer_count_new: summaries.offerCount?.offerCount,
+      
       // Features
       features: attributes.bullet_point || [],
       color: attributes.color?.[0]?.value,
       size: attributes.size?.[0]?.value,
+      
+      // Détails produit
+      part_number: attributes.part_number?.[0]?.value || attributes.model_number?.[0]?.value,
+      package_quantity: attributes.package_quantity?.[0]?.value,
+      item_count: attributes.number_of_items?.[0]?.value,
+      page_count: attributes.number_of_pages?.[0]?.value,
+      
+      // Variations
+      variation_count: relationships.filter((r: any) => r.type === 'VARIATION').length,
+      
+      // Dates
+      publication_date: attributes.publication_date?.[0]?.value,
+      release_date: attributes.release_date?.[0]?.value,
+      
+      // Contributors (auteurs, éditeurs, etc.)
+      contributors: (attributes.author || []).concat(attributes.publisher || []).map((c: any) => ({
+        value: c.value,
+        language: c.language,
+        type: c.type || 'unknown'
+      })),
       
       // Données brutes
       raw_data: amazonData,
