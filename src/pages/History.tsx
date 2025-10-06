@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, ExternalLink, Star } from "lucide-react";
+import { Loader2, Trash2, ExternalLink, Star, RefreshCw, Image, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
@@ -28,6 +28,8 @@ export default function History() {
   const [selectedAnalysis, setSelectedAnalysis] = useState<ProductAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -160,6 +162,128 @@ export default function History() {
     return [];
   };
 
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(analyses.map(a => a.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds(new Set());
+  };
+
+  const regenerateAmazonData = async () => {
+    if (selectedIds.size === 0) {
+      toast({
+        title: "Aucune sélection",
+        description: "Veuillez sélectionner au moins un produit",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRegenerating(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const { data, error } = await supabase.functions.invoke('amazon-product-enrichment', {
+          body: { analysis_id: id }
+        });
+
+        if (error) throw error;
+        successCount++;
+      } catch (error: any) {
+        console.error(`Erreur pour le produit ${id}:`, error);
+        errorCount++;
+      }
+    }
+
+    setIsRegenerating(false);
+    loadAnalyses();
+    
+    toast({
+      title: "Régénération terminée",
+      description: `${successCount} succès, ${errorCount} erreurs`,
+    });
+  };
+
+  const regenerateImages = async () => {
+    if (selectedIds.size === 0) {
+      toast({
+        title: "Aucune sélection",
+        description: "Veuillez sélectionner au moins un produit",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRegenerating(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const analysis = analyses.find(a => a.id === id);
+        if (!analysis) continue;
+
+        const productName = getProductName(analysis.analysis_result);
+        
+        const { data, error } = await supabase.functions.invoke('search-product-images', {
+          body: { 
+            productName,
+            maxResults: 10
+          }
+        });
+
+        if (error) throw error;
+
+        if (data?.images && data.images.length > 0) {
+          await supabase
+            .from('product_analyses')
+            .update({ image_urls: data.images })
+            .eq('id', id);
+          successCount++;
+        }
+      } catch (error: any) {
+        console.error(`Erreur pour le produit ${id}:`, error);
+        errorCount++;
+      }
+    }
+
+    setIsRegenerating(false);
+    loadAnalyses();
+    
+    toast({
+      title: "Régénération des images terminée",
+      description: `${successCount} succès, ${errorCount} erreurs`,
+    });
+  };
+
+  const regenerateAllData = async () => {
+    if (selectedIds.size === 0) {
+      toast({
+        title: "Aucune sélection",
+        description: "Veuillez sélectionner au moins un produit",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRegenerating(true);
+    await Promise.all([regenerateAmazonData(), regenerateImages()]);
+    setIsRegenerating(false);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -179,10 +303,73 @@ export default function History() {
         
         <Card className="glass-card">
           <CardHeader>
-            <CardTitle>Tableau Concurrentiel</CardTitle>
-            <CardDescription>
-              {analyses.length} produit(s) analysé(s) avec surveillance marché
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Tableau Concurrentiel</CardTitle>
+                <CardDescription>
+                  {analyses.length} produit(s) analysé(s) - {selectedIds.size} sélectionné(s)
+                </CardDescription>
+              </div>
+              {selectedIds.size > 0 && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={regenerateAmazonData}
+                    disabled={isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Package className="h-4 w-4 mr-2" />
+                    )}
+                    Amazon
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={regenerateImages}
+                    disabled={isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Image className="h-4 w-4 mr-2" />
+                    )}
+                    Images
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={regenerateAllData}
+                    disabled={isRegenerating}
+                  >
+                    {isRegenerating ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Tout régénérer
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={deselectAll}
+                  >
+                    Désélectionner
+                  </Button>
+                </div>
+              )}
+              {selectedIds.size === 0 && analyses.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={selectAll}
+                >
+                  Tout sélectionner
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {analyses.length > 0 ? (
@@ -191,6 +378,8 @@ export default function History() {
                 onDelete={deleteAnalysis}
                 onViewDetail={setSelectedAnalysis}
                 onOpenDetail={handleOpenDetail}
+                selectedIds={selectedIds}
+                onToggleSelection={toggleSelection}
               />
             ) : (
               <p className="text-center text-muted-foreground py-8">Aucune analyse trouvée</p>
