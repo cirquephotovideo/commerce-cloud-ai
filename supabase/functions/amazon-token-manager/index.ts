@@ -100,27 +100,65 @@ serve(async (req) => {
     }
 
     // 5. Générer un nouveau token
+    const requestBody = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+
+    await logToDatabase('info', 'TokenRequest', 'Envoi de la requête OAuth à Amazon', {
+      url: 'https://api.amazon.com/auth/o2/token',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: {
+        grant_type: 'refresh_token',
+        client_id: clientId,
+        // Ne pas logger les secrets complets
+        refresh_token: refreshToken ? `${refreshToken.substring(0, 10)}...` : undefined,
+        client_secret: clientSecret ? '***MASKED***' : undefined
+      }
+    });
+
     const tokenResponse = await fetch('https://api.amazon.com/auth/o2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
+      body: requestBody,
+    });
+
+    const responseHeaders: Record<string, string> = {};
+    tokenResponse.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
     });
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error('[AMAZON-TOKEN] OAuth error:', errorText);
-      await logToDatabase('error', 'OAuthError', `Erreur OAuth Amazon: ${errorText}`);
+      await logToDatabase('error', 'OAuthError', `Erreur OAuth Amazon: ${errorText}`, {
+        response: {
+          status: tokenResponse.status,
+          statusText: tokenResponse.statusText,
+          headers: responseHeaders,
+          body: errorText
+        }
+      });
       throw new Error(`Amazon OAuth failed: ${errorText}`);
     }
 
     const tokenData = await tokenResponse.json();
     console.log('[AMAZON-TOKEN] New token generated successfully');
-    await logToDatabase('info', 'Success', 'Nouveau token généré avec succès');
+    await logToDatabase('info', 'Success', 'Nouveau token généré avec succès', {
+      response: {
+        status: tokenResponse.status,
+        statusText: tokenResponse.statusText,
+        headers: responseHeaders,
+        body: {
+          access_token: tokenData.access_token ? `${tokenData.access_token.substring(0, 20)}...` : undefined,
+          token_type: tokenData.token_type,
+          expires_in: tokenData.expires_in
+        }
+      }
+    });
 
     // 6. Stocker le nouveau token (uniquement si on a un credentialsId de la DB)
     const expiresAt = new Date(Date.now() + 3600 * 1000); // +1 heure

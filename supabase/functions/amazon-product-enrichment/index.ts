@@ -162,15 +162,33 @@ serve(async (req) => {
     console.log('[AMAZON-ENRICH] Identifiers:', { productEan, productAsin, product_name: productName });
 
     // 2. Obtenir le token Amazon valide
+    await logToDatabase('info', 'TokenRequest', 'Demande de token Amazon', {
+      request: {
+        function: 'amazon-token-manager',
+        analysis_id: analysisId
+      }
+    });
+    
     const { data: tokenData, error: tokenError } = await supabase.functions.invoke('amazon-token-manager');
     
     if (tokenError) {
       console.error('[AMAZON-ENRICH] Token error:', tokenError);
+      await logToDatabase('error', 'TokenError', `Erreur lors de l'obtention du token`, {
+        error: tokenError,
+        analysis_id: analysisId
+      });
       throw new Error(`Token error: ${tokenError.message}`);
     }
 
     const { access_token } = tokenData;
     console.log('[AMAZON-ENRICH] Token obtained');
+    await logToDatabase('info', 'TokenReceived', 'Token Amazon reçu avec succès', {
+      response: {
+        expires_at: tokenData.expires_at,
+        generated: tokenData.generated
+      },
+      analysis_id: analysisId
+    });
 
     // 3. Récupérer les credentials AWS et marketplace ID
     const { data: credentials, error: credError } = await supabase
@@ -275,17 +293,51 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
+      const requestUrl = `https://sellingpartnerapi-eu.amazon.com${catalogPath}?${params}`;
+      await logToDatabase('info', 'SPAPIRequest', 'Appel à Amazon SP-API avec ASIN', {
+        request: {
+          url: requestUrl,
+          method: 'GET',
+          identifierType: 'ASIN',
+          identifier: productAsin,
+          marketplaceId,
+          region
+        }
+      });
+
       console.log('[AMAZON-ENRICH] Calling Amazon API with ASIN (SigV4)...', { region, marketplaceId });
       const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
+      const responseHeaders: Record<string, string> = {};
+      amazonResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+        await logToDatabase('info', 'SPAPISuccess', 'Réponse SP-API reçue avec ASIN', {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            itemsCount: amazonData?.items?.length || 0
+          }
+        });
       } else {
         const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (ASIN):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
           body: errorText
+        });
+        
+        await logToDatabase('error', 'SPAPIError', `Erreur Amazon SP-API avec ASIN`, {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            body: errorText
+          }
         });
         
         if (amazonResponse.status === 403) {
@@ -304,17 +356,51 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
+      const requestUrl = `https://sellingpartnerapi-eu.amazon.com${catalogPath}?${params}`;
+      await logToDatabase('info', 'SPAPIRequest', 'Appel à Amazon SP-API avec EAN', {
+        request: {
+          url: requestUrl,
+          method: 'GET',
+          identifierType: 'EAN',
+          identifier: productEan,
+          marketplaceId,
+          region
+        }
+      });
+
       console.log('[AMAZON-ENRICH] Calling Amazon API with EAN (SigV4)...', { region, marketplaceId });
       const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
+      const responseHeaders: Record<string, string> = {};
+      amazonResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+        await logToDatabase('info', 'SPAPISuccess', 'Réponse SP-API reçue avec EAN', {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            itemsCount: amazonData?.items?.length || 0
+          }
+        });
       } else {
         const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (EAN):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
           body: errorText
+        });
+        
+        await logToDatabase('error', 'SPAPIError', `Erreur Amazon SP-API avec EAN`, {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            body: errorText
+          }
         });
         
         if (amazonResponse.status === 403) {
@@ -332,17 +418,51 @@ serve(async (req) => {
         includedData: 'summaries,attributes,images,productTypes,salesRanks',
       });
 
+      const requestUrl = `https://sellingpartnerapi-eu.amazon.com${catalogPath}?${params}`;
+      await logToDatabase('info', 'SPAPIRequest', 'Appel à Amazon SP-API avec keywords', {
+        request: {
+          url: requestUrl,
+          method: 'GET',
+          identifierType: 'KEYWORDS',
+          identifier: productName,
+          marketplaceId,
+          region
+        }
+      });
+
       console.log('[AMAZON-ENRICH] Calling Amazon API with keywords (SigV4)...', { region, marketplaceId });
       const amazonResponse = await signedAmazonRequest(catalogPath, params);
 
+      const responseHeaders: Record<string, string> = {};
+      amazonResponse.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
       if (amazonResponse.ok) {
         amazonData = await amazonResponse.json();
+        await logToDatabase('info', 'SPAPISuccess', 'Réponse SP-API reçue avec keywords', {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            itemsCount: amazonData?.items?.length || 0
+          }
+        });
       } else {
         const errorText = await amazonResponse.text();
         console.error('[AMAZON-ENRICH] Amazon API error (KEYWORDS):', {
           status: amazonResponse.status,
           statusText: amazonResponse.statusText,
           body: errorText
+        });
+        
+        await logToDatabase('error', 'SPAPIError', `Erreur Amazon SP-API avec keywords`, {
+          response: {
+            status: amazonResponse.status,
+            statusText: amazonResponse.statusText,
+            headers: responseHeaders,
+            body: errorText
+          }
         });
         
         if (amazonResponse.status === 403) {

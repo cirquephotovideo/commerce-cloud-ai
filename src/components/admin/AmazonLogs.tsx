@@ -221,8 +221,8 @@ export function AmazonLogs() {
                     className="p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant={getLevelBadgeVariant(log.level)}>
                             {log.level}
                           </Badge>
@@ -232,9 +232,19 @@ export function AmazonLogs() {
                             {formatTimestamp(log.created_at)}
                           </span>
                         </div>
-                        <pre className="text-sm font-mono whitespace-pre-wrap break-all">
+                        <div className="text-sm font-medium">
                           {log.event_message}
-                        </pre>
+                        </div>
+                        {log.metadata && Object.keys(log.metadata).length > 0 && (
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                              Voir les détails de la requête/réponse
+                            </summary>
+                            <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
+                              {JSON.stringify(log.metadata, null, 2)}
+                            </pre>
+                          </details>
+                        )}
                       </div>
                     </div>
                   </div>
