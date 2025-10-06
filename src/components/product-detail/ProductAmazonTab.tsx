@@ -3,9 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, RefreshCw, ExternalLink, TrendingUp, Ruler, Image as ImageIcon, DollarSign, Users } from "lucide-react";
+import { Package, RefreshCw, ExternalLink, TrendingUp, Ruler, Image as ImageIcon, DollarSign, Users, Edit, Save, X } from "lucide-react";
 import {
   Carousel,
   CarouselContent,
@@ -23,6 +26,8 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
   const [amazonData, setAmazonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedData, setEditedData] = useState<any>({});
 
   const loadAmazonData = async () => {
     try {
@@ -34,6 +39,29 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
 
       if (error) throw error;
       setAmazonData(data);
+      if (data) {
+        const itemDims = data.item_dimensions as any;
+        const packageDims = data.package_dimensions as any;
+        setEditedData({
+          ean: data.ean || '',
+          asin: data.asin || '',
+          title: data.title || '',
+          brand: data.brand || '',
+          part_number: data.part_number || '',
+          manufacturer: data.manufacturer || '',
+          product_type: data.product_type || '',
+          features: Array.isArray(data.features) ? data.features.join('\n') : '',
+          item_weight: data.item_weight || '',
+          item_height: itemDims?.height?.value || '',
+          item_width: itemDims?.width?.value || '',
+          item_length: itemDims?.length?.value || '',
+          package_weight: data.package_weight || '',
+          package_height: packageDims?.height?.value || '',
+          package_width: packageDims?.width?.value || '',
+          package_length: packageDims?.length?.value || '',
+          images: Array.isArray(data.images) ? data.images.map((img: any) => img.url || img).join('\n') : '',
+        });
+      }
     } catch (error: any) {
       console.error('Error loading Amazon data:', error);
     } finally {
@@ -87,6 +115,74 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
     }
   };
 
+  const handleSaveEdits = async () => {
+    if (!amazonData?.id) return;
+
+    try {
+      const updateData: any = {
+        ean: editedData.ean,
+        asin: editedData.asin,
+        title: editedData.title,
+        brand: editedData.brand,
+        part_number: editedData.part_number,
+        manufacturer: editedData.manufacturer,
+        product_type: editedData.product_type,
+        features: editedData.features.split('\n').filter((f: string) => f.trim()),
+        item_weight: editedData.item_weight ? parseFloat(editedData.item_weight) : null,
+        package_weight: editedData.package_weight ? parseFloat(editedData.package_weight) : null,
+      };
+
+      // Update dimensions
+      if (editedData.item_height || editedData.item_width || editedData.item_length) {
+        updateData.item_dimensions = {
+          height: editedData.item_height ? { value: parseFloat(editedData.item_height), unit: 'cm' } : null,
+          width: editedData.item_width ? { value: parseFloat(editedData.item_width), unit: 'cm' } : null,
+          length: editedData.item_length ? { value: parseFloat(editedData.item_length), unit: 'cm' } : null,
+        };
+      }
+
+      if (editedData.package_height || editedData.package_width || editedData.package_length) {
+        updateData.package_dimensions = {
+          height: editedData.package_height ? { value: parseFloat(editedData.package_height), unit: 'cm' } : null,
+          width: editedData.package_width ? { value: parseFloat(editedData.package_width), unit: 'cm' } : null,
+          length: editedData.package_length ? { value: parseFloat(editedData.package_length), unit: 'cm' } : null,
+        };
+      }
+
+      // Update images
+      if (editedData.images) {
+        const imageUrls = editedData.images.split('\n').filter((url: string) => url.trim());
+        updateData.images = imageUrls.map((url: string) => ({ url: url.trim() }));
+      }
+
+      const { error } = await supabase
+        .from('amazon_product_data')
+        .update(updateData)
+        .eq('id', amazonData.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Sauvegardé",
+        description: "Les modifications ont été enregistrées",
+      });
+
+      setIsEditing(false);
+      await loadAmazonData();
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: error.message || "Impossible de sauvegarder les modifications",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    loadAmazonData();
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -121,7 +217,7 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Header avec bouton refresh */}
+      {/* Header avec boutons refresh et edit */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Données Amazon Seller</h3>
@@ -129,10 +225,31 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
             Dernière synchronisation : {new Date(amazonData.last_synced_at).toLocaleString('fr-FR')}
           </p>
         </div>
-        <Button onClick={handleRefresh} disabled={refreshing} variant="outline" size="sm">
-          <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          Actualiser
-        </Button>
+        <div className="flex gap-2">
+          {isEditing ? (
+            <>
+              <Button onClick={handleSaveEdits} size="sm" variant="default">
+                <Save className="h-4 w-4 mr-2" />
+                Sauvegarder
+              </Button>
+              <Button onClick={handleCancelEdit} size="sm" variant="outline">
+                <X className="h-4 w-4 mr-2" />
+                Annuler
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setIsEditing(true)} size="sm" variant="outline">
+                <Edit className="h-4 w-4 mr-2" />
+                Éditer
+              </Button>
+              <Button onClick={handleRefresh} disabled={refreshing} variant="outline" size="sm">
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                Actualiser
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Informations générales */}
@@ -146,23 +263,39 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <span className="text-sm font-medium text-muted-foreground">ASIN</span>
-              <div className="flex items-center gap-2 mt-1">
-                <code className="text-sm bg-muted px-2 py-1 rounded">{amazonData.asin}</code>
-                <a 
-                  href={`https://www.amazon.fr/dp/${amazonData.asin}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Voir sur Amazon
-                </a>
-              </div>
+              <Label className="text-sm font-medium text-muted-foreground">ASIN</Label>
+              {isEditing ? (
+                <Input
+                  value={editedData.asin}
+                  onChange={(e) => setEditedData({ ...editedData, asin: e.target.value })}
+                  className="mt-1"
+                />
+              ) : (
+                <div className="flex items-center gap-2 mt-1">
+                  <code className="text-sm bg-muted px-2 py-1 rounded">{amazonData.asin}</code>
+                  <a 
+                    href={`https://www.amazon.fr/dp/${amazonData.asin}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Voir sur Amazon
+                  </a>
+                </div>
+              )}
             </div>
             <div>
-              <span className="text-sm font-medium text-muted-foreground">EAN</span>
-              <p className="text-sm mt-1">{amazonData.ean || 'N/A'}</p>
+              <Label className="text-sm font-medium text-muted-foreground">EAN</Label>
+              {isEditing ? (
+                <Input
+                  value={editedData.ean}
+                  onChange={(e) => setEditedData({ ...editedData, ean: e.target.value })}
+                  className="mt-1"
+                />
+              ) : (
+                <p className="text-sm mt-1">{amazonData.ean || 'N/A'}</p>
+              )}
             </div>
             {amazonData.upc && (
               <div>
@@ -170,38 +303,79 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
                 <p className="text-sm mt-1">{amazonData.upc}</p>
               </div>
             )}
-            {amazonData.part_number && (
+            {(amazonData.part_number || isEditing) && (
               <div>
-                <span className="text-sm font-medium text-muted-foreground">Numéro de pièce</span>
-                <p className="text-sm mt-1">{amazonData.part_number}</p>
+                <Label className="text-sm font-medium text-muted-foreground">Numéro de pièce</Label>
+                {isEditing ? (
+                  <Input
+                    value={editedData.part_number}
+                    onChange={(e) => setEditedData({ ...editedData, part_number: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm mt-1">{amazonData.part_number}</p>
+                )}
               </div>
             )}
           </div>
 
-          {amazonData.title && (
+          {(amazonData.title || isEditing) && (
             <div>
-              <span className="text-sm font-medium text-muted-foreground">Titre Amazon</span>
-              <p className="text-sm mt-1">{amazonData.title}</p>
+              <Label className="text-sm font-medium text-muted-foreground">Titre Amazon</Label>
+              {isEditing ? (
+                <Textarea
+                  value={editedData.title}
+                  onChange={(e) => setEditedData({ ...editedData, title: e.target.value })}
+                  className="mt-1"
+                  rows={2}
+                />
+              ) : (
+                <p className="text-sm mt-1">{amazonData.title}</p>
+              )}
             </div>
           )}
 
           <div className="grid grid-cols-3 gap-4">
-            {amazonData.brand && (
+            {(amazonData.brand || isEditing) && (
               <div>
-                <span className="text-sm font-medium text-muted-foreground">Marque</span>
-                <p className="text-sm mt-1">{amazonData.brand}</p>
+                <Label className="text-sm font-medium text-muted-foreground">Marque</Label>
+                {isEditing ? (
+                  <Input
+                    value={editedData.brand}
+                    onChange={(e) => setEditedData({ ...editedData, brand: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm mt-1">{amazonData.brand}</p>
+                )}
               </div>
             )}
-            {amazonData.manufacturer && (
+            {(amazonData.manufacturer || isEditing) && (
               <div>
-                <span className="text-sm font-medium text-muted-foreground">Fabricant</span>
-                <p className="text-sm mt-1">{amazonData.manufacturer}</p>
+                <Label className="text-sm font-medium text-muted-foreground">Fabricant</Label>
+                {isEditing ? (
+                  <Input
+                    value={editedData.manufacturer}
+                    onChange={(e) => setEditedData({ ...editedData, manufacturer: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm mt-1">{amazonData.manufacturer}</p>
+                )}
               </div>
             )}
-            {amazonData.product_type && (
+            {(amazonData.product_type || isEditing) && (
               <div>
-                <span className="text-sm font-medium text-muted-foreground">Type de produit</span>
-                <p className="text-sm mt-1">{amazonData.product_type}</p>
+                <Label className="text-sm font-medium text-muted-foreground">Type de produit</Label>
+                {isEditing ? (
+                  <Input
+                    value={editedData.product_type}
+                    onChange={(e) => setEditedData({ ...editedData, product_type: e.target.value })}
+                    className="mt-1"
+                  />
+                ) : (
+                  <p className="text-sm mt-1">{amazonData.product_type}</p>
+                )}
               </div>
             )}
             {amazonData.marketplace && (
@@ -294,43 +468,56 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
       )}
 
       {/* Images Amazon */}
-      {hasImages && (
+      {(hasImages || isEditing) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ImageIcon className="h-5 w-5" />
-              Images Amazon ({amazonData.images.length})
+              Images Amazon {!isEditing && `(${amazonData.images.length})`}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Carousel className="w-full max-w-3xl mx-auto">
-              <CarouselContent>
-                {amazonData.images.map((img: any, index: number) => (
-                  img.url && (
-                    <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
-                      <div className="p-1">
-                        <Card>
-                          <CardContent className="flex aspect-square items-center justify-center p-2">
-                            <img 
-                              src={img.url} 
-                              alt={`Amazon image ${index + 1}`}
-                              className="object-contain w-full h-full"
-                            />
-                          </CardContent>
-                        </Card>
-                        {img.variant && (
-                          <p className="text-xs text-center text-muted-foreground mt-1">
-                            {img.variant}
-                          </p>
-                        )}
-                      </div>
-                    </CarouselItem>
-                  )
-                ))}
-              </CarouselContent>
-              <CarouselPrevious />
-              <CarouselNext />
-            </Carousel>
+            {isEditing ? (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">URLs des images (une par ligne)</Label>
+                <Textarea
+                  value={editedData.images}
+                  onChange={(e) => setEditedData({ ...editedData, images: e.target.value })}
+                  className="mt-2"
+                  rows={5}
+                  placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+                />
+              </div>
+            ) : (
+              <Carousel className="w-full max-w-3xl mx-auto">
+                <CarouselContent>
+                  {amazonData.images.map((img: any, index: number) => (
+                    img.url && (
+                      <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+                        <div className="p-1">
+                          <Card>
+                            <CardContent className="flex aspect-square items-center justify-center p-2">
+                              <img 
+                                src={img.url} 
+                                alt={`Amazon image ${index + 1}`}
+                                className="object-contain w-full h-full"
+                              />
+                            </CardContent>
+                          </Card>
+                          {img.variant && (
+                            <p className="text-xs text-center text-muted-foreground mt-1">
+                              {img.variant}
+                            </p>
+                          )}
+                        </div>
+                      </CarouselItem>
+                    )
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious />
+                <CarouselNext />
+              </Carousel>
+            )}
           </CardContent>
         </Card>
       )}
@@ -345,66 +532,122 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {amazonData.item_dimensions && (
+            {(amazonData.item_dimensions || isEditing) && (
               <div>
                 <h4 className="text-sm font-medium mb-2">Article</h4>
                 <div className="grid grid-cols-4 gap-3 text-sm">
-                  {amazonData.item_dimensions.length && (
-                    <div>
-                      <span className="text-muted-foreground">Longueur</span>
-                      <p className="font-medium">{amazonData.item_dimensions.length.value} {amazonData.item_dimensions.length.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.item_dimensions.width && (
-                    <div>
-                      <span className="text-muted-foreground">Largeur</span>
-                      <p className="font-medium">{amazonData.item_dimensions.width.value} {amazonData.item_dimensions.width.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.item_dimensions.height && (
-                    <div>
-                      <span className="text-muted-foreground">Hauteur</span>
-                      <p className="font-medium">{amazonData.item_dimensions.height.value} {amazonData.item_dimensions.height.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.item_weight && (
-                    <div>
-                      <span className="text-muted-foreground">Poids</span>
-                      <p className="font-medium">{amazonData.item_weight} kg</p>
-                    </div>
-                  )}
+                  <div>
+                    <Label className="text-muted-foreground">Longueur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.item_length}
+                        onChange={(e) => setEditedData({ ...editedData, item_length: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.item_dimensions?.length?.value || 'N/A'} {amazonData.item_dimensions?.length?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Largeur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.item_width}
+                        onChange={(e) => setEditedData({ ...editedData, item_width: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.item_dimensions?.width?.value || 'N/A'} {amazonData.item_dimensions?.width?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Hauteur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.item_height}
+                        onChange={(e) => setEditedData({ ...editedData, item_height: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.item_dimensions?.height?.value || 'N/A'} {amazonData.item_dimensions?.height?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Poids (kg)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.item_weight}
+                        onChange={(e) => setEditedData({ ...editedData, item_weight: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.item_weight || 'N/A'} kg</p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
-            {amazonData.package_dimensions && (
+            {(amazonData.package_dimensions || isEditing) && (
               <div>
                 <h4 className="text-sm font-medium mb-2">Emballage</h4>
                 <div className="grid grid-cols-4 gap-3 text-sm">
-                  {amazonData.package_dimensions.length && (
-                    <div>
-                      <span className="text-muted-foreground">Longueur</span>
-                      <p className="font-medium">{amazonData.package_dimensions.length.value} {amazonData.package_dimensions.length.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.package_dimensions.width && (
-                    <div>
-                      <span className="text-muted-foreground">Largeur</span>
-                      <p className="font-medium">{amazonData.package_dimensions.width.value} {amazonData.package_dimensions.width.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.package_dimensions.height && (
-                    <div>
-                      <span className="text-muted-foreground">Hauteur</span>
-                      <p className="font-medium">{amazonData.package_dimensions.height.value} {amazonData.package_dimensions.height.unit}</p>
-                    </div>
-                  )}
-                  {amazonData.package_weight && (
-                    <div>
-                      <span className="text-muted-foreground">Poids</span>
-                      <p className="font-medium">{amazonData.package_weight} kg</p>
-                    </div>
-                  )}
+                  <div>
+                    <Label className="text-muted-foreground">Longueur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.package_length}
+                        onChange={(e) => setEditedData({ ...editedData, package_length: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.package_dimensions?.length?.value || 'N/A'} {amazonData.package_dimensions?.length?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Largeur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.package_width}
+                        onChange={(e) => setEditedData({ ...editedData, package_width: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.package_dimensions?.width?.value || 'N/A'} {amazonData.package_dimensions?.width?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Hauteur (cm)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.package_height}
+                        onChange={(e) => setEditedData({ ...editedData, package_height: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.package_dimensions?.height?.value || 'N/A'} {amazonData.package_dimensions?.height?.unit || ''}</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className="text-muted-foreground">Poids (kg)</Label>
+                    {isEditing ? (
+                      <Input
+                        type="number"
+                        value={editedData.package_weight}
+                        onChange={(e) => setEditedData({ ...editedData, package_weight: e.target.value })}
+                        className="mt-1"
+                      />
+                    ) : (
+                      <p className="font-medium">{amazonData.package_weight || 'N/A'} kg</p>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -432,17 +675,30 @@ export const ProductAmazonTab = ({ analysis }: ProductAmazonTabProps) => {
       )}
 
       {/* Features */}
-      {hasFeatures && (
+      {(hasFeatures || isEditing) && (
         <Card>
           <CardHeader>
-            <CardTitle>Caractéristiques Produit</CardTitle>
+            <CardTitle>Caractéristiques Produit (Bullet Points)</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="list-disc list-inside space-y-1">
-              {amazonData.features.map((feature: string, index: number) => (
-                <li key={index} className="text-sm">{feature}</li>
-              ))}
-            </ul>
+            {isEditing ? (
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground">Caractéristiques (une par ligne)</Label>
+                <Textarea
+                  value={editedData.features}
+                  onChange={(e) => setEditedData({ ...editedData, features: e.target.value })}
+                  className="mt-2"
+                  rows={6}
+                  placeholder="Entrez chaque caractéristique sur une nouvelle ligne"
+                />
+              </div>
+            ) : (
+              <ul className="list-disc list-inside space-y-1">
+                {amazonData.features.map((feature: string, index: number) => (
+                  <li key={index} className="text-sm">{feature}</li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       )}
