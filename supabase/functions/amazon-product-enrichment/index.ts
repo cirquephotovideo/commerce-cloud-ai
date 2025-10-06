@@ -28,7 +28,22 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    const logToDatabase = async (level: string, event_type: string, message: string, metadata: any = {}) => {
+      try {
+        await supabase.from('amazon_edge_logs').insert({
+          function_name: 'amazon-product-enrichment',
+          level,
+          event_type,
+          event_message: message,
+          metadata: { ...metadata, analysis_id, product_name: productName, ean, asin }
+        });
+      } catch (error) {
+        console.error('[LOG-ERROR]', error);
+      }
+    };
+
     console.log('[AMAZON-ENRICH] Starting enrichment:', { analysis_id, product_name: productName, ean, asin });
+    await logToDatabase('info', 'Start', `Enrichissement Amazon démarré pour ${productName || ean || asin}`);
 
     let userId: string;
     let productEan: string | undefined = ean;
@@ -428,6 +443,7 @@ serve(async (req) => {
     }
 
     console.log('[AMAZON-ENRICH] Data saved successfully');
+    await logToDatabase('info', 'Success', 'Données Amazon sauvegardées avec succès');
 
     // Mettre à jour le statut à "success"
     await supabase
@@ -446,6 +462,26 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMAZON-ENRICH] Error:', error);
+    
+    // Log l'erreur dans la base de données
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseClient = createClient(supabaseUrl, supabaseKey);
+      
+      await supabaseClient.from('amazon_edge_logs').insert({
+        function_name: 'amazon-product-enrichment',
+        level: 'error',
+        event_type: 'Error',
+        event_message: `Erreur: ${error.message || 'Unknown error'}`,
+        metadata: { 
+          stack: error.stack,
+          analysis_id: analysisIdRef
+        }
+      });
+    } catch (logError) {
+      console.error('[LOG-ERROR]', logError);
+    }
     
     // Déterminer le code HTTP selon le type d'erreur
     let httpStatus = 500;

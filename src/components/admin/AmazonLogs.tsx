@@ -10,11 +10,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 
 interface LogEntry {
-  timestamp: number;
+  id: string;
+  created_at: string;
   event_message: string;
   event_type: string;
   level: string;
-  function_id?: string;
+  function_name: string;
+  metadata?: any;
 }
 
 export function AmazonLogs() {
@@ -26,6 +28,7 @@ export function AmazonLogs() {
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const functions = [
+    { value: "all", label: "Toutes les fonctions" },
     { value: "amazon-product-enrichment", label: "Amazon Product Enrichment" },
     { value: "amazon-token-manager", label: "Amazon Token Manager" },
   ];
@@ -33,16 +36,26 @@ export function AmazonLogs() {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke('supabase--edge-function-logs', {
-        body: {
-          function_name: selectedFunction,
-          search: searchTerm || ""
-        }
-      });
+      
+      let query = supabase
+        .from('amazon_edge_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (selectedFunction !== 'all') {
+        query = query.eq('function_name', selectedFunction);
+      }
+
+      if (searchTerm) {
+        query = query.ilike('event_message', `%${searchTerm}%`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
-      if (data && Array.isArray(data)) {
+      if (data) {
         setLogs(data);
         setFilteredLogs(data);
       }
@@ -79,8 +92,8 @@ export function AmazonLogs() {
     }
   }, [searchTerm, logs]);
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp / 1000).toLocaleString('fr-FR', {
+  const formatTimestamp = (dateString: string) => {
+    return new Date(dateString).toLocaleString('fr-FR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -106,7 +119,7 @@ export function AmazonLogs() {
 
   const exportLogs = () => {
     const content = filteredLogs.map(log => 
-      `[${formatTimestamp(log.timestamp)}] [${log.level}] [${log.event_type}] ${log.event_message}`
+      `[${formatTimestamp(log.created_at)}] [${log.level}] [${log.event_type}] ${log.event_message}`
     ).join('\n');
     
     const blob = new Blob([content], { type: 'text/plain' });
@@ -214,8 +227,9 @@ export function AmazonLogs() {
                             {log.level}
                           </Badge>
                           <Badge variant="outline">{log.event_type}</Badge>
+                          <Badge variant="secondary">{log.function_name}</Badge>
                           <span className="text-xs text-muted-foreground">
-                            {formatTimestamp(log.timestamp)}
+                            {formatTimestamp(log.created_at)}
                           </span>
                         </div>
                         <pre className="text-sm font-mono whitespace-pre-wrap break-all">

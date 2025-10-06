@@ -16,7 +16,22 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    const logToDatabase = async (level: string, event_type: string, message: string, metadata: any = {}) => {
+      try {
+        await supabase.from('amazon_edge_logs').insert({
+          function_name: 'amazon-token-manager',
+          level,
+          event_type,
+          event_message: message,
+          metadata
+        });
+      } catch (error) {
+        console.error('[LOG-ERROR]', error);
+      }
+    };
+
     console.log('[AMAZON-TOKEN] Checking for valid access token...');
+    await logToDatabase('info', 'Start', 'Début de la génération de token Amazon');
 
     // 1. Essayer d'abord les secrets d'environnement
     let clientId = Deno.env.get('AMAZON_CLIENT_ID');
@@ -28,6 +43,7 @@ serve(async (req) => {
     // 2. Fallback vers la base de données si les secrets ne sont pas configurés
     if (!clientId || !clientSecret || !refreshToken) {
       console.log('[AMAZON-TOKEN] Environment secrets not found, fetching from database...');
+      await logToDatabase('info', 'Config', 'Chargement des credentials depuis la base de données');
       const { data: credentials, error: credError } = await supabase
         .from('amazon_credentials')
         .select('*')
@@ -65,6 +81,7 @@ serve(async (req) => {
 
     if (existingToken) {
       console.log('[AMAZON-TOKEN] Valid token found, expires at:', existingToken.expires_at);
+      await logToDatabase('info', 'Success', `Token valide trouvé, expire à ${existingToken.expires_at}`);
       return new Response(
         JSON.stringify({ 
           access_token: existingToken.access_token,
@@ -75,6 +92,7 @@ serve(async (req) => {
     }
 
     console.log('[AMAZON-TOKEN] No valid token, generating new one...');
+    await logToDatabase('info', 'Generate', 'Génération d\'un nouveau token Amazon');
 
     // 4. Vérifier que toutes les credentials sont présentes
     if (!clientId || !clientSecret || !refreshToken) {
@@ -96,11 +114,13 @@ serve(async (req) => {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error('[AMAZON-TOKEN] OAuth error:', errorText);
+      await logToDatabase('error', 'OAuthError', `Erreur OAuth Amazon: ${errorText}`);
       throw new Error(`Amazon OAuth failed: ${errorText}`);
     }
 
     const tokenData = await tokenResponse.json();
     console.log('[AMAZON-TOKEN] New token generated successfully');
+    await logToDatabase('info', 'Success', 'Nouveau token généré avec succès');
 
     // 6. Stocker le nouveau token (uniquement si on a un credentialsId de la DB)
     const expiresAt = new Date(Date.now() + 3600 * 1000); // +1 heure
@@ -138,6 +158,19 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMAZON-TOKEN] Error:', error);
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    await supabase.from('amazon_edge_logs').insert({
+      function_name: 'amazon-token-manager',
+      level: 'error',
+      event_type: 'Error',
+      event_message: `Erreur: ${error.message || 'Unknown error'}`,
+      metadata: { stack: error.stack }
+    });
+    
     return new Response(
       JSON.stringify({ error: error.message || 'Unknown error' }),
       { 

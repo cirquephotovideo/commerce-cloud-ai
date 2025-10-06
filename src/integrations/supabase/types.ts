@@ -79,6 +79,39 @@ export type Database = {
         }
         Relationships: []
       }
+      amazon_edge_logs: {
+        Row: {
+          created_at: string | null
+          event_message: string
+          event_type: string
+          function_name: string
+          id: string
+          level: string
+          metadata: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_message: string
+          event_type: string
+          function_name: string
+          id?: string
+          level?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_message?: string
+          event_type?: string
+          function_name?: string
+          id?: string
+          level?: string
+          metadata?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       amazon_product_data: {
         Row: {
           analysis_id: string | null
@@ -1826,6 +1859,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_old_amazon_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
