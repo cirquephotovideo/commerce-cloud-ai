@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
 import { SubscriptionStatus } from "@/components/SubscriptionStatus";
@@ -26,6 +26,13 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 interface ProductAnalysis {
   id: string;
@@ -42,6 +49,11 @@ interface ProductAnalysis {
   use_cases?: any;
   amazon_enrichment_status?: string | null;
   amazon_last_attempt?: string | null;
+  enrichment_status?: {
+    amazon?: string;
+    heygen?: string;
+    rsgp?: string;
+  };
 }
 
 export default function Dashboard() {
@@ -55,6 +67,7 @@ export default function Dashboard() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedAnalysis, setSelectedAnalysis] = useState<ProductAnalysis | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
@@ -323,6 +336,115 @@ export default function Dashboard() {
     }
   };
 
+  const handleQuickEnrich = async (analysisId: string, type: 'amazon' | 'heygen' | 'rsgp' | 'all') => {
+    setEnrichingIds(prev => new Set(prev).add(analysisId));
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast({
+          title: "Authentification requise",
+          description: "Votre session a expiré.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const enrichments = type === 'all' ? ['amazon', 'heygen', 'rsgp'] : [type];
+      
+      for (const enrichType of enrichments) {
+        if (enrichType === 'amazon') {
+          await supabase.functions.invoke('amazon-product-enrichment', {
+            headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+            body: { analysis_id: analysisId, force_regenerate: true }
+          });
+        } else if (enrichType === 'heygen') {
+          // Note: HeyGen needs avatar_id and voice_id - will show error if not configured
+          await supabase.functions.invoke('heygen-video-generator', {
+            headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+            body: { action: 'generate', analysis_id: analysisId, avatar_id: 'default', voice_id: 'default' }
+          });
+        } else if (enrichType === 'rsgp') {
+          await supabase.functions.invoke('rsgp-compliance-generator', {
+            headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+            body: { analysis_id: analysisId, force_regenerate: true }
+          });
+        }
+      }
+
+      toast({
+        title: "Enrichissement lancé",
+        description: `L'enrichissement ${type === 'all' ? 'complet' : type.toUpperCase()} a été lancé.`,
+      });
+      
+      // Reload after a short delay
+      setTimeout(() => loadAnalyses(), 2000);
+    } catch (error: any) {
+      toast({
+        title: "Erreur d'enrichissement",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setEnrichingIds(prev => {
+        const next = new Set(prev);
+        next.delete(analysisId);
+        return next;
+      });
+    }
+  };
+
+  const getEnrichmentBadges = (analysis: ProductAnalysis) => {
+    const status = analysis.enrichment_status || {};
+    const amazonStatus = status.amazon || analysis.amazon_enrichment_status;
+    
+    return (
+      <div className="flex gap-1 flex-wrap mt-1">
+        {/* Amazon Badge */}
+        {amazonStatus === 'completed' && (
+          <Badge variant="secondary" className="text-xs">
+            <Package className="w-3 h-3 mr-1" />
+            Amazon
+          </Badge>
+        )}
+        {amazonStatus === 'processing' && (
+          <Badge variant="outline" className="text-xs">
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            Amazon
+          </Badge>
+        )}
+        
+        {/* HeyGen Badge */}
+        {status.heygen === 'completed' && (
+          <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
+            <Video className="w-3 h-3 mr-1" />
+            HeyGen
+          </Badge>
+        )}
+        {status.heygen === 'processing' && (
+          <Badge variant="outline" className="text-xs">
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            HeyGen
+          </Badge>
+        )}
+        
+        {/* RSGP Badge */}
+        {status.rsgp === 'completed' && (
+          <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">
+            <FileCheck className="w-3 h-3 mr-1" />
+            RSGP
+          </Badge>
+        )}
+        {status.rsgp === 'processing' && (
+          <Badge variant="outline" className="text-xs">
+            <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+            RSGP
+          </Badge>
+        )}
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -502,23 +624,7 @@ export default function Dashboard() {
                           >
                             {productName}
                           </CardTitle>
-                          <div className="flex gap-1 mt-1">
-                            {analysis.amazon_enrichment_status === 'success' && (
-                              <Badge variant="secondary" className="text-xs">
-                                📦 Amazon
-                              </Badge>
-                            )}
-                            {analysis.amazon_enrichment_status === 'pending' && (
-                              <Badge variant="outline" className="text-xs">
-                                ⏳ Amazon
-                              </Badge>
-                            )}
-                            {analysis.amazon_enrichment_status === 'not_found' && (
-                              <Badge variant="outline" className="text-xs opacity-50">
-                                ❌ Intro...
-                              </Badge>
-                            )}
-                          </div>
+                          {getEnrichmentBadges(analysis)}
                         </div>
                       </div>
                       <Button
@@ -549,23 +655,63 @@ export default function Dashboard() {
                      <TaxonomyBadges analysisId={analysis.id} />
                      
                      <div className="space-y-2">
-                      {/* Main Actions Row */}
-                      <div className="flex gap-2 flex-wrap">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleOpenDetail(analysis)}
-                        >
-                          Voir détails
-                        </Button>
-                        <ProductSummaryDialog 
-                          analysis={analysis}
-                          productName={productName}
-                        />
-                        {hasPermission('single_export') && (
-                          <ProductExportMenu analysisId={analysis.id} productName={productName} />
-                        )}
-                      </div>
+                       {/* Main Actions Row */}
+                       <div className="flex gap-2 flex-wrap">
+                         <Button 
+                           variant="outline" 
+                           size="sm"
+                           onClick={() => handleOpenDetail(analysis)}
+                         >
+                           Voir détails
+                         </Button>
+                         <ProductSummaryDialog 
+                           analysis={analysis}
+                           productName={productName}
+                         />
+                         {hasPermission('single_export') && (
+                           <ProductExportMenu analysisId={analysis.id} productName={productName} />
+                         )}
+                         
+                         {/* Quick Enrich Dropdown */}
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button 
+                               variant="outline" 
+                               size="sm"
+                               disabled={enrichingIds.has(analysis.id)}
+                             >
+                               {enrichingIds.has(analysis.id) ? (
+                                 <Loader2 className="w-4 h-4 animate-spin" />
+                               ) : (
+                                 <>
+                                   <Sparkles className="w-4 h-4 mr-1" />
+                                   Enrichir
+                                   <ChevronDown className="w-3 h-3 ml-1" />
+                                 </>
+                               )}
+                             </Button>
+                           </DropdownMenuTrigger>
+                           <DropdownMenuContent align="end" className="bg-background z-50">
+                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'amazon')}>
+                               <Package className="w-4 h-4 mr-2" />
+                               Données Amazon
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'heygen')}>
+                               <Video className="w-4 h-4 mr-2" />
+                               Vidéo HeyGen
+                             </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'rsgp')}>
+                               <FileCheck className="w-4 h-4 mr-2" />
+                               Conformité RSGP
+                             </DropdownMenuItem>
+                             <DropdownMenuSeparator />
+                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'all')}>
+                               <Sparkles className="w-4 h-4 mr-2" />
+                               Tout régénérer
+                             </DropdownMenuItem>
+                           </DropdownMenuContent>
+                         </DropdownMenu>
+                       </div>
                       {/* Secondary Actions Row */}
                       <div className="flex gap-2 flex-wrap">
                         {analysis.image_urls && analysis.image_urls.length > 0 && (

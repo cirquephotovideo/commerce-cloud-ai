@@ -217,13 +217,26 @@ RÈGLES IMPORTANTES :
       throw new Error('Failed to parse AI response as JSON');
     }
 
+    // Sanitize date fields before insertion (convert "non communiqué" to null)
+    const sanitizeDateFields = (data: any) => {
+      const dateFields = ['date_evaluation', 'date_mise_conformite', 'date_import_odoo'];
+      dateFields.forEach(field => {
+        if (data[field] === 'non communiqué' || data[field] === '' || !data[field]) {
+          data[field] = null;
+        }
+      });
+      return data;
+    };
+
+    const sanitizedData = sanitizeDateFields(rsgpData);
+
     // Save to database
     const { data: complianceRecord, error: insertError } = await supabase
       .from('rsgp_compliance')
       .insert({
         analysis_id,
         user_id: user.id,
-        ...rsgpData,
+        ...sanitizedData,
         validation_status: 'draft'
       })
       .select()

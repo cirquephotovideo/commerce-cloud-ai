@@ -34,6 +34,8 @@ const FUNCTION_GROUPS = {
   'google-shopping-scraper': { label: '🛒 Google Shopping', icon: '🛒' },
   'generate-image': { label: '🖼️ Génération Images', icon: '🖼️' },
   'ai-chat': { label: '💬 Chat IA', icon: '💬' },
+  'heygen-video-generator': { label: '🎥 Vidéos HeyGen', icon: '🎥' },
+  'rsgp-compliance-generator': { label: '📋 Conformité RSGP', icon: '📋' },
 };
 
 const AVAILABLE_MODELS = [
@@ -163,9 +165,9 @@ export const AIPromptsManagement = () => {
       </div>
 
       <Tabs value={selectedFunction} onValueChange={setSelectedFunction}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
           {Object.entries(FUNCTION_GROUPS).map(([key, { label }]) => (
-            <TabsTrigger key={key} value={key}>
+            <TabsTrigger key={key} value={key} className="text-xs lg:text-sm">
               {label}
             </TabsTrigger>
           ))}

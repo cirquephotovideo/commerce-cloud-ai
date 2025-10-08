@@ -41,8 +41,11 @@ serve(async (req) => {
       .single();
 
     if (!providerConfig?.api_key_encrypted) {
+      console.error('[HEYGEN-VIDEO] HeyGen API key not configured');
       return new Response(
-        JSON.stringify({ error: 'HeyGen API key not configured' }),
+        JSON.stringify({ 
+          error: 'HeyGen API key not configured. Please configure your HeyGen API key in Admin > API Key Management.'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
