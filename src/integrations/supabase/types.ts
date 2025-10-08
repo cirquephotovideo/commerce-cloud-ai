@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_prompts: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          function_name: string
+          id: string
+          is_active: boolean | null
+          model: string | null
+          prompt_content: string
+          prompt_key: string
+          prompt_type: string
+          temperature: number | null
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          function_name: string
+          id?: string
+          is_active?: boolean | null
+          model?: string | null
+          prompt_content: string
+          prompt_key: string
+          prompt_type: string
+          temperature?: number | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          function_name?: string
+          id?: string
+          is_active?: boolean | null
+          model?: string | null
+          prompt_content?: string
+          prompt_key?: string
+          prompt_type?: string
+          temperature?: number | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: []
+      }
       amazon_access_tokens: {
         Row: {
           access_token: string

@@ -14,7 +14,8 @@ import { RoleDebugger } from "@/components/admin/RoleDebugger";
 import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
 import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
 import { AmazonLogs } from "@/components/admin/AmazonLogs";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart } from "lucide-react";
+import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -37,7 +38,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-12 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-13 lg:w-auto">
             <TabsTrigger value="analytics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
               Analytics
@@ -85,6 +86,10 @@ const AdminDashboard = () => {
             <TabsTrigger value="permissions" className="gap-2">
               <Shield className="h-4 w-4" />
               Permissions
+            </TabsTrigger>
+            <TabsTrigger value="ai-prompts" className="gap-2">
+              <Zap className="h-4 w-4" />
+              Prompts IA
             </TabsTrigger>
           </TabsList>
 
@@ -135,6 +140,10 @@ const AdminDashboard = () => {
           <TabsContent value="permissions" className="space-y-6">
             <FeaturePermissions />
             <OllamaConfiguration />
+          </TabsContent>
+
+          <TabsContent value="ai-prompts" className="space-y-6">
+            <AIPromptsManagement />
           </TabsContent>
         </Tabs>
       </div>
