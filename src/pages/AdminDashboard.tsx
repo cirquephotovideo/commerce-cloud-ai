@@ -38,60 +38,62 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-13 lg:w-auto">
-            <TabsTrigger value="analytics" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="users" className="gap-2">
-              <Users className="h-4 w-4" />
-              Utilisateurs
-            </TabsTrigger>
-            <TabsTrigger value="plans" className="gap-2">
-              <Package className="h-4 w-4" />
-              Plans
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="gap-2">
-              <DollarSign className="h-4 w-4" />
-              Facturation
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Logs
-            </TabsTrigger>
-            <TabsTrigger value="amazon-logs" className="gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Amazon
-            </TabsTrigger>
-            <TabsTrigger value="email" className="gap-2">
-              <Mail className="h-4 w-4" />
-              Email
-            </TabsTrigger>
-            <TabsTrigger value="social" className="gap-2">
-              <Share2 className="h-4 w-4" />
-              Réseaux
-            </TabsTrigger>
-            <TabsTrigger value="newsletter" className="gap-2">
-              <Bell className="h-4 w-4" />
-              Newsletter
-            </TabsTrigger>
-            <TabsTrigger value="apikeys" className="gap-2">
-              <Key className="h-4 w-4" />
-              API Keys
-            </TabsTrigger>
-            <TabsTrigger value="debug" className="gap-2">
-              <Info className="h-4 w-4" />
-              Debug
-            </TabsTrigger>
-            <TabsTrigger value="permissions" className="gap-2">
-              <Shield className="h-4 w-4" />
-              Permissions
-            </TabsTrigger>
-            <TabsTrigger value="ai-prompts" className="gap-2">
-              <Zap className="h-4 w-4" />
-              Prompts IA
-            </TabsTrigger>
-          </TabsList>
+          <div className="bg-card rounded-lg border p-2">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 h-auto bg-transparent">
+              <TabsTrigger value="analytics" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Analytics</span>
+              </TabsTrigger>
+              <TabsTrigger value="users" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Utilisateurs</span>
+              </TabsTrigger>
+              <TabsTrigger value="plans" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Package className="h-4 w-4" />
+                <span className="hidden sm:inline">Plans</span>
+              </TabsTrigger>
+              <TabsTrigger value="billing" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <DollarSign className="h-4 w-4" />
+                <span className="hidden sm:inline">Facturation</span>
+              </TabsTrigger>
+              <TabsTrigger value="ai-prompts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Zap className="h-4 w-4" />
+                <span className="hidden sm:inline">Prompts IA</span>
+              </TabsTrigger>
+              <TabsTrigger value="apikeys" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Key className="h-4 w-4" />
+                <span className="hidden sm:inline">API Keys</span>
+              </TabsTrigger>
+              <TabsTrigger value="permissions" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline">Permissions</span>
+              </TabsTrigger>
+              <TabsTrigger value="email" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Mail className="h-4 w-4" />
+                <span className="hidden sm:inline">Email</span>
+              </TabsTrigger>
+              <TabsTrigger value="social" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Share2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Réseaux</span>
+              </TabsTrigger>
+              <TabsTrigger value="newsletter" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Bell className="h-4 w-4" />
+                <span className="hidden sm:inline">Newsletter</span>
+              </TabsTrigger>
+              <TabsTrigger value="logs" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Logs</span>
+              </TabsTrigger>
+              <TabsTrigger value="amazon-logs" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <ShoppingCart className="h-4 w-4" />
+                <span className="hidden sm:inline">Amazon</span>
+              </TabsTrigger>
+              <TabsTrigger value="debug" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Info className="h-4 w-4" />
+                <span className="hidden sm:inline">Debug</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="analytics" className="space-y-6">
             <Analytics />
