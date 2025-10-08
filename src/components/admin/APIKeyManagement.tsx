@@ -765,6 +765,18 @@ export const APIKeyManagement = () => {
               { value: 'openai/gpt-4', label: 'GPT-4' },
             ]}
           />
+
+          {/* HeyGen */}
+          <AIProviderKeySection
+            providerId="heygen"
+            providerName="HeyGen"
+            description="Obtenez votre clé sur app.heygen.com/settings/api"
+            placeholder="xxxxxxxxxxxxx"
+            defaultModel="default"
+            models={[
+              { value: 'default', label: 'HeyGen API v2' },
+            ]}
+          />
         </CardContent>
       </Card>
     </div>

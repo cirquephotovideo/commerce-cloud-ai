@@ -126,6 +126,41 @@ async function testOpenRouterProvider(apiKey: string): Promise<ProviderTestResul
   }
 }
 
+async function testHeyGenProvider(apiKey: string): Promise<ProviderTestResult> {
+  const startTime = Date.now();
+  try {
+    const response = await fetch('https://api.heygen.com/v2/avatars', {
+      method: 'GET',
+      headers: {
+        'X-Api-Key': apiKey,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const latency = Date.now() - startTime;
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, latency, error: `API Error: ${response.status}` };
+    }
+
+    const data = await response.json();
+    const avatars = data.data?.avatars || [];
+
+    return {
+      success: true,
+      latency,
+      models: [`${avatars.length} avatars disponibles`],
+    };
+  } catch (error) {
+    return {
+      success: false,
+      latency: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -164,6 +199,9 @@ serve(async (req) => {
         break;
       case 'openrouter':
         testResult = await testOpenRouterProvider(api_key);
+        break;
+      case 'heygen':
+        testResult = await testHeyGenProvider(api_key);
         break;
       default:
         throw new Error(`Unsupported provider: ${provider}`);
