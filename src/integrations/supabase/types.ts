@@ -860,6 +860,51 @@ export type Database = {
         }
         Relationships: []
       }
+      google_services_config: {
+        Row: {
+          api_key_encrypted: string | null
+          client_id_encrypted: string | null
+          client_secret_encrypted: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          measurement_id: string | null
+          merchant_id: string | null
+          service_type: Database["public"]["Enums"]["google_service_type"]
+          site_url: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          client_id_encrypted?: string | null
+          client_secret_encrypted?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          measurement_id?: string | null
+          merchant_id?: string | null
+          service_type: Database["public"]["Enums"]["google_service_type"]
+          site_url?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          client_id_encrypted?: string | null
+          client_secret_encrypted?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          measurement_id?: string | null
+          merchant_id?: string | null
+          service_type?: Database["public"]["Enums"]["google_service_type"]
+          site_url?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_trends: {
         Row: {
           confidence_score: number | null
@@ -2134,6 +2179,11 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "user" | "admin" | "moderator"
+      google_service_type:
+        | "merchant_center"
+        | "shopping_api"
+        | "analytics"
+        | "search_console"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2262,6 +2312,12 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "user", "admin", "moderator"],
+      google_service_type: [
+        "merchant_center",
+        "shopping_api",
+        "analytics",
+        "search_console",
+      ],
     },
   },
 } as const

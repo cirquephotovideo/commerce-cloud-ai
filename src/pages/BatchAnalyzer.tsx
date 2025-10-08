@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TechnicalAnalysis } from "@/components/advanced/TechnicalAnalysis";
 import { RiskAnalysis } from "@/components/advanced/RiskAnalysis";
 import { TaxonomySettings } from "@/components/TaxonomySettings";
+import { GoogleServicesSettings } from "@/components/GoogleServicesSettings";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -245,6 +246,7 @@ const BatchAnalyzer = () => {
                 <TabsTrigger value="taxonomy">Taxonomie</TabsTrigger>
                 <TabsTrigger value="odoo">Odoo</TabsTrigger>
                 <TabsTrigger value="platforms">Other Platforms</TabsTrigger>
+                <TabsTrigger value="google">Google Services</TabsTrigger>
               </TabsList>
               
               <TabsContent value="taxonomy" className="space-y-6">
@@ -279,6 +281,10 @@ const BatchAnalyzer = () => {
                 <PlatformSettings />
                 <PlatformFieldMappings />
                 <PricingRules />
+              </TabsContent>
+              
+              <TabsContent value="google" className="space-y-6">
+                <GoogleServicesSettings />
               </TabsContent>
             </Tabs>
           </TabsContent>
