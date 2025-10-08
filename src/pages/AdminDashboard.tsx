@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
 import { Analytics } from "@/components/admin/Analytics";
+import { SystemHealthCheck } from "@/components/admin/SystemHealthCheck";
 import { BillingManagement } from "@/components/admin/BillingManagement";
 import { SystemLogs } from "@/components/admin/SystemLogs";
 import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
@@ -18,7 +19,7 @@ import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
 import AIProviderManagement from "@/components/admin/AIProviderManagement";
 import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
 import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings } from "lucide-react";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings, Sparkles } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -46,6 +47,10 @@ const AdminDashboard = () => {
               <TabsTrigger value="analytics" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <BarChart3 className="h-4 w-4" />
                 <span className="hidden sm:inline">Analytics</span>
+              </TabsTrigger>
+              <TabsTrigger value="health" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Sparkles className="h-4 w-4" />
+                <span className="hidden sm:inline">System Health</span>
               </TabsTrigger>
               <TabsTrigger value="users" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Users className="h-4 w-4" />
@@ -112,6 +117,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="analytics" className="space-y-6">
             <Analytics />
+          </TabsContent>
+
+          <TabsContent value="health" className="space-y-6">
+            <SystemHealthCheck />
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">

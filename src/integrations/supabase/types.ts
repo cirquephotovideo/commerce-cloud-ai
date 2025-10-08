@@ -860,6 +860,105 @@ export type Database = {
         }
         Relationships: []
       }
+      feature_suggestions: {
+        Row: {
+          category: Database["public"]["Enums"]["feature_category"]
+          created_at: string | null
+          created_by: string | null
+          description: string
+          effort: string
+          id: string
+          impact: string
+          lovable_prompt: string
+          priority: Database["public"]["Enums"]["issue_severity"]
+          status: string | null
+          title: string
+          updated_at: string | null
+          votes: number | null
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["feature_category"]
+          created_at?: string | null
+          created_by?: string | null
+          description: string
+          effort: string
+          id?: string
+          impact: string
+          lovable_prompt: string
+          priority: Database["public"]["Enums"]["issue_severity"]
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          votes?: number | null
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["feature_category"]
+          created_at?: string | null
+          created_by?: string | null
+          description?: string
+          effort?: string
+          id?: string
+          impact?: string
+          lovable_prompt?: string
+          priority?: Database["public"]["Enums"]["issue_severity"]
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          votes?: number | null
+        }
+        Relationships: []
+      }
+      fix_tracking: {
+        Row: {
+          component_name: string
+          created_at: string | null
+          created_by: string | null
+          description: string
+          detected_at: string | null
+          fix_applied_at: string | null
+          fix_duration_minutes: number | null
+          id: string
+          issue_id: string
+          issue_type: string
+          lovable_prompt: string
+          retest_result: string | null
+          severity: Database["public"]["Enums"]["issue_severity"]
+          status: string | null
+        }
+        Insert: {
+          component_name: string
+          created_at?: string | null
+          created_by?: string | null
+          description: string
+          detected_at?: string | null
+          fix_applied_at?: string | null
+          fix_duration_minutes?: number | null
+          id?: string
+          issue_id: string
+          issue_type: string
+          lovable_prompt: string
+          retest_result?: string | null
+          severity: Database["public"]["Enums"]["issue_severity"]
+          status?: string | null
+        }
+        Update: {
+          component_name?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string
+          detected_at?: string | null
+          fix_applied_at?: string | null
+          fix_duration_minutes?: number | null
+          id?: string
+          issue_id?: string
+          issue_type?: string
+          lovable_prompt?: string
+          retest_result?: string | null
+          severity?: Database["public"]["Enums"]["issue_severity"]
+          status?: string | null
+        }
+        Relationships: []
+      }
       google_services_config: {
         Row: {
           api_key_encrypted: string | null
@@ -1801,6 +1900,45 @@ export type Database = {
         }
         Relationships: []
       }
+      system_health_logs: {
+        Row: {
+          component_name: string
+          created_at: string | null
+          error_message: string | null
+          id: string
+          latency_ms: number | null
+          status: Database["public"]["Enums"]["health_status"]
+          test_result: Json | null
+          test_type: string
+          tested_at: string | null
+          tested_by: string | null
+        }
+        Insert: {
+          component_name: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          status: Database["public"]["Enums"]["health_status"]
+          test_result?: Json | null
+          test_type: string
+          tested_at?: string | null
+          tested_by?: string | null
+        }
+        Update: {
+          component_name?: string
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          status?: Database["public"]["Enums"]["health_status"]
+          test_result?: Json | null
+          test_type?: string
+          tested_at?: string | null
+          tested_by?: string | null
+        }
+        Relationships: []
+      }
       taxonomy_settings: {
         Row: {
           created_at: string | null
@@ -2179,11 +2317,19 @@ export type Database = {
     }
     Enums: {
       app_role: "super_admin" | "user" | "admin" | "moderator"
+      feature_category:
+        | "optimization"
+        | "missing_feature"
+        | "ux_improvement"
+        | "security"
+        | "integration"
       google_service_type:
         | "merchant_center"
         | "shopping_api"
         | "analytics"
         | "search_console"
+      health_status: "operational" | "failing" | "untested" | "warning"
+      issue_severity: "critical" | "high" | "medium" | "low"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2312,12 +2458,21 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["super_admin", "user", "admin", "moderator"],
+      feature_category: [
+        "optimization",
+        "missing_feature",
+        "ux_improvement",
+        "security",
+        "integration",
+      ],
       google_service_type: [
         "merchant_center",
         "shopping_api",
         "analytics",
         "search_console",
       ],
+      health_status: ["operational", "failing", "untested", "warning"],
+      issue_severity: ["critical", "high", "medium", "low"],
     },
   },
 } as const
