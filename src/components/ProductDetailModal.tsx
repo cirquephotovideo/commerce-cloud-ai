@@ -10,6 +10,7 @@ import { ProductMarketTab } from "./product-detail/ProductMarketTab";
 import { ProductExportTab } from "./product-detail/ProductExportTab";
 import { ProductActionsTab } from "./product-detail/ProductActionsTab";
 import { ProductAmazonTab } from "./product-detail/ProductAmazonTab";
+import { ProductRSGPTab } from "./product-detail/ProductRSGPTab";
 
 interface ProductAnalysis {
   id: string;
@@ -124,11 +125,12 @@ export const ProductDetailModal = ({
         {/* Tabs Navigation */}
         <div className="px-6 pt-4 border-b bg-background sticky top-[73px] z-10">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
               <TabsTrigger value="images">Images</TabsTrigger>
               <TabsTrigger value="advanced">Analyses</TabsTrigger>
               <TabsTrigger value="amazon">📦 Amazon</TabsTrigger>
+              <TabsTrigger value="rsgp">📋 RSGP</TabsTrigger>
               <TabsTrigger value="market">Prix & Marché</TabsTrigger>
               <TabsTrigger value="export">Export</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
@@ -171,6 +173,10 @@ export const ProductDetailModal = ({
 
             <TabsContent value="amazon" className="mt-4">
               <ProductAmazonTab analysis={analysis} />
+            </TabsContent>
+
+            <TabsContent value="rsgp" className="mt-4">
+              <ProductRSGPTab analysis={analysis} />
             </TabsContent>
           </Tabs>
         </div>
