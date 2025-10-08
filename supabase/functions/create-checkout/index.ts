@@ -99,7 +99,9 @@ serve(async (req) => {
     // Parse and validate request body
     let body: CheckoutRequest;
     try {
-      body = await req.json();
+      const rawBody = await req.text();
+      logStep("Raw request body received", { body: rawBody });
+      body = JSON.parse(rawBody);
       logStep("Request body parsed", body);
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
@@ -116,10 +118,25 @@ serve(async (req) => {
     const { priceId, billingInterval } = body;
     
     if (!priceId || typeof priceId !== 'string' || priceId.trim() === '') {
-      logStep("ERROR: Price ID missing or invalid", { priceId });
+      logStep("ERROR: Price ID missing or invalid", { priceId, receivedBody: body });
       return new Response(
         JSON.stringify({ 
-          error: "Price ID is required and must be a valid string" 
+          error: "Price ID is required and must be a valid string",
+          receivedBody: body
+        }), 
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
+    }
+
+    if (!priceId.startsWith('price_')) {
+      logStep("ERROR: Invalid Stripe price ID format", { priceId });
+      return new Response(
+        JSON.stringify({ 
+          error: "Invalid Stripe price ID format. Must start with 'price_'",
+          receivedPriceId: priceId
         }), 
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },

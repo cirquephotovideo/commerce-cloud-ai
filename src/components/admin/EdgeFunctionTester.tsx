@@ -47,9 +47,25 @@ const edgeFunctions: EdgeFunction[] = [
   { name: 'export-single-product', category: 'export', status: 'untested' },
   
   // Payment Functions
-  { name: 'create-checkout', category: 'payment', status: 'untested' },
+  { 
+    name: 'create-checkout', 
+    category: 'payment', 
+    status: 'untested',
+    testPayload: { 
+      priceId: 'price_1SDUekIhbQ0wttwsmWzWVbMa',
+      billingInterval: 'monthly' 
+    }
+  },
   { name: 'customer-portal', category: 'payment', status: 'untested' },
-  { name: 'manage-subscription', category: 'payment', status: 'untested' },
+  { 
+    name: 'manage-subscription', 
+    category: 'payment', 
+    status: 'untested',
+    testPayload: { 
+      newPlanId: '00000000-0000-0000-0000-000000000002',
+      billingInterval: 'monthly' 
+    }
+  },
   
   // Marketing Functions
   { name: 'send-contact-email', category: 'marketing', status: 'untested' },
@@ -217,7 +233,14 @@ Make sure to handle edge cases and add proper TypeScript types.`;
                 <div key={func.name} className="flex items-center justify-between p-3 rounded-lg border bg-card">
                   <div className="flex items-center gap-3 flex-1">
                     {getStatusIcon(func.status)}
-                    <span className="font-mono text-sm">{func.name}</span>
+                    <div className="flex-1">
+                      <div className="font-mono text-sm">{func.name}</div>
+                      {func.testPayload && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Payload: <code className="text-xs">{JSON.stringify(func.testPayload)}</code>
+                        </div>
+                      )}
+                    </div>
                     {func.latency && (
                       <Badge variant="outline" className="text-xs">
                         {func.latency}ms
