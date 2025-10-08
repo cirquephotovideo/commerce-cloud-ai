@@ -119,3 +119,9 @@ verify_jwt = true
 
 [functions.google-shopping-scraper]
 verify_jwt = true
+
+[functions.heygen-video-generator]
+verify_jwt = true
+
+[functions.rsgp-compliance-generator]
+verify_jwt = true

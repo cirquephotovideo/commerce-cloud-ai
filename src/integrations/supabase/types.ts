@@ -1580,6 +1580,8 @@ export type Database = {
           competitive_pros: Json | null
           created_at: string | null
           description_long: string | null
+          enrichment_status: Json | null
+          heygen_video_id: string | null
           id: string
           image_urls: Json | null
           is_favorite: boolean | null
@@ -1588,6 +1590,7 @@ export type Database = {
           market_position: string | null
           odoo_attributes: Json | null
           product_url: string
+          rsgp_compliance_id: string | null
           tags: Json | null
           updated_at: string | null
           use_cases: Json | null
@@ -1601,6 +1604,8 @@ export type Database = {
           competitive_pros?: Json | null
           created_at?: string | null
           description_long?: string | null
+          enrichment_status?: Json | null
+          heygen_video_id?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
@@ -1609,6 +1614,7 @@ export type Database = {
           market_position?: string | null
           odoo_attributes?: Json | null
           product_url: string
+          rsgp_compliance_id?: string | null
           tags?: Json | null
           updated_at?: string | null
           use_cases?: Json | null
@@ -1622,6 +1628,8 @@ export type Database = {
           competitive_pros?: Json | null
           created_at?: string | null
           description_long?: string | null
+          enrichment_status?: Json | null
+          heygen_video_id?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
@@ -1630,12 +1638,27 @@ export type Database = {
           market_position?: string | null
           odoo_attributes?: Json | null
           product_url?: string
+          rsgp_compliance_id?: string | null
           tags?: Json | null
           updated_at?: string | null
           use_cases?: Json | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "product_analyses_heygen_video_id_fkey"
+            columns: ["heygen_video_id"]
+            isOneToOne: false
+            referencedRelation: "product_videos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_analyses_rsgp_compliance_id_fkey"
+            columns: ["rsgp_compliance_id"]
+            isOneToOne: false
+            referencedRelation: "rsgp_compliance"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "product_analyses_user_id_fkey"
             columns: ["user_id"]
@@ -1676,6 +1699,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "product_taxonomy_mappings_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_videos: {
+        Row: {
+          analysis_id: string | null
+          avatar_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          duration: number | null
+          error_message: string | null
+          id: string
+          script: string | null
+          status: string | null
+          template_id: string | null
+          thumbnail_url: string | null
+          user_id: string
+          video_id: string
+          video_url: string | null
+          voice_id: string | null
+        }
+        Insert: {
+          analysis_id?: string | null
+          avatar_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          duration?: number | null
+          error_message?: string | null
+          id?: string
+          script?: string | null
+          status?: string | null
+          template_id?: string | null
+          thumbnail_url?: string | null
+          user_id: string
+          video_id: string
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Update: {
+          analysis_id?: string | null
+          avatar_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          duration?: number | null
+          error_message?: string | null
+          id?: string
+          script?: string | null
+          status?: string | null
+          template_id?: string | null
+          thumbnail_url?: string | null
+          user_id?: string
+          video_id?: string
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_videos_analysis_id_fkey"
             columns: ["analysis_id"]
             isOneToOne: false
             referencedRelation: "product_analyses"
@@ -1750,6 +1835,143 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "risk_assessments_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rsgp_compliance: {
+        Row: {
+          age_recommande: string | null
+          analysis_id: string | null
+          avertissements: string[] | null
+          categorie_rsgp: string | null
+          compatibilites: string[] | null
+          date_evaluation: string | null
+          date_import_odoo: string | null
+          date_mise_conformite: string | null
+          documents_archives: Json | null
+          documents_conformite: Json | null
+          ean: string | null
+          entretien: string | null
+          evaluation_risque: string | null
+          fabricant_adresse: string | null
+          fabricant_nom: string | null
+          firmware_ou_logiciel: string | null
+          fournisseur: string | null
+          garantie: string | null
+          generated_at: string | null
+          historique_incidents: Json | null
+          id: string
+          indice_energie: string | null
+          indice_reparabilite: number | null
+          langues_disponibles: string[] | null
+          last_updated: string | null
+          nom_produit: string
+          normes_ce: string[] | null
+          notice_pdf: string | null
+          numero_lot: string | null
+          numero_modele: string | null
+          pays_origine: string | null
+          personne_responsable_ue: string | null
+          procedure_rappel: string | null
+          recyclage: string | null
+          reference_interne: string | null
+          responsable_conformite: string | null
+          rsgp_valide: boolean | null
+          service_consommateur: string | null
+          user_id: string
+          validation_status: string | null
+        }
+        Insert: {
+          age_recommande?: string | null
+          analysis_id?: string | null
+          avertissements?: string[] | null
+          categorie_rsgp?: string | null
+          compatibilites?: string[] | null
+          date_evaluation?: string | null
+          date_import_odoo?: string | null
+          date_mise_conformite?: string | null
+          documents_archives?: Json | null
+          documents_conformite?: Json | null
+          ean?: string | null
+          entretien?: string | null
+          evaluation_risque?: string | null
+          fabricant_adresse?: string | null
+          fabricant_nom?: string | null
+          firmware_ou_logiciel?: string | null
+          fournisseur?: string | null
+          garantie?: string | null
+          generated_at?: string | null
+          historique_incidents?: Json | null
+          id?: string
+          indice_energie?: string | null
+          indice_reparabilite?: number | null
+          langues_disponibles?: string[] | null
+          last_updated?: string | null
+          nom_produit: string
+          normes_ce?: string[] | null
+          notice_pdf?: string | null
+          numero_lot?: string | null
+          numero_modele?: string | null
+          pays_origine?: string | null
+          personne_responsable_ue?: string | null
+          procedure_rappel?: string | null
+          recyclage?: string | null
+          reference_interne?: string | null
+          responsable_conformite?: string | null
+          rsgp_valide?: boolean | null
+          service_consommateur?: string | null
+          user_id: string
+          validation_status?: string | null
+        }
+        Update: {
+          age_recommande?: string | null
+          analysis_id?: string | null
+          avertissements?: string[] | null
+          categorie_rsgp?: string | null
+          compatibilites?: string[] | null
+          date_evaluation?: string | null
+          date_import_odoo?: string | null
+          date_mise_conformite?: string | null
+          documents_archives?: Json | null
+          documents_conformite?: Json | null
+          ean?: string | null
+          entretien?: string | null
+          evaluation_risque?: string | null
+          fabricant_adresse?: string | null
+          fabricant_nom?: string | null
+          firmware_ou_logiciel?: string | null
+          fournisseur?: string | null
+          garantie?: string | null
+          generated_at?: string | null
+          historique_incidents?: Json | null
+          id?: string
+          indice_energie?: string | null
+          indice_reparabilite?: number | null
+          langues_disponibles?: string[] | null
+          last_updated?: string | null
+          nom_produit?: string
+          normes_ce?: string[] | null
+          notice_pdf?: string | null
+          numero_lot?: string | null
+          numero_modele?: string | null
+          pays_origine?: string | null
+          personne_responsable_ue?: string | null
+          procedure_rappel?: string | null
+          recyclage?: string | null
+          reference_interne?: string | null
+          responsable_conformite?: string | null
+          rsgp_valide?: boolean | null
+          service_consommateur?: string | null
+          user_id?: string
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rsgp_compliance_analysis_id_fkey"
             columns: ["analysis_id"]
             isOneToOne: false
             referencedRelation: "product_analyses"
