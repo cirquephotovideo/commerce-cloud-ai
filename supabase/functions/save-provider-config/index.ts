@@ -1,0 +1,253 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+interface ProviderTestResult {
+  success: boolean;
+  latency: number;
+  error?: string;
+  models?: string[];
+}
+
+async function testClaudeProvider(apiKey: string): Promise<ProviderTestResult> {
+  const startTime = Date.now();
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Test' }],
+      }),
+    });
+
+    const latency = Date.now() - startTime;
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, latency, error: `API Error: ${response.status}` };
+    }
+
+    return {
+      success: true,
+      latency,
+      models: ['claude-opus-4-20250514', 'claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
+    };
+  } catch (error) {
+    return {
+      success: false,
+      latency: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+async function testOpenAIProvider(apiKey: string): Promise<ProviderTestResult> {
+  const startTime = Date.now();
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages: [{ role: 'user', content: 'Test' }],
+        max_completion_tokens: 10,
+      }),
+    });
+
+    const latency = Date.now() - startTime;
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, latency, error: `API Error: ${response.status}` };
+    }
+
+    return {
+      success: true,
+      latency,
+      models: ['gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'o3', 'o4-mini'],
+    };
+  } catch (error) {
+    return {
+      success: false,
+      latency: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+async function testOpenRouterProvider(apiKey: string): Promise<ProviderTestResult> {
+  const startTime = Date.now();
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://your-app.com',
+      },
+      body: JSON.stringify({
+        model: 'anthropic/claude-3.5-sonnet',
+        messages: [{ role: 'user', content: 'Test' }],
+        max_tokens: 10,
+      }),
+    });
+
+    const latency = Date.now() - startTime;
+
+    if (!response.ok) {
+      const error = await response.text();
+      return { success: false, latency, error: `API Error: ${response.status}` };
+    }
+
+    return {
+      success: true,
+      latency,
+      models: ['anthropic/claude-3.5-sonnet', 'google/gemini-pro-1.5', 'meta-llama/llama-3.1-70b'],
+    };
+  } catch (error) {
+    return {
+      success: false,
+      latency: Date.now() - startTime,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      throw new Error('Unauthorized');
+    }
+
+    const { provider, api_key, model, priority = 0, test_only = false } = await req.json();
+
+    console.log(`[SAVE-PROVIDER-CONFIG] Testing ${provider} for user ${user.id}`);
+
+    // Test the provider
+    let testResult: ProviderTestResult;
+    
+    switch (provider) {
+      case 'claude':
+        testResult = await testClaudeProvider(api_key);
+        break;
+      case 'openai':
+        testResult = await testOpenAIProvider(api_key);
+        break;
+      case 'openrouter':
+        testResult = await testOpenRouterProvider(api_key);
+        break;
+      default:
+        throw new Error(`Unsupported provider: ${provider}`);
+    }
+
+    console.log(`[SAVE-PROVIDER-CONFIG] Test result:`, testResult);
+
+    if (!testResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: testResult.error || 'Provider test failed',
+          latency: testResult.latency 
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // If test_only, don't save
+    if (test_only) {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          latency: testResult.latency,
+          models: testResult.models 
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Save to ai_provider_configs
+    const { error: configError } = await supabase
+      .from('ai_provider_configs')
+      .upsert({
+        provider,
+        api_key_encrypted: api_key, // TODO: Implement proper encryption
+        default_model: model,
+        is_active: true,
+        priority,
+      });
+
+    if (configError) throw configError;
+
+    // Update ai_provider_health
+    const { error: healthError } = await supabase
+      .from('ai_provider_health')
+      .upsert({
+        provider,
+        status: 'online',
+        response_time_ms: testResult.latency,
+        available_models: testResult.models || [],
+        last_check: new Date().toISOString(),
+      });
+
+    if (healthError) throw healthError;
+
+    console.log(`[SAVE-PROVIDER-CONFIG] Configuration saved successfully`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        latency: testResult.latency,
+        models: testResult.models
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error) {
+    console.error('[SAVE-PROVIDER-CONFIG] Error:', error);
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  }
+});

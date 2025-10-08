@@ -2,7 +2,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type AIProvider = 'lovable' | 'ollama';
+export type AIProvider = 'lovable' | 'claude' | 'openai' | 'openrouter' | 'ollama_cloud' | 'ollama_local';
+
+export interface ProviderConfig {
+  provider: AIProvider;
+  priority: number;
+  isActive: boolean;
+  hasApiKey: boolean;
+  status: 'online' | 'offline' | 'degraded';
+}
 
 export const useAIProvider = () => {
   const [provider, setProvider] = useState<AIProvider>('lovable');
@@ -18,17 +26,30 @@ export const useAIProvider = () => {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("user_ai_preferences")
+        // Try the new table first
+        const { data: newData, error: newError } = await supabase
+          .from("user_provider_preferences")
           .select("*")
           .eq("user_id", session.user.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') throw error;
+        if (newData) {
+          setProvider(newData.primary_provider as AIProvider);
+          setFallbackEnabled(newData.fallback_enabled);
+        } else if (newError && newError.code !== 'PGRST116') {
+          // If new table doesn't work, try the old one for backwards compatibility
+          const { data, error } = await supabase
+            .from("user_ai_preferences")
+            .select("*")
+            .eq("user_id", session.user.id)
+            .single();
 
-        if (data) {
-          setProvider(data.preferred_provider as AIProvider);
-          setFallbackEnabled(data.fallback_enabled);
+          if (error && error.code !== 'PGRST116') throw error;
+
+          if (data) {
+            setProvider(data.preferred_provider as AIProvider);
+            setFallbackEnabled(data.fallback_enabled);
+          }
         }
       } catch (error) {
         console.error("Error fetching AI preferences:", error);
@@ -46,17 +67,27 @@ export const useAIProvider = () => {
       if (!session?.user) return;
 
       const { error } = await supabase
-        .from("user_ai_preferences")
+        .from("user_provider_preferences")
         .upsert({
           user_id: session.user.id,
-          preferred_provider: newProvider,
+          primary_provider: newProvider,
           fallback_enabled: fallbackEnabled,
         });
 
       if (error) throw error;
 
       setProvider(newProvider);
-      toast.success(`Provider IA changé vers ${newProvider === 'lovable' ? 'Lovable AI' : 'Ollama Cloud'}`);
+      
+      const providerNames: Record<AIProvider, string> = {
+        'lovable': 'Lovable AI',
+        'claude': 'Claude',
+        'openai': 'OpenAI',
+        'openrouter': 'OpenRouter',
+        'ollama_cloud': 'Ollama Cloud',
+        'ollama_local': 'Ollama Local',
+      };
+      
+      toast.success(`Provider IA changé vers ${providerNames[newProvider]}`);
     } catch (error) {
       console.error("Error updating AI provider:", error);
       toast.error("Erreur lors du changement de provider");
@@ -69,10 +100,10 @@ export const useAIProvider = () => {
       if (!session?.user) return;
 
       const { error } = await supabase
-        .from("user_ai_preferences")
+        .from("user_provider_preferences")
         .upsert({
           user_id: session.user.id,
-          preferred_provider: provider,
+          primary_provider: provider,
           fallback_enabled: enabled,
         });
 

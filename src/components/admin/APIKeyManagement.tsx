@@ -708,6 +708,316 @@ export const APIKeyManagement = () => {
           </Card>
         </>
       )}
+      
+      {/* AI Providers Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Clés API pour Providers IA
+          </CardTitle>
+          <CardDescription>
+            Configurez et testez vos clés API pour Claude, OpenAI et OpenRouter
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Claude */}
+          <AIProviderKeySection
+            providerId="claude"
+            providerName="Claude (Anthropic)"
+            description="Obtenez votre clé sur console.anthropic.com"
+            placeholder="sk-ant-xxxxxxxxxxxxx"
+            defaultModel="claude-sonnet-4-20250514"
+            models={[
+              { value: 'claude-opus-4-20250514', label: 'Claude Opus 4 (Flagship)' },
+              { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (Balanced)' },
+              { value: 'claude-3-5-haiku-20241022', label: 'Claude Haiku 3.5 (Fast)' },
+            ]}
+          />
+
+          {/* OpenAI */}
+          <AIProviderKeySection
+            providerId="openai"
+            providerName="OpenAI"
+            description="Obtenez votre clé sur platform.openai.com"
+            placeholder="sk-xxxxxxxxxxxxx"
+            defaultModel="gpt-5-mini"
+            models={[
+              { value: 'gpt-5', label: 'GPT-5 (Flagship)' },
+              { value: 'gpt-5-mini', label: 'GPT-5 Mini (Balanced)' },
+              { value: 'gpt-5-nano', label: 'GPT-5 Nano (Fast)' },
+              { value: 'o3', label: 'O3 (Reasoning)' },
+              { value: 'o4-mini', label: 'O4 Mini (Fast Reasoning)' },
+            ]}
+          />
+
+          {/* OpenRouter */}
+          <AIProviderKeySection
+            providerId="openrouter"
+            providerName="OpenRouter"
+            description="Obtenez votre clé sur openrouter.ai"
+            placeholder="sk-or-xxxxxxxxxxxxx"
+            defaultModel="anthropic/claude-3.5-sonnet"
+            models={[
+              { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet' },
+              { value: 'google/gemini-pro-1.5', label: 'Gemini Pro 1.5' },
+              { value: 'meta-llama/llama-3.1-70b', label: 'Llama 3.1 70B' },
+              { value: 'openai/gpt-4', label: 'GPT-4' },
+            ]}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 };
+
+// New component for AI Provider Key Section
+interface AIProviderKeySectionProps {
+  providerId: string;
+  providerName: string;
+  description: string;
+  placeholder: string;
+  defaultModel: string;
+  models: { value: string; label: string }[];
+}
+
+function AIProviderKeySection({
+  providerId,
+  providerName,
+  description,
+  placeholder,
+  defaultModel,
+  models,
+}: AIProviderKeySectionProps) {
+  const { toast } = useToast();
+  const [apiKey, setApiKey] = useState('');
+  const [selectedModel, setSelectedModel] = useState(defaultModel);
+  const [showKey, setShowKey] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'testing' | 'valid' | 'invalid'>('idle');
+  const [lastTested, setLastTested] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadProviderConfig();
+  }, [providerId]);
+
+  const loadProviderConfig = async () => {
+    const { data } = await supabase
+      .from('ai_provider_configs')
+      .select('*')
+      .eq('provider', providerId)
+      .single();
+
+    if (data) {
+      setSelectedModel(data.default_model || defaultModel);
+      // Don't load API key for security, just show configured status
+      const { data: health } = await supabase
+        .from('ai_provider_health')
+        .select('*')
+        .eq('provider', providerId)
+        .single();
+
+      if (health) {
+        setStatus(health.status === 'online' ? 'valid' : 'invalid');
+        setLastTested(health.last_check);
+      }
+    }
+  };
+
+  const testProvider = async () => {
+    if (!apiKey) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une clé API",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setStatus('testing');
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('save-provider-config', {
+        body: {
+          provider: providerId,
+          api_key: apiKey,
+          model: selectedModel,
+          test_only: true,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setStatus('valid');
+        setLastTested(new Date().toISOString());
+        toast({
+          title: "✅ Test réussi",
+          description: `Connexion à ${providerName} établie (${data.latency}ms)`,
+        });
+      } else {
+        setStatus('invalid');
+        setError(data.error);
+        toast({
+          title: "❌ Test échoué",
+          description: data.error || "Impossible de se connecter",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      setStatus('invalid');
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      toast({
+        title: "❌ Erreur",
+        description: "Erreur lors du test",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveProvider = async () => {
+    if (!apiKey) {
+      toast({
+        title: "Erreur",
+        description: "Veuillez entrer une clé API",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('save-provider-config', {
+        body: {
+          provider: providerId,
+          api_key: apiKey,
+          model: selectedModel,
+          priority: 0,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setStatus('valid');
+        setLastTested(new Date().toISOString());
+        toast({
+          title: "✅ Configuration sauvegardée",
+          description: `${providerName} configuré avec succès`,
+        });
+        setApiKey(''); // Clear for security
+      } else {
+        setError(data.error);
+        toast({
+          title: "❌ Échec de la sauvegarde",
+          description: data.error || "Configuration invalide",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      toast({
+        title: "❌ Erreur",
+        description: "Erreur lors de la sauvegarde",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getStatusBadge = () => {
+    switch (status) {
+      case 'valid':
+        return <Badge variant="default">🟢 Valide</Badge>;
+      case 'invalid':
+        return <Badge variant="destructive">🔴 Invalide</Badge>;
+      case 'testing':
+        return <Badge variant="secondary">🔄 Test en cours...</Badge>;
+      default:
+        return <Badge variant="secondary">⚪ Non testée</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-4 p-4 rounded-lg border">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">{providerName}</h3>
+        {getStatusBadge()}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Clé API</Label>
+        <div className="flex gap-2">
+          <Input
+            type={showKey ? "text" : "password"}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={placeholder}
+            className="flex-1"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowKey(!showKey)}
+          >
+            {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Modèle par défaut</Label>
+        <select
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          {models.map((model) => (
+            <option key={model.value} value={model.value}>
+              {model.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {lastTested && (
+        <p className="text-xs text-muted-foreground">
+          Dernière vérification: {new Date(lastTested).toLocaleString()}
+        </p>
+      )}
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex gap-2">
+        <Button
+          onClick={testProvider}
+          variant="outline"
+          disabled={status === 'testing' || !apiKey}
+          className="flex-1"
+        >
+          <TestTube className="h-4 w-4 mr-2" />
+          {status === 'testing' ? 'Test en cours...' : 'Tester'}
+        </Button>
+        <Button
+          onClick={saveProvider}
+          disabled={saving || !apiKey || status === 'testing'}
+          className="flex-1"
+        >
+          <Save className="h-4 w-4 mr-2" />
+          {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+        </Button>
+      </div>
+    </div>
+  );
+}
