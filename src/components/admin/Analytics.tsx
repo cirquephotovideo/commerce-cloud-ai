@@ -27,32 +27,21 @@ export const Analytics = () => {
 
   const fetchAnalytics = async () => {
     try {
-      // Fetch total users
-      const { count: usersCount } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch active subscriptions
-      const { count: subsCount } = await supabase
-        .from("user_subscriptions")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active");
-
-      // Fetch active subscriptions with plans to calculate MRR
-      const { data: subs } = await supabase
-        .from("user_subscriptions")
-        .select(`
+      // Utiliser Promise.allSettled pour récupérer les données même si certaines échouent
+      const [usersResult, subsCountResult, subsDataResult, analysesResult] = await Promise.allSettled([
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("user_subscriptions").select("*", { count: "exact", head: true }).eq("status", "active"),
+        supabase.from("user_subscriptions").select(`
           billing_interval,
-          subscription_plans (
-            price_monthly,
-            price_yearly
-          )
-        `)
-        .eq("status", "active");
+          subscription_plans (price_monthly, price_yearly)
+        `).eq("status", "active"),
+        supabase.from("product_analyses").select("*", { count: "exact", head: true })
+      ]);
 
+      // Calculer le MRR
       let mrr = 0;
-      if (subs) {
-        subs.forEach((sub: any) => {
+      if (subsDataResult.status === 'fulfilled' && subsDataResult.value.data) {
+        subsDataResult.value.data.forEach((sub: any) => {
           if (sub.billing_interval === "monthly") {
             mrr += sub.subscription_plans?.price_monthly || 0;
           } else if (sub.billing_interval === "yearly") {
@@ -61,16 +50,11 @@ export const Analytics = () => {
         });
       }
 
-      // Fetch total analyses
-      const { count: analysesCount } = await supabase
-        .from("product_analyses")
-        .select("*", { count: "exact", head: true });
-
       setData({
-        totalUsers: usersCount || 0,
-        activeSubscriptions: subsCount || 0,
+        totalUsers: usersResult.status === 'fulfilled' ? (usersResult.value.count || 0) : 0,
+        activeSubscriptions: subsCountResult.status === 'fulfilled' ? (subsCountResult.value.count || 0) : 0,
         mrr: Math.round(mrr),
-        totalAnalyses: analysesCount || 0,
+        totalAnalyses: analysesResult.status === 'fulfilled' ? (analysesResult.value.count || 0) : 0,
       });
     } catch (error) {
       console.error("Error fetching analytics:", error);

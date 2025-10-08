@@ -16,12 +16,13 @@ interface UserData {
   full_name: string;
   created_at: string;
   role?: string;
-  subscription?: {
+  subscription?: Array<{
+    user_id: string;
     status: string;
-    plan: {
+    subscription_plans: {
       name: string;
     };
-  };
+  }>;
 }
 
 export const UserManagement = () => {
@@ -39,38 +40,44 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
+      // Récupérer les profils
       const { data: profilesData, error: profilesError } = await supabase
         .from("profiles")
-        .select(`
-          id,
-          email,
-          full_name,
-          created_at,
-          user_subscriptions (
-            status,
-            subscription_plans (name)
-          )
-        `)
+        .select("id, email, full_name, created_at")
         .order("created_at", { ascending: false });
 
       if (profilesError) throw profilesError;
 
-      // Récupérer les rôles des utilisateurs
-      const { data: rolesData, error: rolesError } = await supabase
+      // Récupérer les rôles
+      const { data: rolesData } = await supabase
         .from("user_roles")
         .select("user_id, role");
 
-      if (rolesError) throw rolesError;
+      // Récupérer les abonnements séparément (peut échouer sans bloquer)
+      const { data: subscriptionsData } = await supabase
+        .from("user_subscriptions")
+        .select(`
+          user_id,
+          status,
+          subscription_plans (name)
+        `);
 
-      // Mapper les rôles aux utilisateurs
+      // Mapper les données
       const rolesMap = new Map(rolesData?.map(r => [r.user_id, r.role]) || []);
+      const subscriptionsMap = new Map(
+        subscriptionsData?.map(s => [s.user_id, s]) || []
+      );
       
-      const usersWithRoles = (profilesData || []).map(user => ({
-        ...user,
-        role: rolesMap.get(user.id) || "user"
-      }));
+      const usersWithData = (profilesData || []).map(user => {
+        const subscription = subscriptionsMap.get(user.id);
+        return {
+          ...user,
+          role: rolesMap.get(user.id) || "user",
+          subscription: subscription ? [subscription] : []
+        };
+      });
 
-      setUsers(usersWithRoles);
+      setUsers(usersWithData);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast({
