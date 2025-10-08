@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/useUserRole";
 import { Search, UserPlus, Shield } from "lucide-react";
 import { CreateUserDialog } from "./CreateUserDialog";
 import { EditRoleDialog } from "./EditRoleDialog";
@@ -33,6 +34,7 @@ export const UserManagement = () => {
   const [editRoleDialogOpen, setEditRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; role: string } | null>(null);
   const { toast } = useToast();
+  const { isSuperAdmin } = useUserRole();
 
   useEffect(() => {
     fetchUsers();
@@ -116,10 +118,19 @@ export const UserManagement = () => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Gestion des Utilisateurs</CardTitle>
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              Créer un compte
-            </Button>
+            <div className="flex items-center gap-2">
+              {!isSuperAdmin && (
+                <Badge variant="secondary" className="text-xs">
+                  👀 Lecture seule
+                </Badge>
+              )}
+              {isSuperAdmin && (
+                <Button onClick={() => setCreateDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Créer un compte
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex gap-2 mt-4">
             <div className="relative flex-1">
@@ -172,17 +183,19 @@ export const UserManagement = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => {
-                          setSelectedUser({ id: user.id, email: user.email, role: user.role || "user" });
-                          setEditRoleDialogOpen(true);
-                        }}
-                      >
-                        <Shield className="h-4 w-4 mr-1" />
-                        Rôle
-                      </Button>
+                      {isSuperAdmin && (
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedUser({ id: user.id, email: user.email, role: user.role || "user" });
+                            setEditRoleDialogOpen(true);
+                          }}
+                        >
+                          <Shield className="h-4 w-4 mr-1" />
+                          Rôle
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

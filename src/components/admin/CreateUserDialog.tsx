@@ -28,6 +28,25 @@ export const CreateUserDialog = ({ open, onOpenChange, onSuccess }: CreateUserDi
     setLoading(true);
 
     try {
+      // Vérifier que l'utilisateur connecté est super_admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+      
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (roleData?.role !== "super_admin") {
+        toast({
+          title: "Accès refusé",
+          description: "Seuls les super admins peuvent créer des utilisateurs",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
       // Créer l'utilisateur via l'API Supabase Auth Admin
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: formData.email,

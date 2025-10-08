@@ -31,6 +31,25 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
     setLoading(true);
 
     try {
+      // Vérifier que l'utilisateur connecté est super_admin
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+      
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (roleData?.role !== "super_admin") {
+        toast({
+          title: "Accès refusé",
+          description: "Seuls les super admins peuvent modifier les rôles",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
       // Si le rôle est "user", supprimer l'entrée dans user_roles
       if (selectedRole === "user") {
         const { error } = await supabase
