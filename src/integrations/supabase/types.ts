@@ -59,6 +59,72 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_provider_health: {
+        Row: {
+          available_models: Json | null
+          error_details: Json | null
+          id: string
+          last_check: string | null
+          provider: string
+          response_time_ms: number | null
+          status: string
+        }
+        Insert: {
+          available_models?: Json | null
+          error_details?: Json | null
+          id?: string
+          last_check?: string | null
+          provider: string
+          response_time_ms?: number | null
+          status: string
+        }
+        Update: {
+          available_models?: Json | null
+          error_details?: Json | null
+          id?: string
+          last_check?: string | null
+          provider?: string
+          response_time_ms?: number | null
+          status?: string
+        }
+        Relationships: []
+      }
+      ai_request_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          latency_ms: number | null
+          model: string | null
+          prompt_type: string | null
+          provider: string
+          success: boolean
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          prompt_type?: string | null
+          provider: string
+          success: boolean
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          model?: string | null
+          prompt_type?: string | null
+          provider?: string
+          success?: boolean
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       amazon_access_tokens: {
         Row: {
           access_token: string
