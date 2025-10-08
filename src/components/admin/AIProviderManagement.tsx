@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save } from "lucide-react";
 import { useAIProvider, AIProvider } from "@/hooks/useAIProvider";
 import { ProviderSelector } from "./ProviderSelector";
+import { ImportExportButtons } from "./ImportExportButtons";
 
 type ProviderStatus = 'online' | 'offline' | 'degraded';
 
@@ -45,13 +46,33 @@ export default function AIProviderManagement() {
   const [fallbackOrder, setFallbackOrder] = useState<AIProvider[]>([
     'lovable', 'claude', 'openai', 'openrouter', 'ollama_cloud', 'ollama_local'
   ]);
+  const [userPreferences, setUserPreferences] = useState<any[]>([]);
+  const [providerConfigs, setProviderConfigs] = useState<any[]>([]);
 
   useEffect(() => {
     loadProviderHealth();
     loadRecentLogs();
     loadStats();
     loadFallbackOrder();
+    loadConfig();
   }, []);
+
+  const loadConfig = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    const { data: prefs } = await supabase
+      .from('user_provider_preferences')
+      .select('*')
+      .eq('user_id', session.user.id);
+    
+    const { data: configs } = await supabase
+      .from('ai_provider_configs')
+      .select('*');
+
+    if (prefs) setUserPreferences(prefs);
+    if (configs) setProviderConfigs(configs);
+  };
 
   const loadProviderHealth = async () => {
     const { data } = await supabase
@@ -215,8 +236,42 @@ export default function AIProviderManagement() {
     'ollama_local': 'Ollama Local',
   };
 
+  const handleImport = async (data: any) => {
+    if (!data.providers || !Array.isArray(data.providers)) {
+      throw new Error('Format invalide: providers attendu');
+    }
+
+    for (const provider of data.providers) {
+      const { error } = await supabase.from('ai_provider_configs').upsert(provider);
+      if (error) throw error;
+    }
+
+    if (data.user_preferences && Array.isArray(data.user_preferences)) {
+      for (const pref of data.user_preferences) {
+        const { error } = await supabase.from('user_provider_preferences').upsert(pref);
+        if (error) throw error;
+      }
+    }
+
+    await loadConfig();
+  };
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-bold">Gestion des Fournisseurs IA</h2>
+          <p className="text-muted-foreground">
+            Configurez vos fournisseurs IA et gérez les priorités
+          </p>
+        </div>
+        <ImportExportButtons
+          data={{ providers: providerConfigs, user_preferences: userPreferences }}
+          filename="ai-providers"
+          onImport={handleImport}
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

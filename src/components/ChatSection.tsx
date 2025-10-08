@@ -87,11 +87,26 @@ export const ChatSection = () => {
     setIsLoading(true);
 
     try {
+      console.log('[ChatSection] Calling ai-chat function...');
+      console.log('[ChatSection] Message:', userMessage);
+      console.log('[ChatSection] Messages history:', messages.length);
+      
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: { message: userMessage, messages }
       });
 
-      if (error) throw error;
+      console.log('[ChatSection] Response data:', data);
+      console.log('[ChatSection] Response error:', error);
+
+      if (error) {
+        console.error('[ChatSection] Error from function:', error);
+        throw error;
+      }
+
+      if (!data?.response) {
+        console.error('[ChatSection] No response in data:', data);
+        throw new Error('Aucune réponse reçue de l\'IA');
+      }
 
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
 
@@ -101,9 +116,13 @@ export const ChatSection = () => {
           saveConversation();
         }, 1000);
       }
-    } catch (error) {
-      console.error('Error:', error);
-      toast.error("Erreur lors de la communication avec l'IA");
+    } catch (error: any) {
+      console.error('[ChatSection] Full error:', error);
+      const errorMessage = error?.message || error?.error || 'Erreur lors de la communication avec l\'IA';
+      toast.error(errorMessage);
+      
+      // Remove the user message if there was an error
+      setMessages(prev => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
     }

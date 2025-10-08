@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Server, TestTube } from "lucide-react";
+import { ImportExportButtons } from "./ImportExportButtons";
 
 export const OllamaConfiguration = () => {
   const [config, setConfig] = useState({
@@ -114,6 +115,19 @@ export const OllamaConfiguration = () => {
     }
   };
 
+  const handleImport = async (data: any) => {
+    if (!Array.isArray(data)) {
+      throw new Error('Format invalide: un tableau de configurations est attendu');
+    }
+
+    for (const configItem of data) {
+      const { error } = await supabase.from('ollama_configurations').upsert(configItem);
+      if (error) throw error;
+    }
+
+    await fetchConfig();
+  };
+
   if (isLoading) {
     return <div>Chargement...</div>;
   }
@@ -121,13 +135,23 @@ export const OllamaConfiguration = () => {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Server className="h-5 w-5 text-primary" />
-          <CardTitle>Configuration Ollama Cloud</CardTitle>
+        <div className="flex justify-between items-start">
+          <div>
+            <div className="flex items-center gap-2">
+              <Server className="h-5 w-5 text-primary" />
+              <CardTitle>Configuration Ollama Cloud</CardTitle>
+            </div>
+            <CardDescription>
+              Connectez votre Mac Mini M4 avec Ollama pour utiliser l'IA en local
+            </CardDescription>
+          </div>
+          <ImportExportButtons
+            data={[config]}
+            filename="ollama-config"
+            onImport={handleImport}
+            disabled={isLoading}
+          />
         </div>
-        <CardDescription>
-          Connectez votre Mac Mini M4 avec Ollama pour utiliser l'IA en local
-        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">

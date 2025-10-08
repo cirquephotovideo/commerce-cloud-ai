@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Save, X, Edit, History, TestTube, Download, Upload } from "lucide-react";
 import { Loader2 } from "lucide-react";
+import { ImportExportButtons } from "./ImportExportButtons";
 
 interface AIPrompt {
   id: string;
@@ -121,15 +122,17 @@ export const AIPromptsManagement = () => {
     }
   };
 
-  const exportPrompts = () => {
-    const dataStr = JSON.stringify(prompts, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `ai-prompts-${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
+  const handleImport = async (data: any) => {
+    if (!Array.isArray(data)) {
+      throw new Error('Format invalide: un tableau de prompts est attendu');
+    }
+
+    for (const prompt of data) {
+      const { error } = await supabase.from('ai_prompts').upsert(prompt);
+      if (error) throw error;
+    }
+
+    await loadPrompts();
   };
 
   const filteredPrompts = prompts.filter(p => p.function_name === selectedFunction);
@@ -151,10 +154,12 @@ export const AIPromptsManagement = () => {
             Éditez et gérez les prompts utilisés par les fonctions IA
           </p>
         </div>
-        <Button onClick={exportPrompts} variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          Exporter
-        </Button>
+        <ImportExportButtons
+          data={prompts}
+          filename="ai-prompts"
+          onImport={handleImport}
+          disabled={loading}
+        />
       </div>
 
       <Tabs value={selectedFunction} onValueChange={setSelectedFunction}>

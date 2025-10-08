@@ -6,16 +6,28 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('[AI-CHAT] Request received');
+  console.log('[AI-CHAT] Method:', req.method);
+  console.log('[AI-CHAT] URL:', req.url);
+  
   if (req.method === 'OPTIONS') {
+    console.log('[AI-CHAT] Handling OPTIONS request');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message, messages = [] } = await req.json();
-    console.log('Received message:', message);
+    const body = await req.json();
+    console.log('[AI-CHAT] Request body:', JSON.stringify(body));
+    
+    const { message, messages = [] } = body;
+    console.log('[AI-CHAT] Message:', message);
+    console.log('[AI-CHAT] Messages count:', messages.length);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    console.log('[AI-CHAT] LOVABLE_API_KEY present:', !!LOVABLE_API_KEY);
+    
     if (!LOVABLE_API_KEY) {
+      console.error('[AI-CHAT] LOVABLE_API_KEY not configured');
       throw new Error('LOVABLE_API_KEY not configured');
     }
 
@@ -30,7 +42,9 @@ serve(async (req) => {
       { role: 'user', content: message }
     ];
 
-    console.log('Calling Lovable AI...');
+    console.log('[AI-CHAT] Calling Lovable AI Gateway...');
+    console.log('[AI-CHAT] Conversation history length:', conversationHistory.length);
+    
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -45,14 +59,38 @@ serve(async (req) => {
       }),
     });
 
+    console.log('[AI-CHAT] Response status:', response.status);
+    console.log('[AI-CHAT] Response ok:', response.ok);
+    
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-      throw new Error(`AI API error: ${response.status}`);
+      console.error('[AI-CHAT] AI API error:', response.status, errorText);
+      
+      if (response.status === 429) {
+        return new Response(
+          JSON.stringify({ error: 'Limite de requêtes atteinte. Veuillez réessayer plus tard.' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 429,
+          }
+        );
+      }
+      
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: 'Crédits insuffisants. Veuillez recharger votre compte.' }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 402,
+          }
+        );
+      }
+      
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('AI response received');
+    console.log('[AI-CHAT] AI response received successfully');
     
     const aiResponse = data.choices[0].message.content;
 
@@ -65,10 +103,16 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in ai-chat function:', error);
+    console.error('[AI-CHAT] Error in ai-chat function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('[AI-CHAT] Error stack:', errorStack);
+    
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: errorStack,
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,

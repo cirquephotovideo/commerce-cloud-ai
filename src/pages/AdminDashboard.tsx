@@ -17,7 +17,8 @@ import { AmazonLogs } from "@/components/admin/AmazonLogs";
 import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
 import AIProviderManagement from "@/components/admin/AIProviderManagement";
 import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon } from "lucide-react";
+import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -98,6 +99,10 @@ const AdminDashboard = () => {
                 <SearchIcon className="h-4 w-4" />
                 <span className="hidden sm:inline">Amazon Tester</span>
               </TabsTrigger>
+              <TabsTrigger value="global-config" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Settings className="h-4 w-4" />
+                <span className="hidden sm:inline">Config Globale</span>
+              </TabsTrigger>
               <TabsTrigger value="debug" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Info className="h-4 w-4" />
                 <span className="hidden sm:inline">Debug</span>
@@ -164,6 +169,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="amazon-tester" className="space-y-6">
             <AmazonProductTester />
+          </TabsContent>
+
+          <TabsContent value="global-config" className="space-y-6">
+            <GlobalConfigManager />
           </TabsContent>
         </Tabs>
       </div>
