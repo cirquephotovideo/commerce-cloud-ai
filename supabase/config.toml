@@ -101,3 +101,15 @@ verify_jwt = true
 
 [functions.test-aws-sigv4]
 verify_jwt = true
+
+[functions.claude-proxy]
+verify_jwt = true
+
+[functions.openai-proxy]
+verify_jwt = true
+
+[functions.openrouter-proxy]
+verify_jwt = true
+
+[functions.amazon-product-search]
+verify_jwt = true

@@ -59,6 +59,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_provider_configs: {
+        Row: {
+          api_key_encrypted: string | null
+          api_url: string | null
+          created_at: string | null
+          default_model: string | null
+          id: string
+          is_active: boolean | null
+          priority: number | null
+          provider: string
+          updated_at: string | null
+        }
+        Insert: {
+          api_key_encrypted?: string | null
+          api_url?: string | null
+          created_at?: string | null
+          default_model?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          provider: string
+          updated_at?: string | null
+        }
+        Update: {
+          api_key_encrypted?: string | null
+          api_url?: string | null
+          created_at?: string | null
+          default_model?: string | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          provider?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ai_provider_health: {
         Row: {
           available_models: Json | null

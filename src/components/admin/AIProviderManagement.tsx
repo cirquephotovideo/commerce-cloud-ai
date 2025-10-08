@@ -445,22 +445,31 @@ export default function AIProviderManagement() {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
           <TabsTrigger value="lovable">
             <Zap className="h-4 w-4 mr-2" />
-            Lovable AI
+            Lovable
+          </TabsTrigger>
+          <TabsTrigger value="claude">
+            🤖 Claude
+          </TabsTrigger>
+          <TabsTrigger value="openai">
+            🚀 OpenAI
+          </TabsTrigger>
+          <TabsTrigger value="openrouter">
+            🌐 Router
           </TabsTrigger>
           <TabsTrigger value="cloud">
             <Cloud className="h-4 w-4 mr-2" />
-            Ollama Cloud
+            Cloud
           </TabsTrigger>
           <TabsTrigger value="local">
             <Laptop className="h-4 w-4 mr-2" />
-            Ollama Local
+            Local
           </TabsTrigger>
           <TabsTrigger value="monitoring">
             <Activity className="h-4 w-4 mr-2" />
-            Monitoring
+            Monitor
           </TabsTrigger>
           <TabsTrigger value="tests">
             <TestTube className="h-4 w-4 mr-2" />
@@ -517,6 +526,126 @@ export default function AIProviderManagement() {
                     </div>
                   ))}
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="claude" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>🤖 Claude (Anthropic)</CardTitle>
+              <CardDescription>Provider Claude avec modèles Opus, Sonnet et Haiku</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Clé API Anthropic</Label>
+                <Input type="password" placeholder="sk-ant-xxx" />
+                <p className="text-xs text-muted-foreground">
+                  Obtenez votre clé sur console.anthropic.com
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Modèle par défaut</Label>
+                <Select defaultValue="claude-sonnet-4-20250514">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="claude-opus-4-20250514">Claude Opus 4 (Flagship)</SelectItem>
+                    <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4 (Balanced)</SelectItem>
+                    <SelectItem value="claude-3-5-haiku-20241022">Claude Haiku 3.5 (Fast)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button onClick={() => toast({ title: "🧪 Test Claude", description: "Connexion à implémenter" })}>
+                <TestTube className="h-4 w-4 mr-2" />
+                Tester la connexion
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="openai" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>🚀 OpenAI</CardTitle>
+              <CardDescription>Provider OpenAI avec GPT-5, O3 et O4</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Clé API OpenAI</Label>
+                <Input type="password" placeholder="sk-xxx" />
+                <p className="text-xs text-muted-foreground">
+                  Obtenez votre clé sur platform.openai.com
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Modèle par défaut</Label>
+                <Select defaultValue="gpt-5-mini">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-5">GPT-5 (Flagship)</SelectItem>
+                    <SelectItem value="gpt-5-mini">GPT-5 Mini (Balanced)</SelectItem>
+                    <SelectItem value="gpt-5-nano">GPT-5 Nano (Fast)</SelectItem>
+                    <SelectItem value="o3">O3 (Reasoning)</SelectItem>
+                    <SelectItem value="o4-mini">O4 Mini (Fast Reasoning)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button onClick={() => toast({ title: "🧪 Test OpenAI", description: "Connexion à implémenter" })}>
+                <TestTube className="h-4 w-4 mr-2" />
+                Tester la connexion
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="openrouter" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>🌐 OpenRouter</CardTitle>
+              <CardDescription>Accès à tous les modèles IA via OpenRouter</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Clé API OpenRouter</Label>
+                <Input type="password" placeholder="sk-or-xxx" />
+                <p className="text-xs text-muted-foreground">
+                  Obtenez votre clé sur openrouter.ai
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Modèle par défaut</Label>
+                <Select defaultValue="anthropic/claude-3.5-sonnet">
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</SelectItem>
+                    <SelectItem value="google/gemini-pro-1.5">Gemini Pro 1.5</SelectItem>
+                    <SelectItem value="meta-llama/llama-3.1-70b">Llama 3.1 70B</SelectItem>
+                    <SelectItem value="openai/gpt-4">GPT-4</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={() => toast({ title: "🔄 Chargement", description: "Liste des modèles à implémenter" })} variant="outline">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Charger les modèles
+                </Button>
+                <Button onClick={() => toast({ title: "🧪 Test OpenRouter", description: "Connexion à implémenter" })}>
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Tester
+                </Button>
               </div>
             </CardContent>
           </Card>

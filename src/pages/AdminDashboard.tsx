@@ -16,7 +16,8 @@ import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
 import { AmazonLogs } from "@/components/admin/AmazonLogs";
 import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
 import AIProviderManagement from "@/components/admin/AIProviderManagement";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain } from "lucide-react";
+import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
+import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
@@ -91,7 +92,11 @@ const AdminDashboard = () => {
               </TabsTrigger>
               <TabsTrigger value="amazon-logs" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Amazon</span>
+                <span className="hidden sm:inline">Amazon Logs</span>
+              </TabsTrigger>
+              <TabsTrigger value="amazon-tester" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <SearchIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Amazon Tester</span>
               </TabsTrigger>
               <TabsTrigger value="debug" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Info className="h-4 w-4" />
@@ -155,6 +160,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="ai-providers" className="space-y-6">
             <AIProviderManagement />
+          </TabsContent>
+
+          <TabsContent value="amazon-tester" className="space-y-6">
+            <AmazonProductTester />
           </TabsContent>
         </Tabs>
       </div>
