@@ -22,7 +22,7 @@ const RSGP_ALLOWED_COLUMNS = [
   'garantie', 'service_consommateur', 'langues_disponibles', 
   'rsgp_valide', 'date_mise_conformite', 'responsable_conformite',
   'documents_archives', 'fournisseur', 'date_import_odoo', 
-  'generation_metadata', 'validation_status', 'statut'
+  'generation_metadata', 'validation_status'
 ];
 
 // ✅ Domaines de confiance pour sources
@@ -845,13 +845,13 @@ ${relevantResults.map(r => `[${r.title}] ${r.snippet}`).join('\n')}
 JSON:
 {
   "rsgp_valide": "Oui",
-  "statut": "actif",
+  "validation_status": "draft",
   "sources_urls": ["url1", "url2"]
 }
 
 RÈGLES:
 - rsgp_valide: "Oui" si certifications CE + conformité visible, "En attente" si manque docs, "Non conforme" si rappel/alerte
-- statut: "actif" si commercialisé, "draft" si en développement, "retiré" si rappel`;
+- validation_status: "draft" par défaut`;
 }
 
 // ============================================
@@ -1021,10 +1021,10 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
           type: "object",
           properties: {
             rsgp_valide: { type: "string", enum: ["Oui", "En attente", "Non conforme"] },
-            statut: { type: "string", enum: ["actif", "draft", "retiré"] },
+            validation_status: { type: "string", enum: ["draft", "validated", "rejected"] },
             sources_urls: { type: "array", items: { type: "string" } }
           },
-          required: ["rsgp_valide", "statut", "sources_urls"],
+          required: ["rsgp_valide", "validation_status", "sources_urls"],
           additionalProperties: false
         }
       }
@@ -1246,7 +1246,7 @@ function mergeRSGPResults(
     indice_reparabilite: 0,
     indice_energie: 'N/A',
     rsgp_valide: 'En attente',
-    statut: 'draft',
+    validation_status: 'draft',
     date_mise_conformite: null,
     responsable_conformite: '',
     documents_archives: {},
