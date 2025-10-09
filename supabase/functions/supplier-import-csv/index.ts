@@ -78,37 +78,54 @@ serve(async (req) => {
           // Update existing
           await supabase
             .from('supplier_products')
-            .update(productData)
+            .update({ ...productData, enrichment_status: 'completed', enrichment_progress: 100 })
             .eq('id', existing.id);
           matched++;
         } else {
           // Insert new
-          const { error: insertError } = await supabase
+          const { data: newProduct, error: insertError } = await supabase
             .from('supplier_products')
-            .insert([productData]);
+            .insert([productData])
+            .select()
+            .single();
 
           if (insertError) throw insertError;
-          newProducts++;
-        }
 
-        // Try to match with existing product_analyses by EAN
-        if (ean) {
-          const { data: analysis } = await supabase
-            .from('product_analyses')
-            .select('id')
-            .ilike('analysis_results', `%${ean}%`)
-            .maybeSingle();
-
-          if (analysis) {
-            await supabase
+          // Try to match with existing product_analyses by EAN
+          let matchedAnalysis = false;
+          if (ean) {
+            const { data: analysis } = await supabase
               .from('product_analyses')
-              .update({
-                purchase_price: parseFloat(price.replace(',', '.')),
-                purchase_currency: 'EUR',
-                last_price_update: new Date().toISOString(),
-              })
-              .eq('id', analysis.id);
+              .select('id')
+              .eq('ean', ean)
+              .maybeSingle();
+
+            if (analysis) {
+              await supabase
+                .from('product_analyses')
+                .update({
+                  purchase_price: parseFloat(price.replace(',', '.')),
+                  purchase_currency: 'EUR',
+                  supplier_product_id: newProduct.id,
+                })
+                .eq('id', analysis.id);
+              
+              await supabase
+                .from('supplier_products')
+                .update({ enrichment_status: 'completed', enrichment_progress: 100 })
+                .eq('id', newProduct.id);
+              
+              matchedAnalysis = true;
+            }
           }
+
+          // If no match found, trigger auto-enrichment
+          if (!matchedAnalysis) {
+            console.log(`🔍 Product ${name} not found, marking for enrichment...`);
+            // The process-pending-enrichments function will handle this
+          }
+
+          newProducts++;
         }
 
         products.push(productData);

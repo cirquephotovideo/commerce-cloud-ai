@@ -2299,6 +2299,8 @@ export type Database = {
           currency: string | null
           delivery_time_days: number | null
           ean: string | null
+          enrichment_progress: number | null
+          enrichment_status: string | null
           id: string
           last_updated: string | null
           minimum_order_quantity: number | null
@@ -2316,6 +2318,8 @@ export type Database = {
           currency?: string | null
           delivery_time_days?: number | null
           ean?: string | null
+          enrichment_progress?: number | null
+          enrichment_status?: string | null
           id?: string
           last_updated?: string | null
           minimum_order_quantity?: number | null
@@ -2333,6 +2337,8 @@ export type Database = {
           currency?: string | null
           delivery_time_days?: number | null
           ean?: string | null
+          enrichment_progress?: number | null
+          enrichment_status?: string | null
           id?: string
           last_updated?: string | null
           minimum_order_quantity?: number | null

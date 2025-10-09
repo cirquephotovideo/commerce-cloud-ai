@@ -32,6 +32,7 @@ const mainNavigation = [
 
 const supplierNavigation = [
   { title: "Fournisseurs", url: "/suppliers", icon: Truck },
+  { title: "Produits Importés", url: "/imported-products", icon: Package },
 ];
 
 const marketNavigation = [
