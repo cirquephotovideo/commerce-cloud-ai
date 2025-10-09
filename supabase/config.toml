@@ -81,9 +81,6 @@ verify_jwt = true
 [functions.verify-api-keys]
 verify_jwt = true
 
-[functions.manage-api-keys]
-verify_jwt = true
-
 [functions.generate-themed-image]
 verify_jwt = true
 
