@@ -597,18 +597,23 @@ serve(async (req) => {
     }
 
     // Get Amazon data if available
-    const { data: amazonData } = await supabase
+    const { data: amazonData, error: amazonError } = await supabase
       .from('amazon_product_data')
       .select('*')
       .eq('analysis_id', analysis_id)
-      .single();
+      .maybeSingle();  // ✅ CORRECTION: maybeSingle au lieu de single
 
-    console.log('[RSGP] 📊 Données Amazon:', {
-      ean: amazonData?.ean,
-      brand: amazonData?.brand,
-      manufacturer: amazonData?.manufacturer,
-      seller: amazonData?.buy_box_seller_name,
-      country: amazonData?.buy_box_ship_country
+    if (amazonError) {
+      console.warn('[RSGP] ⚠️ Erreur récupération Amazon:', amazonError);
+    }
+
+    console.log('[RSGP] 📊 Données Amazon récupérées:', {
+      hasData: !!amazonData,
+      ean: amazonData?.ean || 'non disponible',
+      brand: amazonData?.brand || 'non disponible',
+      manufacturer: amazonData?.manufacturer || 'non disponible',
+      seller: amazonData?.buy_box_seller_name || 'non disponible',
+      country: amazonData?.buy_box_ship_country || 'non disponible'
     });
 
     // ========== PHASE 1: Recherche Web avec Fallback ==========

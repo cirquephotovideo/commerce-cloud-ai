@@ -152,11 +152,13 @@ export const ProductActionsTab = ({
         const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
           body: { 
             action: 'check_status',
-            video_id: videoId
+            analysis_id: analysis.id  // ✅ CORRECTION: utilise analysis_id
           }
         });
         
         if (error) throw error;
+        
+        console.log('[HEYGEN] Status check:', data);
         
         const progress = data?.progress || 0;
         setVideoGenerationProgress(progress);
@@ -177,6 +179,7 @@ export const ProductActionsTab = ({
           toast.error("Erreur lors de la génération de la vidéo");
         }
       } catch (error) {
+        console.error('[HEYGEN] Monitoring error:', error);
         clearInterval(pollInterval);
         setHeygenStatus('error');
         setIsRegeneratingHeygen(false);
@@ -377,13 +380,13 @@ export const ProductActionsTab = ({
             </div>
             
             {/* Lecteur vidéo HeyGen */}
-            {heygenStatus === 'completed' && analysis?.heygen_video_url && (
+            {heygenStatus === 'completed' && analysis?.analysis_result?.heygen_video_url && (
               <div className="p-3 border rounded-lg bg-muted/50 mt-2">
                 <p className="text-sm font-medium mb-2">Vidéo générée</p>
                 <video 
                   controls 
                   className="w-full rounded-md"
-                  src={analysis.heygen_video_url}
+                  src={analysis.analysis_result.heygen_video_url}
                 >
                   Votre navigateur ne supporte pas la lecture vidéo.
                 </video>

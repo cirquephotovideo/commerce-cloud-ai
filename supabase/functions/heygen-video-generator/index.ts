@@ -136,14 +136,25 @@ serve(async (req) => {
           })
           .eq('id', videoData.id);
 
+        // Get current analysis to merge enrichment_status
+        const { data: currentAnalysis } = await supabase
+          .from('product_analyses')
+          .select('enrichment_status, analysis_result')
+          .eq('id', analysis_id)
+          .single();
+
         await supabase
           .from('product_analyses')
           .update({
-            enrichment_status: supabase.rpc('jsonb_set', {
-              target: 'enrichment_status',
-              path: '{heygen}',
-              new_value: '"completed"'
-            })
+            enrichment_status: {
+              ...(currentAnalysis?.enrichment_status || {}),
+              heygen: 'completed'
+            },
+            analysis_result: {
+              ...(currentAnalysis?.analysis_result || {}),
+              heygen_video_url: statusData.data.video_url,
+              heygen_thumbnail_url: statusData.data.thumbnail_url
+            }
           })
           .eq('id', analysis_id);
       }

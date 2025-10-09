@@ -24,16 +24,21 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
   const fetchRSGPData = async () => {
     try {
       setLoading(true);
-    const { data, error } = await supabase
-      .from("rsgp_compliance")
-      .select("*")
-      .eq("analysis_id", analysis.id)
-      .order("generated_at", { ascending: false })
-      .limit(1)
-      .single();
+      const { data, error } = await supabase
+        .from("rsgp_compliance")
+        .select("*")
+        .eq("analysis_id", analysis.id)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();  // ✅ CORRECTION: maybeSingle au lieu de single
 
-      if (error) throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error fetching RSGP data:", error);
+        throw error;
+      }
+      
       setRsgpData(data);
+      console.log('[RSGP-TAB] Données chargées:', data ? 'OK' : 'Aucune donnée');
     } catch (error: any) {
       console.error("Error fetching RSGP data:", error);
       toast.error("Erreur lors du chargement des données RSGP");
