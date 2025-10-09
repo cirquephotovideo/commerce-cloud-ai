@@ -677,6 +677,7 @@ serve(async (req) => {
       analysis,
       amazonData,
       searchResults,
+      searchMethod,
       user.id,
       supabase
     );
