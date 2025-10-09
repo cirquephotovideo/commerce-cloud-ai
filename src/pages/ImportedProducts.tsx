@@ -8,7 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Code, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 
 type EnrichmentStatus = "pending" | "enriching" | "completed" | "failed";
@@ -17,6 +20,9 @@ export default function ImportedProducts() {
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [currentTab, setCurrentTab] = useState<EnrichmentStatus>("pending");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedProductDetail, setSelectedProductDetail] = useState<string | null>(null);
+  const [filterMargin, setFilterMargin] = useState<'all' | 'high' | 'medium' | 'low'>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
 
   // Fetch statistics
   const { data: stats } = useQuery({
@@ -46,9 +52,9 @@ export default function ImportedProducts() {
 
   // Fetch products by status
   const { data: products, isLoading, refetch } = useQuery({
-    queryKey: ['imported-products', currentTab],
+    queryKey: ['imported-products', currentTab, filterMargin, filterCategory],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('supplier_products')
         .select(`
           *,
@@ -58,11 +64,48 @@ export default function ImportedProducts() {
         .eq('enrichment_status', currentTab)
         .order('created_at', { ascending: false });
       
+      const { data, error } = await query;
+      
       if (error) throw error;
-      return data;
+      
+      // Apply filters client-side
+      let filteredData = data || [];
+      
+      if (filterMargin !== 'all' && currentTab === 'completed') {
+        filteredData = filteredData.filter(p => {
+          const analyses = p.product_analyses as any;
+          const margin = Array.isArray(analyses) ? analyses[0]?.margin_percentage : analyses?.margin_percentage;
+          if (!margin) return false;
+          
+          if (filterMargin === 'high') return margin > 30;
+          if (filterMargin === 'medium') return margin >= 15 && margin <= 30;
+          if (filterMargin === 'low') return margin < 15;
+          return true;
+        });
+      }
+      
+      if (filterCategory !== 'all' && currentTab === 'completed') {
+        filteredData = filteredData.filter(p => {
+          const analyses = p.product_analyses as any;
+          const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
+          const category = analysis?.analysis_result?.category || '';
+          return category.toLowerCase().includes(filterCategory.toLowerCase());
+        });
+      }
+      
+      return filteredData;
     },
-    refetchInterval: currentTab === 'enriching' ? 3000 : undefined, // Auto-refresh if enriching
+    refetchInterval: currentTab === 'enriching' ? 3000 : undefined,
   });
+
+  // Get unique categories for filter
+  const uniqueCategories = products
+    ?.map(p => {
+      const analyses = p.product_analyses as any;
+      const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
+      return analysis?.analysis_result?.category || '';
+    })
+    .filter((cat, idx, arr) => cat && arr.indexOf(cat) === idx) || [];
 
   // Toggle selection
   const toggleSelection = (productId: string) => {
@@ -249,9 +292,57 @@ export default function ImportedProducts() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Filters */}
+          {currentTab === 'completed' && (
+            <div className="flex gap-2 mb-4 items-center flex-wrap">
+              <span className="text-sm text-muted-foreground">Filtres:</span>
+              
+              <Select value={filterMargin} onValueChange={(v) => setFilterMargin(v as any)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Marge" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les marges</SelectItem>
+                  <SelectItem value="high">🟢 &gt; 30%</SelectItem>
+                  <SelectItem value="medium">🟡 15-30%</SelectItem>
+                  <SelectItem value="low">🔴 &lt; 15%</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {uniqueCategories.length > 0 && (
+                <Select value={filterCategory} onValueChange={setFilterCategory}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Catégorie" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Toutes catégories</SelectItem>
+                    {uniqueCategories.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {(filterMargin !== 'all' || filterCategory !== 'all') && (
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setFilterMargin('all');
+                    setFilterCategory('all');
+                  }}
+                >
+                  Réinitialiser
+                </Button>
+              )}
+            </div>
+          )}
+          
           <Tabs value={currentTab} onValueChange={(v) => {
             setCurrentTab(v as EnrichmentStatus);
             setSelectedProducts(new Set());
+            setFilterMargin('all');
+            setFilterCategory('all');
           }}>
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="pending">
@@ -280,95 +371,157 @@ export default function ImportedProducts() {
                     <p>Aucun produit dans cette catégorie</p>
                   </div>
                 ) : (
-                  products?.map(product => (
-                    <Card key={product.id} className="p-4 hover:bg-accent/50 transition-colors">
-                      <div className="flex items-start gap-4">
-                        <Checkbox
-                          checked={selectedProducts.has(product.id)}
-                          onCheckedChange={() => toggleSelection(product.id)}
-                          disabled={tab === 'enriching' || tab === 'failed'}
-                        />
-                        
-                        <div className="flex-1 space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h3 className="font-semibold">{product.product_name}</h3>
-                              <p className="text-sm text-muted-foreground">
-                                {product.supplier_configurations?.supplier_name} • EAN: {product.ean || 'N/A'}
-                              </p>
+                  products?.map(product => {
+                    const analyses = product.product_analyses as any;
+                    const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
+                    const margin = analysis?.margin_percentage;
+                    const estimatedPrice = analysis?.analysis_result?.price_estimation?.estimated_price;
+                    const category = analysis?.analysis_result?.category;
+                    const ranking = analysis?.analysis_result?.amazon_ranking;
+                    const imageCount = analysis?.image_urls?.length || 0;
+                    
+                    return (
+                      <Card key={product.id} className="p-4 hover:bg-accent/50 transition-colors">
+                        <div className="flex items-start gap-4">
+                          <Checkbox
+                            checked={selectedProducts.has(product.id)}
+                            onCheckedChange={() => toggleSelection(product.id)}
+                            disabled={tab === 'enriching' || tab === 'failed'}
+                          />
+                          
+                          <div className="flex-1 space-y-3">
+                            {/* Header */}
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Package className="w-4 h-4 text-muted-foreground" />
+                                  <h3 className="font-semibold">{product.product_name}</h3>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  🏢 {product.supplier_configurations?.supplier_name} • 📊 EAN: {product.ean || 'N/A'}
+                                </p>
+                              </div>
+                              
+                              {/* Status Card */}
+                              {product.enrichment_status === 'pending' && (
+                                <div className="bg-orange-50 dark:bg-orange-950 border-l-4 border-orange-500 p-2 rounded">
+                                  <div className="flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 text-orange-500" />
+                                    <div>
+                                      <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">En attente</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {product.enrichment_status === 'enriching' && (
+                                <div className="bg-blue-50 dark:bg-blue-950 border-l-4 border-blue-500 p-2 rounded min-w-[200px]">
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                                    <div className="flex-1">
+                                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">En cours</p>
+                                      <Progress value={product.enrichment_progress || 0} className="h-1 mt-1" />
+                                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{product.enrichment_progress || 0}%</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {product.enrichment_status === 'completed' && (
+                                <div className="bg-green-50 dark:bg-green-950 border-l-4 border-green-500 p-2 rounded">
+                                  <div className="flex items-center gap-2">
+                                    <Check className="w-4 h-4 text-green-500" />
+                                    <div>
+                                      <p className="text-xs font-semibold text-green-700 dark:text-green-300">Prêt à exporter</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {product.enrichment_status === 'failed' && (
+                                <div className="bg-red-50 dark:bg-red-950 border-l-4 border-red-500 p-2 rounded">
+                                  <div className="flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 text-red-500" />
+                                    <div>
+                                      <p className="text-xs font-semibold text-red-700 dark:text-red-300">Erreur</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            
-                            {/* Status Badge */}
-                            {product.enrichment_status === 'pending' && (
-                              <Badge variant="secondary">
-                                <AlertCircle className="w-3 h-3 mr-1" />
-                                En attente
-                              </Badge>
-                            )}
-                            {product.enrichment_status === 'enriching' && (
-                              <Badge>
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                {product.enrichment_progress}%
-                              </Badge>
-                            )}
-                            {product.enrichment_status === 'completed' && (
-                              <Badge variant="default" className="bg-green-500">
-                                <Check className="w-3 h-3 mr-1" />
-                                Prêt
-                              </Badge>
-                            )}
-                            {product.enrichment_status === 'failed' && (
-                              <Badge variant="destructive">
-                                <AlertCircle className="w-3 h-3 mr-1" />
-                                Erreur
-                              </Badge>
+
+                            {/* Enriched Data Grid */}
+                            {product.product_analyses && (
+                              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                                {/* Row 1: Pricing */}
+                                <div className="grid grid-cols-3 gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">💰 Prix achat</span>
+                                    <span className="font-semibold text-sm">{product.purchase_price?.toFixed(2)}€</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">💵 Prix vente</span>
+                                    <span className="font-semibold text-sm text-green-600 dark:text-green-400">
+                                      {estimatedPrice ? `${estimatedPrice}€` : 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">📈 Marge</span>
+                                    <Badge variant={margin > 30 ? "default" : margin > 15 ? "secondary" : "destructive"}>
+                                      {margin ? `${margin.toFixed(1)}%` : '0%'}
+                                    </Badge>
+                                  </div>
+                                </div>
+
+                                {/* Row 2: Category & Market */}
+                                <div className="grid grid-cols-2 gap-4 text-xs">
+                                  <div>
+                                    <span className="text-muted-foreground">🏷️ Catégorie: </span>
+                                    <span className="font-medium">{category || 'Non catégorisé'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">🌐 Marché Amazon: </span>
+                                    <span className="font-medium">{ranking ? `Top ${ranking}%` : 'N/A'}</span>
+                                  </div>
+                                </div>
+
+                                {/* Row 3: Images */}
+                                {imageCount > 0 && (
+                                  <div className="flex items-center gap-4 text-xs pt-2 border-t">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-muted-foreground">🖼️ Images:</span>
+                                      <Badge variant="outline">{imageCount}</Badge>
+                                    </div>
+                                    <div className="flex gap-1">
+                                      {analysis.image_urls.slice(0, 3).map((url: string, idx: number) => (
+                                        <img
+                                          key={idx}
+                                          src={url}
+                                          alt=""
+                                          className="w-8 h-8 rounded border object-cover"
+                                        />
+                                      ))}
+                                      {imageCount > 3 && (
+                                        <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center text-xs font-medium">
+                                          +{imageCount - 3}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => setSelectedProductDetail(product.id)}
+                                      className="ml-auto"
+                                    >
+                                      <Eye className="w-4 h-4 mr-2" />
+                                      Détails
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
-
-                          {/* Progress bar */}
-                          {product.enrichment_status === 'enriching' && (
-                            <Progress value={product.enrichment_progress || 0} className="h-2" />
-                          )}
-
-                          {/* Enriched product info */}
-                          {product.product_analyses && (
-                            <div className="grid grid-cols-3 gap-2 text-sm pt-2 border-t">
-                              <div>
-                                <span className="text-muted-foreground">Prix achat: </span>
-                                <span className="font-medium">{product.purchase_price}€</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Prix vente: </span>
-                                <span className="font-medium">
-                                  {(() => {
-                                    const analyses = product.product_analyses as any;
-                                    const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
-                                    return analysis?.analysis_result?.price_estimation?.estimated_price || 'N/A';
-                                  })()}€
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Marge: </span>
-                                <Badge variant={
-                                  (() => {
-                                    const analyses = product.product_analyses as any;
-                                    const margin = Array.isArray(analyses) ? analyses[0]?.margin_percentage : analyses?.margin_percentage;
-                                    return margin > 30 ? "default" : margin > 15 ? "secondary" : "destructive";
-                                  })()
-                                }>
-                                  {(() => {
-                                    const analyses = product.product_analyses as any;
-                                    const margin = Array.isArray(analyses) ? analyses[0]?.margin_percentage : analyses?.margin_percentage;
-                                    return margin?.toFixed(1) || '0';
-                                  })()}%
-                                </Badge>
-                              </div>
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    </Card>
-                  ))
+                      </Card>
+                    );
+                  })
                 )}
               </TabsContent>
             ))}
@@ -404,6 +557,129 @@ export default function ImportedProducts() {
           )}
         </CardContent>
       </Card>
+
+      {/* Details Modal */}
+      <Dialog open={!!selectedProductDetail} onOpenChange={(open) => !open && setSelectedProductDetail(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Détails du Produit</DialogTitle>
+          </DialogHeader>
+          
+          {(() => {
+            const product = products?.find(p => p.id === selectedProductDetail);
+            if (!product) return null;
+            
+            const analyses = product.product_analyses as any;
+            const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
+            const amazonData = analysis?.analysis_result?.amazon_data;
+            
+            return (
+              <div className="space-y-6">
+                {/* Identity */}
+                <div>
+                  <h3 className="font-semibold mb-2 flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Identité
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div><span className="text-muted-foreground">Nom:</span> <strong>{product.product_name}</strong></div>
+                    <div><span className="text-muted-foreground">EAN:</span> <strong>{product.ean}</strong></div>
+                    <div><span className="text-muted-foreground">Fournisseur:</span> <strong>{product.supplier_configurations?.supplier_name}</strong></div>
+                    <div><span className="text-muted-foreground">Référence:</span> <strong>{product.supplier_reference || 'N/A'}</strong></div>
+                  </div>
+                </div>
+
+                {/* Pricing */}
+                {analysis && (
+                  <div>
+                    <h3 className="font-semibold mb-2">💰 Tarification</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <Card className="p-3">
+                        <div className="text-muted-foreground text-xs">Prix d'achat</div>
+                        <div className="text-2xl font-bold">{product.purchase_price}€</div>
+                      </Card>
+                      <Card className="p-3">
+                        <div className="text-muted-foreground text-xs">Prix de vente estimé</div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {analysis?.analysis_result?.price_estimation?.estimated_price || 'N/A'}€
+                        </div>
+                      </Card>
+                      <Card className="p-3">
+                        <div className="text-muted-foreground text-xs">Marge</div>
+                        <div className="text-2xl font-bold">
+                          {analysis?.margin_percentage?.toFixed(1) || '0'}%
+                        </div>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+
+                {/* Amazon Data */}
+                {amazonData && (
+                  <div>
+                    <h3 className="font-semibold mb-2">🌐 Données Amazon</h3>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Ranking: </span>
+                        <Badge>{analysis?.analysis_result?.amazon_ranking || 'N/A'}%</Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Prix Amazon: </span>
+                        <strong>{amazonData.buy_box_price || amazonData.price || 'N/A'}€</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Stock: </span>
+                        <Badge variant={amazonData.in_stock ? "default" : "destructive"}>
+                          {amazonData.in_stock ? "Disponible" : "Rupture"}
+                        </Badge>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Vendeur: </span>
+                        <strong>{amazonData.seller || 'N/A'}</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Images */}
+                {analysis?.image_urls && analysis.image_urls.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">🖼️ Images ({analysis.image_urls.length})</h3>
+                    <div className="grid grid-cols-4 gap-2">
+                      {analysis.image_urls.map((url: string, idx: number) => (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt={`Image ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded border"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Raw JSON */}
+                {analysis?.analysis_result && (
+                  <Collapsible>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full">
+                        <Code className="w-4 h-4 mr-2" />
+                        Voir données brutes (JSON)
+                        <ChevronDown className="w-4 h-4 ml-2" />
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <pre className="text-xs bg-muted p-4 rounded mt-2 overflow-x-auto max-h-96">
+                        {JSON.stringify(analysis.analysis_result, null, 2)}
+                      </pre>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
