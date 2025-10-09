@@ -41,6 +41,17 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           });
           
           if (!checkError && data?.status === 'completed' && data?.video_url) {
+            // Mise à jour optimiste immédiate
+            setVideo(prev => prev ? {
+              ...prev,
+              status: 'completed',
+              video_url: data.video_url,
+              thumbnail_url: data.thumbnail_url,
+              duration: data.duration,
+              error_message: null,
+              completed_at: new Date().toISOString()
+            } : prev);
+            
             toast.success("✅ Vidéo récupérée avec succès !");
             await fetchLatestVideo();
           }
@@ -152,8 +163,39 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     }
   };
 
-  const handleForceCheck = async () => {
+  const handleForceCheck = async (videoId?: string) => {
     toast.info("🔄 Vérification manuelle du statut...");
+    
+    if (videoId) {
+      try {
+        const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
+          body: { 
+            action: 'check_status',
+            analysis_id: analysisId,
+            video_id: videoId,
+            force_recovery: true
+          }
+        });
+        
+        if (!checkError && data?.status === 'completed' && data?.video_url) {
+          // Mise à jour optimiste immédiate
+          setVideo(prev => prev ? {
+            ...prev,
+            status: 'completed',
+            video_url: data.video_url,
+            thumbnail_url: data.thumbnail_url,
+            duration: data.duration,
+            error_message: null,
+            completed_at: new Date().toISOString()
+          } : prev);
+          
+          toast.success("✅ Vidéo récupérée !");
+        }
+      } catch (err) {
+        console.error('[VideoPlayer] Force check error:', err);
+      }
+    }
+    
     await fetchLatestVideo();
   };
 
@@ -181,26 +223,30 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
         </div>
       )}
 
-    {!loading && !error && video && (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          {getStatusBadge(video.status)}
-          {video.video_url && (
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={handleDownload}>
-                <Download className="w-3 h-3 mr-1" />
-                Télécharger
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => window.open(video.video_url, '_blank')}>
-                <ExternalLink className="w-3 h-3 mr-1" />
-                Ouvrir
-              </Button>
-            </div>
-          )}
-        </div>
+    {!loading && !error && video && (() => {
+      const hasPlayable = Boolean(video.video_url);
+      const effectiveStatus = hasPlayable ? 'completed' : video.status;
+      
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            {getStatusBadge(effectiveStatus)}
+            {hasPlayable && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={handleDownload}>
+                  <Download className="w-3 h-3 mr-1" />
+                  Télécharger
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => window.open(video.video_url, '_blank')}>
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  Ouvrir
+                </Button>
+              </div>
+            )}
+          </div>
 
-        {/* Priorité 1 : Si completed avec video_url, afficher directement */}
-        {video.status === 'completed' && video.video_url && (
+          {/* PRIORITÉ ABSOLUE : Si video_url existe, afficher le lecteur */}
+          {hasPlayable && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
               <span className="text-sm font-medium">🔗 Lien de la vidéo :</span>
@@ -234,23 +280,11 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
                 <span>Généré le {new Date(video.created_at).toLocaleDateString('fr-FR')}</span>
               </div>
             )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {video.status === 'completed' && !video.video_url && video.thumbnail_url && (
-          <div className="p-4 bg-muted/50 rounded-lg">
-            <img 
-              src={video.thumbnail_url} 
-              alt="Miniature de la vidéo" 
-              className="w-full rounded-md"
-            />
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Vidéo générée mais URL non disponible
-            </p>
-          </div>
-        )}
-
-        {video.status === 'processing' && (
+          {/* Si pas de video_url mais processing, afficher spinner */}
+          {!hasPlayable && video.status === 'processing' && (
             <div className="p-4 bg-muted/50 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -279,15 +313,16 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
                       La génération prend plus de temps que prévu. Vous pouvez forcer une vérification.
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={handleForceCheck}>
+                  <Button size="sm" variant="outline" onClick={() => handleForceCheck(video.video_id)}>
                     Vérifier
                   </Button>
                 </div>
               )}
-            </div>
-          )}
+              </div>
+            )}
 
-          {video.status === 'failed' && (
+          {/* Si pas de video_url et failed, afficher erreur */}
+          {!hasPlayable && video.status === 'failed' && (
             <>
               {/* Si c'est un timeout, afficher message optimiste */}
               {video.error_message?.includes('Timeout') ? (
@@ -304,33 +339,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
                   <Button 
                     size="sm" 
                     variant="outline" 
-                    onClick={async () => {
-                      toast.info("🔄 Vérification manuelle...");
-                      
-                      const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
-                        body: { 
-                          action: 'check_status',
-                          analysis_id: analysisId,
-                          video_id: video.video_id,
-                          force_recovery: true
-                        }
-                      });
-                      
-                      if (checkError) {
-                        toast.error("Erreur lors de la vérification");
-                        return;
-                      }
-                      
-                      if (data?.status === 'completed') {
-                        toast.success("✅ Vidéo récupérée !");
-                        await fetchLatestVideo();
-                      } else if (data?.status === 'processing') {
-                        toast.info("⏳ La vidéo est toujours en cours de génération");
-                        await fetchLatestVideo();
-                      } else {
-                        toast.error("La vidéo n'est pas encore disponible");
-                      }
-                    }}
+                    onClick={() => handleForceCheck(video.video_id)}
                   >
                     Forcer la vérification
                   </Button>
@@ -349,33 +358,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
                     <Button 
                       size="sm" 
                       variant="outline" 
-                      onClick={async () => {
-                        toast.info("🔄 Vérification du statut HeyGen...");
-                        
-                        const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
-                          body: { 
-                            action: 'check_status',
-                            analysis_id: analysisId,
-                            video_id: video.video_id,
-                            force_recovery: true
-                          }
-                        });
-                        
-                        if (checkError) {
-                          toast.error("Erreur lors de la vérification");
-                          return;
-                        }
-                        
-                        if (data?.status === 'completed') {
-                          toast.success("✅ Vidéo récupérée !");
-                          await fetchLatestVideo();
-                        } else if (data?.status === 'processing') {
-                          toast.info("⏳ La vidéo est toujours en cours de génération");
-                          await fetchLatestVideo();
-                        } else {
-                          toast.error("La vidéo n'est pas encore disponible");
-                        }
-                      }}
+                      onClick={() => handleForceCheck(video.video_id)}
                     >
                       Vérifier si la vidéo est prête
                     </Button>
@@ -395,59 +378,9 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
               )}
             </>
           )}
-
-          {video.status === 'completed' && video.video_url && (
-            <div className="space-y-3">
-              {/* Lien de la vidéo copiable */}
-              <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                <span className="text-sm font-medium">🔗 Lien de la vidéo :</span>
-                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
-                  {video.video_url}
-                </code>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => {
-                    navigator.clipboard.writeText(video.video_url);
-                    toast.success("Lien copié !");
-                  }}
-                >
-                  Copier
-                </Button>
-              </div>
-              
-              <video 
-                controls 
-                className="w-full rounded-lg border-2 border-border shadow-lg"
-                src={video.video_url}
-                poster={video.thumbnail_url || undefined}
-              >
-                Votre navigateur ne supporte pas la lecture vidéo.
-              </video>
-              
-              {video.duration && (
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>Durée : {Math.round(video.duration)}s</span>
-                  <span>Généré le {new Date(video.created_at).toLocaleDateString('fr-FR')}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {video.status === 'completed' && video.thumbnail_url && !video.video_url && (
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <img 
-                src={video.thumbnail_url} 
-                alt="Miniature de la vidéo" 
-                className="w-full rounded-md"
-              />
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Vidéo générée mais URL non disponible
-              </p>
-            </div>
-          )}
         </div>
-      )}
+      );
+    })()}
     </>
   );
 
