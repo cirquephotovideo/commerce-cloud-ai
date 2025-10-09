@@ -46,7 +46,9 @@ serve(async (req) => {
         .select('*')
         .eq('analysis_id', analysis_id)
         .eq('user_id', user.id)
-        .single();
+        .order('generated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (existing) {
         return new Response(
@@ -230,14 +232,16 @@ RÈGLES IMPORTANTES :
 
     const sanitizedData = sanitizeDateFields(rsgpData);
 
-    // Save to database
+    // Save to database using UPSERT
     const { data: complianceRecord, error: insertError } = await supabase
       .from('rsgp_compliance')
-      .insert({
+      .upsert({
         analysis_id,
         user_id: user.id,
         ...sanitizedData,
         validation_status: 'draft'
+      }, {
+        onConflict: 'analysis_id'
       })
       .select()
       .single();

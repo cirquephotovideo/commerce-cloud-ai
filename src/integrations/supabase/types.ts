@@ -1973,7 +1973,7 @@ export type Database = {
           {
             foreignKeyName: "rsgp_compliance_analysis_id_fkey"
             columns: ["analysis_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
           },

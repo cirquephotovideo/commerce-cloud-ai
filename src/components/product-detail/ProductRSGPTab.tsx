@@ -24,11 +24,13 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
   const fetchRSGPData = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("rsgp_compliance")
-        .select("*")
-        .eq("analysis_id", analysis.id)
-        .maybeSingle();
+    const { data, error } = await supabase
+      .from("rsgp_compliance")
+      .select("*")
+      .eq("analysis_id", analysis.id)
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .single();
 
       if (error) throw error;
       setRsgpData(data);
