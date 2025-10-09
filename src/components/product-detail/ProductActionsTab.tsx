@@ -113,7 +113,7 @@ export const ProductActionsTab = ({
     }
   };
 
-  const handleRegenerateHeygen = async (avatarId: string, voiceId: string) => {
+  const handleRegenerateHeygen = async (avatarId: string, voiceId: string, customScript?: string) => {
     setIsRegeneratingHeygen(true);
     setHeygenStatus('processing');
     setVideoGenerationProgress(0);
@@ -125,7 +125,8 @@ export const ProductActionsTab = ({
           analysis_id: analysis.id,
           avatar_id: avatarId,
           voice_id: voiceId,
-          auto_generate_script: true
+          custom_script: customScript,
+          auto_generate_script: !customScript || customScript.trim() === ''
         }
       });
 
@@ -136,6 +137,12 @@ export const ProductActionsTab = ({
 
       const generatedVideoId = data?.video_id;
       setVideoId(generatedVideoId);
+      
+      if (!generatedVideoId) {
+        console.warn('[HEYGEN] No video_id returned from generation');
+        toast.warning("Vidéo lancée mais impossible de suivre le statut");
+        return;
+      }
       
       // Démarrer le monitoring
       startVideoMonitoring(generatedVideoId);
@@ -150,45 +157,59 @@ export const ProductActionsTab = ({
   };
 
   const startVideoMonitoring = (videoId: string) => {
-    const pollInterval = setInterval(async () => {
+    console.log('[HEYGEN] Starting video monitoring for:', videoId);
+
+    const pollStatus = async (retryCount = 0) => {
       try {
         const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
           body: { 
             action: 'check_status',
-            analysis_id: analysis.id  // ✅ CORRECTION: utilise analysis_id
+            analysis_id: analysis.id,
+            video_id: videoId
           }
         });
-        
-        if (error) throw error;
-        
+
+        if (error) {
+          // Handle 404 with retry mechanism for initial polls
+          if (error.message?.includes('404') && retryCount < 3) {
+            console.log(`[HEYGEN] Video not found yet, retry ${retryCount + 1}/3 in ${2 ** (retryCount + 1)}s...`);
+            const backoffDelay = 2000 * (2 ** retryCount); // 2s, 4s, 8s
+            setTimeout(() => pollStatus(retryCount + 1), backoffDelay);
+            return;
+          }
+          throw error;
+        }
+
         console.log('[HEYGEN] Status check:', data);
         
         const progress = data?.progress || 0;
         setVideoGenerationProgress(progress);
         
         if (data?.status === 'completed') {
-          clearInterval(pollInterval);
           setHeygenStatus('completed');
           setIsRegeneratingHeygen(false);
           setVideoGenerationProgress(100);
           toast.success("Vidéo générée avec succès !");
           onReload();
-        }
-        
-        if (data?.status === 'failed') {
-          clearInterval(pollInterval);
+        } else if (data?.status === 'failed') {
           setHeygenStatus('error');
           setIsRegeneratingHeygen(false);
           toast.error("Erreur lors de la génération de la vidéo");
+        } else {
+          // Continue polling
+          setTimeout(() => pollStatus(0), 5000);
         }
       } catch (error: any) {
         console.error('[HEYGEN] Monitoring error:', error);
-        clearInterval(pollInterval);
         setHeygenStatus('error');
         setIsRegeneratingHeygen(false);
-        toast.error(error.message || "Erreur lors du monitoring de la vidéo");
+        const errorMsg = error.message || JSON.stringify(error);
+        toast.error(`Erreur: ${errorMsg}`);
       }
-    }, 5000);
+    };
+
+    // Wait 2 seconds before first poll to let DB commit
+    setTimeout(() => pollStatus(0), 2000);
   };
 
   const handleRegenerateRsgp = async () => {

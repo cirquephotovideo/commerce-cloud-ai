@@ -102,16 +102,35 @@ serve(async (req) => {
 
     // Action: check video status
     if (action === 'check_status' && analysis_id) {
-      const { data: videoData } = await supabase
+      const { video_id: videoIdParam } = await req.json().then(body => body).catch(() => ({}));
+      console.log('[HEYGEN-VIDEO] Checking status for analysis:', analysis_id, 'video_id:', videoIdParam);
+      
+      // Get video record - use video_id if provided, otherwise get latest for analysis_id
+      let videoQuery = supabase
         .from('product_videos')
         .select('*')
-        .eq('analysis_id', analysis_id)
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id);
+
+      if (videoIdParam) {
+        videoQuery = videoQuery.eq('video_id', videoIdParam);
+      } else {
+        videoQuery = videoQuery.eq('analysis_id', analysis_id).order('created_at', { ascending: false });
+      }
+
+      const { data: videoData, error: videoError } = await videoQuery.limit(1).maybeSingle();
+
+      if (videoError) {
+        console.error('[HEYGEN-VIDEO] Database error fetching video:', videoError);
+        return new Response(
+          JSON.stringify({ error: 'Database error while fetching video' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       if (!videoData) {
+        console.warn('[HEYGEN-VIDEO] Video not found for', videoIdParam ? `video_id: ${videoIdParam}` : `analysis_id: ${analysis_id}`);
         return new Response(
-          JSON.stringify({ error: 'Video not found' }),
+          JSON.stringify({ error: 'Video not found for analysis/video id' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -256,9 +275,15 @@ serve(async (req) => {
       if (auto_generate_script && !custom_script) {
         const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
         
+        // Get product name with fallbacks
+        const productName = analysis.product_name || 
+                           analysis.analysis_result?.title || 
+                           analysis.analysis_result?.product_name || 
+                           'ce produit';
+        
         const scriptPrompt = `Crée un script de démonstration produit de 60-90 secondes pour :
 
-Produit: ${analysis.product_name}
+Produit: ${productName}
 Description: ${analysis.description || ''}
 Points clés: ${analysis.key_features?.slice(0, 5).join(', ') || 'N/A'}
 
@@ -286,8 +311,15 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
           })
         });
 
+        if (!aiResponse.ok) {
+          const errorText = await aiResponse.text();
+          console.error('[HEYGEN-VIDEO] AI script generation error:', aiResponse.status, errorText);
+          throw new Error(`AI API error: ${aiResponse.status}`);
+        }
+
         const aiData = await aiResponse.json();
         script = aiData.choices?.[0]?.message?.content || script;
+        console.log('[HEYGEN-VIDEO] Script generated successfully for product:', productName);
       }
 
       // Create video on HeyGen
