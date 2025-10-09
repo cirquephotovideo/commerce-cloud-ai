@@ -8,7 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LanguageSelector } from "./LanguageSelector";
 import { ThemeSelector } from "./ThemeSelector";
-import { TartriqueLogo } from "./TartriqueLogo";
+import { TarifiqueLogo } from "./TarifiqueLogo";
 import { useTranslation } from "react-i18next";
 import { useUserRole } from "@/hooks/useUserRole";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
@@ -133,7 +133,7 @@ export const Header = () => {
   return (
     <header className="border-b glass-card sticky top-0 z-50 bg-gradient-to-r from-purple-500/20 via-purple-600/20 to-purple-700/20 backdrop-blur-md">
       <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
-        <TartriqueLogo />
+        <TarifiqueLogo />
         
         <div className="flex items-center gap-2 sm:gap-3">
           <ThemeSelector />

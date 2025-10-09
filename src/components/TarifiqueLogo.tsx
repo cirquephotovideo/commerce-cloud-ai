@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-export const TartriqueLogo = () => {
+export const TarifiqueLogo = () => {
   const navigate = useNavigate();
   
   return (
@@ -37,13 +37,13 @@ export const TartriqueLogo = () => {
         <div className="absolute inset-0 rounded-full bg-gradient-to-br from-purple-400/20 to-pink-400/20 animate-spin-slow opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       
-      {/* Texte Tartrique.com */}
+      {/* Texte Tarifique.com */}
       <div className="flex flex-col">
         <h1 className="text-lg sm:text-2xl font-bold bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 bg-clip-text text-transparent group-hover:from-purple-500 group-hover:via-pink-500 group-hover:to-purple-600 transition-all duration-300">
-          Tartrique.com
+          Tarifique.com
         </h1>
         <span className="text-[10px] sm:text-xs text-muted-foreground font-medium -mt-1">
-          Analyse Viticole IA
+          Analyse Tarifaire IA
         </span>
       </div>
     </div>
