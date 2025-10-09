@@ -1863,6 +1863,7 @@ export type Database = {
           fournisseur: string | null
           garantie: string | null
           generated_at: string | null
+          generation_metadata: Json | null
           historique_incidents: Json | null
           id: string
           indice_energie: string | null
@@ -1905,6 +1906,7 @@ export type Database = {
           fournisseur?: string | null
           garantie?: string | null
           generated_at?: string | null
+          generation_metadata?: Json | null
           historique_incidents?: Json | null
           id?: string
           indice_energie?: string | null
@@ -1947,6 +1949,7 @@ export type Database = {
           fournisseur?: string | null
           garantie?: string | null
           generated_at?: string | null
+          generation_metadata?: Json | null
           historique_incidents?: Json | null
           id?: string
           indice_energie?: string | null
