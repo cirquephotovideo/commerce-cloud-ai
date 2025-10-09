@@ -190,36 +190,26 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
               <p className="text-sm text-muted-foreground">Nom du produit</p>
               <p className="font-medium">{rsgpData.nom_produit}</p>
             </div>
-            {rsgpData.categorie_rsgp && (
-              <div>
-                <p className="text-sm text-muted-foreground">Catégorie RSGP</p>
-                <p className="font-medium">{rsgpData.categorie_rsgp}</p>
-              </div>
-            )}
-            {rsgpData.reference_interne && (
-              <div>
-                <p className="text-sm text-muted-foreground">Référence interne</p>
-                <p className="font-medium">{rsgpData.reference_interne}</p>
-              </div>
-            )}
-            {rsgpData.numero_modele && (
-              <div>
-                <p className="text-sm text-muted-foreground">Numéro de modèle</p>
-                <p className="font-medium">{rsgpData.numero_modele}</p>
-              </div>
-            )}
-            {rsgpData.ean && (
-              <div>
-                <p className="text-sm text-muted-foreground">EAN</p>
-                <p className="font-medium">{rsgpData.ean}</p>
-              </div>
-            )}
-            {rsgpData.pays_origine && (
-              <div>
-                <p className="text-sm text-muted-foreground">Pays d'origine</p>
-                <p className="font-medium">{rsgpData.pays_origine}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-sm text-muted-foreground">Catégorie RSGP</p>
+              <p className="font-medium">{rsgpData.categorie_rsgp || "non communiqué"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Référence interne</p>
+              <p className="font-medium">{rsgpData.reference_interne || "non communiqué"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Numéro de modèle</p>
+              <p className="font-medium">{rsgpData.numero_modele || "non communiqué"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">EAN</p>
+              <p className="font-medium">{rsgpData.ean || "non communiqué"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Pays d'origine</p>
+              <p className="font-medium">{rsgpData.pays_origine || "non communiqué"}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -233,44 +223,34 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {rsgpData.fabricant_nom && (
-            <div>
-              <p className="text-sm font-medium mb-2">Fabricant</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-muted-foreground">Nom</p>
-                  <p className="font-medium">{rsgpData.fabricant_nom}</p>
-                </div>
-                {rsgpData.fabricant_adresse && (
-                  <div className="md:col-span-2">
-                    <p className="text-muted-foreground">Adresse</p>
-                    <p className="font-medium">{rsgpData.fabricant_adresse}</p>
-                  </div>
-                )}
+          <div>
+            <p className="text-sm font-medium mb-2">Fabricant</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-muted-foreground">Nom</p>
+                <p className="font-medium">{rsgpData.fabricant_nom || "non communiqué"}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-muted-foreground">Adresse</p>
+                <p className="font-medium">{rsgpData.fabricant_adresse || "non communiqué"}</p>
               </div>
             </div>
-          )}
+          </div>
 
-          {rsgpData.fournisseur && (
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium mb-2">Fournisseur</p>
-              <p className="text-sm">{rsgpData.fournisseur}</p>
-            </div>
-          )}
+          <div className="pt-4 border-t">
+            <p className="text-sm font-medium mb-2">Fournisseur</p>
+            <p className="text-sm">{rsgpData.fournisseur || "non communiqué"}</p>
+          </div>
 
-          {rsgpData.personne_responsable_ue && (
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium mb-2">Personne responsable UE</p>
-              <p className="text-sm">{rsgpData.personne_responsable_ue}</p>
-            </div>
-          )}
+          <div className="pt-4 border-t">
+            <p className="text-sm font-medium mb-2">Personne responsable UE</p>
+            <p className="text-sm">{rsgpData.personne_responsable_ue || "non communiqué"}</p>
+          </div>
 
-          {rsgpData.service_consommateur && (
-            <div className="pt-4 border-t">
-              <p className="text-sm font-medium mb-2">Service consommateur</p>
-              <p className="text-sm">{rsgpData.service_consommateur}</p>
-            </div>
-          )}
+          <div className="pt-4 border-t">
+            <p className="text-sm font-medium mb-2">Service consommateur</p>
+            <p className="text-sm">{rsgpData.service_consommateur || "non communiqué"}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -286,8 +266,14 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
           <div className="flex items-center gap-4">
             <div>
               <p className="text-sm text-muted-foreground">RSGP Valide</p>
-              <Badge variant={rsgpData.rsgp_valide ? "default" : "secondary"}>
-                {rsgpData.rsgp_valide ? "✓ Valide" : "En attente"}
+              <Badge 
+                variant={
+                  rsgpData.rsgp_valide === "Oui" ? "default" :
+                  rsgpData.rsgp_valide === "Non conforme" ? "destructive" :
+                  "secondary"
+                }
+              >
+                {rsgpData.rsgp_valide === "Oui" ? "✓ Oui" : rsgpData.rsgp_valide || "En attente"}
               </Badge>
             </div>
             {rsgpData.validation_status && (
@@ -341,11 +327,11 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
           {rsgpData.avertissements && rsgpData.avertissements.length > 0 && (
             <div>
               <p className="text-sm text-muted-foreground mb-2">Avertissements</p>
-              <div className="flex flex-wrap gap-2">
+              <ul className="list-disc list-inside space-y-1 text-sm">
                 {rsgpData.avertissements.map((warn: string, idx: number) => (
-                  <Badge key={idx} variant="destructive">{warn}</Badge>
+                  <li key={idx}>{warn}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
 
