@@ -26,31 +26,22 @@ export const useAIProvider = () => {
           return;
         }
 
-        // Try the new table first
-        const { data: newData, error: newError } = await supabase
-          .from("user_provider_preferences")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .single();
+      // Fetch from user_provider_preferences
+      const { data, error } = await supabase
+        .from("user_provider_preferences")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .single();
 
-        if (newData) {
-          setProvider(newData.primary_provider as AIProvider);
-          setFallbackEnabled(newData.fallback_enabled);
-        } else if (newError && newError.code !== 'PGRST116') {
-          // If new table doesn't work, try the old one for backwards compatibility
-          const { data, error } = await supabase
-            .from("user_ai_preferences")
-            .select("*")
-            .eq("user_id", session.user.id)
-            .single();
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error fetching provider preferences:", error);
+        throw error;
+      }
 
-          if (error && error.code !== 'PGRST116') throw error;
-
-          if (data) {
-            setProvider(data.preferred_provider as AIProvider);
-            setFallbackEnabled(data.fallback_enabled);
-          }
-        }
+      if (data) {
+        setProvider(data.primary_provider as AIProvider);
+        setFallbackEnabled(data.fallback_enabled);
+      }
       } catch (error) {
         console.error("Error fetching AI preferences:", error);
       } finally {

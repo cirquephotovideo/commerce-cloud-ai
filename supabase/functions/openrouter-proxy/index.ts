@@ -10,13 +10,24 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
+    console.log('[OPENROUTER-PROXY] Function started');
+    
     const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
     if (!OPENROUTER_API_KEY) {
+      console.error('[OPENROUTER-PROXY] API key not configured');
       throw new Error('OPENROUTER_API_KEY not configured');
     }
 
     const { action, model, messages } = await req.json();
+    console.log('[OPENROUTER-PROXY] Request:', { 
+      action, 
+      model, 
+      messageCount: messages?.length,
+      timestamp: new Date().toISOString()
+    });
 
     // Fetch available models
     if (action === 'list_models') {
@@ -61,13 +72,22 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('[OPENROUTER-PROXY] Success');
+    const latency = Date.now() - startTime;
+    console.log('[OPENROUTER-PROXY] Success', {
+      latency_ms: latency,
+      usage: data.usage,
+      model: data.model
+    });
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[OPENROUTER-PROXY] Error:', error);
+    const latency = Date.now() - startTime;
+    console.error('[OPENROUTER-PROXY] Error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      latency_ms: latency
+    });
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Unknown error' 
     }), {

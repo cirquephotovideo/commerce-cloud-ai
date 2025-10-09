@@ -14,7 +14,7 @@ import { SubscriptionStatus } from "@/components/SubscriptionStatus";
 import { ProductExportMenu } from "@/components/ProductExportMenu";
 import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { AIProviderSettings } from "@/components/AIProviderSettings";
+import { AIProviderManagement } from "@/components/AIProviderManagement";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
@@ -465,7 +465,7 @@ export default function Dashboard() {
             <SubscriptionStatus />
           </div>
           <div className="lg:col-span-2 space-y-4">
-            <AIProviderSettings />
+            <AIProviderManagement />
             
             <Card>
               <CardHeader>

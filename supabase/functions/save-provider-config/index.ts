@@ -171,21 +171,34 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    console.log('[SAVE-PROVIDER-CONFIG] Function started');
+
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('[SAVE-PROVIDER-CONFIG] Missing authorization header');
       throw new Error('Missing authorization header');
     }
 
+    console.log('[SAVE-PROVIDER-CONFIG] Authenticating user...');
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('[SAVE-PROVIDER-CONFIG] Authentication failed:', authError);
       throw new Error('Unauthorized');
     }
 
+    console.log(`[SAVE-PROVIDER-CONFIG] User authenticated: ${user.id} (${user.email})`);
+
     const { provider, api_key, model, priority = 0, test_only = false } = await req.json();
 
-    console.log(`[SAVE-PROVIDER-CONFIG] Testing ${provider} for user ${user.id}`);
+    console.log(`[SAVE-PROVIDER-CONFIG] Testing ${provider} for user ${user.id}`, {
+      provider,
+      test_only,
+      has_api_key: !!api_key,
+      model,
+      priority
+    });
 
     // Test the provider
     let testResult: ProviderTestResult;
@@ -207,9 +220,15 @@ serve(async (req) => {
         throw new Error(`Unsupported provider: ${provider}`);
     }
 
-    console.log(`[SAVE-PROVIDER-CONFIG] Test result:`, testResult);
+    console.log(`[SAVE-PROVIDER-CONFIG] Test result for ${provider}:`, {
+      success: testResult.success,
+      latency: testResult.latency,
+      models_count: testResult.models?.length || 0,
+      error: testResult.error
+    });
 
     if (!testResult.success) {
+      console.error(`[SAVE-PROVIDER-CONFIG] Provider ${provider} test failed:`, testResult.error);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -225,6 +244,7 @@ serve(async (req) => {
 
     // If test_only, don't save
     if (test_only) {
+      console.log(`[SAVE-PROVIDER-CONFIG] Test-only mode, skipping save`);
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -237,6 +257,8 @@ serve(async (req) => {
       );
     }
 
+    console.log(`[SAVE-PROVIDER-CONFIG] Saving configuration for ${provider}...`);
+
     // Save to ai_provider_configs
     const { error: configError } = await supabase
       .from('ai_provider_configs')
@@ -248,7 +270,12 @@ serve(async (req) => {
         priority,
       });
 
-    if (configError) throw configError;
+    if (configError) {
+      console.error(`[SAVE-PROVIDER-CONFIG] Config save failed:`, configError);
+      throw configError;
+    }
+
+    console.log(`[SAVE-PROVIDER-CONFIG] Provider config saved`);
 
     // Update ai_provider_health
     const { error: healthError } = await supabase
@@ -261,9 +288,12 @@ serve(async (req) => {
         last_check: new Date().toISOString(),
       });
 
-    if (healthError) throw healthError;
+    if (healthError) {
+      console.error(`[SAVE-PROVIDER-CONFIG] Health save failed:`, healthError);
+      throw healthError;
+    }
 
-    console.log(`[SAVE-PROVIDER-CONFIG] Configuration saved successfully`);
+    console.log(`[SAVE-PROVIDER-CONFIG] Provider health updated successfully`);
 
     return new Response(
       JSON.stringify({ 

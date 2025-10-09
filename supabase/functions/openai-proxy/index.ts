@@ -11,15 +11,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+
   try {
+    console.log('[OPENAI-PROXY] Function started');
+    
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     if (!OPENAI_API_KEY) {
+      console.error('[OPENAI-PROXY] API key not configured');
       throw new Error('OPENAI_API_KEY not configured');
     }
 
     const { model = 'gpt-5-mini', messages, max_completion_tokens } = await req.json();
 
-    console.log('[OPENAI-PROXY] Request:', { model, messageCount: messages?.length });
+    console.log('[OPENAI-PROXY] Request:', { 
+      model, 
+      messageCount: messages?.length,
+      max_completion_tokens,
+      timestamp: new Date().toISOString()
+    });
 
     // Newer models (GPT-5+) use max_completion_tokens and don't support temperature
     const isNewerModel = model.startsWith('gpt-5') || model.startsWith('o3') || model.startsWith('o4');
@@ -57,13 +67,22 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    console.log('[OPENAI-PROXY] Success');
+    const latency = Date.now() - startTime;
+    console.log('[OPENAI-PROXY] Success', {
+      latency_ms: latency,
+      usage: data.usage,
+      model: data.model
+    });
 
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('[OPENAI-PROXY] Error:', error);
+    const latency = Date.now() - startTime;
+    console.error('[OPENAI-PROXY] Error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      latency_ms: latency
+    });
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'Unknown error' 
     }), {
