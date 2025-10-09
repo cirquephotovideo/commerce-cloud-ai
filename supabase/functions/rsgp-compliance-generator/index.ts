@@ -10,6 +10,104 @@ const corsHeaders = {
 // UTILITY FUNCTIONS
 // ============================================
 
+// ✅ Whitelist des colonnes rsgp_compliance (évite erreurs PostgREST)
+const RSGP_ALLOWED_COLUMNS = [
+  'analysis_id', 'user_id', 'nom_produit', 'reference_interne', 'ean', 
+  'numero_lot', 'numero_modele', 'categorie_rsgp', 'fabricant_nom', 
+  'fabricant_adresse', 'pays_origine', 'personne_responsable_ue', 
+  'normes_ce', 'documents_conformite', 'evaluation_risque', 'date_evaluation',
+  'firmware_ou_logiciel', 'procedure_rappel', 'historique_incidents', 
+  'notice_pdf', 'avertissements', 'age_recommande', 'compatibilites',
+  'entretien', 'recyclage', 'indice_reparabilite', 'indice_energie',
+  'garantie', 'service_consommateur', 'langues_disponibles', 
+  'rsgp_valide', 'date_mise_conformite', 'responsable_conformite',
+  'documents_archives', 'fournisseur', 'date_import_odoo', 
+  'generation_metadata', 'validation_status', 'statut'
+];
+
+// ✅ Domaines de confiance pour sources
+const TRUSTED_DOMAINS = [
+  'apple.com', 'support.apple.com', 'ec.europa.eu', 'europa.eu',
+  'gouv.fr', 'gov.uk', 'iso.org', 'iec.ch', 'bsigroup.com',
+  'tuv.com', 'sgs.com', 'ul.com', 'intertek.com'
+];
+
+// ✅ Validation URL avec HEAD request (timeout 5s)
+async function validateUrlHead(url: string): Promise<boolean> {
+  if (!url || !url.startsWith('http')) return false;
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'RSGP-Validator/1.0' }
+    });
+    
+    clearTimeout(timeoutId);
+    return response.ok && response.status === 200;
+  } catch (error) {
+    console.warn(`[RSGP] URL validation failed: ${url}`, error);
+    return false;
+  }
+}
+
+// ✅ Vérifier si URL est un PDF
+function isPdf(url: string): boolean {
+  if (!url || !url.startsWith('http')) return false;
+  const lower = url.toLowerCase();
+  return lower.endsWith('.pdf') || lower.includes('.pdf?') || lower.includes('/pdf/');
+}
+
+// ✅ Vérifier si domaine est de confiance
+function isTrustedDomain(url: string): boolean {
+  if (!url || !url.startsWith('http')) return false;
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return TRUSTED_DOMAINS.some(domain => hostname.includes(domain));
+  } catch {
+    return false;
+  }
+}
+
+// ✅ Normaliser les normes (EN 12345, ISO 9001, etc.)
+function normalizeStandard(str: string): string {
+  const match = str.match(/(EN|ISO|IEC|UN)\s*(\d+(?:[-:]\d+)*)/i);
+  return match ? `${match[1].toUpperCase()} ${match[2]}` : str;
+}
+
+// ✅ Filtrer objet selon whitelist
+function pickWhitelist<T extends Record<string, any>>(obj: T, allowedKeys: string[]): Partial<T> {
+  const result: any = {};
+  allowedKeys.forEach(key => {
+    if (key in obj) {
+      result[key] = obj[key];
+    }
+  });
+  return result;
+}
+
+// ✅ Calculer score de confiance par section
+function computeSectionConfidence(sectionData: any): number {
+  let score = 0;
+  
+  // +0.5 si sources_urls non vides
+  if (sectionData.sources_urls && Array.isArray(sectionData.sources_urls) && sectionData.sources_urls.length > 0) {
+    score += 0.5;
+  }
+  
+  // +0.5 si au moins 1 URL sur domaine trusted
+  const trustedCount = (sectionData.sources_urls || []).filter((url: string) => isTrustedDomain(url)).length;
+  if (trustedCount > 0) {
+    score += 0.5;
+  }
+  
+  // Cap à 1.0
+  return Math.min(score, 1.0);
+}
+
 async function getAvailableProviders(supabase: any, userId: string) {
   const lovableKey = Deno.env.get('LOVABLE_API_KEY');
   
@@ -185,16 +283,26 @@ async function fetchWebDataMultiSource(
   const brand = productBrand || '';
   const ean = productEan || '';
   
-  // 🎯 12 queries optimisées RSGP
+  // 🎯 Enhanced queries with "site:" targeting trusted domains
   const queries = [
     // Fabricant & Contact
     `${brand || productName} manufacturer official contact address EU representative`,
     `${productName} ${brand} country origin made in fabrication location`,
     
+    // Site-specific: Official manufacturer sites
+    ...(brand ? [
+      `site:${brand.toLowerCase().replace(/\s+/g, '')}.com ${productName} compliance declaration`,
+      `site:support.${brand.toLowerCase().replace(/\s+/g, '')}.com ${productName} manual PDF`
+    ] : []),
+    
     // Conformité & Certifications
     `${productName} ${ean} CE certificate declaration conformity PDF download`,
     `${brand || productName} safety datasheet MSDS compliance ISO EN standards`,
     `${productName} ${brand} certifications list ISO EN IEC UN38.3`,
+    
+    // Site-specific: EU safety databases
+    `site:ec.europa.eu/safety-gate ${productName} ${brand}`,
+    `site:signal.conso.gouv.fr ${productName} ${brand}`,
     
     // Documentation
     `${productName} user manual instructions notice PDF download`,
@@ -731,6 +839,176 @@ RÈGLES:
 async function generateWithLovableAI(product: any, derivedData: any, webResults: any[], webSearchData: { searchResults: any[], searchMethod: string }) {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
+  // ✅ Tool definitions for structured extraction
+  const tools = [
+    {
+      type: "function",
+      function: {
+        name: "extract_product_info",
+        description: "Extract basic product information",
+        parameters: {
+          type: "object",
+          properties: {
+            nom_produit: { type: "string" },
+            categorie_rsgp: { type: "string", enum: ["électronique", "jouets", "textile", "cosmétiques", "alimentaire", "autre"] },
+            numero_modele: { type: "string" },
+            ean: { type: "string" },
+            pays_origine: { type: "string" },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["nom_produit", "categorie_rsgp", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_manufacturer",
+        description: "Extract manufacturer contact details",
+        parameters: {
+          type: "object",
+          properties: {
+            fabricant_nom: { type: "string" },
+            fabricant_adresse: { type: "string" },
+            pays_origine: { type: "string" },
+            personne_responsable_ue: { type: "string" },
+            service_consommateur: { type: "string" },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["fabricant_nom", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_certifications",
+        description: "Extract CE norms and certifications",
+        parameters: {
+          type: "object",
+          properties: {
+            normes_ce: { type: "array", items: { type: "string" } },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["normes_ce", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_compliance_docs",
+        description: "Extract compliance document URLs",
+        parameters: {
+          type: "object",
+          properties: {
+            documents_conformite: {
+              type: "object",
+              properties: {
+                declaration_conformite: { type: "string" },
+                certificat_ce: { type: "string" },
+                rapport_test: { type: "string" }
+              }
+            },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["documents_conformite", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_notice_languages",
+        description: "Extract user manual and available languages",
+        parameters: {
+          type: "object",
+          properties: {
+            notice_pdf: { type: "string" },
+            langues_disponibles: { type: "array", items: { type: "string" } },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["notice_pdf", "langues_disponibles", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_support_recall",
+        description: "Extract customer service and recall information",
+        parameters: {
+          type: "object",
+          properties: {
+            procedure_rappel: { type: "string" },
+            historique_incidents: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  date: { type: "string" },
+                  type: { type: "string" },
+                  description: { type: "string" },
+                  source: { type: "string" }
+                }
+              }
+            },
+            service_consommateur: { type: "string" },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["procedure_rappel", "historique_incidents", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_safety_technical",
+        description: "Extract safety and technical characteristics",
+        parameters: {
+          type: "object",
+          properties: {
+            age_recommande: { type: "string" },
+            avertissements: { type: "array", items: { type: "string" } },
+            entretien: { type: "string" },
+            recyclage: { type: "string" },
+            garantie: { type: "string" },
+            indice_reparabilite: { type: "number" },
+            indice_energie: { type: "string" },
+            firmware_ou_logiciel: { type: "string" },
+            compatibilites: { type: "array", items: { type: "string" } },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["age_recommande", "avertissements", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_rsgp_status",
+        description: "Determine RSGP compliance status",
+        parameters: {
+          type: "object",
+          properties: {
+            rsgp_valide: { type: "string", enum: ["Oui", "En attente", "Non conforme"] },
+            statut: { type: "string", enum: ["actif", "draft", "retiré"] },
+            sources_urls: { type: "array", items: { type: "string" } }
+          },
+          required: ["rsgp_valide", "statut", "sources_urls"],
+          additionalProperties: false
+        }
+      }
+    }
+  ];
+
   const prompts = [
     createProductInfoPrompt(product, derivedData, webResults),
     createManufacturerPrompt(product, derivedData, webResults),
@@ -742,10 +1020,11 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
     createRsgpStatusPrompt(product, webResults)
   ];
 
-  console.log('[RSGP] 🚀 Lancement 8 prompts parallèles (séparés par section)...');
+  console.log('[RSGP] 🚀 Lancement 8 prompts parallèles avec tool-calling...');
 
   const results = await Promise.allSettled(
     prompts.map(async (prompt, index) => {
+      const tool = tools[index];
       const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -756,23 +1035,40 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
           model: 'google/gemini-2.5-flash',
           temperature: 0.7,
           messages: [
-            { role: 'system', content: 'Retourne UNIQUEMENT du JSON valide sans markdown.' },
             { role: 'user', content: prompt }
-          ]
+          ],
+          tools: [tool],
+          tool_choice: { type: "function", function: { name: tool.function.name } }
         })
       });
 
       if (!res.ok) {
         const errorText = await res.text();
         console.error(`[RSGP] ❌ Prompt ${index+1} failed: ${res.status} - ${errorText}`);
+        
+        // Handle rate limits
+        if (res.status === 429) {
+          throw new Error('Rate limits exceeded - please try again later');
+        }
+        if (res.status === 402) {
+          throw new Error('Payment required - please add credits to your Lovable AI workspace');
+        }
+        
         throw new Error(`AI ${index+1} failed: ${res.status} - ${errorText}`);
       }
 
       const data = await res.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (toolCall?.function?.arguments) {
+        const args = JSON.parse(toolCall.function.arguments);
+        console.log(`[RSGP] ✅ Prompt ${index+1} (${['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'][index]}) terminé`);
+        return args;
+      }
+      
+      // Fallback if no tool call
       let content = data.choices?.[0]?.message?.content || '{}';
       content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      
-      console.log(`[RSGP] ✅ Prompt ${index+1} (${['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'][index]}) terminé`);
       return JSON.parse(content);
     })
   );
@@ -919,6 +1215,7 @@ function mergeRSGPResults(
   };
 
   const usedSources: string[] = [];
+  const sectionConfidence: Record<string, number> = {};
 
   // ✅ Collecter les URLs sources des résultats web
   webSearchData.searchResults.forEach((result: any) => {
@@ -927,41 +1224,75 @@ function mergeRSGPResults(
     }
   });
 
-  // ✅ Merge des 8 résultats IA et collecte des sources
+  // ✅ Merge des 8 résultats IA avec validation stricte
+  const promptNames = ['product_info', 'manufacturer', 'certifications', 'compliance_docs', 'notice', 'support', 'safety', 'status'];
+  
   results.forEach((result, index) => {
     if (result.status === 'fulfilled' && result.value) {
       const promptData = result.value;
+      const sectionName = promptNames[index];
+      
+      // Calculer confiance pour cette section
+      sectionConfidence[sectionName] = computeSectionConfidence(promptData);
       
       // Prioriser les données non vides sur "non communiqué"
       Object.keys(promptData).forEach(key => {
+        // Ignorer clés hors whitelist dès maintenant
+        if (!RSGP_ALLOWED_COLUMNS.includes(key) && key !== 'sources_urls') {
+          return;
+        }
+        
         const value = promptData[key];
         const isEmpty = !value || value === 'non communiqué' || value === 'N/A' || value === '';
         
-        // Cas spécial: normes_ce (merge arrays)
+        // Cas spécial: normes_ce (normaliser et dédupliquer)
         if (key === 'normes_ce' && Array.isArray(value) && value.length > 0) {
-          merged.normes_ce = [...new Set([...merged.normes_ce, ...value])];
+          const normalized = value.map(normalizeStandard).filter(Boolean);
+          merged.normes_ce = [...new Set([...merged.normes_ce, ...normalized])].sort();
           return;
         }
         
-        // Cas spécial: historique_incidents (merge arrays)
+        // Cas spécial: historique_incidents (filtrer URLs invalides)
         if (key === 'historique_incidents' && Array.isArray(value) && value.length > 0) {
-          merged.historique_incidents = [...merged.historique_incidents, ...value];
+          const validIncidents = value.filter((inc: any) => 
+            inc.source && inc.source.startsWith('http')
+          );
+          merged.historique_incidents = [...merged.historique_incidents, ...validIncidents];
           return;
         }
         
-        // Cas spécial: documents_conformite (merge objects)
+        // Cas spécial: documents_conformite (valider PDFs)
         if (key === 'documents_conformite' && typeof value === 'object') {
           Object.keys(value).forEach(docKey => {
-            if (value[docKey] && value[docKey] !== 'non communiqué') {
-              merged.documents_conformite[docKey] = value[docKey];
+            const docUrl = value[docKey];
+            if (docUrl && docUrl !== 'non communiqué' && isPdf(docUrl)) {
+              merged.documents_conformite[docKey] = docUrl;
             }
           });
           return;
         }
         
-        // Cas spécial: langues_disponibles (merge arrays)
+        // Cas spécial: notice_pdf (valider PDF)
+        if (key === 'notice_pdf' && value && value !== 'non communiqué') {
+          if (isPdf(value)) {
+            merged.notice_pdf = value;
+          }
+          return;
+        }
+        
+        // Cas spécial: pays_origine (forcer ISO-2)
+        if (key === 'pays_origine' && value && value !== 'non communiqué') {
+          const upper = value.toUpperCase().trim();
+          if (/^[A-Z]{2}$/.test(upper)) {
+            merged.pays_origine = upper;
+          }
+          return;
+        }
+        
+        // Cas spécial: langues_disponibles (merge arrays, codes ISO-2)
         if (key === 'langues_disponibles' && Array.isArray(value) && value.length > 0) {
-          merged.langues_disponibles = [...new Set([...merged.langues_disponibles, ...value])];
+          const validLangs = value.filter((lang: string) => /^[a-z]{2}$/.test(lang.toLowerCase()));
+          merged.langues_disponibles = [...new Set([...merged.langues_disponibles, ...validLangs.map((l: string) => l.toLowerCase())])];
           return;
         }
         
@@ -990,23 +1321,36 @@ function mergeRSGPResults(
         usedSources.push(...promptData.sources_urls);
       }
       
-      const promptNames = ['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'];
-      console.log(`[RSGP] ✅ Prompt ${index+1} (${promptNames[index] || 'Unknown'}) intégré`);
+      console.log(`[RSGP] ✅ Prompt ${index+1} (${sectionName}) intégré (confiance: ${sectionConfidence[sectionName].toFixed(2)})`);
     } else {
-      console.warn(`[RSGP] ⚠️ Prompt ${index+1} échoué:`, result.status === 'rejected' ? result.reason : 'unknown');
+      const sectionName = promptNames[index];
+      sectionConfidence[sectionName] = 0;
+      console.warn(`[RSGP] ⚠️ Prompt ${index+1} (${sectionName}) échoué`);
     }
   });
 
-  // ✅ Métadonnées enrichies avec sources
+  // ✅ Dédupliquer sources
+  const uniqueSources = [...new Set(usedSources)].filter(url => url.startsWith('http'));
+  
+  // ✅ Séparer sources trusted vs non-trusted
+  const trustedSources = uniqueSources.filter(isTrustedDomain);
+  const otherSources = uniqueSources.filter(url => !isTrustedDomain(url));
+
+  // ✅ Métadonnées enrichies avec confiance et sources vérifiées
   merged.generation_metadata = {
     method: webSearchData.searchMethod,
     timestamp: new Date().toISOString(),
     web_results_count: webSearchData.searchResults.length,
-    sources_urls: [...new Set(usedSources)],
-    queries_executed: [...new Set(webSearchData.searchResults.map((r: any) => r.query))]
+    sources_urls: uniqueSources,
+    trusted_sources: trustedSources,
+    other_sources: otherSources,
+    queries_executed: [...new Set(webSearchData.searchResults.map((r: any) => r.query))],
+    section_confidence: sectionConfidence,
+    overall_confidence: Object.values(sectionConfidence).reduce((a, b) => a + b, 0) / Math.max(Object.keys(sectionConfidence).length, 1)
   };
 
-  return merged;
+  // ✅ Filtrer strictement selon whitelist
+  return pickWhitelist(merged, RSGP_ALLOWED_COLUMNS);
 }
 
 function generateMinimalRSGP(product: any, derivedData: any) {
