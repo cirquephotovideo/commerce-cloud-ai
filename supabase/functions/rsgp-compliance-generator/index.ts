@@ -783,8 +783,19 @@ serve(async (req) => {
       .eq('id', analysis_id);
 
     // ========== PHASE 1: Recherche Web avec Fallback ==========
+    // ✅ AMÉLIORATION: Extraction robuste du nom du produit
+    const productName = analysis.product_name || 
+                       analysis.analysis_result?.title || 
+                       analysis.analysis_result?.product_name ||
+                       analysis.product_url ||
+                       'Produit sans nom';
+    
+    console.log(`[RSGP] 📦 Produit: "${productName}"`);
+    console.log(`[RSGP] 🏷️  Marque: "${derivedData.brand || 'inconnue'}"`);
+    console.log(`[RSGP] 🔢 EAN: "${derivedData.ean || 'inconnu'}"`);
+
     const { searchResults, searchMethod } = await fetchWebData(
-      analysis.product_name,
+      productName,
       derivedData.brand,
       derivedData.ean
     );

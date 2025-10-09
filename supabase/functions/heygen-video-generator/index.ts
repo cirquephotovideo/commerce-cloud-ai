@@ -135,6 +135,30 @@ serve(async (req) => {
         );
       }
 
+      // ✅ AJOUT: Timeout automatique après 10 minutes
+      const createdAt = new Date(videoData.created_at).getTime();
+      const elapsedMinutes = (Date.now() - createdAt) / 1000 / 60;
+      
+      if (videoData.status === 'processing' && elapsedMinutes > 10) {
+        console.warn(`[HEYGEN-VIDEO] Timeout detected for video ${videoData.video_id} (${Math.floor(elapsedMinutes)} minutes)`);
+        
+        await supabase
+          .from('product_videos')
+          .update({
+            status: 'failed',
+            error_message: 'Timeout: La génération a pris plus de 10 minutes'
+          })
+          .eq('id', videoData.id);
+
+        return new Response(
+          JSON.stringify({
+            status: 'failed',
+            error: 'Timeout: La génération a pris plus de 10 minutes'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Check status on HeyGen - Correct API endpoint
       // Check status on HeyGen with automatic fallback between v2 and v1 endpoints
       console.log(`[HEYGEN-VIDEO] Checking status for video: ${videoData.video_id}`);

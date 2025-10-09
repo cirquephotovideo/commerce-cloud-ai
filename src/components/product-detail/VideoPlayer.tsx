@@ -31,7 +31,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           body: { 
             action: 'check_status',
             analysis_id: analysisId,
-            video_id: video.heygen_video_id
+            video_id: video.video_id // ✅ CORRECTION: Utiliser video.video_id au lieu de heygen_video_id
           }
         });
 
@@ -58,20 +58,27 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     return () => clearInterval(pollInterval);
   }, [video, analysisId]);
 
-  // Compteur de temps écoulé pour les vidéos en cours
+  // Compteur de temps écoulé depuis created_at
   useEffect(() => {
     if (!video || video.status !== 'processing') {
       setElapsedTime(0);
       return;
     }
 
-    const startTime = Date.now();
-    const timer = setInterval(() => {
+    // ✅ CORRECTION: Calculer depuis created_at au lieu de Date.now()
+    const startTime = new Date(video.created_at).getTime();
+    const updateElapsed = () => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
+    };
+
+    // Mise à jour immédiate
+    updateElapsed();
+
+    // Puis toutes les secondes
+    const timer = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(timer);
-  }, [video?.status]);
+  }, [video?.status, video?.created_at]);
 
   const fetchLatestVideo = async () => {
     try {
@@ -114,6 +121,11 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     if (video?.video_url) {
       window.open(video.video_url, '_blank');
     }
+  };
+
+  const handleForceCheck = async () => {
+    toast.info("🔄 Vérification manuelle du statut...");
+    await fetchLatestVideo();
   };
 
   const content = (
@@ -175,6 +187,23 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
               <p className="text-xs text-muted-foreground">
                 La génération peut prendre 1 à 3 minutes. Le statut se met à jour automatiquement.
               </p>
+              
+              {/* ✅ AJOUT: Avertissement timeout après 5 minutes */}
+              {elapsedTime > 300 && (
+                <div className="flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-500">
+                      ⚠️ Génération anormalement longue
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      La génération prend plus de temps que prévu. Vous pouvez forcer une vérification.
+                    </p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handleForceCheck}>
+                    Vérifier
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
