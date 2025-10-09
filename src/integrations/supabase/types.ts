@@ -1302,6 +1302,7 @@ export type Database = {
           is_active: boolean | null
           platform_type: string
           platform_url: string
+          supports_import: boolean | null
           updated_at: string
           user_id: string
         }
@@ -1315,6 +1316,7 @@ export type Database = {
           is_active?: boolean | null
           platform_type: string
           platform_url: string
+          supports_import?: boolean | null
           updated_at?: string
           user_id: string
         }
@@ -1328,6 +1330,7 @@ export type Database = {
           is_active?: boolean | null
           platform_type?: string
           platform_url?: string
+          supports_import?: boolean | null
           updated_at?: string
           user_id?: string
         }
@@ -1583,6 +1586,7 @@ export type Database = {
           competitive_pros: Json | null
           created_at: string | null
           description_long: string | null
+          ean: string | null
           enrichment_status: Json | null
           heygen_video_id: string | null
           id: string
@@ -1612,6 +1616,7 @@ export type Database = {
           competitive_pros?: Json | null
           created_at?: string | null
           description_long?: string | null
+          ean?: string | null
           enrichment_status?: Json | null
           heygen_video_id?: string | null
           id?: string
@@ -1641,6 +1646,7 @@ export type Database = {
           competitive_pros?: Json | null
           created_at?: string | null
           description_long?: string | null
+          ean?: string | null
           enrichment_status?: Json | null
           heygen_video_id?: string | null
           id?: string
@@ -2760,6 +2766,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_valid_ean13: {
+        Args: { ean: string }
         Returns: boolean
       }
     }

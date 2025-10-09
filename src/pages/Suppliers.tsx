@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus } from "lucide-react";
+import { Truck, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SupplierConfiguration } from "@/components/SupplierConfiguration";
 import { SupplierProductsTable } from "@/components/SupplierProductsTable";
 import { SupplierImportWizard } from "@/components/SupplierImportWizard";
+import { SupplierImportMenu } from "@/components/SupplierImportMenu";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -94,9 +95,10 @@ export default function Suppliers() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setShowImportWizard(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Importer CSV
+          <SupplierImportMenu onImportComplete={() => refetchSuppliers()} />
+          <Button onClick={() => setShowImportWizard(true)} variant="outline">
+            <Upload className="mr-2 h-4 w-4" />
+            Import CSV
           </Button>
           <Button onClick={() => setShowNewSupplier(true)}>
             <Plus className="mr-2 h-4 w-4" />
@@ -130,6 +132,10 @@ export default function Suppliers() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
+                    <SupplierImportMenu 
+                      supplierId={supplier.id}
+                      onImportComplete={() => refetchSuppliers()}
+                    />
                     <Button variant="outline" size="sm" onClick={() => handleSync(supplier.id)}>
                       Synchroniser
                     </Button>

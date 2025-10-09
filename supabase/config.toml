@@ -143,3 +143,39 @@ verify_jwt = true
 
 [functions.customer-portal]
 verify_jwt = true
+
+[functions.import-from-platform]
+verify_jwt = true
+
+[functions.import-from-odoo]
+verify_jwt = true
+
+[functions.import-from-shopify]
+verify_jwt = true
+
+[functions.import-from-prestashop]
+verify_jwt = true
+
+[functions.import-from-woocommerce]
+verify_jwt = true
+
+[functions.import-from-magento]
+verify_jwt = true
+
+[functions.import-from-salesforce]
+verify_jwt = true
+
+[functions.import-from-sap]
+verify_jwt = true
+
+[functions.import-from-uber_eats]
+verify_jwt = true
+
+[functions.import-from-deliveroo]
+verify_jwt = true
+
+[functions.import-from-just_eat]
+verify_jwt = true
+
+[functions.import-from-windev]
+verify_jwt = true
