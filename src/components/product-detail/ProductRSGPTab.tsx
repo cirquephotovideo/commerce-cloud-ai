@@ -4,7 +4,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, RefreshCw, Shield, Building2, FileText, AlertTriangle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Shield, Building2, FileText, AlertTriangle, Package, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -224,32 +224,57 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-sm font-medium mb-2">Fabricant</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              Fabricant
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm bg-muted/30 p-3 rounded-lg">
               <div>
                 <p className="text-muted-foreground">Nom</p>
-                <p className="font-medium">{rsgpData.fabricant_nom || "non communiqué"}</p>
+                <p className="font-medium">
+                  {rsgpData.fabricant_nom || (
+                    <span className="text-muted-foreground italic">non communiqué</span>
+                  )}
+                </p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-muted-foreground">Adresse</p>
-                <p className="font-medium">{rsgpData.fabricant_adresse || "non communiqué"}</p>
+                <p className="font-medium">
+                  {rsgpData.fabricant_adresse || (
+                    <span className="text-muted-foreground italic">non communiqué</span>
+                  )}
+                </p>
               </div>
             </div>
           </div>
 
           <div className="pt-4 border-t">
-            <p className="text-sm font-medium mb-2">Fournisseur</p>
-            <p className="text-sm">{rsgpData.fournisseur || "non communiqué"}</p>
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Fournisseur
+            </p>
+            <p className="text-sm bg-muted/30 p-3 rounded-lg">
+              {rsgpData.fournisseur || (
+                <span className="text-muted-foreground italic">non communiqué</span>
+              )}
+            </p>
           </div>
 
           <div className="pt-4 border-t">
-            <p className="text-sm font-medium mb-2">Personne responsable UE</p>
-            <p className="text-sm">{rsgpData.personne_responsable_ue || "non communiqué"}</p>
+            <p className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Globe className="w-4 h-4" />
+              Personne responsable UE
+            </p>
+            <p className="text-sm bg-muted/30 p-3 rounded-lg">
+              {rsgpData.personne_responsable_ue || (
+                <span className="text-muted-foreground italic">non communiqué</span>
+              )}
+            </p>
           </div>
 
           <div className="pt-4 border-t">
             <p className="text-sm font-medium mb-2">Service consommateur</p>
-            <p className="text-sm">{rsgpData.service_consommateur || "non communiqué"}</p>
+            <p className="text-sm bg-muted/30 p-3 rounded-lg">{rsgpData.service_consommateur || "non communiqué"}</p>
           </div>
         </CardContent>
       </Card>
@@ -297,21 +322,39 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
 
           {rsgpData.documents_conformite && (
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Documents de conformité</p>
-              <pre className="text-xs bg-muted p-2 rounded overflow-auto">
-                {JSON.stringify(rsgpData.documents_conformite, null, 2)}
-              </pre>
+              <p className="text-sm text-muted-foreground mb-2">Documents de conformité</p>
+              <div className="space-y-2 bg-muted/30 p-3 rounded-lg">
+                {Object.entries(rsgpData.documents_conformite).map(([key, value]: [string, any]) => (
+                  <div key={key} className="text-sm">
+                    <span className="font-medium capitalize">{key.replace(/_/g, ' ')} :</span>{' '}
+                    {value && value !== "non communiqué" ? (
+                      value.startsWith('http') ? (
+                        <a href={value} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          Consulter le document
+                        </a>
+                      ) : (
+                        <span>{value}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground italic">non communiqué</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {rsgpData.notice_pdf && (
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Notice PDF</p>
-              <a href={rsgpData.notice_pdf} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Notice PDF</p>
+            {rsgpData.notice_pdf ? (
+              <a href={rsgpData.notice_pdf} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-2">
+                <FileText className="w-4 h-4" />
                 Télécharger la notice
               </a>
-            </div>
-          )}
+            ) : (
+              <p className="text-sm text-muted-foreground italic">non communiqué</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -469,12 +512,14 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
             </div>
           )}
 
-          {rsgpData.firmware_ou_logiciel && (
             <div>
               <p className="text-sm text-muted-foreground mb-1">Firmware / Logiciel</p>
-              <p className="text-sm">{rsgpData.firmware_ou_logiciel}</p>
+              <p className="text-sm">
+                {rsgpData.firmware_ou_logiciel || (
+                  <span className="text-muted-foreground italic">N/A</span>
+                )}
+              </p>
             </div>
-          )}
 
           {rsgpData.langues_disponibles && rsgpData.langues_disponibles.length > 0 && (
             <div>
