@@ -384,6 +384,51 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
         </CardContent>
       </Card>
 
+      {/* Search Method & Sources */}
+      {rsgpData.generation_metadata && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5" />
+              Méthode de recherche & Sources
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Méthode de collecte</p>
+              <Badge variant="outline" className="capitalize">
+                {rsgpData.generation_metadata.method === 'serper' && '🔍 Serper API'}
+                {rsgpData.generation_metadata.method === 'openrouter_online' && '🌐 OpenRouter :online'}
+                {rsgpData.generation_metadata.method === 'lovable_grounding' && '🔮 Lovable AI + Grounding'}
+                {rsgpData.generation_metadata.method === 'ai_simulated' && '⚠️ IA Simulation'}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-muted-foreground">Résultats web</p>
+                <p className="font-semibold">{rsgpData.generation_metadata.web_results_count || 0}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Sources uniques</p>
+                <p className="font-semibold">{rsgpData.generation_metadata.sources_urls?.length || 0}</p>
+              </div>
+            </div>
+            {rsgpData.generation_metadata.sources_urls && rsgpData.generation_metadata.sources_urls.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="text-sm text-muted-foreground mb-2">Sources consultées</p>
+                <div className="space-y-1 max-h-[200px] overflow-y-auto">
+                  {rsgpData.generation_metadata.sources_urls.slice(0, 10).map((url: string, idx: number) => (
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block text-xs text-primary hover:underline truncate">
+                      {url}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Risk Assessment & Additional Info */}
       <Card>
         <CardHeader>
