@@ -181,25 +181,76 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
         </div>
       )}
 
-      {!loading && !error && video && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            {getStatusBadge(video.status)}
-            {video.video_url && (
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={handleDownload}>
-                  <Download className="w-3 h-3 mr-1" />
-                  Télécharger
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => window.open(video.video_url, '_blank')}>
-                  <ExternalLink className="w-3 h-3 mr-1" />
-                  Ouvrir
-                </Button>
+    {!loading && !error && video && (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          {getStatusBadge(video.status)}
+          {video.video_url && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleDownload}>
+                <Download className="w-3 h-3 mr-1" />
+                Télécharger
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.open(video.video_url, '_blank')}>
+                <ExternalLink className="w-3 h-3 mr-1" />
+                Ouvrir
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Priorité 1 : Si completed avec video_url, afficher directement */}
+        {video.status === 'completed' && video.video_url && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <span className="text-sm font-medium">🔗 Lien de la vidéo :</span>
+              <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
+                {video.video_url}
+              </code>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => {
+                  navigator.clipboard.writeText(video.video_url);
+                  toast.success("Lien copié !");
+                }}
+              >
+                Copier
+              </Button>
+            </div>
+            
+            <video 
+              controls 
+              className="w-full rounded-lg border-2 border-border shadow-lg"
+              src={video.video_url}
+              poster={video.thumbnail_url || undefined}
+            >
+              Votre navigateur ne supporte pas la lecture vidéo.
+            </video>
+            
+            {video.duration && (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Durée : {Math.round(video.duration)}s</span>
+                <span>Généré le {new Date(video.created_at).toLocaleDateString('fr-FR')}</span>
               </div>
             )}
           </div>
+        )}
 
-          {video.status === 'processing' && (
+        {video.status === 'completed' && !video.video_url && video.thumbnail_url && (
+          <div className="p-4 bg-muted/50 rounded-lg">
+            <img 
+              src={video.thumbnail_url} 
+              alt="Miniature de la vidéo" 
+              className="w-full rounded-md"
+            />
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Vidéo générée mais URL non disponible
+            </p>
+          </div>
+        )}
+
+        {video.status === 'processing' && (
             <div className="p-4 bg-muted/50 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">

@@ -208,6 +208,7 @@ serve(async (req) => {
                 video_url: v1Data.data.video_url,
                 thumbnail_url: v1Data.data.thumbnail_url,
                 duration: v1Data.data.duration,
+                error_message: null,
                 completed_at: new Date().toISOString()
               })
               .eq('id', videoData.id);
@@ -266,6 +267,7 @@ serve(async (req) => {
             video_url: statusData.data.video_url,
             thumbnail_url: statusData.data.thumbnail_url,
             duration: statusData.data.duration,
+            error_message: null,
             completed_at: new Date().toISOString()
           })
           .eq('id', videoData.id);
