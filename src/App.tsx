@@ -11,6 +11,7 @@ import MarketIntelligence from "./pages/MarketIntelligence";
 import Suppliers from "./pages/Suppliers";
 import ImportedProducts from "./pages/ImportedProducts";
 import ImportExportDashboard from "./pages/ImportExportDashboard";
+import Analytics from "./pages/Analytics";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import ResetPassword from "./pages/ResetPassword";
@@ -53,6 +54,7 @@ const App = () => {
         <Route path="/suppliers" element={<ProtectedRoute><DashboardLayout><Suppliers /></DashboardLayout></ProtectedRoute>} />
         <Route path="/imported-products" element={<ProtectedRoute><DashboardLayout><ImportedProducts /></DashboardLayout></ProtectedRoute>} />
         <Route path="/import-export-dashboard" element={<ProtectedRoute><DashboardLayout><ImportExportDashboard /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/analytics" element={<ProtectedRoute><DashboardLayout><Analytics /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />

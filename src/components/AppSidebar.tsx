@@ -8,6 +8,7 @@ import {
   Mail,
   Settings,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -37,6 +38,7 @@ const supplierNavigation = [
 
 const marketNavigation = [
   { title: "Intelligence Marché", url: "/market-intelligence", icon: TrendingUp },
+  { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 const configNavigation = [

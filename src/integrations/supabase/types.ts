@@ -803,6 +803,66 @@ export type Database = {
         }
         Relationships: []
       }
+      enrichment_queue: {
+        Row: {
+          analysis_id: string | null
+          completed_at: string | null
+          created_at: string | null
+          enrichment_type: string[]
+          error_message: string | null
+          id: string
+          priority: string | null
+          started_at: string | null
+          status: string | null
+          supplier_product_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          enrichment_type: string[]
+          error_message?: string | null
+          id?: string
+          priority?: string | null
+          started_at?: string | null
+          status?: string | null
+          supplier_product_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          enrichment_type?: string[]
+          error_message?: string | null
+          id?: string
+          priority?: string | null
+          started_at?: string | null
+          status?: string | null
+          supplier_product_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_queue_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrichment_queue_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_history: {
         Row: {
           analysis_id: string | null
@@ -1745,6 +1805,51 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_links: {
+        Row: {
+          analysis_id: string | null
+          confidence_score: number | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          link_type: string
+          supplier_product_id: string | null
+        }
+        Insert: {
+          analysis_id?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          link_type: string
+          supplier_product_id?: string | null
+        }
+        Update: {
+          analysis_id?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          link_type?: string
+          supplier_product_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_links_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_links_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
             referencedColumns: ["id"]
           },
         ]
