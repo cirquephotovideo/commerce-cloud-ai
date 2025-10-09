@@ -36,6 +36,10 @@ const TRUSTED_DOMAINS = [
 async function validateUrlHead(url: string): Promise<boolean> {
   if (!url || !url.startsWith('http')) return false;
   
+  console.log(`[RSGP] 🔗 Validation URL: ${url.substring(0, 80)}...`);
+  console.log(`  - Est PDF: ${isPdf(url) ? '✅' : '❌'}`);
+  console.log(`  - Domaine confiance: ${isTrustedDomain(url) ? '✅' : '❌'}`);
+  
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
@@ -47,9 +51,11 @@ async function validateUrlHead(url: string): Promise<boolean> {
     });
     
     clearTimeout(timeoutId);
-    return response.ok && response.status === 200;
+    const isValid = response.ok && response.status === 200;
+    console.log(`  - HEAD request: ${isValid ? '✅ 200 OK' : '❌ Échec'}`);
+    return isValid;
   } catch (error) {
-    console.warn(`[RSGP] URL validation failed: ${url}`, error);
+    console.warn(`[RSGP] ❌ URL validation failed: ${url}`, error);
     return false;
   }
 }
@@ -280,6 +286,8 @@ async function fetchWebDataMultiSource(
   supabase?: any
 ): Promise<{ searchResults: any[], searchMethod: string }> {
   
+  console.log('[RSGP] 🌐 === DÉBUT RECHERCHE WEB ===');
+  
   const brand = productBrand || '';
   const ean = productEan || '';
   
@@ -318,22 +326,36 @@ async function fetchWebDataMultiSource(
     `${productName} recycling DEEE disposal instructions electronic waste`
   ];
 
+  console.log('[RSGP] 🎯 Requêtes générées:', queries);
+
   let searchResults: any[] = [];
   let searchMethod = 'none';
 
   // ✅ Stratégie 1 : Serper API (si configuré)
   const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
+  console.log('[RSGP] 📡 Tentative Serper...');
   if (SERPER_API_KEY) {
     try {
       searchResults = await searchViaSerper(queries);
       if (searchResults.length > 0) {
         searchMethod = 'serper';
-        console.log(`✅ [RSGP] Serper: ${searchResults.length} résultats`);
+        console.log(`[RSGP] ✅ Serper: ${searchResults.length} résultats`);
+        console.log('[RSGP] 📄 Premiers résultats Serper:', 
+          searchResults.slice(0, 3).map(r => ({
+            title: r.title?.substring(0, 80),
+            hasSnippet: !!r.snippet,
+            link: r.link
+          }))
+        );
         return { searchResults, searchMethod };
+      } else {
+        console.log('[RSGP] ⚠️ Serper: 0 résultats');
       }
     } catch (error) {
-      console.warn('⚠️ [RSGP] Serper failed:', error);
+      console.warn('[RSGP] ⚠️ Serper failed:', error);
     }
+  } else {
+    console.log('[RSGP] ⚠️ SERPER_API_KEY non configurée');
   }
 
   // ✅ Stratégie 2 : OpenRouter :online (si configuré)
@@ -1020,11 +1042,22 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
     createRsgpStatusPrompt(product, webResults)
   ];
 
-  console.log('[RSGP] 🚀 Lancement 8 prompts parallèles avec tool-calling...');
+  console.log('[RSGP] 🤖 === DÉBUT GÉNÉRATION AI (8 PROMPTS) ===');
+
+  const promptNames = ['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'];
 
   const results = await Promise.allSettled(
     prompts.map(async (prompt, index) => {
       const tool = tools[index];
+      const promptName = promptNames[index];
+      
+      console.log(`[RSGP] 📝 Prompt ${index + 1}/8: ${promptName}`);
+      console.log(`[RSGP] 📊 Données d'entrée:`, {
+        webResultsCount: webResults.length,
+        hasProductName: !!product.product_name,
+        hasBrand: !!derivedData?.brand
+      });
+      
       const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1062,14 +1095,20 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
       
       if (toolCall?.function?.arguments) {
         const args = JSON.parse(toolCall.function.arguments);
-        console.log(`[RSGP] ✅ Prompt ${index+1} (${['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'][index]}) terminé`);
+        console.log(`[RSGP] ✅ Prompt ${index+1}/8 (${promptName}) terminé:`, {
+          success: true,
+          hasToolCall: true,
+          dataKeys: Object.keys(args)
+        });
         return args;
       }
       
       // Fallback if no tool call
       let content = data.choices?.[0]?.message?.content || '{}';
       content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      console.log(`[RSGP] ⚠️ Prompt ${index+1}/8 (${promptName}) sans tool call, fallback parsing`);
+      return parsed;
     })
   );
 
@@ -1349,6 +1388,14 @@ function mergeRSGPResults(
     overall_confidence: Object.values(sectionConfidence).reduce((a, b) => a + b, 0) / Math.max(Object.keys(sectionConfidence).length, 1)
   };
 
+  console.log('[RSGP] ✅ Merge terminé:', {
+    nom_produit: merged.nom_produit,
+    fabricant_nom: merged.fabricant_nom,
+    normes_ce_count: merged.normes_ce?.length || 0,
+    has_certificat_ce: !!merged.documents_conformite?.certificat_ce,
+    confidence_score: merged.generation_metadata?.overall_confidence
+  });
+
   // ✅ Filtrer strictement selon whitelist
   return pickWhitelist(merged, RSGP_ALLOWED_COLUMNS);
 }
@@ -1481,13 +1528,7 @@ async function generateRSGPWithFallback(
 function deriveFromAnalysis(analysis: any): Record<string, any> {
   const result = analysis?.analysis_result || {};
   
-  console.log('[RSGP] 🔍 Extracting from analysis_result only:', {
-    hasResult: !!result,
-    brand: result.brand || result.manufacturer,
-    ean: result.ean
-  });
-  
-  return {
+  const derivedData = {
     ean: result.ean || null,
     brand: result.brand || result.manufacturer || null,
     numero_modele: result.model || result.model_number || null,
@@ -1495,6 +1536,15 @@ function deriveFromAnalysis(analysis: any): Record<string, any> {
     categorie_rsgp: result.category || result.product_category || null,
     fournisseur: result.seller || result.supplier || null,
   };
+  
+  console.log('[RSGP] 🔄 Données dérivées de l\'analyse:', {
+    ean: derivedData.ean || '❌ Manquant',
+    brand: derivedData.brand || '❌ Manquant',
+    numero_modele: derivedData.numero_modele || '❌ Manquant',
+    categorie_rsgp: derivedData.categorie_rsgp || '❌ Manquant'
+  });
+  
+  return derivedData;
 }
 
 // ============================================
@@ -1525,7 +1575,14 @@ serve(async (req) => {
 
     const { analysis_id, force_regenerate = false } = await req.json();
 
-    console.log(`[RSGP-COMPLIANCE] Generating for analysis: ${analysis_id}`);
+    console.log('[RSGP] 🚀 === DÉBUT GÉNÉRATION RSGP ===');
+    console.log('[RSGP] 📋 Configuration:');
+    console.log(`  - Analysis ID: ${analysis_id}`);
+    console.log(`  - User ID: ${user.id}`);
+    console.log(`  - Force regenerate: ${force_regenerate}`);
+    console.log('[RSGP] 🔑 Clés API disponibles:');
+    console.log(`  - LOVABLE_API_KEY: ${Deno.env.get('LOVABLE_API_KEY') ? '✅ Présente' : '❌ Manquante'}`);
+    console.log(`  - SERPER_API_KEY: ${Deno.env.get('SERPER_API_KEY') ? '✅ Présente' : '❌ Manquante'}`);
 
     if (!analysis_id) {
       return new Response(
@@ -1571,6 +1628,13 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log('[RSGP] 📊 Analyse récupérée:', {
+      id: analysis.id,
+      product_name: analysis.product_name,
+      hasAnalysisResult: !!analysis.analysis_result,
+      analysisResultKeys: analysis.analysis_result ? Object.keys(analysis.analysis_result) : []
+    });
 
     // ========== PHASE 0: Extract data from analysis_result only ==========
     console.log('[RSGP] 🔍 Extracting data from analysis (NO Amazon dependency)...');
@@ -1698,13 +1762,27 @@ serve(async (req) => {
 
     const sanitizedData = sanitizeAllFields(rsgpData);
 
+    // ✅ Filtrer selon whitelist avant upsert
+    const finalPayload = pickWhitelist(sanitizedData, RSGP_ALLOWED_COLUMNS);
+
+    console.log('[RSGP] 💾 === SAUVEGARDE EN BASE ===');
+    console.log('[RSGP] 📝 Données à sauvegarder:', {
+      analysis_id,
+      user_id: user.id,
+      nom_produit: finalPayload.nom_produit,
+      fabricant_nom: finalPayload.fabricant_nom,
+      normes_ce_count: finalPayload.normes_ce?.length || 0,
+      has_documents: !!finalPayload.documents_conformite,
+      validation_status: 'draft'
+    });
+
     // Save to database using UPSERT
     const { data: complianceRecord, error: insertError } = await supabase
       .from('rsgp_compliance')
       .upsert({
         analysis_id,
         user_id: user.id,
-        ...sanitizedData,
+        ...finalPayload,
         validation_status: 'draft'
       }, {
         onConflict: 'analysis_id'
@@ -1713,9 +1791,18 @@ serve(async (req) => {
       .single();
 
     if (insertError) {
-      console.error('[RSGP] Database insert error:', insertError);
+      console.error('[RSGP] ❌ Erreur base de données:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details
+      });
       throw insertError;
     }
+
+    console.log('[RSGP] ✅ Sauvegarde réussie:', {
+      id: complianceRecord.id,
+      analysis_id: complianceRecord.analysis_id
+    });
 
     // Update product_analyses
     await supabase
@@ -1729,7 +1816,16 @@ serve(async (req) => {
       })
       .eq('id', analysis_id);
 
-    console.log('[RSGP] Compliance data generated successfully');
+    console.log('[RSGP] 🎉 === FIN GÉNÉRATION RSGP ===');
+    console.log('[RSGP] 📊 Résumé:', {
+      success: true,
+      method: rsgpData.generation_metadata?.method,
+      webSearchMethod: rsgpData.generation_metadata?.web_search_method,
+      webResultsCount: rsgpData.generation_metadata?.web_results_count,
+      sourcesCount: rsgpData.generation_metadata?.sources_urls?.length || 0,
+      overallConfidence: rsgpData.generation_metadata?.overall_confidence,
+      hasRealData: rsgpData.fabricant_nom !== 'non communiqué'
+    });
 
     return new Response(
       JSON.stringify({
