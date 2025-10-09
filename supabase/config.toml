@@ -126,6 +126,9 @@ verify_jwt = true
 [functions.supplier-import-csv]
 verify_jwt = true
 
+[functions.supplier-import-xlsx]
+verify_jwt = true
+
 [functions.supplier-sync-ftp]
 verify_jwt = true
 

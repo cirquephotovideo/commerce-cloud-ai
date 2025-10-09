@@ -98,7 +98,7 @@ export default function Suppliers() {
           <SupplierImportMenu onImportComplete={() => refetchSuppliers()} />
           <Button onClick={() => setShowImportWizard(true)} variant="outline">
             <Upload className="mr-2 h-4 w-4" />
-            Import CSV
+            Import CSV/XLSX
           </Button>
           <Button onClick={() => setShowNewSupplier(true)}>
             <Plus className="mr-2 h-4 w-4" />

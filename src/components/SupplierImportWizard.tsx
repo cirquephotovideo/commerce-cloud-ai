@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, FileText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import * as XLSX from "xlsx";
 
 interface SupplierImportWizardProps {
   onClose: () => void;
@@ -38,8 +39,11 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      if (!selectedFile.name.endsWith(".csv")) {
-        toast.error("Seuls les fichiers CSV sont acceptés");
+      const isCSV = selectedFile.name.endsWith(".csv");
+      const isXLSX = selectedFile.name.endsWith(".xlsx") || selectedFile.name.endsWith(".xls");
+      
+      if (!isCSV && !isXLSX) {
+        toast.error("Seuls les fichiers CSV et XLSX sont acceptés");
         return;
       }
       setFile(selectedFile);
@@ -48,11 +52,22 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   };
 
   const previewFile = async (file: File) => {
-    const text = await file.text();
-    const allLines = text.split("\n");
-    const lines = allLines.slice(skipFirstRow ? 1 : 0, 6);
-    const parsed = lines.map(line => line.split(delimiter));
-    setPreview(parsed);
+    const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+    
+    if (isXLSX) {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+      const rows = jsonData.slice(skipFirstRow ? 1 : 0, 6);
+      setPreview(rows);
+    } else {
+      const text = await file.text();
+      const allLines = text.split("\n");
+      const lines = allLines.slice(skipFirstRow ? 1 : 0, 6);
+      const parsed = lines.map(line => line.split(delimiter));
+      setPreview(parsed);
+    }
   };
 
   const handleImport = async () => {
@@ -63,20 +78,43 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
     setLoading(true);
     try {
-      const text = await file.text();
+      const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
       
-      const { data, error } = await supabase.functions.invoke("supplier-import-csv", {
-        body: {
-          supplierId,
-          csvContent: text,
-          delimiter,
-          skipFirstRow,
-        },
-      });
+      if (isXLSX) {
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = btoa(
+          new Uint8Array(arrayBuffer).reduce(
+            (data, byte) => data + String.fromCharCode(byte),
+            ''
+          )
+        );
+        
+        const { data, error } = await supabase.functions.invoke("supplier-import-xlsx", {
+          body: {
+            supplierId,
+            fileContent: base64,
+            skipFirstRow,
+          },
+        });
 
-      if (error) throw error;
+        if (error) throw error;
+        toast.success(`Importation réussie: ${data.imported} produits importés`);
+      } else {
+        const text = await file.text();
+        
+        const { data, error } = await supabase.functions.invoke("supplier-import-csv", {
+          body: {
+            supplierId,
+            csvContent: text,
+            delimiter,
+            skipFirstRow,
+          },
+        });
 
-      toast.success(`Importation réussie: ${data.imported} produits importés`);
+        if (error) throw error;
+        toast.success(`Importation réussie: ${data.imported} produits importés`);
+      }
+      
       onClose();
     } catch (error) {
       console.error("Import error:", error);
@@ -90,7 +128,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Assistant d'importation CSV</DialogTitle>
+          <DialogTitle>Assistant d'importation CSV/XLSX</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -131,7 +169,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                     <Label htmlFor="file-upload" className="cursor-pointer">
                       <div className="text-center">
                         <p className="text-sm text-muted-foreground">
-                          Cliquez pour sélectionner un fichier CSV
+                          Cliquez pour sélectionner un fichier CSV ou XLSX
                         </p>
                         {file && (
                           <p className="text-sm font-medium mt-2 flex items-center gap-2 justify-center">
@@ -144,7 +182,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                     <Input
                       id="file-upload"
                       type="file"
-                      accept=".csv"
+                      accept=".csv,.xlsx,.xls"
                       onChange={handleFileSelect}
                       className="hidden"
                     />
