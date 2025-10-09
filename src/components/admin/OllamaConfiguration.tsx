@@ -36,20 +36,23 @@ export const OllamaConfiguration = () => {
         .from("ollama_configurations")
         .select("*")
         .eq("user_id", session.user.id)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
       if (error && error.code !== 'PGRST116') throw error;
 
-      if (data) {
-        const models = Array.isArray(data.available_models) 
-          ? data.available_models as string[]
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Prendre la dernière configuration en cas de doublons
+        const latestConfig = data[0];
+        const models = Array.isArray(latestConfig.available_models) 
+          ? latestConfig.available_models as string[]
           : [];
         
         setConfig({
-          ollama_url: data.ollama_url || "http://localhost:11434",
-          api_key_encrypted: data.api_key_encrypted || "",
+          ollama_url: latestConfig.ollama_url || "http://localhost:11434",
+          api_key_encrypted: latestConfig.api_key_encrypted || "",
           available_models: models,
-          is_active: data.is_active,
+          is_active: latestConfig.is_active,
         });
       }
     } catch (error) {

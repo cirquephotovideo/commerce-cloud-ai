@@ -27,19 +27,34 @@ serve(async (req) => {
       }
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) {
-      throw new Error('Not authenticated');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError) {
+      console.error('Auth error:', authError);
+      throw new Error(`Authentication failed: ${authError.message}`);
     }
+    if (!user) {
+      console.error('No user found in token');
+      throw new Error('Not authenticated - no user found');
+    }
+    
+    console.log('User authenticated:', user.id);
 
     const { action, ollama_url, api_key, model, messages } = await req.json();
 
     // Get user's Ollama configuration
-    const { data: config } = await supabaseClient
+    const { data: configData, error: configError } = await supabaseClient
       .from('ollama_configurations')
       .select('*')
       .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
+    
+    if (configError && configError.code !== 'PGRST116') {
+      console.error('Config fetch error:', configError);
+    }
+    
+    const config = configData;
 
     const targetUrl = ollama_url || config?.ollama_url;
     const targetApiKey = api_key || config?.api_key_encrypted;
