@@ -268,6 +268,8 @@ serve(async (req) => {
         default_model: model,
         is_active: true,
         priority,
+      }, { 
+        onConflict: 'provider'
       });
 
     if (configError) {
@@ -286,6 +288,8 @@ serve(async (req) => {
         response_time_ms: testResult.latency,
         available_models: testResult.models || [],
         last_check: new Date().toISOString(),
+      }, { 
+        onConflict: 'provider'
       });
 
     if (healthError) {
