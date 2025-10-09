@@ -4,7 +4,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, AlertCircle, RefreshCw, Shield, Building2, FileText, AlertTriangle, Package, Globe } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Shield, Building2, FileText, AlertTriangle, Package, Globe, ExternalLink, Radio } from "lucide-react";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -560,6 +560,135 @@ export const ProductRSGPTab = ({ analysis }: ProductRSGPTabProps) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* ✅ NOUVELLE SECTION: Certifications FCC */}
+      {rsgpData.fcc_id && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="w-5 h-5" />
+              Certifications FCC (USA)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">FCC ID</p>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="font-mono">
+                  {rsgpData.fcc_id}
+                </Badge>
+                <a 
+                  href={`https://fccid.io/${rsgpData.fcc_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline flex items-center gap-1"
+                >
+                  Voir sur fccid.io
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+
+            {rsgpData.fcc_data && typeof rsgpData.fcc_data === 'object' && !Array.isArray(rsgpData.fcc_data) && (
+              <>
+                {/* Informations du fabricant */}
+                {(rsgpData.fcc_data as any).grantee_name && (rsgpData.fcc_data as any).grantee_name !== 'non communiqué' && (
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    <p className="text-sm font-medium mb-2">Titulaire de la certification</p>
+                    <p className="text-sm">{(rsgpData.fcc_data as any).grantee_name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Code Grantee: {(rsgpData.fcc_data as any).grantee_code}
+                    </p>
+                  </div>
+                )}
+
+                {/* Type d'équipement */}
+                {(rsgpData.fcc_data as any).equipment_type && (rsgpData.fcc_data as any).equipment_type !== 'non communiqué' && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Type d'équipement</p>
+                    <p className="text-sm font-medium">{(rsgpData.fcc_data as any).equipment_type}</p>
+                  </div>
+                )}
+
+                {/* Date de certification */}
+                {(rsgpData.fcc_data as any).grant_date && (rsgpData.fcc_data as any).grant_date !== 'non communiqué' && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Date de certification</p>
+                    <p className="text-sm">{new Date((rsgpData.fcc_data as any).grant_date).toLocaleDateString('fr-FR')}</p>
+                  </div>
+                )}
+
+                {/* Plage de fréquences */}
+                {(rsgpData.fcc_data as any).frequency_range && (rsgpData.fcc_data as any).frequency_range !== 'non communiqué' && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Plage de fréquences</p>
+                    <Badge variant="outline">{(rsgpData.fcc_data as any).frequency_range}</Badge>
+                  </div>
+                )}
+
+                {/* Documents disponibles */}
+                {(rsgpData.fcc_data as any).documents_urls && Array.isArray((rsgpData.fcc_data as any).documents_urls) && (rsgpData.fcc_data as any).documents_urls.length > 0 && (
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Documents techniques disponibles ({(rsgpData.fcc_data as any).documents_urls.length})
+                    </p>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {(rsgpData.fcc_data as any).documents_urls.slice(0, 10).map((url: string, idx: number) => (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline flex items-center gap-1 block"
+                        >
+                          <FileText className="w-3 h-3" />
+                          Document {idx + 1}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Photos internes (si disponibles) */}
+                {(rsgpData.fcc_data as any).images_urls && Array.isArray((rsgpData.fcc_data as any).images_urls) && (rsgpData.fcc_data as any).images_urls.length > 0 && (
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-medium mb-3">Photos internes disponibles</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {(rsgpData.fcc_data as any).images_urls.slice(0, 6).map((url: string, idx: number) => (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square rounded-lg overflow-hidden border hover:border-primary transition-colors"
+                        >
+                          <img 
+                            src={url} 
+                            alt={`FCC photo ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {!rsgpData.fcc_id && (rsgpData.categorie_rsgp === 'électronique' || rsgpData.categorie_rsgp === 'autre') && (
+        <Card className="border-dashed">
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground text-center italic">
+              Aucune certification FCC trouvée pour ce produit
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

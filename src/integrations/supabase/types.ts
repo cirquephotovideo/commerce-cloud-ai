@@ -1862,6 +1862,8 @@ export type Database = {
           evaluation_risque: string | null
           fabricant_adresse: string | null
           fabricant_nom: string | null
+          fcc_data: Json | null
+          fcc_id: string | null
           firmware_ou_logiciel: string | null
           fournisseur: string | null
           garantie: string | null
@@ -1905,6 +1907,8 @@ export type Database = {
           evaluation_risque?: string | null
           fabricant_adresse?: string | null
           fabricant_nom?: string | null
+          fcc_data?: Json | null
+          fcc_id?: string | null
           firmware_ou_logiciel?: string | null
           fournisseur?: string | null
           garantie?: string | null
@@ -1948,6 +1952,8 @@ export type Database = {
           evaluation_risque?: string | null
           fabricant_adresse?: string | null
           fabricant_nom?: string | null
+          fcc_data?: Json | null
+          fcc_id?: string | null
           firmware_ou_logiciel?: string | null
           fournisseur?: string | null
           garantie?: string | null

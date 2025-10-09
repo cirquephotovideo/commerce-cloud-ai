@@ -22,6 +22,7 @@ const RSGP_ALLOWED_COLUMNS = [
   'garantie', 'service_consommateur', 'langues_disponibles', 
   'rsgp_valide', 'date_mise_conformite', 'responsable_conformite',
   'documents_archives', 'fournisseur', 'date_import_odoo', 
+  'fcc_id', 'fcc_data',  // ✅ NOUVEAU: FCC certifications
   'generation_metadata', 'validation_status'
 ];
 
@@ -93,6 +94,145 @@ function pickWhitelist<T extends Record<string, any>>(obj: T, allowedKeys: strin
     }
   });
   return result;
+}
+
+// ============================================
+// FCC ID SEARCH & DATA FETCHING
+// ============================================
+
+// ✅ Rechercher FCC ID via Serper
+async function searchFCCId(productName: string, brand: string, model: string): Promise<string | null> {
+  console.log(`[FCC] 🔍 Recherche FCC ID pour: ${productName} ${brand} ${model}`);
+  
+  const serperKey = Deno.env.get('SERPER_API_KEY');
+  if (!serperKey) {
+    console.warn('[FCC] ⚠️ SERPER_API_KEY manquante, recherche FCC désactivée');
+    return null;
+  }
+  
+  // Construire des requêtes de recherche optimisées
+  const searchQueries = [
+    `${brand} ${model} FCC ID`,
+    `"${productName}" FCC certification`,
+    `${brand} ${model} wireless certification FCC`,
+    `site:fccid.io ${brand} ${model}`
+  ];
+  
+  for (const query of searchQueries) {
+    try {
+      console.log(`[FCC] 🔎 Query: "${query}"`);
+      const response = await fetch('https://google.serper.dev/search', {
+        method: 'POST',
+        headers: {
+          'X-API-KEY': serperKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ q: query, num: 5 })
+      });
+      
+      if (!response.ok) continue;
+      
+      const data = await response.json();
+      const results = data.organic || [];
+      
+      // Extraire FCC ID des résultats (format: ABC-12345 ou ABC12345)
+      const fccIdPattern = /\b[A-Z0-9]{3,5}-?[A-Z0-9]{2,}\b/g;
+      
+      for (const result of results) {
+        const text = `${result.title} ${result.snippet}`.toUpperCase();
+        const matches = text.match(fccIdPattern);
+        
+        if (matches) {
+          for (const match of matches) {
+            // Vérifier que c'est un vrai FCC ID (contient grantee code)
+            const cleaned = match.replace('-', '');
+            if (cleaned.length >= 5 && cleaned.length <= 20) {
+              const fccId = match.includes('-') ? match : `${match.slice(0, 3)}-${match.slice(3)}`;
+              console.log(`[FCC] ✅ FCC ID trouvé: ${fccId}`);
+              return fccId;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[FCC] ❌ Erreur recherche:`, error);
+    }
+  }
+  
+  console.log('[FCC] ⚠️ Aucun FCC ID trouvé');
+  return null;
+}
+
+// ✅ Récupérer données FCC depuis fccid.io
+async function fetchFCCData(fccId: string): Promise<any> {
+  console.log(`[FCC] 📡 Récupération des données pour FCC ID: ${fccId}`);
+  
+  try {
+    const fccUrl = `https://fccid.io/${fccId}`;
+    const response = await fetch(fccUrl, {
+      headers: { 'User-Agent': 'RSGP-Analyzer/1.0' }
+    });
+    
+    if (!response.ok) {
+      console.warn(`[FCC] ⚠️ fccid.io returned ${response.status}`);
+      return null;
+    }
+    
+    const html = await response.text();
+    
+    // Fonctions d'extraction
+    const extractFromHtml = (pattern: RegExp): string => {
+      const match = html.match(pattern);
+      return match ? match[1].trim() : 'non communiqué';
+    };
+    
+    const extractDocumentLinks = (): string[] => {
+      const links: string[] = [];
+      const docPattern = /href="(\/document\/[^"]*(?:pdf|PDF)[^"]*)"/g;
+      let match;
+      while ((match = docPattern.exec(html)) !== null) {
+        links.push(`https://fccid.io${match[1]}`);
+      }
+      return links.slice(0, 20); // Limiter à 20 documents
+    };
+    
+    const extractImageLinks = (): string[] => {
+      const images: string[] = [];
+      const imgPattern = /src="(\/document\/[^"]*(?:jpg|jpeg|png|gif)[^"]*)"/gi;
+      let match;
+      while ((match = imgPattern.exec(html)) !== null) {
+        images.push(`https://fccid.io${match[1]}`);
+      }
+      return images.slice(0, 10); // Limiter à 10 images
+    };
+    
+    // Parser les données
+    const fccData = {
+      fcc_id: fccId,
+      grantee_code: fccId.split('-')[0],
+      product_code: fccId.split('-')[1] || '',
+      source_url: fccUrl,
+      grantee_name: extractFromHtml(/<td[^>]*>Grantee<\/td>\s*<td[^>]*>(.*?)<\/td>/s),
+      equipment_type: extractFromHtml(/<td[^>]*>Equipment Type<\/td>\s*<td[^>]*>(.*?)<\/td>/s),
+      grant_date: extractFromHtml(/<td[^>]*>Grant Date<\/td>\s*<td[^>]*>(.*?)<\/td>/s),
+      frequency_range: extractFromHtml(/<td[^>]*>Frequency Range<\/td>\s*<td[^>]*>(.*?)<\/td>/s),
+      documents_urls: extractDocumentLinks(),
+      images_urls: extractImageLinks()
+    };
+    
+    console.log(`[FCC] ✅ Données récupérées:`, {
+      grantee: fccData.grantee_name,
+      equipment: fccData.equipment_type,
+      docs_count: fccData.documents_urls.length,
+      images_count: fccData.images_urls.length
+    });
+    
+    return fccData;
+    
+  } catch (error) {
+    console.error(`[FCC] ❌ Erreur récupération FCC data:`, error);
+    return null;
+  }
 }
 
 // ✅ Calculer score de confiance par section
@@ -1691,6 +1831,37 @@ serve(async (req) => {
 
     console.log('[RSGP] ✅ Génération terminée, merging with derived data...');
     
+    // ========== PHASE 2.5: Recherche et récupération FCC ID (si électronique) ==========
+    let fccId = null;
+    let fccData = null;
+    
+    const isElectronic = derivedData.categorie_rsgp === 'électronique' || 
+                        rsgpData.categorie_rsgp === 'électronique' ||
+                        derivedData.categorie_rsgp === 'autre' ||
+                        rsgpData.categorie_rsgp === 'autre';
+    
+    if (isElectronic) {
+      console.log('[FCC] 🔍 Produit électronique détecté, recherche FCC ID...');
+      fccId = await searchFCCId(
+        productName, 
+        derivedData.brand || 'unknown', 
+        derivedData.numero_modele || ''
+      );
+      
+      if (fccId) {
+        console.log(`[FCC] ✅ FCC ID trouvé: ${fccId}, récupération des données...`);
+        fccData = await fetchFCCData(fccId);
+        
+        if (fccData) {
+          console.log('[FCC] ✅ Données FCC récupérées avec succès');
+        }
+      } else {
+        console.log('[FCC] ℹ️ Aucun FCC ID trouvé pour ce produit');
+      }
+    } else {
+      console.log('[FCC] ℹ️ Produit non électronique, recherche FCC ignorée');
+    }
+    
     // Merge derived data with generated data, prioritizing non-empty values
     // Map to actual table columns
     rsgpData = {
@@ -1708,6 +1879,10 @@ serve(async (req) => {
       personne_responsable_ue: rsgpData.personne_responsable_ue || 'non communiqué',
       fournisseur: derivedData.fournisseur || rsgpData.fournisseur || 'non communiqué',
       service_consommateur: rsgpData.service_consommateur || 'non communiqué',
+      
+      // ✅ FCC certification data
+      fcc_id: fccId,
+      fcc_data: fccData,
     };
     
     // Remove any nested objects that don't match table structure
