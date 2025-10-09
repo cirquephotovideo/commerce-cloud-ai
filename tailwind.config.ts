@@ -47,6 +47,12 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        tartrique: {
+          grape: "#7c3aed",
+          wine: "#dc2626",
+          gold: "#f59e0b",
+          leaf: "#4ade80",
+        },
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles, Mail, Github, Twitter, Linkedin } from "lucide-react";
+import { Grape, Mail, Github, Twitter, Linkedin } from "lucide-react";
 
 export const Footer = () => {
   return (
@@ -9,11 +9,11 @@ export const Footer = () => {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-6 w-6 text-primary" />
-              <span className="font-bold text-xl">Commerce Cloud AI</span>
+              <Grape className="h-6 w-6 text-purple-600" />
+              <span className="font-bold text-xl">Tartrique.com</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Solution d'analyse produit e-commerce pilotée par l'IA
+              Plateforme d'analyse viticole et compliance RSGP pilotée par l'IA
             </p>
           </div>
 
@@ -92,7 +92,7 @@ export const Footer = () => {
         </div>
 
         <div className="border-t mt-8 pt-8 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Commerce Cloud AI. Tous droits réservés.</p>
+          <p>© {new Date().getFullYear()} Tartrique.com. Tous droits réservés.</p>
         </div>
       </div>
     </footer>
