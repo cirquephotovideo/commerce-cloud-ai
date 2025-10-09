@@ -153,7 +153,7 @@ All colors MUST be HSL.
   }
 }
 
-/* Animations personnalisées pour Tartrique.com */
+/* Animations personnalisées pour Tarifique.com */
 @keyframes float {
   0%, 100% {
     transform: translateY(0px);
@@ -183,6 +183,65 @@ All colors MUST be HSL.
   }
 }
 
+/* Rotation 3D de la boîte produit */
+@keyframes spin-3d {
+  0% {
+    transform: rotateY(0deg) rotateX(5deg);
+  }
+  100% {
+    transform: rotateY(360deg) rotateX(5deg);
+  }
+}
+
+/* Pulsation de l'éclair IA */
+@keyframes lightning-pulse {
+  0%, 100% {
+    opacity: 1;
+    stroke-width: 3px;
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+  50% {
+    opacity: 0.3;
+    stroke-width: 5px;
+    filter: drop-shadow(0 0 12px currentColor);
+  }
+}
+
+/* Orbites des particules d'énergie */
+@keyframes orbit-1 {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(15px, -10px); }
+  50% { transform: translate(0, -20px); }
+  75% { transform: translate(-15px, -10px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes orbit-2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-20px, 15px) scale(1.5); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes orbit-3 {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-10px, 10px); }
+  66% { transform: translate(10px, 5px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Animation du gradient de texte */
+@keyframes gradient-x {
+  0%, 100% {
+    background-size: 200% 200%;
+    background-position: left center;
+  }
+  50% {
+    background-size: 200% 200%;
+    background-position: right center;
+  }
+}
+
+/* Classes utilitaires */
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
@@ -193,6 +252,31 @@ All colors MUST be HSL.
 
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
+}
+
+.animate-spin-3d {
+  animation: spin-3d 8s linear infinite;
+  transform-style: preserve-3d;
+}
+
+.animate-lightning-pulse {
+  animation: lightning-pulse 1.5s ease-in-out infinite;
+}
+
+.animate-orbit-1 {
+  animation: orbit-1 3s ease-in-out infinite;
+}
+
+.animate-orbit-2 {
+  animation: orbit-2 4s ease-in-out infinite;
+}
+
+.animate-orbit-3 {
+  animation: orbit-3 3.5s ease-in-out infinite;
+}
+
+.animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
 }
 
 .delay-100 {
