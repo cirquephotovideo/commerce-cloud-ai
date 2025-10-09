@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Star, Trash2, RefreshCw, Download, ExternalLink, Calendar, Package, Video, FileCheck, Loader2, Play } from "lucide-react";
+import { HeyGenVideoWizard } from "./HeyGenVideoWizard";
 import { toast } from "sonner";
 import { getProductName } from "@/lib/analysisDataExtractors";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +28,9 @@ export const ProductActionsTab = ({
   const [isRegeneratingAmazon, setIsRegeneratingAmazon] = useState(false);
   const [isRegeneratingHeygen, setIsRegeneratingHeygen] = useState(false);
   const [isRegeneratingRsgp, setIsRegeneratingRsgp] = useState(false);
+  const [showHeygenWizard, setShowHeygenWizard] = useState(false);
+  const [videoGenerationProgress, setVideoGenerationProgress] = useState(0);
+  const [videoId, setVideoId] = useState<string | null>(null);
   
   const [amazonStatus, setAmazonStatus] = useState<string>('not_started');
   const [heygenStatus, setHeygenStatus] = useState<string>('not_started');
@@ -109,31 +113,75 @@ export const ProductActionsTab = ({
     }
   };
 
-  const handleRegenerateHeygen = async () => {
+  const handleRegenerateHeygen = async (avatarId: string, voiceId: string) => {
     setIsRegeneratingHeygen(true);
     setHeygenStatus('processing');
+    setVideoGenerationProgress(0);
     
     try {
       const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
         body: { 
           action: 'generate',
           analysis_id: analysis.id,
+          avatar_id: avatarId,
+          voice_id: voiceId,
           auto_generate_script: true
         }
       });
-      
+
       if (error) throw error;
+
+      const generatedVideoId = data?.video_id;
+      setVideoId(generatedVideoId);
       
+      // Démarrer le monitoring
+      startVideoMonitoring(generatedVideoId);
+
       toast.success("Vidéo HeyGen en cours de génération");
-      setHeygenStatus('completed');
-      onReload();
     } catch (error: any) {
       console.error("Erreur régénération HeyGen:", error);
       toast.error(error.message || "Erreur lors de la génération vidéo");
       setHeygenStatus('error');
-    } finally {
       setIsRegeneratingHeygen(false);
     }
+  };
+
+  const startVideoMonitoring = (videoId: string) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
+          body: { 
+            action: 'check_status',
+            video_id: videoId
+          }
+        });
+        
+        if (error) throw error;
+        
+        const progress = data?.progress || 0;
+        setVideoGenerationProgress(progress);
+        
+        if (data?.status === 'completed') {
+          clearInterval(pollInterval);
+          setHeygenStatus('completed');
+          setIsRegeneratingHeygen(false);
+          setVideoGenerationProgress(100);
+          toast.success("Vidéo générée avec succès !");
+          onReload();
+        }
+        
+        if (data?.status === 'failed') {
+          clearInterval(pollInterval);
+          setHeygenStatus('error');
+          setIsRegeneratingHeygen(false);
+          toast.error("Erreur lors de la génération de la vidéo");
+        }
+      } catch (error) {
+        clearInterval(pollInterval);
+        setHeygenStatus('error');
+        setIsRegeneratingHeygen(false);
+      }
+    }, 5000);
   };
 
   const handleRegenerateRsgp = async () => {
@@ -306,13 +354,13 @@ export const ProductActionsTab = ({
               </Badge>
               <Button 
                 size="sm" 
-                onClick={handleRegenerateHeygen}
+                onClick={() => setShowHeygenWizard(true)}
                 disabled={isRegeneratingHeygen}
               >
                 {isRegeneratingHeygen ? (
                   <>
                     <Loader2 className="w-3 h-3 mr-1 animate-spin" /> 
-                    En cours...
+                    {videoGenerationProgress}%
                   </>
                 ) : heygenStatus === 'completed' ? (
                   <>
@@ -327,6 +375,20 @@ export const ProductActionsTab = ({
                 )}
               </Button>
             </div>
+            
+            {/* Lecteur vidéo HeyGen */}
+            {heygenStatus === 'completed' && analysis?.heygen_video_url && (
+              <div className="p-3 border rounded-lg bg-muted/50 mt-2">
+                <p className="text-sm font-medium mb-2">Vidéo générée</p>
+                <video 
+                  controls 
+                  className="w-full rounded-md"
+                  src={analysis.heygen_video_url}
+                >
+                  Votre navigateur ne supporte pas la lecture vidéo.
+                </video>
+              </div>
+            )}
           </div>
 
           {/* RSGP Compliance */}
@@ -435,6 +497,15 @@ export const ProductActionsTab = ({
           </AlertDialog>
         </CardContent>
       </Card>
+
+      {/* Wizard HeyGen */}
+      {showHeygenWizard && (
+        <HeyGenVideoWizard
+          analysisId={analysis.id}
+          onGenerate={handleRegenerateHeygen}
+          onClose={() => setShowHeygenWizard(false)}
+        />
+      )}
     </div>
   );
 };

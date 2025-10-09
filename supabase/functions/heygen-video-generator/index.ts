@@ -139,9 +139,19 @@ serve(async (req) => {
 
     // Action: generate video
     if (action === 'generate') {
-      if (!analysis_id || !avatar_id || !voice_id) {
+      // Validation des paramètres obligatoires
+      if (!analysis_id) {
         return new Response(
-          JSON.stringify({ error: 'Missing required parameters' }),
+          JSON.stringify({ error: 'analysis_id is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (!avatar_id || !voice_id) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'avatar_id and voice_id are required for video generation. Please select an avatar and voice using the wizard.' 
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
