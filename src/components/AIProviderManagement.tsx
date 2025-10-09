@@ -11,8 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save } from "lucide-react";
 import { useAIProvider, AIProvider } from "@/hooks/useAIProvider";
-import { ProviderSelector } from "./ProviderSelector";
-import { ImportExportButtons } from "./ImportExportButtons";
+import { ProviderSelector } from "./admin/ProviderSelector";
+import { ImportExportButtons } from "./admin/ImportExportButtons";
 
 type ProviderStatus = 'online' | 'offline' | 'degraded';
 

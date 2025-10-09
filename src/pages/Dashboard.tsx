@@ -14,7 +14,7 @@ import { SubscriptionStatus } from "@/components/SubscriptionStatus";
 import { ProductExportMenu } from "@/components/ProductExportMenu";
 import { ProductAnalysisDialog } from "@/components/ProductAnalysisDialog";
 import { useFeaturePermissions } from "@/hooks/useFeaturePermissions";
-import { AIProviderManagement } from "@/components/AIProviderManagement";
+import AIProviderManagement from "@/components/AIProviderManagement";
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";

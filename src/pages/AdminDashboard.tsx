@@ -16,7 +16,7 @@ import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
 import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
 import { AmazonLogs } from "@/components/admin/AmazonLogs";
 import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
-import AIProviderManagement from "@/components/admin/AIProviderManagement";
+import AIProviderManagement from "@/components/AIProviderManagement";
 import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
 import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
 import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings, Sparkles } from "lucide-react";
