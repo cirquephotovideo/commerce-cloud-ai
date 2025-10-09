@@ -61,21 +61,17 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
 
   // Compteur de temps écoulé depuis created_at
   useEffect(() => {
-    if (!video || video.status !== 'processing') {
+    if (!video || !['processing', 'pending'].includes(video.status)) {
       setElapsedTime(0);
       return;
     }
 
-    // ✅ CORRECTION: Calculer depuis created_at au lieu de Date.now()
     const startTime = new Date(video.created_at).getTime();
     const updateElapsed = () => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     };
 
-    // Mise à jour immédiate
     updateElapsed();
-
-    // Puis toutes les secondes
     const timer = setInterval(updateElapsed, 1000);
 
     return () => clearInterval(timer);
@@ -217,17 +213,52 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
               {video.error_message && (
                 <p className="text-xs text-destructive/80">{video.error_message}</p>
               )}
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={() => {
-                  const actionsTab = document.querySelector('[data-value="actions"]') as HTMLElement;
-                  if (actionsTab) actionsTab.click();
-                  toast.info("Veuillez régénérer la vidéo depuis l'onglet Actions");
-                }}
-              >
-                Régénérer la vidéo
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={async () => {
+                    toast.info("🔄 Vérification du statut HeyGen...");
+                    
+                    const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
+                      body: { 
+                        action: 'check_status',
+                        analysis_id: analysisId,
+                        video_id: video.video_id,
+                        force_recovery: true
+                      }
+                    });
+                    
+                    if (checkError) {
+                      toast.error("Erreur lors de la vérification");
+                      return;
+                    }
+                    
+                    if (data?.status === 'completed') {
+                      toast.success("✅ Vidéo récupérée !");
+                      await fetchLatestVideo();
+                    } else if (data?.status === 'processing') {
+                      toast.info("⏳ La vidéo est toujours en cours de génération");
+                      await fetchLatestVideo();
+                    } else {
+                      toast.error("La vidéo n'est pas encore disponible");
+                    }
+                  }}
+                >
+                  Vérifier si la vidéo est prête
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    const actionsTab = document.querySelector('[data-value="actions"]') as HTMLElement;
+                    if (actionsTab) actionsTab.click();
+                    toast.info("Veuillez régénérer la vidéo depuis l'onglet Actions");
+                  }}
+                >
+                  Régénérer la vidéo
+                </Button>
+              </div>
             </div>
           )}
 

@@ -32,12 +32,12 @@ serve(async (req) => {
 
     console.log(`[HEYGEN-VIDEO] Action: ${action}, Analysis: ${analysis_id}`);
     
-    // ✅ Timeout automatique rétroactif : marquer toutes les vidéos en processing > 10 min comme failed
+    // ✅ Timeout automatique rétroactif : marquer toutes les vidéos en processing > 30 min comme failed
     const { data: stuckVideos } = await supabase
       .from('product_videos')
       .select('id, video_id, created_at')
       .eq('status', 'processing')
-      .lt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+      .lt('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString());
 
     if (stuckVideos && stuckVideos.length > 0) {
       console.log(`[HEYGEN-VIDEO] Marking ${stuckVideos.length} stuck videos as failed:`, stuckVideos.map(v => v.video_id));
@@ -45,7 +45,7 @@ serve(async (req) => {
         .from('product_videos')
         .update({ 
           status: 'failed', 
-          error_message: 'Timeout: Plus de 10 minutes écoulées' 
+          error_message: 'Timeout: Plus de 30 minutes écoulées sans réponse de HeyGen' 
         })
         .in('id', stuckVideos.map(v => v.id));
     }
@@ -153,25 +153,26 @@ serve(async (req) => {
         );
       }
 
-      // ✅ AJOUT: Timeout automatique après 10 minutes
+      // ✅ Timeout automatique backend après 30 minutes
       const createdAt = new Date(videoData.created_at).getTime();
       const elapsedMinutes = (Date.now() - createdAt) / 1000 / 60;
       
-      if (videoData.status === 'processing' && elapsedMinutes > 10) {
-        console.warn(`[HEYGEN-VIDEO] Timeout detected for video ${videoData.video_id} (${Math.floor(elapsedMinutes)} minutes)`);
+      if (videoData.status === 'processing' && elapsedMinutes > 30) {
+        console.warn(`[HEYGEN-VIDEO] Backend timeout for video ${videoData.video_id} (${Math.floor(elapsedMinutes)} minutes)`);
         
         await supabase
           .from('product_videos')
           .update({
             status: 'failed',
-            error_message: 'Timeout: La génération a pris plus de 10 minutes'
+            error_message: 'Timeout backend: Plus de 30 minutes écoulées sans réponse de HeyGen',
+            completed_at: new Date().toISOString()
           })
           .eq('id', videoData.id);
 
         return new Response(
           JSON.stringify({
             status: 'failed',
-            error: 'Timeout: La génération a pris plus de 10 minutes'
+            error: 'Timeout backend: Plus de 30 minutes écoulées'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -193,8 +194,29 @@ serve(async (req) => {
         const fallbackRes = await fetch(statusUrlV1, {
           headers: { 'X-Api-Key': HEYGEN_API_KEY }
         });
+        
         if (fallbackRes.ok) {
-          statusRes = fallbackRes;
+          const v1Data = await fallbackRes.json();
+          
+          // ✅ CORRECTION: Mettre à jour la DB si le statut est 'completed'
+          if (v1Data.data?.status === 'completed') {
+            console.log('[HEYGEN-VIDEO] v1 API returned completed status, updating database');
+            await supabase
+              .from('product_videos')
+              .update({
+                status: 'completed',
+                video_url: v1Data.data.video_url,
+                thumbnail_url: v1Data.data.thumbnail_url,
+                duration: v1Data.data.duration,
+                completed_at: new Date().toISOString()
+              })
+              .eq('id', videoData.id);
+          }
+          
+          return new Response(
+            JSON.stringify(v1Data.data),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         } else {
           const fbText = await fallbackRes.text();
           console.error('[HEYGEN-VIDEO] v1 status check failed:', fallbackRes.status, fbText);
