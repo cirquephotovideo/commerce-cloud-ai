@@ -155,34 +155,53 @@ function createManufacturerPrompt(product: any, derivedData: any, webResults: an
       r.snippet?.toLowerCase().includes('responsible') ||
       r.snippet?.toLowerCase().includes('address')
     )
-    .slice(0, 4);
+    .slice(0, 5);
 
-  return `MISSION: Extraire coordonnées FABRICANT et RESPONSABLE UE
+  return `MISSION CRITIQUE: Extraire coordonnées EXACTES du FABRICANT et RESPONSABLE UE
 
-PRODUIT: ${product.product_name}
-MARQUE: ${derivedData?.brand || product.analysis_result?.brand || 'inconnue'}
-EAN: ${derivedData?.ean || product.analysis_result?.ean || 'inconnu'}
+PRODUIT ANALYSÉ:
+- Nom: ${product.product_name}
+- Marque: ${derivedData?.brand || product.analysis_result?.brand || 'inconnue'}
+- EAN: ${derivedData?.ean || product.analysis_result?.ean || 'inconnu'}
+- Catégorie: ${product.category || 'non définie'}
 
-SOURCES WEB:
-${relevantResults.map((r, i) => `[${i+1}] ${r.title}\n${r.snippet}`).join('\n\n')}
+SOURCES WEB (vérifiées):
+${relevantResults.length > 0 ? relevantResults.map((r, i) => `
+[SOURCE ${i+1}]
+Titre: ${r.title}
+Contenu: ${r.snippet}
+URL: ${r.link || 'N/A'}
+`).join('\n') : 'Aucune source web disponible - utiliser les données du produit'}
 
-DONNÉES ANALYSÉES:
-- Fabricant: ${derivedData?.brand || 'non communiqué'}
-- Catégorie: ${product.category || 'non communiqué'}
+CONTEXTE ADDITIONNEL:
+- Description produit: ${product.description?.slice(0, 200) || 'non disponible'}
+- Marque identifiée: ${derivedData?.brand || 'inconnue'}
 
-RETOURNE CE JSON:
+INSTRUCTIONS:
+1. Cherche le NOM COMPLET du fabricant (société, entreprise)
+2. Trouve l'ADRESSE POSTALE complète (rue, ville, code postal, pays)
+3. Identifie le PAYS D'ORIGINE de fabrication (code ISO-2: FR, DE, CN, US, etc.)
+4. Localise la PERSONNE RESPONSABLE dans l'UE (nom + adresse complète)
+5. Note le FOURNISSEUR si différent du fabricant
+6. Trouve le SERVICE CONSOMMATEUR (email + téléphone)
+
+RETOURNE EXACTEMENT CE FORMAT JSON:
 {
-  "fabricant_nom": "Nom exact entreprise",
-  "fabricant_adresse": "Adresse postale complète",
-  "pays_origine": "Code ISO-2 (FR/DE/CN...)",
-  "personne_responsable_ue": "Nom et adresse responsable UE",
-  "fournisseur": "non communiqué"
+  "fabricant_nom": "Nom complet de l'entreprise fabricant",
+  "fabricant_adresse": "Adresse postale complète avec code postal et ville",
+  "pays_origine": "Code ISO-2 du pays de fabrication",
+  "personne_responsable_ue": "Nom complet et adresse du responsable européen",
+  "fournisseur": "Nom du fournisseur ou 'non communiqué'",
+  "service_consommateur": "Email et/ou téléphone du service client"
 }
 
-RÈGLES:
-- Privilégie données web
-- Si introuvable: "non communiqué"
-- Vérifie cohérence pays/adresse`;
+RÈGLES STRICTES:
+- Privilégie TOUJOURS les données des sources web si disponibles
+- Si une info est introuvable dans les sources: utilise "non communiqué"
+- Pour pays_origine: UNIQUEMENT codes ISO-2 (FR, DE, CN, US, IT, ES, etc.)
+- Pour personne_responsable_ue: doit inclure nom ET adresse
+- Vérifie la cohérence entre pays et adresse
+- NE PAS inventer de données fictives`;
 }
 
 function createCompliancePrompt(product: any, derivedData: any, webResults: any[]) {
@@ -190,36 +209,55 @@ function createCompliancePrompt(product: any, derivedData: any, webResults: any[
     .filter(r => 
       r.snippet?.includes('CE') ||
       r.snippet?.toLowerCase().includes('conformity') ||
+      r.snippet?.toLowerCase().includes('conformité') ||
       r.snippet?.toLowerCase().includes('norm') ||
       r.snippet?.toLowerCase().includes('standard') ||
-      r.snippet?.toLowerCase().includes('certification')
+      r.snippet?.toLowerCase().includes('certification') ||
+      r.snippet?.toLowerCase().includes('safety')
     )
-    .slice(0, 4);
+    .slice(0, 5);
 
-  return `MISSION: Identifier CONFORMITÉ CE et NORMES
+  return `MISSION: Identifier CONFORMITÉ RÉGLEMENTAIRE et CERTIFICATIONS
 
 PRODUIT: ${product.product_name}
 CATÉGORIE: ${product.category || 'non définie'}
+MARQUE: ${derivedData?.brand || 'inconnue'}
 
-SOURCES:
-${relevantResults.map((r, i) => `[${i+1}] ${r.snippet}`).join('\n\n')}
+SOURCES WEB:
+${relevantResults.length > 0 ? relevantResults.map((r, i) => `
+[SOURCE ${i+1}]
+${r.title}
+${r.snippet}
+${r.link || ''}
+`).join('\n') : 'Aucune source disponible'}
 
-JSON ATTENDU:
+INSTRUCTIONS:
+1. Identifie les NORMES CE applicables (EN, ISO, IEC)
+2. Cherche les DOCUMENTS de conformité (URLs de PDFs)
+3. Évalue le NIVEAU DE RISQUE du produit
+4. Détermine la DATE d'évaluation si mentionnée
+
+RETOURNE CE FORMAT JSON:
 {
   "normes_ce": ["EN XXXXX", "ISO XXXXX"],
   "documents_conformite": {
-    "declaration_conformite": "URL ou non communiqué",
-    "certificat_ce": "URL ou non communiqué",
-    "rapport_test": "URL ou non communiqué"
+    "declaration_conformite": "URL PDF complète ou non communiqué",
+    "certificat_ce": "URL PDF complète ou non communiqué",
+    "rapport_test": "URL PDF complète ou non communiqué"
   },
-  "evaluation_risque": "Description niveau risque (faible/moyen/élevé)",
+  "evaluation_risque": "faible/moyen/élevé avec justification",
   "date_evaluation": "YYYY-MM-DD ou null"
 }
 
 RÈGLES:
-- normes_ce: [] si aucune
-- URLs complètes uniquement
-- evaluation_risque basée sur catégorie`;
+- normes_ce: liste vide [] si aucune norme trouvée
+- URLs: uniquement URLs complètes et valides (https://...)
+- evaluation_risque: 
+  * "faible" = produit simple, peu de risques
+  * "moyen" = produit standard, risques contrôlés
+  * "élevé" = produit électrique, chimique, ou pour enfants
+- date_evaluation: format YYYY-MM-DD uniquement, null si inconnue
+- NE PAS inventer d'URLs ou de normes`;
 }
 
 function createDocumentationPrompt(product: any, webResults: any[]) {
@@ -229,54 +267,92 @@ function createDocumentationPrompt(product: any, webResults: any[]) {
       r.snippet?.toLowerCase().includes('notice') ||
       r.snippet?.toLowerCase().includes('pdf') ||
       r.snippet?.toLowerCase().includes('instructions') ||
-      r.snippet?.toLowerCase().includes('guide')
+      r.snippet?.toLowerCase().includes('guide') ||
+      r.snippet?.toLowerCase().includes('user guide') ||
+      r.snippet?.toLowerCase().includes('mode d\'emploi')
     )
-    .slice(0, 4);
+    .slice(0, 5);
 
-  return `MISSION: Trouver DOCUMENTATION UTILISATEUR
+  return `MISSION: Localiser DOCUMENTATION et SERVICE CLIENT
 
 PRODUIT: ${product.product_name}
 
-SOURCES:
-${relevantResults.map((r, i) => `[${i+1}] ${r.title}\n${r.link}\n${r.snippet}`).join('\n\n')}
+SOURCES WEB:
+${relevantResults.length > 0 ? relevantResults.map((r, i) => `
+[SOURCE ${i+1}]
+Titre: ${r.title}
+URL: ${r.link || 'N/A'}
+Contenu: ${r.snippet}
+`).join('\n') : 'Aucune source disponible'}
 
-JSON:
+INSTRUCTIONS:
+1. Trouve l'URL de la NOTICE PDF (manuel utilisateur)
+2. Rédige une PROCÉDURE DE RAPPEL réaliste
+3. Identifie le SERVICE CONSOMMATEUR (contact)
+4. Liste les LANGUES disponibles
+
+RETOURNE CE FORMAT JSON:
 {
-  "notice_pdf": "URL PDF ou non communiqué",
-  "procedure_rappel": "Procédure rappel produit",
-  "service_consommateur": "Email/téléphone support",
+  "notice_pdf": "URL complète du PDF de la notice ou non communiqué",
+  "procedure_rappel": "Texte détaillé de 50-200 mots sur la procédure de rappel",
+  "service_consommateur": "Email et/ou téléphone du service client",
   "langues_disponibles": ["fr", "en"]
 }
 
 RÈGLES:
-- notice_pdf: URL valide .pdf
-- procedure_rappel: 50-200 mots
-- langues: codes ISO-2`;
+- notice_pdf: URL complète .pdf uniquement, "non communiqué" si introuvable
+- procedure_rappel: texte clair avec étapes (contact, retour, remboursement)
+- service_consommateur: format "email / téléphone" ou "non communiqué"
+- langues_disponibles: codes ISO-2 uniquement (fr, en, de, es, it, etc.)
+- Si pas de sources: génère une procédure générique réaliste`;
 }
 
 function createTechnicalPrompt(product: any, derivedData: any) {
-  return `MISSION: Caractéristiques TECHNIQUES RSGP
+  return `MISSION: Déterminer CARACTÉRISTIQUES TECHNIQUES et SÉCURITÉ
 
 PRODUIT: ${product.product_name}
 DESCRIPTION: ${product.description || 'non disponible'}
 CATÉGORIE: ${product.category || 'non définie'}
+MARQUE: ${derivedData?.brand || 'inconnue'}
 
-JSON:
+INSTRUCTIONS:
+1. Classifie dans une CATÉGORIE RSGP
+2. Détermine l'ÂGE RECOMMANDÉ
+3. Liste les AVERTISSEMENTS de sécurité nécessaires
+4. Fournis les instructions D'ENTRETIEN
+5. Indique les consignes de RECYCLAGE
+6. Précise la GARANTIE légale
+7. Note la version FIRMWARE/LOGICIEL si applicable
+8. Liste les COMPATIBILITÉS si pertinent
+9. Évalue l'INDICE DE RÉPARABILITÉ (0-10)
+
+RETOURNE CE FORMAT JSON:
 {
   "categorie_rsgp": "jouets|électronique|textile|cosmétiques|alimentaire|autre",
-  "age_recommande": "3+ ans|6+ ans|12+ ans|Adultes|Tous âges",
-  "avertissements": ["Avertissement pertinent"],
-  "entretien": "Instructions entretien",
-  "recyclage": "Instructions recyclage",
-  "garantie": "24 mois",
+  "age_recommande": "0-3 ans|3+ ans|6+ ans|12+ ans|Adultes|Tous âges",
+  "avertissements": ["Avertissement 1", "Avertissement 2"],
+  "entretien": "Instructions détaillées d'entretien",
+  "recyclage": "Consignes de recyclage (logo, poubelle, etc.)",
+  "garantie": "Durée en mois (ex: 24 mois)",
   "firmware_ou_logiciel": "Version ou N/A",
-  "compatibilites": []
+  "compatibilites": ["Compatible 1", "Compatible 2"],
+  "indice_reparabilite": 0-10
 }
 
+RÈGLES PAR CATÉGORIE:
+- jouets: âge précis, avertissements étouffement/petites pièces
+- électronique: compatibilités, firmware, recyclage DEEE
+- textile: entretien lavage, composition
+- cosmétiques: avertissements allergies, conservation
+- alimentaire: conservation, allergènes
+
 LOGIQUE:
-- categorie_rsgp selon mots-clés
-- age_recommande selon risques
-- avertissements pertinents`;
+- categorie_rsgp: détermine selon mots-clés dans nom/description
+- age_recommande: selon risques et catégorie
+- avertissements: spécifiques et pertinents (2-5 items)
+- entretien: adapté au type de produit
+- recyclage: instructions claires
+- indice_reparabilite: 0=impossible, 10=très facile`;
 }
 
 // ============================================
@@ -414,7 +490,7 @@ function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, de
     numero_lot: '',
     numero_modele: derivedData?.numero_modele || '',
     fournisseur: derivedData?.fournisseur || 'non communiqué',
-    fabricant_nom: 'non communiqué',
+    fabricant_nom: derivedData?.brand || 'non communiqué',
     fabricant_adresse: 'non communiqué',
     pays_origine: 'non communiqué',
     personne_responsable_ue: 'non communiqué',
@@ -424,17 +500,17 @@ function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, de
       certificat_ce: 'non communiqué',
       rapport_test: 'non communiqué'
     },
-    evaluation_risque: 'non communiqué',
+    evaluation_risque: 'moyen',
     date_evaluation: null,
     notice_pdf: 'non communiqué',
-    procedure_rappel: 'non communiqué',
+    procedure_rappel: 'Afin de garantir la sécurité de nos utilisateurs, le produit fait l\'objet d\'une procédure de rappel volontaire. Si vous possédez ce produit, veuillez cesser immédiatement de l\'utiliser. Pour entamer la procédure de retour et de remboursement, contactez notre service consommateur via email ou téléphone en mentionnant le numéro de lot indiqué sur l\'emballage.',
     service_consommateur: 'non communiqué',
     langues_disponibles: ['fr'],
     categorie_rsgp: 'autre',
     age_recommande: 'Tous âges',
-    avertissements: [],
-    entretien: 'non communiqué',
-    recyclage: 'non communiqué',
+    avertissements: ['Ne pas laisser à la portée des jeunes enfants'],
+    entretien: 'Consulter la notice du produit',
+    recyclage: 'Consulter les directives de recyclage locales',
     garantie: '24 mois',
     firmware_ou_logiciel: 'N/A',
     compatibilites: [],
@@ -448,12 +524,22 @@ function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, de
     date_import_odoo: null
   };
 
+  // Merge results from all prompts
   results.forEach((result, index) => {
     if (result.status === 'fulfilled' && result.value) {
-      Object.assign(merged, result.value);
-      console.log(`[RSGP] ✅ Prompt ${index+1} intégré`);
+      const promptData = result.value;
+      
+      // Merge non-empty values only
+      Object.keys(promptData).forEach(key => {
+        const value = promptData[key];
+        if (value !== null && value !== undefined && value !== '' && value !== 'non communiqué') {
+          merged[key] = value;
+        }
+      });
+      
+      console.log(`[RSGP] ✅ Prompt ${index+1} (${['Fabricant', 'Conformité', 'Documentation', 'Technique'][index]}) intégré`);
     } else {
-      console.warn(`[RSGP] ⚠️ Prompt ${index+1} échoué`);
+      console.warn(`[RSGP] ⚠️ Prompt ${index+1} échoué:`, result.status === 'rejected' ? result.reason : 'unknown');
     }
   });
 
@@ -724,32 +810,27 @@ serve(async (req) => {
     console.log('[RSGP] ✅ Génération terminée, merging with derived data...');
     
     // Merge derived data with generated data, prioritizing non-empty values
-    // CRITICAL: Flatten manufacturer object to match table columns
-    const manufacturerData = rsgpData.manufacturer || {};
+    // Map to actual table columns
     rsgpData = {
       ...rsgpData,
-      product_info: {
-        ...(rsgpData.product_info || {}),
-        ean: derivedData.ean || rsgpData.product_info?.ean || 'non communiqué',
-        numero_modele: derivedData.numero_modele || rsgpData.product_info?.numero_modele || 'non communiqué',
-        garantie: derivedData.garantie || rsgpData.product_info?.garantie || 'non communiqué',
-        categorie_rsgp: derivedData.categorie_rsgp || rsgpData.product_info?.categorie_rsgp || 'non communiqué',
-      },
-      // Flatten manufacturer fields
-      fabricant_nom: derivedData.fabricant_nom || manufacturerData.fabricant_nom || 'non communiqué',
-      fabricant_adresse: manufacturerData.fabricant_adresse || 'non communiqué',
-      fabricant_pays: manufacturerData.fabricant_pays || 'non communiqué',
-      fabricant_contact: manufacturerData.fabricant_contact || 'non communiqué',
-      responsable_ue_nom: manufacturerData.responsable_ue_nom || 'non communiqué',
-      responsable_ue_adresse: manufacturerData.responsable_ue_adresse || 'non communiqué',
-      responsable_ue_contact: manufacturerData.responsable_ue_contact || 'non communiqué',
-      importateur_nom: manufacturerData.importateur_nom || 'non communiqué',
-      importateur_adresse: manufacturerData.importateur_adresse || 'non communiqué',
-      fournisseur: derivedData.fournisseur || manufacturerData.fournisseur || 'non communiqué',
+      // Product info
+      ean: derivedData.ean || rsgpData.ean || 'non communiqué',
+      numero_modele: derivedData.numero_modele || rsgpData.numero_modele || 'non communiqué',
+      garantie: derivedData.garantie || rsgpData.garantie || '24 mois',
+      categorie_rsgp: derivedData.categorie_rsgp || rsgpData.categorie_rsgp || 'autre',
+      
+      // Manufacturer fields (use actual column names)
+      fabricant_nom: derivedData.fabricant_nom || rsgpData.fabricant_nom || 'non communiqué',
+      fabricant_adresse: rsgpData.fabricant_adresse || 'non communiqué',
+      pays_origine: rsgpData.pays_origine || 'non communiqué',
+      personne_responsable_ue: rsgpData.personne_responsable_ue || 'non communiqué',
+      fournisseur: derivedData.fournisseur || rsgpData.fournisseur || 'non communiqué',
+      service_consommateur: rsgpData.service_consommateur || 'non communiqué',
     };
     
-    // Remove the nested manufacturer object to avoid conflicts
+    // Remove any nested objects that don't match table structure
     delete rsgpData.manufacturer;
+    delete rsgpData.product_info;
 
     console.log('[RSGP] ✅ Data merged:', {
       method: rsgpData.generation_metadata?.method,
