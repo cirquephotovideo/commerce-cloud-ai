@@ -263,13 +263,14 @@ serve(async (req) => {
     const { error: configError } = await supabase
       .from('ai_provider_configs')
       .upsert({
+        user_id: user.id,
         provider,
-        api_key_encrypted: api_key, // TODO: Implement proper encryption
+        api_key_encrypted: api_key,
         default_model: model,
         is_active: true,
         priority,
       }, { 
-        onConflict: 'provider'
+        onConflict: 'user_id,provider'
       });
 
     if (configError) {

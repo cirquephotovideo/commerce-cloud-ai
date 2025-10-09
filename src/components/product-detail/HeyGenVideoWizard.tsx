@@ -36,10 +36,53 @@ export function HeyGenVideoWizard({ analysisId, onGenerate, onClose }: HeyGenVid
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
   const [selectedVoice, setSelectedVoice] = useState<string | null>(null);
 
-  // Charger les avatars au montage
   useEffect(() => {
-    loadAvatars();
+    checkApiKey();
   }, []);
+
+  const checkApiKey = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast({
+        title: "⚠️ Authentification requise",
+        description: "Veuillez vous connecter",
+        variant: "destructive"
+      });
+      onClose();
+      return;
+    }
+
+    const { data } = await supabase
+      .from('ai_provider_configs')
+      .select('id')
+      .eq('provider', 'heygen')
+      .eq('is_active', true)
+      .eq('user_id', user.id)
+      .maybeSingle();
+      
+    if (!data) {
+      const { data: globalKey } = await supabase
+        .from('ai_provider_configs')
+        .select('id')
+        .eq('provider', 'heygen')
+        .eq('is_active', true)
+        .is('user_id', null)
+        .maybeSingle();
+        
+      if (!globalKey) {
+        toast({
+          title: "⚠️ Configuration requise",
+          description: "Configurez votre clé HeyGen dans Paramètres → Providers IA",
+          variant: "destructive"
+        });
+        onClose();
+        return;
+      }
+    }
+    
+    loadAvatars();
+    loadVoices();
+  };
 
   const loadAvatars = async () => {
     setLoading(true);

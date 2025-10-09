@@ -70,6 +70,7 @@ export type Database = {
           priority: number | null
           provider: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           api_key_encrypted?: string | null
@@ -81,6 +82,7 @@ export type Database = {
           priority?: number | null
           provider: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           api_key_encrypted?: string | null
@@ -92,6 +94,7 @@ export type Database = {
           priority?: number | null
           provider?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }

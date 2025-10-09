@@ -32,13 +32,30 @@ serve(async (req) => {
 
     console.log(`[HEYGEN-VIDEO] Action: ${action}, Analysis: ${analysis_id}`);
 
-    // Get HeyGen API key from provider configs
-    const { data: providerConfig } = await supabase
+    // Get HeyGen API key from provider configs (user key or global fallback)
+    let providerConfig = null;
+    
+    const { data: userConfig } = await supabase
       .from('ai_provider_configs')
       .select('api_key_encrypted')
       .eq('provider', 'heygen')
       .eq('is_active', true)
-      .single();
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    if (userConfig) {
+      providerConfig = userConfig;
+    } else {
+      const { data: globalConfig } = await supabase
+        .from('ai_provider_configs')
+        .select('api_key_encrypted')
+        .eq('provider', 'heygen')
+        .eq('is_active', true)
+        .is('user_id', null)
+        .maybeSingle();
+      
+      providerConfig = globalConfig;
+    }
 
     if (!providerConfig?.api_key_encrypted) {
       console.error('[HEYGEN-VIDEO] HeyGen API key not configured');

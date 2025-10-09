@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,10 +16,67 @@ serve(async (req) => {
   try {
     console.log('[OPENROUTER-PROXY] Function started');
     
-    const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get OpenRouter API key (user key or global fallback)
+    let OPENROUTER_API_KEY = null;
+    
+    const { data: userConfig } = await supabase
+      .from('ai_provider_configs')
+      .select('api_key_encrypted')
+      .eq('provider', 'openrouter')
+      .eq('is_active', true)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    if (userConfig) {
+      OPENROUTER_API_KEY = userConfig.api_key_encrypted;
+    } else {
+      const { data: globalConfig } = await supabase
+        .from('ai_provider_configs')
+        .select('api_key_encrypted')
+        .eq('provider', 'openrouter')
+        .eq('is_active', true)
+        .is('user_id', null)
+        .maybeSingle();
+      
+      if (globalConfig) {
+        OPENROUTER_API_KEY = globalConfig.api_key_encrypted;
+      } else {
+        OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+        if (OPENROUTER_API_KEY) {
+          console.warn('[OPENROUTER-PROXY] Using env fallback');
+        }
+      }
+    }
+    
     if (!OPENROUTER_API_KEY) {
       console.error('[OPENROUTER-PROXY] API key not configured');
-      throw new Error('OPENROUTER_API_KEY not configured');
+      return new Response(JSON.stringify({ error: 'OpenRouter API key not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const { action, model, messages } = await req.json();

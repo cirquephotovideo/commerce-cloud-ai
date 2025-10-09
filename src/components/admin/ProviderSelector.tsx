@@ -89,19 +89,25 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
   }, []);
 
   const loadProviderStatuses = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     // Load provider health statuses
     const { data: healthData } = await supabase
       .from('ai_provider_health')
       .select('*');
 
-    // Load provider configs
+    // Load provider configs (user + global)
     const { data: configData } = await supabase
       .from('ai_provider_configs')
-      .select('*');
+      .select('*')
+      .or(`user_id.eq.${user.id},user_id.is.null`);
 
     const updatedProviders = AVAILABLE_PROVIDERS.map(provider => {
       const health = healthData?.find(h => h.provider === provider.id);
-      const config = configData?.find(c => c.provider === provider.id);
+      const userConfig = configData?.find(c => c.provider === provider.id && c.user_id === user.id);
+      const globalConfig = configData?.find(c => c.provider === provider.id && c.user_id === null);
+      const config = userConfig || globalConfig;
 
       let status: 'online' | 'offline' | 'not_configured' = 'not_configured';
       let configured = provider.id === 'lovable'; // Lovable is always configured
@@ -117,6 +123,7 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
         ...provider,
         status,
         configured,
+        isUserConfig: !!userConfig,
       };
     });
 
@@ -166,6 +173,11 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
               <Badge variant={getStatusVariant(provider.status)} className="text-xs">
                 {getStatusLabel(provider.status)}
               </Badge>
+              {provider.configured && (provider as any).isUserConfig !== undefined && (
+                <Badge variant={(provider as any).isUserConfig ? "default" : "outline"} className="text-xs">
+                  {(provider as any).isUserConfig ? "🔐 Perso" : "🔓 Global"}
+                </Badge>
+              )}
               {selected === provider.id && provider.configured && (
                 <CheckCircle className="h-4 w-4 mx-auto text-primary" />
               )}
