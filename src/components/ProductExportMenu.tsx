@@ -10,11 +10,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, History } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
+import { ExportHistoryDialog } from "@/components/ExportHistoryDialog";
 
 interface ProductExportMenuProps {
   analysisId: string;
   productName: string;
+  exportedPlatforms?: string[];
 }
 
 const platforms = [
@@ -31,13 +35,34 @@ const platforms = [
   { id: 'windev', name: 'WinDev', emoji: '💻' },
 ];
 
-export const ProductExportMenu = ({ analysisId, productName }: ProductExportMenuProps) => {
+export const ProductExportMenu = ({ analysisId, productName, exportedPlatforms = [] }: ProductExportMenuProps) => {
   const [isExporting, setIsExporting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Récupérer les plateformes configurées
+  const { data: configuredPlatforms } = useQuery({
+    queryKey: ['configured-platforms'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('platform_configurations')
+        .select('platform_type, is_active')
+        .eq('is_active', true);
+      
+      return data?.map(p => p.platform_type) || [];
+    },
+  });
+
+  const availablePlatforms = platforms.filter(p => 
+    configuredPlatforms?.includes(p.id)
+  );
 
   const handleExport = async (platformId: string, platformName: string) => {
     setIsExporting(true);
     try {
       toast.info(`Export vers ${platformName} en cours...`);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
 
       const { data, error } = await supabase.functions.invoke('export-single-product', {
         body: {
@@ -47,6 +72,31 @@ export const ProductExportMenu = ({ analysisId, productName }: ProductExportMenu
       });
 
       if (error) throw error;
+
+      // Logger l'export dans l'historique
+      await supabase.from('export_history').insert({
+        analysis_id: analysisId,
+        user_id: user.id,
+        platform_type: platformId,
+        status: data.success ? 'success' : 'failed',
+        error_message: data.success ? null : data.error,
+        exported_data: data.result,
+      });
+
+      // Mettre à jour les plateformes exportées
+      const { data: analysisData } = await supabase
+        .from('product_analyses')
+        .select('exported_to_platforms')
+        .eq('id', analysisId)
+        .single();
+
+      const currentPlatforms = (analysisData?.exported_to_platforms as string[]) || [];
+      if (!currentPlatforms.includes(platformId)) {
+        await supabase
+          .from('product_analyses')
+          .update({ exported_to_platforms: [...currentPlatforms, platformId] })
+          .eq('id', analysisId);
+      }
 
       if (data.success) {
         toast.success(`${productName} exporté vers ${platformName} !`);
@@ -62,35 +112,72 @@ export const ProductExportMenu = ({ analysisId, productName }: ProductExportMenu
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <>
+      <div className="flex gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+              Exporter
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Plateformes configurées</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {availablePlatforms.length > 0 ? (
+              availablePlatforms.map((platform) => {
+                const isExported = Array.isArray(exportedPlatforms) && exportedPlatforms.includes(platform.id);
+                
+                return (
+                  <DropdownMenuItem
+                    key={platform.id}
+                    onClick={() => handleExport(platform.id, platform.name)}
+                    disabled={isExporting}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <span className="mr-2">{platform.emoji}</span>
+                      {platform.name}
+                    </div>
+                    
+                    {isExported && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        ✓ Exporté
+                      </Badge>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })
+            ) : (
+              <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+                Aucune plateforme configurée
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          disabled={isExporting}
+          onClick={() => setShowHistory(true)}
         >
-          {isExporting ? (
-            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Download className="w-4 h-4 mr-2" />
-          )}
-          Exporter
+          <History className="w-4 h-4" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Choisir une plateforme</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {platforms.map((platform) => (
-          <DropdownMenuItem
-            key={platform.id}
-            onClick={() => handleExport(platform.id, platform.name)}
-            disabled={isExporting}
-          >
-            <span className="mr-2">{platform.emoji}</span>
-            {platform.name}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </div>
+
+      <ExportHistoryDialog 
+        open={showHistory}
+        onOpenChange={setShowHistory}
+        analysisId={analysisId}
+      />
+    </>
   );
 };

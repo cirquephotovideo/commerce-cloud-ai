@@ -803,6 +803,50 @@ export type Database = {
         }
         Relationships: []
       }
+      export_history: {
+        Row: {
+          analysis_id: string | null
+          created_at: string | null
+          error_message: string | null
+          exported_at: string | null
+          exported_data: Json | null
+          id: string
+          platform_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          exported_at?: string | null
+          exported_data?: Json | null
+          id?: string
+          platform_type: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          exported_at?: string | null
+          exported_data?: Json | null
+          id?: string
+          platform_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_history_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       export_logs: {
         Row: {
           created_at: string

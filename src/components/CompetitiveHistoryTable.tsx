@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, ExternalLink, TrendingDown, TrendingUp, Package
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ProductMonitoringDetail } from "./market/ProductMonitoringDetail";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -11,13 +12,17 @@ interface CompetitiveHistoryTableProps {
   onDelete: (id: string) => void;
   onViewDetail: (analysis: any) => void;
   onOpenDetail: (analysis: any) => void;
+  selectedAnalyses?: Set<string>;
+  onSelectAnalysis?: (id: string, checked: boolean) => void;
 }
 
 export const CompetitiveHistoryTable = ({ 
   analyses, 
   onDelete, 
   onViewDetail,
-  onOpenDetail 
+  onOpenDetail,
+  selectedAnalyses = new Set(),
+  onSelectAnalysis,
 }: CompetitiveHistoryTableProps) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
@@ -122,6 +127,15 @@ export const CompetitiveHistoryTable = ({
           return (
             <Card key={analysis.id} className="p-4">
               <div className="flex items-start gap-4">
+                {/* Checkbox de sélection */}
+                {onSelectAnalysis && (
+                  <Checkbox
+                    checked={selectedAnalyses.has(analysis.id)}
+                    onCheckedChange={(checked) => onSelectAnalysis(analysis.id, checked as boolean)}
+                    className="mt-1"
+                  />
+                )}
+                
                 {/* Image miniature */}
                 {analysis.image_urls?.[0] && (
                   <img 

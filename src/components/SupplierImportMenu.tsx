@@ -8,10 +8,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2 } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Upload, Loader2, Settings, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ImportProgressDialog } from "@/components/ImportProgressDialog";
 
 interface SupplierImportMenuProps {
   supplierId?: string;
@@ -53,6 +59,24 @@ export const SupplierImportMenu = ({
 }: SupplierImportMenuProps) => {
   const [isImporting, setIsImporting] = useState(false);
   const [importingPlatform, setImportingPlatform] = useState<string | null>(null);
+  const [showOptions, setShowOptions] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  
+  // Options d'import
+  const [importType, setImportType] = useState<'full' | 'incremental'>('full');
+  const [autoEnrich, setAutoEnrich] = useState(true);
+  const [matchByEan, setMatchByEan] = useState(true);
+  
+  // Progress tracking
+  const [importProgress, setImportProgress] = useState({
+    total: 0,
+    processed: 0,
+    success: 0,
+    skipped: 0,
+    errors: 0,
+    current_operation: '',
+  });
+
   const { toast } = useToast();
 
   // Récupérer les plateformes avec support import
@@ -81,19 +105,47 @@ export const SupplierImportMenu = ({
     },
   });
 
-  const handleImport = async (platform: string) => {
+  const openImportOptions = (platform: string) => {
+    setSelectedPlatform(platform);
+    setShowOptions(true);
+  };
+
+  const handleImportWithOptions = async () => {
+    setShowOptions(false);
     setIsImporting(true);
-    setImportingPlatform(platform);
+    setImportingPlatform(selectedPlatform);
+
+    // Initialiser le tracking
+    setImportProgress({
+      total: 100,
+      processed: 0,
+      success: 0,
+      skipped: 0,
+      errors: 0,
+      current_operation: 'Connexion à la plateforme...',
+    });
 
     try {
       const { data, error } = await supabase.functions.invoke('import-from-platform', {
         body: {
-          platform,
+          platform: selectedPlatform,
           supplier_id: supplierId,
+          options: {
+            import_type: importType,
+            auto_enrich: autoEnrich,
+            match_by_ean: matchByEan,
+          },
         },
       });
 
       if (error) throw error;
+
+      // Mettre à jour le progress final
+      setImportProgress(prev => ({
+        ...prev,
+        processed: prev.total,
+        current_operation: 'Import terminé',
+      }));
 
       toast({
         title: "✅ Import réussi",
@@ -157,46 +209,121 @@ export const SupplierImportMenu = ({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button 
-          size="sm" 
-          variant="outline"
-          disabled={isImporting}
-        >
-          {isImporting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Import en cours...
-            </>
-          ) : (
-            <>
-              <Upload className="mr-2 h-4 w-4" />
-              Importer depuis
-            </>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        {platforms.map((platform) => (
-          <DropdownMenuItem
-            key={platform}
-            onClick={() => handleImport(platform)}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button 
+            size="sm" 
+            variant="outline"
             disabled={isImporting}
-            className="cursor-pointer"
           >
-            <span className="mr-2 text-lg">{platformIcons[platform]}</span>
-            <span>{platformLabels[platform]}</span>
-            {importingPlatform === platform && (
-              <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+            {isImporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Import en cours...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Importer depuis
+              </>
             )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {platforms.map((platform) => (
+            <DropdownMenuItem
+              key={platform}
+              onClick={() => openImportOptions(platform)}
+              disabled={isImporting}
+              className="cursor-pointer"
+            >
+              <span className="mr-2 text-lg">{platformIcons[platform]}</span>
+              <span>{platformLabels[platform]}</span>
+              {importingPlatform === platform && (
+                <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+              )}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem disabled className="text-xs text-muted-foreground">
+            Configurez vos plateformes dans Paramètres
           </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-          Configurez vos plateformes dans Paramètres
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Dialog Options d'Import */}
+      <Dialog open={showOptions} onOpenChange={setShowOptions}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Options d'Import - {platformLabels[selectedPlatform]}</DialogTitle>
+            <DialogDescription>
+              Configurez les options d'importation
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Type d'import */}
+            <div className="space-y-2">
+              <Label>Type d'import</Label>
+              <RadioGroup value={importType} onValueChange={(v) => setImportType(v as any)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="full" id="full" />
+                  <Label htmlFor="full" className="font-normal cursor-pointer">
+                    Complet (remplacer tout)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="incremental" id="incremental" />
+                  <Label htmlFor="incremental" className="font-normal cursor-pointer">
+                    Incrémental (nouveaux uniquement)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Auto-enrichissement */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="auto-enrich"
+                checked={autoEnrich}
+                onCheckedChange={(checked) => setAutoEnrich(checked as boolean)}
+              />
+              <Label htmlFor="auto-enrich" className="font-normal cursor-pointer">
+                Enrichir automatiquement après import
+              </Label>
+            </div>
+
+            {/* Matching par EAN */}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="match-ean"
+                checked={matchByEan}
+                onCheckedChange={(checked) => setMatchByEan(checked as boolean)}
+              />
+              <Label htmlFor="match-ean" className="font-normal cursor-pointer">
+                Matcher avec produits existants (EAN)
+              </Label>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowOptions(false)}>
+                Annuler
+              </Button>
+              <Button onClick={handleImportWithOptions}>
+                <Upload className="w-4 h-4 mr-2" />
+                Lancer l'import
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Progress Dialog */}
+      <ImportProgressDialog 
+        open={isImporting}
+        progress={importProgress}
+      />
+    </>
   );
 };
