@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, Video, AlertCircle, ExternalLink, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface VideoPlayerProps {
   analysisId: string;
@@ -14,10 +15,63 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
   const [loading, setLoading] = useState(true);
   const [video, setVideo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
 
   useEffect(() => {
     fetchLatestVideo();
   }, [analysisId]);
+
+  // Auto-polling pour les vidéos en cours de génération
+  useEffect(() => {
+    if (!video || video.status !== 'processing') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error: statusError } = await supabase.functions.invoke('heygen-video-generator', {
+          body: { 
+            action: 'check_status',
+            analysis_id: analysisId,
+            video_id: video.heygen_video_id
+          }
+        });
+
+        if (statusError) {
+          console.error('[VideoPlayer] Status check error:', statusError);
+          return;
+        }
+
+        // Mettre à jour la vidéo si le statut a changé
+        if (data?.status && data.status !== video.status) {
+          await fetchLatestVideo();
+          
+          if (data.status === 'completed') {
+            toast.success("✅ Vidéo disponible !");
+          } else if (data.status === 'failed') {
+            toast.error("❌ Erreur lors de la génération");
+          }
+        }
+      } catch (err) {
+        console.error('[VideoPlayer] Polling error:', err);
+      }
+    }, 5000); // Poll toutes les 5 secondes
+
+    return () => clearInterval(pollInterval);
+  }, [video, analysisId]);
+
+  // Compteur de temps écoulé pour les vidéos en cours
+  useEffect(() => {
+    if (!video || video.status !== 'processing') {
+      setElapsedTime(0);
+      return;
+    }
+
+    const startTime = Date.now();
+    const timer = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [video?.status]);
 
   const fetchLatestVideo = async () => {
     try {
@@ -105,13 +159,21 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           </div>
 
           {video.status === 'processing' && (
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span className="text-sm font-medium">Génération en cours...</span>
+            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm font-medium">⏳ Génération en cours chez HeyGen...</span>
+                </div>
+                <span className="text-xs text-muted-foreground font-mono">
+                  {Math.floor(elapsedTime / 60)}:{(elapsedTime % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div className="h-full bg-primary/60 animate-pulse" style={{ width: '60%' }} />
               </div>
               <p className="text-xs text-muted-foreground">
-                La génération peut prendre 1 à 3 minutes. La page se rafraîchira automatiquement.
+                La génération peut prendre 1 à 3 minutes. Le statut se met à jour automatiquement.
               </p>
             </div>
           )}

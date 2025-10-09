@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -7,9 +7,10 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { getProductImages, getProductName, getProductPrice, getProductScore, getProductCategory } from "@/lib/analysisDataExtractors";
-import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info, Zap, Box, Wifi, Battery, Ruler, Weight, Calendar, ShieldCheck, TrendingUp, Sparkles, Loader2 } from "lucide-react";
+import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info, Zap, Box, Wifi, Battery, Ruler, Weight, Calendar, ShieldCheck, TrendingUp, Sparkles, Loader2, Video as VideoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { VideoPlayer } from "./VideoPlayer";
 
 interface ProductOverviewTabProps {
   analysis: any;
@@ -35,6 +36,7 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [hasAmazonData, setHasAmazonData] = useState(false);
   const [isEnrichingAmazon, setIsEnrichingAmazon] = useState(false);
+  const [hasVideo, setHasVideo] = useState(false);
 
   // Extract data from analysis
   const description = analysis?.analysis_result?.description?.suggested_description || analysis?.description_long || "";
@@ -81,6 +83,23 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
     };
     
     checkAmazonData();
+  }, [analysis?.id]);
+
+  // Check if video exists
+  useEffect(() => {
+    const checkVideo = async () => {
+      if (!analysis?.id) return;
+      
+      const { data } = await supabase
+        .from('product_videos')
+        .select('id')
+        .eq('analysis_id', analysis.id)
+        .maybeSingle();
+      
+      setHasVideo(!!data);
+    };
+    
+    checkVideo();
   }, [analysis?.id]);
 
   // Generate taxonomy with AI
@@ -351,6 +370,24 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed whitespace-pre-line">{description}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vidéo Promotionnelle HeyGen */}
+      {hasVideo && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <VideoIcon className="w-5 h-5" />
+              Vidéo Promotionnelle HeyGen
+            </CardTitle>
+            <CardDescription>
+              Vidéo générée avec un avatar IA pour présenter le produit
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <VideoPlayer analysisId={analysis.id} showCard={false} />
           </CardContent>
         </Card>
       )}

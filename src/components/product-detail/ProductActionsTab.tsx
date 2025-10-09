@@ -148,7 +148,7 @@ export const ProductActionsTab = ({
       // Démarrer le monitoring
       startVideoMonitoring(generatedVideoId);
 
-      toast.success("Vidéo HeyGen en cours de génération");
+      toast.success("🎬 Génération vidéo lancée ! Suivez la progression ci-dessous ou dans l'onglet Vue d'ensemble.");
     } catch (error: any) {
       console.error("Erreur régénération HeyGen:", error);
       toast.error(error.message || "Erreur lors de la génération vidéo");
