@@ -20,6 +20,14 @@ async function getAvailableProviders(supabase: any, userId: string) {
     .eq('is_active', true)
     .maybeSingle();
   
+  const { data: openRouterConfig } = await supabase
+    .from('ai_provider_configs')
+    .select('*')
+    .eq('provider', 'openrouter')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  
   return {
     lovable: { available: !!lovableKey },
     ollama: { 
@@ -27,19 +35,23 @@ async function getAvailableProviders(supabase: any, userId: string) {
       config: ollamaConfig,
       url: ollamaConfig?.ollama_url || 'http://localhost:11434',
       model: ollamaConfig?.default_model || 'llama3.1'
+    },
+    openrouter: {
+      available: !!openRouterConfig,
+      config: openRouterConfig
     }
   };
 }
 
-async function fetchWebData(productName: string, amazonData: any) {
+async function fetchWebData(productName: string, productBrand?: string, productEan?: string) {
   const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
   let searchResults: any[] = [];
   let searchMethod = 'none';
 
   if (SERPER_API_KEY) {
     try {
-      const brand = amazonData?.brand || '';
-      const ean = amazonData?.ean || '';
+      const brand = productBrand || '';
+      const ean = productEan || '';
       
       const queries = [
         `${brand || productName} manufacturer contact EU representative address`,
@@ -74,7 +86,7 @@ async function fetchWebData(productName: string, amazonData: any) {
 
   if (searchResults.length === 0) {
     try {
-      searchResults = await simulateWebSearchWithAI(productName, amazonData);
+      searchResults = await simulateWebSearchWithAI(productName, productBrand, productEan);
       searchMethod = 'ai_simulated';
       console.log(`✅ [RSGP] AI simulation: ${searchResults.length} résultats`);
     } catch (error) {
@@ -85,14 +97,14 @@ async function fetchWebData(productName: string, amazonData: any) {
   return { searchResults, searchMethod };
 }
 
-async function simulateWebSearchWithAI(productName: string, amazonData: any) {
+async function simulateWebSearchWithAI(productName: string, productBrand?: string, productEan?: string) {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
   const prompt = `Simule une recherche web pour trouver des informations RSGP sur ce produit:
 
 Produit: ${productName}
-Marque: ${amazonData?.brand || 'inconnue'}
-EAN: ${amazonData?.ean || 'inconnu'}
+Marque: ${productBrand || 'inconnue'}
+EAN: ${productEan || 'inconnu'}
 
 Génère 8-10 résultats plausibles et réalistes contenant:
 - Coordonnées fabricant et responsable UE
@@ -135,7 +147,7 @@ Format JSON:
 // SPECIALIZED PROMPTS
 // ============================================
 
-function createManufacturerPrompt(product: any, amazonData: any, webResults: any[]) {
+function createManufacturerPrompt(product: any, derivedData: any, webResults: any[]) {
   const relevantResults = webResults
     .filter(r => 
       r.snippet?.toLowerCase().includes('manufacturer') ||
@@ -148,16 +160,15 @@ function createManufacturerPrompt(product: any, amazonData: any, webResults: any
   return `MISSION: Extraire coordonnées FABRICANT et RESPONSABLE UE
 
 PRODUIT: ${product.product_name}
-MARQUE: ${amazonData?.brand || 'inconnue'}
-EAN: ${amazonData?.ean || 'inconnu'}
-VENDEUR AMAZON: ${amazonData?.buy_box_seller_name || 'inconnu'}
+MARQUE: ${derivedData?.brand || product.analysis_result?.brand || 'inconnue'}
+EAN: ${derivedData?.ean || product.analysis_result?.ean || 'inconnu'}
 
 SOURCES WEB:
 ${relevantResults.map((r, i) => `[${i+1}] ${r.title}\n${r.snippet}`).join('\n\n')}
 
-DONNÉES AMAZON:
-- Fabricant déclaré: ${amazonData?.manufacturer || 'non communiqué'}
-- Pays expédition: ${amazonData?.buy_box_ship_country || 'non communiqué'}
+DONNÉES ANALYSÉES:
+- Fabricant: ${derivedData?.brand || 'non communiqué'}
+- Catégorie: ${product.category || 'non communiqué'}
 
 RETOURNE CE JSON:
 {
@@ -165,16 +176,16 @@ RETOURNE CE JSON:
   "fabricant_adresse": "Adresse postale complète",
   "pays_origine": "Code ISO-2 (FR/DE/CN...)",
   "personne_responsable_ue": "Nom et adresse responsable UE",
-  "fournisseur": "${amazonData?.buy_box_seller_name || 'non communiqué'}"
+  "fournisseur": "non communiqué"
 }
 
 RÈGLES:
-- Privilégie données web sur Amazon
+- Privilégie données web
 - Si introuvable: "non communiqué"
 - Vérifie cohérence pays/adresse`;
 }
 
-function createCompliancePrompt(product: any, amazonData: any, webResults: any[]) {
+function createCompliancePrompt(product: any, derivedData: any, webResults: any[]) {
   const relevantResults = webResults
     .filter(r => 
       r.snippet?.includes('CE') ||
@@ -243,7 +254,7 @@ RÈGLES:
 - langues: codes ISO-2`;
 }
 
-function createTechnicalPrompt(product: any, amazonData: any) {
+function createTechnicalPrompt(product: any, derivedData: any) {
   return `MISSION: Caractéristiques TECHNIQUES RSGP
 
 PRODUIT: ${product.product_name}
@@ -272,14 +283,14 @@ LOGIQUE:
 // AI GENERATION WITH FALLBACK
 // ============================================
 
-async function generateWithLovableAI(product: any, amazonData: any, webResults: any[]) {
+async function generateWithLovableAI(product: any, derivedData: any, webResults: any[]) {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
   const prompts = [
-    createManufacturerPrompt(product, amazonData, webResults),
-    createCompliancePrompt(product, amazonData, webResults),
+    createManufacturerPrompt(product, derivedData, webResults),
+    createCompliancePrompt(product, derivedData, webResults),
     createDocumentationPrompt(product, webResults),
-    createTechnicalPrompt(product, amazonData)
+    createTechnicalPrompt(product, derivedData)
   ];
 
   console.log('[RSGP] 🚀 Lancement 4 prompts parallèles...');
@@ -315,10 +326,10 @@ async function generateWithLovableAI(product: any, amazonData: any, webResults: 
     })
   );
 
-  return mergeRSGPResults(results, product, amazonData);
+  return mergeRSGPResults(results, product, derivedData);
 }
 
-async function generateWithOllama(product: any, amazonData: any, webResults: any[], ollamaConfig: any) {
+async function generateWithOllama(product: any, derivedData: any, webResults: any[], ollamaConfig: any) {
   const ollamaUrl = ollamaConfig.ollama_url || 'http://localhost:11434';
   const model = ollamaConfig.default_model || 'llama3.1';
 
@@ -326,13 +337,13 @@ async function generateWithOllama(product: any, amazonData: any, webResults: any
 
   const consolidatedPrompt = `Tu es expert RSGP. Génère UN JSON complet avec toutes les infos:
 
-${createManufacturerPrompt(product, amazonData, webResults)}
+${createManufacturerPrompt(product, derivedData, webResults)}
 
-${createCompliancePrompt(product, amazonData, webResults)}
+${createCompliancePrompt(product, derivedData, webResults)}
 
 ${createDocumentationPrompt(product, webResults)}
 
-${createTechnicalPrompt(product, amazonData)}
+${createTechnicalPrompt(product, derivedData)}
 
 Fusionne TOUS les champs dans un seul JSON.`;
 
@@ -358,17 +369,54 @@ Fusionne TOUS les champs dans un seul JSON.`;
   return JSON.parse(content);
 }
 
-function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, amazonData: any) {
+async function generateWithOpenRouter(product: any, derivedData: any, webResults: any[], config: any) {
+  const apiKey = config.api_key_encrypted;
+  const model = config.default_model || 'anthropic/claude-3.5-sonnet';
+
+  console.log(`[RSGP] 🌐 OpenRouter (${model})`);
+
+  const consolidatedPrompt = `Tu es expert RSGP. Génère UN JSON complet:
+
+${createManufacturerPrompt(product, derivedData, webResults)}
+${createCompliancePrompt(product, derivedData, webResults)}
+${createDocumentationPrompt(product, webResults)}
+${createTechnicalPrompt(product, derivedData)}`;
+
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: 'Retourne UNIQUEMENT JSON sans markdown.' },
+        { role: 'user', content: consolidatedPrompt }
+      ]
+    })
+  });
+
+  if (!res.ok) throw new Error(`OpenRouter: ${res.status}`);
+
+  const data = await res.json();
+  let content = data.choices?.[0]?.message?.content || '{}';
+  content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  
+  return JSON.parse(content);
+}
+
+function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, derivedData: any) {
   const merged: any = {
     nom_produit: product.product_name || product.product_url || 'Produit sans nom',
-    ean: amazonData?.ean || 'non communiqué',
+    ean: derivedData?.ean || 'non communiqué',
     reference_interne: '',
     numero_lot: '',
-    numero_modele: amazonData?.numero_modele || '',
-    fournisseur: amazonData?.buy_box_seller_name || 'non communiqué',
+    numero_modele: derivedData?.numero_modele || '',
+    fournisseur: derivedData?.fournisseur || 'non communiqué',
     fabricant_nom: 'non communiqué',
     fabricant_adresse: 'non communiqué',
-    pays_origine: amazonData?.buy_box_ship_country || 'non communiqué',
+    pays_origine: 'non communiqué',
     personne_responsable_ue: 'non communiqué',
     normes_ce: [],
     documents_conformite: {
@@ -412,7 +460,7 @@ function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, am
   return merged;
 }
 
-function generateMinimalRSGP(product: any, amazonData: any) {
+function generateMinimalRSGP(product: any, derivedData: any) {
   console.warn('[RSGP] ⚠️ Génération minimaliste (fallback final)');
   
   const inferCategory = (name: string): string => {
@@ -425,14 +473,14 @@ function generateMinimalRSGP(product: any, amazonData: any) {
 
   return {
     nom_produit: product.product_name || product.product_url || 'Produit sans nom',
-    ean: amazonData?.ean || 'non communiqué',
-    fabricant_nom: amazonData?.manufacturer || amazonData?.brand || 'non communiqué',
-    pays_origine: amazonData?.buy_box_ship_country || 'non communiqué',
-    fournisseur: amazonData?.buy_box_seller_name || 'non communiqué',
+    ean: derivedData?.ean || 'non communiqué',
+    fabricant_nom: derivedData?.brand || 'non communiqué',
+    pays_origine: 'non communiqué',
+    fournisseur: derivedData?.fournisseur || 'non communiqué',
     categorie_rsgp: inferCategory(product.product_name),
     reference_interne: '',
     numero_lot: '',
-    numero_modele: amazonData?.numero_modele || '',
+    numero_modele: derivedData?.numero_modele || '',
     fabricant_adresse: 'non communiqué',
     personne_responsable_ue: 'non communiqué',
     normes_ce: [],
@@ -468,7 +516,7 @@ function generateMinimalRSGP(product: any, amazonData: any) {
 
 async function generateRSGPWithFallback(
   product: any,
-  amazonData: any,
+  derivedData: any,
   webResults: any[],
   searchMethod: string,
   userId: string,
@@ -478,7 +526,8 @@ async function generateRSGPWithFallback(
   
   console.log('[RSGP] 📊 Providers:', {
     lovable: providers.lovable.available,
-    ollama: providers.ollama.available
+    ollama: providers.ollama.available,
+    openrouter: providers.openrouter.available
   });
 
   let rsgpData: any = null;
@@ -488,27 +537,38 @@ async function generateRSGPWithFallback(
   if (providers.lovable.available) {
     try {
       console.log('[RSGP] 🎯 Lovable AI (primaire)...');
-      rsgpData = await generateWithLovableAI(product, amazonData, webResults);
+      rsgpData = await generateWithLovableAI(product, derivedData, webResults);
       usedMethod = 'lovable_primary';
     } catch (error) {
       console.error('[RSGP] ❌ Lovable échoué:', error);
     }
   }
 
-  // NIVEAU 2: Ollama (fallback)
+  // NIVEAU 2: OpenRouter (fallback)
+  if (!rsgpData && providers.openrouter.available) {
+    try {
+      console.log('[RSGP] 🌐 OpenRouter (fallback)...');
+      rsgpData = await generateWithOpenRouter(product, derivedData, webResults, providers.openrouter.config);
+      usedMethod = 'openrouter_fallback';
+    } catch (error) {
+      console.error('[RSGP] ❌ OpenRouter échoué:', error);
+    }
+  }
+
+  // NIVEAU 3: Ollama (fallback)
   if (!rsgpData && providers.ollama.available) {
     try {
       console.log('[RSGP] 🦙 Ollama (fallback)...');
-      rsgpData = await generateWithOllama(product, amazonData, webResults, providers.ollama.config);
+      rsgpData = await generateWithOllama(product, derivedData, webResults, providers.ollama.config);
       usedMethod = 'ollama_fallback';
     } catch (error) {
       console.error('[RSGP] ❌ Ollama échoué:', error);
     }
   }
 
-  // NIVEAU 3: Génération minimaliste
+  // NIVEAU 4: Génération minimaliste
   if (!rsgpData) {
-    rsgpData = generateMinimalRSGP(product, amazonData);
+    rsgpData = generateMinimalRSGP(product, derivedData);
     usedMethod = 'minimal_fallback';
   }
 
@@ -528,22 +588,20 @@ async function generateRSGPWithFallback(
 
 function deriveFromAnalysis(analysis: any): Record<string, any> {
   const result = analysis?.analysis_result || {};
-  const amazonData = analysis?.amazon_data || {};
   
-  console.log('[RSGP] 🔍 Extracting from analysis:', {
+  console.log('[RSGP] 🔍 Extracting from analysis_result only:', {
     hasResult: !!result,
-    hasAmazon: !!amazonData,
-    brand: result.brand || amazonData.brand,
-    ean: result.ean || amazonData.ean
+    brand: result.brand || result.manufacturer,
+    ean: result.ean
   });
   
   return {
-    ean: result.ean || amazonData.ean || null,
-    fabricant_nom: result.brand || amazonData.brand || amazonData.manufacturer || null,
-    numero_modele: result.model || amazonData.model || result.model_number || null,
+    ean: result.ean || null,
+    brand: result.brand || result.manufacturer || null,
+    numero_modele: result.model || result.model_number || null,
     garantie: result.warranty || result.warranty_info || null,
     categorie_rsgp: result.category || result.product_category || null,
-    fournisseur: result.seller || amazonData.buy_box_seller_name || result.supplier || null,
+    fournisseur: result.seller || result.supplier || null,
   };
 }
 
@@ -622,28 +680,8 @@ serve(async (req) => {
       );
     }
 
-    // Get Amazon data if available
-    const { data: amazonData, error: amazonError } = await supabase
-      .from('amazon_product_data')
-      .select('*')
-      .eq('analysis_id', analysis_id)
-      .maybeSingle();  // ✅ CORRECTION: maybeSingle au lieu de single
-
-    if (amazonError) {
-      console.warn('[RSGP] ⚠️ Erreur récupération Amazon:', amazonError);
-    }
-
-    console.log('[RSGP] 📊 Données Amazon récupérées:', {
-      hasData: !!amazonData,
-      ean: amazonData?.ean || 'non disponible',
-      brand: amazonData?.brand || 'non disponible',
-      manufacturer: amazonData?.manufacturer || 'non disponible',
-      seller: amazonData?.buy_box_seller_name || 'non disponible',
-      country: amazonData?.buy_box_ship_country || 'non disponible'
-    });
-
-    // ========== PHASE 0: Extract data from existing analysis ==========
-    console.log('[RSGP] 🔍 Extracting data from analysis...');
+    // ========== PHASE 0: Extract data from analysis_result only ==========
+    console.log('[RSGP] 🔍 Extracting data from analysis (NO Amazon dependency)...');
     const derivedData = deriveFromAnalysis(analysis);
     console.log('[RSGP] ✅ Derived data:', derivedData);
 
@@ -661,7 +699,8 @@ serve(async (req) => {
     // ========== PHASE 1: Recherche Web avec Fallback ==========
     const { searchResults, searchMethod } = await fetchWebData(
       analysis.product_name,
-      amazonData
+      derivedData.brand,
+      derivedData.ean
     );
 
     console.log(`[RSGP] 🔍 Recherche: ${searchMethod} - ${searchResults.length} résultats`);
@@ -675,7 +714,7 @@ serve(async (req) => {
     // ========== PHASE 2: Génération RSGP avec Cascade Fallback ==========
     let rsgpData = await generateRSGPWithFallback(
       analysis,
-      amazonData,
+      derivedData,
       searchResults,
       searchMethod,
       user.id,

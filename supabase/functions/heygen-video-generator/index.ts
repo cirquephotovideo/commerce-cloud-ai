@@ -322,7 +322,8 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
         console.log('[HEYGEN-VIDEO] Script generated successfully for product:', productName);
       }
 
-      // Create video on HeyGen
+      // Create video on HeyGen (HD 720p resolution for free plan compatibility)
+      console.log('[HEYGEN-VIDEO] Using resolution: 1280x720 (HD 720p)');
       const heygenPayload: any = {
         video_inputs: [{
           character: {
@@ -337,8 +338,8 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
           }
         }],
         dimension: {
-          width: 1920,
-          height: 1080
+          width: 1280,
+          height: 720
         },
         aspect_ratio: '16:9'
       };
