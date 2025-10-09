@@ -31,6 +31,24 @@ serve(async (req) => {
     const { action, analysis_id, avatar_id, voice_id, template_id, custom_script, auto_generate_script = true } = await req.json();
 
     console.log(`[HEYGEN-VIDEO] Action: ${action}, Analysis: ${analysis_id}`);
+    
+    // ✅ Timeout automatique rétroactif : marquer toutes les vidéos en processing > 10 min comme failed
+    const { data: stuckVideos } = await supabase
+      .from('product_videos')
+      .select('id, video_id, created_at')
+      .eq('status', 'processing')
+      .lt('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+    if (stuckVideos && stuckVideos.length > 0) {
+      console.log(`[HEYGEN-VIDEO] Marking ${stuckVideos.length} stuck videos as failed:`, stuckVideos.map(v => v.video_id));
+      await supabase
+        .from('product_videos')
+        .update({ 
+          status: 'failed', 
+          error_message: 'Timeout: Plus de 10 minutes écoulées' 
+        })
+        .in('id', stuckVideos.map(v => v.id));
+    }
 
     // Get HeyGen API key from provider configs (user key or global fallback)
     let providerConfig = null;
@@ -395,11 +413,15 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
       }
 
       const heygenData = await heygenRes.json();
+      console.log('[HEYGEN-VIDEO] HeyGen generate response:', JSON.stringify(heygenData, null, 2));
+      
       const video_id = heygenData.data?.video_id;
+      console.log('[HEYGEN-VIDEO] Generated video_id:', video_id);
 
       if (!video_id) {
+        console.error('[HEYGEN-VIDEO] No video_id in response:', heygenData);
         return new Response(
-          JSON.stringify({ error: 'No video_id returned from HeyGen' }),
+          JSON.stringify({ error: 'No video_id returned from HeyGen', response: heygenData }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

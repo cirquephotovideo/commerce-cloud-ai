@@ -21,9 +21,9 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     fetchLatestVideo();
   }, [analysisId]);
 
-  // Auto-polling pour les vidéos en cours de génération
+  // Auto-polling pour les vidéos en cours de génération ou pending
   useEffect(() => {
-    if (!video || video.status !== 'processing') return;
+    if (!video || !['processing', 'pending'].includes(video.status)) return;
 
     const pollInterval = setInterval(async () => {
       try {
@@ -31,7 +31,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           body: { 
             action: 'check_status',
             analysis_id: analysisId,
-            video_id: video.video_id // ✅ CORRECTION: Utiliser video.video_id au lieu de heygen_video_id
+            video_id: video.video_id
           }
         });
 
@@ -44,7 +44,8 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
         if (data?.status && data.status !== video.status) {
           await fetchLatestVideo();
           
-          if (data.status === 'completed') {
+          // Toast uniquement si video_url est disponible
+          if (data.status === 'completed' && data.video_url) {
             toast.success("✅ Vidéo disponible !");
           } else if (data.status === 'failed') {
             toast.error("❌ Erreur lors de la génération");
@@ -56,7 +57,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     }, 5000); // Poll toutes les 5 secondes
 
     return () => clearInterval(pollInterval);
-  }, [video, analysisId]);
+  }, [video?.status, analysisId]);
 
   // Compteur de temps écoulé depuis created_at
   useEffect(() => {
@@ -208,19 +209,48 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           )}
 
           {video.status === 'failed' && (
-            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-              <p className="text-sm text-destructive font-medium mb-1">Erreur de génération</p>
+            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">Erreur de génération</span>
+              </div>
               {video.error_message && (
                 <p className="text-xs text-destructive/80">{video.error_message}</p>
               )}
-              <p className="text-xs text-muted-foreground mt-2">
-                Réessayez avec une autre configuration ou contactez le support.
-              </p>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => {
+                  const actionsTab = document.querySelector('[data-value="actions"]') as HTMLElement;
+                  if (actionsTab) actionsTab.click();
+                  toast.info("Veuillez régénérer la vidéo depuis l'onglet Actions");
+                }}
+              >
+                Régénérer la vidéo
+              </Button>
             </div>
           )}
 
           {video.status === 'completed' && video.video_url && (
             <div className="space-y-3">
+              {/* Lien de la vidéo copiable */}
+              <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <span className="text-sm font-medium">🔗 Lien de la vidéo :</span>
+                <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">
+                  {video.video_url}
+                </code>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => {
+                    navigator.clipboard.writeText(video.video_url);
+                    toast.success("Lien copié !");
+                  }}
+                >
+                  Copier
+                </Button>
+              </div>
+              
               <video 
                 controls 
                 className="w-full rounded-lg border-2 border-border shadow-lg"

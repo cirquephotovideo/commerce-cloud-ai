@@ -115,6 +115,19 @@ export const ProductActionsTab = ({
   };
 
   const handleRegenerateHeygen = async (avatarId: string, voiceId: string, customScript?: string) => {
+    // Vérifier si une vidéo est déjà en cours
+    const { data: existingVideo } = await supabase
+      .from('product_videos')
+      .select('status')
+      .eq('analysis_id', analysis.id)
+      .in('status', ['processing', 'pending'])
+      .maybeSingle();
+    
+    if (existingVideo) {
+      toast.error("Une vidéo est déjà en cours de génération pour ce produit");
+      return;
+    }
+    
     setIsRegeneratingHeygen(true);
     setHeygenStatus('processing');
     setVideoGenerationProgress(0);
