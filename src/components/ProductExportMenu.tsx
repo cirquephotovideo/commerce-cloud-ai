@@ -40,14 +40,27 @@ export const ProductExportMenu = ({ analysisId, productName, exportedPlatforms =
   const [showHistory, setShowHistory] = useState(false);
 
   // Récupérer les plateformes configurées
-  const { data: configuredPlatforms } = useQuery({
+  const { data: configuredPlatforms, isLoading: isLoadingPlatforms, error: platformsError } = useQuery({
     queryKey: ['configured-platforms'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.log('[ProductExportMenu] User not authenticated');
+        return [];
+      }
+
+      const { data, error } = await supabase
         .from('platform_configurations')
         .select('platform_type, is_active')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('user_id', user.id);
       
+      if (error) {
+        console.error('[ProductExportMenu] Error fetching platforms:', error);
+        return [];
+      }
+
+      console.log('[ProductExportMenu] Configured platforms:', data?.map(p => p.platform_type));
       return data?.map(p => p.platform_type) || [];
     },
   });
