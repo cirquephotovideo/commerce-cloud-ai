@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -104,7 +104,7 @@ export default function ImportedProducts() {
     }
   };
 
-  // Bulk export
+  // Bulk export avec feedback détaillé
   const handleBulkExport = async (platform: string) => {
     const selectedAnalysisIds = products
       ?.filter(p => {
@@ -117,12 +117,12 @@ export default function ImportedProducts() {
       }) || [];
 
     if (selectedAnalysisIds.length === 0) {
-      toast.error("Aucun produit enrichi sélectionné");
+      toast.error("❌ Aucun produit enrichi sélectionné");
       return;
     }
 
     try {
-      toast.info(`Export de ${selectedAnalysisIds.length} produits vers ${platform}...`);
+      toast.info(`📤 Export de ${selectedAnalysisIds.length} produits vers ${platform}...`);
       
       const { data, error } = await supabase.functions.invoke(`export-to-${platform}`, {
         body: { analysis_ids: selectedAnalysisIds }
@@ -130,14 +130,54 @@ export default function ImportedProducts() {
 
       if (error) throw error;
       
+      // ✅ Feedback détaillé
       const successCount = data.results?.filter((r: any) => r.success).length || 0;
-      toast.success(`${successCount} produits exportés avec succès !`);
+      const errorCount = data.results?.filter((r: any) => !r.success).length || 0;
+      
+      toast.success(
+        `✅ Export terminé !\n` +
+        `• ${successCount} créés\n` +
+        `• ${errorCount || 0} erreurs`
+      );
+      
+      // Mettre à jour last_exported_at pour les produits exportés
+      await supabase
+        .from('product_analyses')
+        .update({ 
+          last_exported_at: new Date().toISOString()
+        })
+        .in('id', selectedAnalysisIds);
+      
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Export error:', error);
-      toast.error("Erreur lors de l'export");
+      toast.error(`❌ Erreur lors de l'export: ${error.message}`);
     }
   };
+
+  // Phase 6.2: Notifications temps réel
+  useEffect(() => {
+    const channel = supabase
+      .channel('supplier_enrichment_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'supplier_products',
+          filter: 'enrichment_status=eq.completed',
+        },
+        (payload) => {
+          toast.success(`✅ ${payload.new.product_name} est maintenant enrichi !`);
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">

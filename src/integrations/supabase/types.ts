@@ -1588,10 +1588,12 @@ export type Database = {
           description_long: string | null
           ean: string | null
           enrichment_status: Json | null
+          exported_to_platforms: Json | null
           heygen_video_id: string | null
           id: string
           image_urls: Json | null
           is_favorite: boolean | null
+          last_exported_at: string | null
           last_price_update: string | null
           mapped_category_id: string | null
           mapped_category_name: string | null
@@ -1618,10 +1620,12 @@ export type Database = {
           description_long?: string | null
           ean?: string | null
           enrichment_status?: Json | null
+          exported_to_platforms?: Json | null
           heygen_video_id?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_exported_at?: string | null
           last_price_update?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
@@ -1648,10 +1652,12 @@ export type Database = {
           description_long?: string | null
           ean?: string | null
           enrichment_status?: Json | null
+          exported_to_platforms?: Json | null
           heygen_video_id?: string | null
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_exported_at?: string | null
           last_price_update?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null

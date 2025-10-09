@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Truck, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SupplierConfiguration } from "@/components/SupplierConfiguration";
 import { SupplierProductsTable } from "@/components/SupplierProductsTable";
 import { SupplierImportWizard } from "@/components/SupplierImportWizard";
@@ -18,16 +21,57 @@ export default function Suppliers() {
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
+  // Mapping des types de fournisseurs
+  const supplierTypeLabels: Record<string, string> = {
+    file: "📁 Fichier CSV/XLSX",
+    ftp: "🌐 FTP",
+    sftp: "🔒 SFTP",
+    api: "⚡ API REST",
+    prestashop: "🛒 PrestaShop",
+    odoo: "🟣 Odoo",
+    sap: "💼 SAP",
+    email: "📧 Email",
+  };
+
   const { data: suppliers, refetch: refetchSuppliers } = useQuery({
     queryKey: ["suppliers"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("supplier_configurations")
-        .select("*")
+        .select(`
+          *,
+          supplier_products(count)
+        `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      
+      // Transformer pour ajouter product_count
+      return data?.map(s => ({
+        ...s,
+        product_count: s.supplier_products?.[0]?.count || 0
+      }));
+    },
+  });
+
+  // Statistiques fournisseurs
+  const { data: stats } = useQuery({
+    queryKey: ['supplier-stats'],
+    queryFn: async () => {
+      const { data: suppliers } = await supabase
+        .from('supplier_configurations')
+        .select('id, supplier_type, is_active');
+      
+      const { data: products } = await supabase
+        .from('supplier_products')
+        .select('id, enrichment_status');
+      
+      return {
+        total_suppliers: suppliers?.length || 0,
+        active_suppliers: suppliers?.filter(s => s.is_active).length || 0,
+        total_products: products?.length || 0,
+        pending_enrichment: products?.filter(p => p.enrichment_status === 'pending').length || 0,
+      };
     },
   });
 
@@ -48,6 +92,12 @@ export default function Suppliers() {
   const handleSync = async (supplierId: string) => {
     const supplier = suppliers?.find(s => s.id === supplierId);
     if (!supplier) return;
+
+    // ✅ AJOUT : Vérifier que ce n'est pas un fichier
+    if (supplier.supplier_type === 'file') {
+      toast.error("❌ Les fournisseurs de type 'Fichier' ne peuvent pas être synchronisés automatiquement. Utilisez 'Import CSV/XLSX' à la place.");
+      return;
+    }
 
     toast.info("Synchronisation en cours...");
     
@@ -107,6 +157,34 @@ export default function Suppliers() {
         </div>
       </div>
 
+      {/* Statistiques */}
+      <div className="grid grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold">{stats?.total_suppliers || 0}</div>
+            <p className="text-sm text-muted-foreground">Fournisseurs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-green-500">{stats?.active_suppliers || 0}</div>
+            <p className="text-sm text-muted-foreground">Actifs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold">{stats?.total_products || 0}</div>
+            <p className="text-sm text-muted-foreground">Produits importés</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-3xl font-bold text-orange-500">{stats?.pending_enrichment || 0}</div>
+            <p className="text-sm text-muted-foreground">En attente enrichissement</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Tabs defaultValue="list" className="w-full">
         <TabsList>
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
@@ -114,51 +192,106 @@ export default function Suppliers() {
           <TabsTrigger value="logs">Historique</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="list" className="space-y-4">
-          {suppliers?.map((supplier) => (
-            <Card key={supplier.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Truck className="h-5 w-5" />
-                      {supplier.supplier_name}
-                    </CardTitle>
-                    <CardDescription>
-                      Type: {supplier.supplier_type} • 
-                      {supplier.last_sync_at
-                        ? ` Dernière synchro: ${new Date(supplier.last_sync_at).toLocaleDateString()}`
-                        : " Jamais synchronisé"}
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <SupplierImportMenu 
-                      supplierId={supplier.id}
-                      onImportComplete={() => refetchSuppliers()}
-                    />
-                    <Button variant="outline" size="sm" onClick={() => handleSync(supplier.id)}>
-                      Synchroniser
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(supplier.id)}>
-                      Modifier
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          ))}
+        <TabsContent value="list">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nom</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Dernière synchro</TableHead>
+                    <TableHead>Produits</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suppliers?.map((supplier) => (
+                    <TableRow key={supplier.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{supplier.supplier_name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {supplierTypeLabels[supplier.supplier_type] || supplier.supplier_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={supplier.is_active ? "default" : "secondary"}>
+                          {supplier.is_active ? "✅ Actif" : "⏸️ Inactif"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {supplier.last_sync_at
+                          ? new Date(supplier.last_sync_at).toLocaleDateString('fr-FR')
+                          : "Jamais synchronisé"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {supplier.product_count || 0} produits
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <SupplierImportMenu 
+                            supplierId={supplier.id}
+                            onImportComplete={refetchSuppliers}
+                          />
+                          
+                          {/* Bouton "Synchroniser" UNIQUEMENT si pas de type file */}
+                          {supplier.supplier_type !== 'file' ? (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleSync(supplier.id)}
+                            >
+                              🔄 Synchroniser
+                            </Button>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="outline" size="sm" disabled>
+                                    🔄 Synchroniser
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Les fournisseurs de type "Fichier" ne peuvent pas être synchronisés automatiquement.</p>
+                                  <p>Utilisez le bouton "Import CSV/XLSX" pour importer manuellement.</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleEdit(supplier.id)}
+                          >
+                            ✏️ Modifier
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
-          {!suppliers?.length && (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Truck className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">Aucun fournisseur configuré</p>
-                <Button onClick={() => setShowNewSupplier(true)}>
-                  Ajouter votre premier fournisseur
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+              {!suppliers?.length && (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Truck className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground mb-4">Aucun fournisseur configuré</p>
+                  <Button onClick={() => setShowNewSupplier(true)}>
+                    Ajouter votre premier fournisseur
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="products">
@@ -166,34 +299,72 @@ export default function Suppliers() {
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
-          {importLogs?.map((log) => (
-            <Card key={log.id}>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">
-                      {log.supplier_configurations?.supplier_name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(log.created_at).toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm">
-                      {log.products_found} trouvés • {log.products_matched} matchés
-                    </p>
-                    <p className={`text-sm ${
-                      log.import_status === 'success' ? 'text-green-600' :
-                      log.import_status === 'partial' ? 'text-yellow-600' :
-                      'text-red-600'
-                    }`}>
-                      {log.import_status}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                <span>📜 Historique des imports</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    // Télécharger CSV des logs
+                    const csv = "Date,Fournisseur,Trouvés,Matchés,Nouveaux,Statut\n" +
+                      importLogs?.map(log => 
+                        `${new Date(log.created_at).toLocaleString()},${log.supplier_configurations?.supplier_name},${log.products_found},${log.products_matched},${log.products_found - log.products_matched},${log.import_status}`
+                      ).join("\n") || "";
+                    const blob = new Blob([csv], { type: "text/csv" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "historique-imports.csv";
+                    a.click();
+                  }}
+                >
+                  📥 Exporter CSV
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>Trouvés</TableHead>
+                    <TableHead>Matchés</TableHead>
+                    <TableHead>Nouveaux</TableHead>
+                    <TableHead>Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {importLogs?.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="text-sm">
+                        {new Date(log.created_at).toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell>{log.supplier_configurations?.supplier_name}</TableCell>
+                      <TableCell>{log.products_found}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{log.products_matched}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge>{log.products_found - log.products_matched}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          log.import_status === 'success' ? 'default' :
+                          log.import_status === 'partial' ? 'secondary' :
+                          'destructive'
+                        }>
+                          {log.import_status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 

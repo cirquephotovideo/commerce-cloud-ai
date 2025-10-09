@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Upload, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SupplierImportMenuProps {
   supplierId?: string;
@@ -55,7 +56,7 @@ export const SupplierImportMenu = ({
   const { toast } = useToast();
 
   // Récupérer les plateformes avec support import
-  const { data: platforms, isLoading } = useQuery({
+  const { data: platforms, isLoading, error } = useQuery({
     queryKey: ['import-platforms'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -64,12 +65,17 @@ export const SupplierImportMenu = ({
         .eq('is_active', true)
         .eq('supports_import', true);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching platforms:', error);
+        throw error;
+      }
       
       // Grouper par plateforme (peut avoir plusieurs configs)
       const uniquePlatforms = Array.from(
         new Set(data?.map(p => p.platform_type) || [])
       );
+      
+      console.log('✅ Plateformes disponibles pour import:', uniquePlatforms);
       
       return uniquePlatforms;
     },
@@ -118,12 +124,35 @@ export const SupplierImportMenu = ({
     );
   }
 
+  // Gérer l'erreur
+  if (error) {
+    return (
+      <Button disabled size="sm" variant="destructive">
+        <Upload className="mr-2 h-4 w-4" />
+        Erreur chargement
+      </Button>
+    );
+  }
+
+  // Pas de plateformes configurées
   if (!platforms || platforms.length === 0) {
     return (
-      <Button disabled size="sm" variant="outline">
-        <Upload className="mr-2 h-4 w-4" />
-        Aucune plateforme configurée
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button disabled size="sm" variant="outline">
+              <Upload className="mr-2 h-4 w-4" />
+              Importer depuis
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Aucune plateforme configurée pour l'import</p>
+            <p className="text-xs text-muted-foreground">
+              Configurez Odoo, Shopify, etc. dans Paramètres
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 
