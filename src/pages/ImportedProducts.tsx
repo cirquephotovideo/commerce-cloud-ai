@@ -8,11 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Code, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Filter, Link2, Sparkles, Table2, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
+import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
+import { ProductsTable } from "@/components/ProductsTable";
+import { BatchEnrichmentDialog } from "@/components/BatchEnrichmentDialog";
+import { AutoLinkDialog } from "@/components/AutoLinkDialog";
+import { ProductDetailModal } from "@/components/ProductDetailModal";
 
 type EnrichmentStatus = "pending" | "enriching" | "completed" | "failed";
 
@@ -23,6 +27,20 @@ export default function ImportedProducts() {
   const [selectedProductDetail, setSelectedProductDetail] = useState<string | null>(null);
   const [filterMargin, setFilterMargin] = useState<'all' | 'high' | 'medium' | 'low'>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [batchEnrichmentOpen, setBatchEnrichmentOpen] = useState(false);
+  const [autoLinkOpen, setAutoLinkOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const ITEMS_PER_PAGE = 50;
+  
+  // Get current user
+  const [userId, setUserId] = useState<string>('');
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setUserId(data.user.id);
+    });
+  }, []);
 
   // Fetch statistics
   const { data: stats } = useQuery({
@@ -68,8 +86,18 @@ export default function ImportedProducts() {
       
       if (error) throw error;
       
-      // Apply filters client-side
+      // Apply filters and search
       let filteredData = data || [];
+      
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filteredData = filteredData.filter(p => 
+          p.product_name?.toLowerCase().includes(query) ||
+          p.ean?.toLowerCase().includes(query) ||
+          p.supplier_configurations?.supplier_name?.toLowerCase().includes(query)
+        );
+      }
       
       if (filterMargin !== 'all' && currentTab === 'completed') {
         filteredData = filteredData.filter(p => {
@@ -261,6 +289,16 @@ export default function ImportedProducts() {
               Produits Importés
             </span>
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setAutoLinkOpen(true)}>
+                <Link2 className="w-4 h-4 mr-2" />
+                Lier automatiquement
+              </Button>
+              {selectedProducts.size > 0 && (
+                <Button size="sm" onClick={() => setBatchEnrichmentOpen(true)}>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Enrichir ({selectedProducts.size})
+                </Button>
+              )}
               {stats?.pending > 0 && (
                 <Button 
                   onClick={handleProcessEnrichments}
@@ -281,21 +319,38 @@ export default function ImportedProducts() {
                   )}
                 </Button>
               )}
-              <Button 
-                onClick={selectedProducts.size === products?.length ? selectNone : selectAll}
-                variant="outline" 
-                size="sm"
-              >
-                {selectedProducts.size === products?.length ? "Tout désélectionner" : "Tout sélectionner"}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm"
+                  variant={viewMode === 'cards' ? 'default' : 'outline'}
+                  onClick={() => setViewMode('cards')}
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                </Button>
+                <Button 
+                  size="sm"
+                  variant={viewMode === 'table' ? 'default' : 'outline'}
+                  onClick={() => setViewMode('table')}
+                >
+                  <Table2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* Filters */}
-          {currentTab === 'completed' && (
-            <div className="flex gap-2 mb-4 items-center flex-wrap">
-              <span className="text-sm text-muted-foreground">Filtres:</span>
+          {/* Search and Filters */}
+          <div className="flex gap-2 mb-4 items-center flex-wrap">
+            <Input
+              placeholder="Rechercher par nom, EAN, fournisseur..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+            
+            {currentTab === 'completed' && (
+              <>
+                <span className="text-sm text-muted-foreground">Filtres:</span>
               
               <Select value={filterMargin} onValueChange={(v) => setFilterMargin(v as any)}>
                 <SelectTrigger className="w-[180px]">
@@ -335,8 +390,9 @@ export default function ImportedProducts() {
                   Réinitialiser
                 </Button>
               )}
-            </div>
-          )}
+              </>
+            )}
+          </div>
           
           <Tabs value={currentTab} onValueChange={(v) => {
             setCurrentTab(v as EnrichmentStatus);
@@ -370,6 +426,14 @@ export default function ImportedProducts() {
                     <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>Aucun produit dans cette catégorie</p>
                   </div>
+                ) : viewMode === 'table' ? (
+                  <ProductsTable
+                    products={products}
+                    selectedProducts={selectedProducts}
+                    onToggleSelection={toggleSelection}
+                    onSelectAll={() => selectedProducts.size === products?.length ? selectNone() : selectAll()}
+                    onViewDetails={setSelectedProductDetail}
+                  />
                 ) : (
                   products?.map(product => {
                     const analyses = product.product_analyses as any;
@@ -558,128 +622,40 @@ export default function ImportedProducts() {
         </CardContent>
       </Card>
 
-      {/* Details Modal */}
-      <Dialog open={!!selectedProductDetail} onOpenChange={(open) => !open && setSelectedProductDetail(null)}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Détails du Produit</DialogTitle>
-          </DialogHeader>
-          
-          {(() => {
-            const product = products?.find(p => p.id === selectedProductDetail);
-            if (!product) return null;
-            
-            const analyses = product.product_analyses as any;
-            const analysis = Array.isArray(analyses) ? analyses[0] : analyses;
-            const amazonData = analysis?.analysis_result?.amazon_data;
-            
-            return (
-              <div className="space-y-6">
-                {/* Identity */}
-                <div>
-                  <h3 className="font-semibold mb-2 flex items-center gap-2">
-                    <Package className="w-4 h-4" />
-                    Identité
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-muted-foreground">Nom:</span> <strong>{product.product_name}</strong></div>
-                    <div><span className="text-muted-foreground">EAN:</span> <strong>{product.ean}</strong></div>
-                    <div><span className="text-muted-foreground">Fournisseur:</span> <strong>{product.supplier_configurations?.supplier_name}</strong></div>
-                    <div><span className="text-muted-foreground">Référence:</span> <strong>{product.supplier_reference || 'N/A'}</strong></div>
-                  </div>
-                </div>
+      {/* Batch Enrichment Dialog */}
+      <BatchEnrichmentDialog
+        open={batchEnrichmentOpen}
+        onOpenChange={setBatchEnrichmentOpen}
+        selectedProducts={selectedProducts}
+        onComplete={() => {
+          refetch();
+          setSelectedProducts(new Set());
+        }}
+      />
 
-                {/* Pricing */}
-                {analysis && (
-                  <div>
-                    <h3 className="font-semibold mb-2">💰 Tarification</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      <Card className="p-3">
-                        <div className="text-muted-foreground text-xs">Prix d'achat</div>
-                        <div className="text-2xl font-bold">{product.purchase_price}€</div>
-                      </Card>
-                      <Card className="p-3">
-                        <div className="text-muted-foreground text-xs">Prix de vente estimé</div>
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {analysis?.analysis_result?.price_estimation?.estimated_price || 'N/A'}€
-                        </div>
-                      </Card>
-                      <Card className="p-3">
-                        <div className="text-muted-foreground text-xs">Marge</div>
-                        <div className="text-2xl font-bold">
-                          {analysis?.margin_percentage?.toFixed(1) || '0'}%
-                        </div>
-                      </Card>
-                    </div>
-                  </div>
-                )}
+      {/* Auto Link Dialog */}
+      <AutoLinkDialog
+        open={autoLinkOpen}
+        onOpenChange={setAutoLinkOpen}
+        userId={userId}
+        onComplete={() => refetch()}
+      />
 
-                {/* Amazon Data */}
-                {amazonData && (
-                  <div>
-                    <h3 className="font-semibold mb-2">🌐 Données Amazon</h3>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Ranking: </span>
-                        <Badge>{analysis?.analysis_result?.amazon_ranking || 'N/A'}%</Badge>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Prix Amazon: </span>
-                        <strong>{amazonData.buy_box_price || amazonData.price || 'N/A'}€</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Stock: </span>
-                        <Badge variant={amazonData.in_stock ? "default" : "destructive"}>
-                          {amazonData.in_stock ? "Disponible" : "Rupture"}
-                        </Badge>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Vendeur: </span>
-                        <strong>{amazonData.seller || 'N/A'}</strong>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Images */}
-                {analysis?.image_urls && analysis.image_urls.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2">🖼️ Images ({analysis.image_urls.length})</h3>
-                    <div className="grid grid-cols-4 gap-2">
-                      {analysis.image_urls.map((url: string, idx: number) => (
-                        <img
-                          key={idx}
-                          src={url}
-                          alt={`Image ${idx + 1}`}
-                          className="w-full h-32 object-cover rounded border"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Raw JSON */}
-                {analysis?.analysis_result && (
-                  <Collapsible>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Code className="w-4 h-4 mr-2" />
-                        Voir données brutes (JSON)
-                        <ChevronDown className="w-4 h-4 ml-2" />
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <pre className="text-xs bg-muted p-4 rounded mt-2 overflow-x-auto max-h-96">
-                        {JSON.stringify(analysis.analysis_result, null, 2)}
-                      </pre>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      {/* Product Detail Modal */}
+      <ProductDetailModal
+        open={!!selectedProductDetail}
+        onOpenChange={(open) => !open && setSelectedProductDetail(null)}
+        product={products?.find(p => p.id === selectedProductDetail)}
+        onExport={(platform) => {
+          const product = products?.find(p => p.id === selectedProductDetail);
+          if (product) {
+            const { analysisId } = extractAnalysisData(product);
+            if (analysisId) {
+              handleBulkExport(platform);
+            }
+          }
+        }}
+      />
     </div>
   );
 }
