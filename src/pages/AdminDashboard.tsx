@@ -159,6 +159,7 @@ const AdminDashboard = () => {
           <TabsContent value="apikeys" className="space-y-6">
             <GlobalAPIKeysManager />
             <APIKeyManagement />
+            <OllamaConfiguration />
           </TabsContent>
 
           <TabsContent value="debug" className="space-y-6">
@@ -167,7 +168,6 @@ const AdminDashboard = () => {
 
           <TabsContent value="permissions" className="space-y-6">
             <FeaturePermissions />
-            <OllamaConfiguration />
           </TabsContent>
 
           <TabsContent value="ai-prompts" className="space-y-6">

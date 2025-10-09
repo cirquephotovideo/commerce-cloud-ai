@@ -7,12 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Server, TestTube } from "lucide-react";
+import { Server, TestTube, Settings } from "lucide-react";
 import { ImportExportButtons } from "./ImportExportButtons";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export const OllamaConfiguration = () => {
   const [config, setConfig] = useState({
-    ollama_url: "",
+    ollama_url: "http://localhost:11434",
     api_key_encrypted: "",
     available_models: [] as string[],
     is_active: true,
@@ -20,6 +21,7 @@ export const OllamaConfiguration = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -44,7 +46,7 @@ export const OllamaConfiguration = () => {
           : [];
         
         setConfig({
-          ollama_url: data.ollama_url,
+          ollama_url: data.ollama_url || "http://localhost:11434",
           api_key_encrypted: data.api_key_encrypted || "",
           available_models: models,
           is_active: data.is_active,
@@ -58,8 +60,8 @@ export const OllamaConfiguration = () => {
   };
 
   const testConnection = async () => {
-    if (!config.ollama_url) {
-      toast.error("Entrez l'URL de votre Mac Mini");
+    if (!config.api_key_encrypted) {
+      toast.error("Entrez votre clé API Ollama");
       return;
     }
 
@@ -155,28 +157,41 @@ export const OllamaConfiguration = () => {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="ollama_url">URL du Mac Mini (Ollama)</Label>
-          <Input
-            id="ollama_url"
-            placeholder="http://192.168.1.100:11434"
-            value={config.ollama_url}
-            onChange={(e) => setConfig({ ...config, ollama_url: e.target.value })}
-          />
-          <p className="text-sm text-muted-foreground">
-            Exemple: http://votre-ip-locale:11434
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="api_key">Clé API (optionnelle)</Label>
+          <Label htmlFor="api_key">Clé API Ollama *</Label>
           <Input
             id="api_key"
             type="password"
-            placeholder="Votre clé API Ollama"
+            placeholder="Collez votre clé API ici"
             value={config.api_key_encrypted}
             onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
           />
+          <p className="text-sm text-muted-foreground">
+            Cette clé sera utilisée pour authentifier les requêtes vers Ollama Cloud
+          </p>
         </div>
+
+        <Collapsible open={advancedMode} onOpenChange={setAdvancedMode}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Configuration avancée (optionnelle)
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="ollama_url">URL personnalisée</Label>
+              <Input
+                id="ollama_url"
+                placeholder="http://localhost:11434"
+                value={config.ollama_url}
+                onChange={(e) => setConfig({ ...config, ollama_url: e.target.value })}
+              />
+              <p className="text-sm text-muted-foreground">
+                Par défaut : http://localhost:11434 (modifiez uniquement si nécessaire)
+              </p>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         <div className="flex items-center space-x-2">
           <Switch

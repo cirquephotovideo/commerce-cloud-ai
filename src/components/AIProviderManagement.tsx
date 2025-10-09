@@ -178,7 +178,7 @@ export default function AIProviderManagement() {
     
     toast({
       title: "Configuration",
-      description: `Veuillez configurer ${provider} dans l'onglet "Clés API" du menu principal`,
+      description: `Veuillez configurer ${provider} dans l'onglet "API Keys" (accessible depuis le menu Administration)`,
     });
   };
 
