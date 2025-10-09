@@ -360,7 +360,7 @@ Fusionne TOUS les champs dans un seul JSON.`;
 
 function mergeRSGPResults(results: PromiseSettledResult<any>[], product: any, amazonData: any) {
   const merged: any = {
-    nom_produit: product.product_name,
+    nom_produit: product.product_name || product.product_url || 'Produit sans nom',
     ean: amazonData?.ean || 'non communiqué',
     reference_interne: '',
     numero_lot: '',
@@ -424,7 +424,7 @@ function generateMinimalRSGP(product: any, amazonData: any) {
   };
 
   return {
-    nom_produit: product.product_name,
+    nom_produit: product.product_name || product.product_url || 'Produit sans nom',
     ean: amazonData?.ean || 'non communiqué',
     fabricant_nom: amazonData?.manufacturer || amazonData?.brand || 'non communiqué',
     pays_origine: amazonData?.buy_box_ship_country || 'non communiqué',
@@ -643,15 +643,42 @@ serve(async (req) => {
     // Sanitize date fields before insertion
     const sanitizeDateFields = (data: any) => {
       const dateFields = ['date_evaluation', 'date_mise_conformite', 'date_import_odoo'];
+      const invalidValues = ['non communiqué', 'null', 'N/A', 'undefined', '', 'non disponible'];
+      
       dateFields.forEach(field => {
-        if (data[field] === 'non communiqué' || data[field] === '' || !data[field]) {
+        const value = data[field];
+        const strValue = String(value || '').toLowerCase().trim();
+        
+        if (!value || invalidValues.includes(strValue)) {
           data[field] = null;
         }
       });
       return data;
     };
 
-    const sanitizedData = sanitizeDateFields(rsgpData);
+    const sanitizeAllFields = (data: any) => {
+      // 1. Nettoyer les dates
+      data = sanitizeDateFields(data);
+      
+      // 2. Garantir nom_produit
+      if (!data.nom_produit || data.nom_produit === 'undefined') {
+        data.nom_produit = 'Produit sans nom';
+      }
+      
+      // 3. Nettoyer les strings "null"/"undefined"
+      Object.keys(data).forEach(key => {
+        if (typeof data[key] === 'string') {
+          const cleaned = data[key].toLowerCase().trim();
+          if (cleaned === 'null' || cleaned === 'undefined') {
+            data[key] = 'non communiqué';
+          }
+        }
+      });
+      
+      return data;
+    };
+
+    const sanitizedData = sanitizeAllFields(rsgpData);
 
     // Save to database using UPSERT
     const { data: complianceRecord, error: insertError } = await supabase
