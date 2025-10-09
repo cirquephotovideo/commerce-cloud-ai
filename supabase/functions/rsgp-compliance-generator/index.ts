@@ -313,8 +313,50 @@ Format JSON:
 }
 
 // ============================================
-// SPECIALIZED PROMPTS
+// SPECIALIZED PROMPTS (8 prompts séparés)
 // ============================================
+
+function createProductInfoPrompt(product: any, derivedData: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('model') ||
+      r.snippet?.toLowerCase().includes('ean') ||
+      r.snippet?.toLowerCase().includes('made in') ||
+      r.snippet?.toLowerCase().includes('origin')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Identifier INFORMATIONS PRODUIT essentielles
+
+PRODUIT: ${product.product_name}
+MARQUE: ${derivedData?.brand || 'inconnue'}
+EAN CONNU: ${derivedData?.ean || 'inconnu'}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.snippet} - ${r.link}`).join('\n')}
+
+EXTRAIRE:
+1. Nom exact du produit
+2. Catégorie RSGP (électronique|jouets|textile|cosmétiques|alimentaire|autre)
+3. Numéro de modèle
+4. Code EAN/GTIN (si trouvé)
+5. Pays d'origine (code ISO-2: FR, DE, CN, US, etc.)
+
+JSON ATTENDU:
+{
+  "nom_produit": "...",
+  "categorie_rsgp": "électronique",
+  "numero_modele": "...",
+  "ean": "...",
+  "pays_origine": "FR",
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- "non communiqué" si info introuvable
+- pays_origine: UNIQUEMENT codes ISO-2
+- categorie_rsgp: choisir la plus pertinente`;
+}
 
 function createManufacturerPrompt(product: any, derivedData: any, webResults: any[]) {
   const relevantResults = webResults
@@ -450,39 +492,236 @@ RÈGLES:
 - langues_disponibles: codes ISO-2 (fr, en, de, es, it)`;
 }
 
-function createTechnicalPrompt(product: any, derivedData: any) {
-  return `MISSION: CARACTÉRISTIQUES TECHNIQUES et SÉCURITÉ
+function createCertificationsPrompt(product: any, derivedData: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.includes('CE') ||
+      r.snippet?.includes('EN ') ||
+      r.snippet?.includes('ISO ') ||
+      r.snippet?.toLowerCase().includes('norm') ||
+      r.snippet?.toLowerCase().includes('standard')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Lister TOUTES les NORMES et CERTIFICATIONS
+
+PRODUIT: ${product.product_name}
+CATÉGORIE: ${product.category || 'non définie'}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.snippet}`).join('\n')}
+
+CHERCHE:
+- Normes CE (EN, IEC, ISO)
+- Certifications (RoHS, REACH, etc.)
+- Standards de sécurité (UN 38.3 pour batteries, etc.)
+
+JSON ATTENDU:
+{
+  "normes_ce": ["EN 60950-1", "EN 300 328", "ISO 9001", "UN 38.3"],
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- Normes en format exact (EN XXXXX-X, ISO XXXXX)
+- Liste unique (pas de doublons)
+- [] si aucune norme trouvée`;
+}
+
+function createComplianceDocsPrompt(product: any, derivedData: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('declaration') ||
+      r.snippet?.toLowerCase().includes('certificate') ||
+      r.snippet?.toLowerCase().includes('pdf') ||
+      r.link?.includes('compliance') ||
+      r.link?.includes('.pdf')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Trouver DOCUMENTS DE CONFORMITÉ officiels (PDFs)
+
+PRODUIT: ${product.product_name}
+MARQUE: ${derivedData?.brand || 'inconnue'}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.link}`).join('\n')}
+
+TROUVE:
+1. Déclaration de conformité (PDF)
+2. Certificat CE (PDF)
+3. Rapport de test (PDF)
+
+JSON ATTENDU:
+{
+  "documents_conformite": {
+    "declaration_conformite": "https://example.com/conformity.pdf",
+    "certificat_ce": "https://example.com/ce-cert.pdf",
+    "rapport_test": "https://example.com/test-report.pdf"
+  },
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- URLs COMPLÈTES https://... pointant vers PDFs
+- "non communiqué" si introuvable
+- Prioriser sites officiels fabricants`;
+}
+
+function createNoticeAndLanguagesPrompt(product: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('manual') ||
+      r.snippet?.toLowerCase().includes('notice') ||
+      r.snippet?.toLowerCase().includes('instructions') ||
+      r.link?.includes('manual') ||
+      r.link?.includes('.pdf')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Localiser NOTICE UTILISATEUR et LANGUES
+
+PRODUIT: ${product.product_name}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.link}`).join('\n')}
+
+TROUVE:
+1. URL de la notice PDF (manuel utilisateur)
+2. Langues disponibles (codes ISO)
+
+JSON:
+{
+  "notice_pdf": "https://example.com/manual.pdf",
+  "langues_disponibles": ["fr", "en", "de", "es"],
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- notice_pdf: URL complète .pdf, "non communiqué" si introuvable
+- langues_disponibles: codes ISO-2 (fr, en, de, es, it, etc.)`;
+}
+
+function createSupportAndRecallPrompt(product: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('service') ||
+      r.snippet?.toLowerCase().includes('support') ||
+      r.snippet?.toLowerCase().includes('recall') ||
+      r.snippet?.toLowerCase().includes('rapex') ||
+      r.snippet?.toLowerCase().includes('warranty')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Identifier SERVICE CLIENT et RAPPELS
+
+PRODUIT: ${product.product_name}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.snippet} - ${r.link}`).join('\n')}
+
+TROUVE:
+1. Procédure de rappel (texte 50-200 mots)
+2. Historique incidents/rappels RAPEX
+3. Service consommateur (contact)
+
+JSON:
+{
+  "procedure_rappel": "En cas de défaut avéré, contactez...",
+  "historique_incidents": [
+    {"date": "2024-03-15", "type": "rappel", "description": "...", "source": "url"}
+  ],
+  "service_consommateur": "support@example.com / +33 1 XX XX XX XX",
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- procedure_rappel: texte clair avec étapes (contact, délais, remboursement)
+- historique_incidents: [] si aucun rappel
+- service_consommateur: format "email / téléphone"`;
+}
+
+function createSafetyAndTechnicalPrompt(product: any, derivedData: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('safety') ||
+      r.snippet?.toLowerCase().includes('warning') ||
+      r.snippet?.toLowerCase().includes('repair') ||
+      r.snippet?.toLowerCase().includes('energy') ||
+      r.snippet?.toLowerCase().includes('recycle')
+    )
+    .slice(0, 5);
+
+  return `MISSION: SÉCURITÉ et CARACTÉRISTIQUES TECHNIQUES
 
 PRODUIT: ${product.product_name}
 DESCRIPTION: ${product.description || 'non disponible'}
 
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.snippet}`).join('\n')}
+
 DÉTERMINE:
-1. CATÉGORIE RSGP (jouets|électronique|textile|cosmétiques|alimentaire|autre)
-2. ÂGE recommandé
-3. AVERTISSEMENTS sécurité (2-5 items précis)
-4. ENTRETIEN (instructions)
-5. RECYCLAGE (logo DEEE, consignes)
-6. GARANTIE (durée)
-7. INDICE RÉPARABILITÉ (0-10)
-8. INDICE ÉNERGIE (A-G ou N/A)
+1. ÂGE recommandé
+2. AVERTISSEMENTS sécurité (2-5 items précis)
+3. ENTRETIEN (instructions)
+4. RECYCLAGE (consignes)
+5. GARANTIE (durée)
+6. INDICE RÉPARABILITÉ (0-10)
+7. INDICE ÉNERGIE (A-G ou N/A)
+8. FIRMWARE/Logiciel (version si applicable)
+9. COMPATIBILITÉS (systèmes compatibles)
 
 JSON:
 {
-  "categorie_rsgp": "électronique",
   "age_recommande": "3+ ans",
   "avertissements": ["Ne pas jeter au feu (batterie lithium)", "Risque électrique"],
-  "entretien": "...",
+  "entretien": "Nettoyer avec un chiffon doux...",
   "recyclage": "Logo DEEE - À déposer en point de collecte",
   "garantie": "24 mois",
   "indice_reparabilite": 6.5,
   "indice_energie": "A+",
   "firmware_ou_logiciel": "v2.1.0",
-  "compatibilites": ["iOS 15+", "Android 11+"]
+  "compatibilites": ["iOS 15+", "Android 11+"],
+  "sources_urls": ["url1", "url2"]
 }
 
 LOGIQUE:
 - indice_reparabilite: 0=impossible, 10=très facile
-- avertissements: SPÉCIFIQUES au produit (batteries, électrique, étouffement, allergènes)`;
+- avertissements: SPÉCIFIQUES au produit (batteries, électrique, étouffement, allergènes)
+- indice_energie: A-G pour électroménager, N/A sinon`;
+}
+
+function createRsgpStatusPrompt(product: any, webResults: any[]) {
+  const relevantResults = webResults
+    .filter(r => 
+      r.snippet?.toLowerCase().includes('conformity') ||
+      r.snippet?.toLowerCase().includes('compliance') ||
+      r.snippet?.includes('CE') ||
+      r.snippet?.toLowerCase().includes('rsgp')
+    )
+    .slice(0, 5);
+
+  return `MISSION: Déterminer STATUT CONFORMITÉ RSGP
+
+PRODUIT: ${product.product_name}
+
+SOURCES WEB (${relevantResults.length} résultats):
+${relevantResults.map(r => `[${r.title}] ${r.snippet}`).join('\n')}
+
+ÉVALUE:
+1. RSGP valide (Oui/En attente/Non conforme)
+2. Statut du produit (actif/draft/retiré)
+
+JSON:
+{
+  "rsgp_valide": "Oui",
+  "statut": "actif",
+  "sources_urls": ["url1", "url2"]
+}
+
+RÈGLES:
+- rsgp_valide: "Oui" si certifications CE + conformité visible, "En attente" si manque docs, "Non conforme" si rappel/alerte
+- statut: "actif" si commercialisé, "draft" si en développement, "retiré" si rappel`;
 }
 
 // ============================================
@@ -493,13 +732,17 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   
   const prompts = [
+    createProductInfoPrompt(product, derivedData, webResults),
     createManufacturerPrompt(product, derivedData, webResults),
-    createCompliancePrompt(product, derivedData, webResults),
-    createDocumentationPrompt(product, webResults),
-    createTechnicalPrompt(product, derivedData)
+    createCertificationsPrompt(product, derivedData, webResults),
+    createComplianceDocsPrompt(product, derivedData, webResults),
+    createNoticeAndLanguagesPrompt(product, webResults),
+    createSupportAndRecallPrompt(product, webResults),
+    createSafetyAndTechnicalPrompt(product, derivedData, webResults),
+    createRsgpStatusPrompt(product, webResults)
   ];
 
-  console.log('[RSGP] 🚀 Lancement 4 prompts parallèles...');
+  console.log('[RSGP] 🚀 Lancement 8 prompts parallèles (séparés par section)...');
 
   const results = await Promise.allSettled(
     prompts.map(async (prompt, index) => {
@@ -511,6 +754,7 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
         },
         body: JSON.stringify({
           model: 'google/gemini-2.5-flash',
+          temperature: 0.7,
           messages: [
             { role: 'system', content: 'Retourne UNIQUEMENT du JSON valide sans markdown.' },
             { role: 'user', content: prompt }
@@ -520,6 +764,7 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
 
       if (!res.ok) {
         const errorText = await res.text();
+        console.error(`[RSGP] ❌ Prompt ${index+1} failed: ${res.status} - ${errorText}`);
         throw new Error(`AI ${index+1} failed: ${res.status} - ${errorText}`);
       }
 
@@ -527,7 +772,7 @@ async function generateWithLovableAI(product: any, derivedData: any, webResults:
       let content = data.choices?.[0]?.message?.content || '{}';
       content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       
-      console.log(`[RSGP] ✅ Prompt ${index+1} terminé`);
+      console.log(`[RSGP] ✅ Prompt ${index+1} (${['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'][index]}) terminé`);
       return JSON.parse(content);
     })
   );
@@ -543,13 +788,21 @@ async function generateWithOllama(product: any, derivedData: any, webResults: an
 
   const consolidatedPrompt = `Tu es expert RSGP. Génère UN JSON complet avec toutes les infos:
 
+${createProductInfoPrompt(product, derivedData, webResults)}
+
 ${createManufacturerPrompt(product, derivedData, webResults)}
 
-${createCompliancePrompt(product, derivedData, webResults)}
+${createCertificationsPrompt(product, derivedData, webResults)}
 
-${createDocumentationPrompt(product, webResults)}
+${createComplianceDocsPrompt(product, derivedData, webResults)}
 
-${createTechnicalPrompt(product, derivedData)}
+${createNoticeAndLanguagesPrompt(product, webResults)}
+
+${createSupportAndRecallPrompt(product, webResults)}
+
+${createSafetyAndTechnicalPrompt(product, derivedData, webResults)}
+
+${createRsgpStatusPrompt(product, webResults)}
 
 Fusionne TOUS les champs dans un seul JSON.`;
 
@@ -583,10 +836,14 @@ async function generateWithOpenRouter(product: any, derivedData: any, webResults
 
   const consolidatedPrompt = `Tu es expert RSGP. Génère UN JSON complet:
 
+${createProductInfoPrompt(product, derivedData, webResults)}
 ${createManufacturerPrompt(product, derivedData, webResults)}
-${createCompliancePrompt(product, derivedData, webResults)}
-${createDocumentationPrompt(product, webResults)}
-${createTechnicalPrompt(product, derivedData)}`;
+${createCertificationsPrompt(product, derivedData, webResults)}
+${createComplianceDocsPrompt(product, derivedData, webResults)}
+${createNoticeAndLanguagesPrompt(product, webResults)}
+${createSupportAndRecallPrompt(product, webResults)}
+${createSafetyAndTechnicalPrompt(product, derivedData, webResults)}
+${createRsgpStatusPrompt(product, webResults)}`;
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -596,6 +853,7 @@ ${createTechnicalPrompt(product, derivedData)}`;
     },
     body: JSON.stringify({
       model,
+      temperature: 0.7,
       messages: [
         { role: 'system', content: 'Retourne UNIQUEMENT JSON sans markdown.' },
         { role: 'user', content: consolidatedPrompt }
@@ -623,7 +881,7 @@ function mergeRSGPResults(
     ean: derivedData?.ean || 'non communiqué',
     reference_interne: '',
     numero_lot: '',
-    numero_modele: derivedData?.numero_modele || '',
+    numero_modele: derivedData?.numero_modele || 'non communiqué',
     fournisseur: derivedData?.fournisseur || 'non communiqué',
     fabricant_nom: derivedData?.brand || 'non communiqué',
     fabricant_adresse: 'non communiqué',
@@ -652,7 +910,8 @@ function mergeRSGPResults(
     historique_incidents: [],
     indice_reparabilite: 0,
     indice_energie: 'N/A',
-    rsgp_valide: false,
+    rsgp_valide: 'En attente',
+    statut: 'draft',
     date_mise_conformite: null,
     responsable_conformite: '',
     documents_archives: {},
@@ -668,27 +927,71 @@ function mergeRSGPResults(
     }
   });
 
-  // ✅ Merge des résultats IA et collecte des sources
+  // ✅ Merge des 8 résultats IA et collecte des sources
   results.forEach((result, index) => {
     if (result.status === 'fulfilled' && result.value) {
       const promptData = result.value;
       
-      // Prioriser les données non vides
+      // Prioriser les données non vides sur "non communiqué"
       Object.keys(promptData).forEach(key => {
         const value = promptData[key];
         const isEmpty = !value || value === 'non communiqué' || value === 'N/A' || value === '';
         
-        if (!isEmpty && (!merged[key] || merged[key] === 'non communiqué')) {
-          merged[key] = value;
+        // Cas spécial: normes_ce (merge arrays)
+        if (key === 'normes_ce' && Array.isArray(value) && value.length > 0) {
+          merged.normes_ce = [...new Set([...merged.normes_ce, ...value])];
+          return;
+        }
+        
+        // Cas spécial: historique_incidents (merge arrays)
+        if (key === 'historique_incidents' && Array.isArray(value) && value.length > 0) {
+          merged.historique_incidents = [...merged.historique_incidents, ...value];
+          return;
+        }
+        
+        // Cas spécial: documents_conformite (merge objects)
+        if (key === 'documents_conformite' && typeof value === 'object') {
+          Object.keys(value).forEach(docKey => {
+            if (value[docKey] && value[docKey] !== 'non communiqué') {
+              merged.documents_conformite[docKey] = value[docKey];
+            }
+          });
+          return;
+        }
+        
+        // Cas spécial: langues_disponibles (merge arrays)
+        if (key === 'langues_disponibles' && Array.isArray(value) && value.length > 0) {
+          merged.langues_disponibles = [...new Set([...merged.langues_disponibles, ...value])];
+          return;
+        }
+        
+        // Cas spécial: avertissements (merge arrays)
+        if (key === 'avertissements' && Array.isArray(value) && value.length > 0) {
+          merged.avertissements = [...new Set([...merged.avertissements, ...value])];
+          return;
+        }
+        
+        // Cas spécial: compatibilites (merge arrays)
+        if (key === 'compatibilites' && Array.isArray(value) && value.length > 0) {
+          merged.compatibilites = [...new Set([...merged.compatibilites, ...value])];
+          return;
+        }
+        
+        // Règle générale: ne pas écraser si déjà rempli, sauf si nouvelle valeur plus riche
+        if (!isEmpty) {
+          if (!merged[key] || merged[key] === 'non communiqué' || merged[key] === 'N/A') {
+            merged[key] = value;
+          }
         }
       });
 
       // Collecter les sources_urls des prompts
-      if (promptData.sources_urls) {
+      if (promptData.sources_urls && Array.isArray(promptData.sources_urls)) {
         usedSources.push(...promptData.sources_urls);
       }
       
-      console.log(`[RSGP] ✅ Prompt ${index+1} (${['Fabricant', 'Conformité', 'Documentation', 'Technique'][index]}) intégré`);
+      const promptNames = ['ProductInfo', 'Fabricant', 'Certifications', 'ComplianceDocs', 'Notice', 'Support', 'Safety', 'Status'];
+      console.log(`[RSGP] ✅ Prompt ${index+1} (${promptNames[index] || 'Unknown'}) intégré`);
     } else {
       console.warn(`[RSGP] ⚠️ Prompt ${index+1} échoué:`, result.status === 'rejected' ? result.reason : 'unknown');
     }

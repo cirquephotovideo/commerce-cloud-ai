@@ -53,7 +53,7 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
             } : prev);
             
             toast.success("✅ Vidéo récupérée avec succès !");
-            await fetchLatestVideo();
+            // Ne pas fetch immédiatement pour éviter que la DB stale écrase notre état optimiste
           }
         } catch (err) {
           console.error('[VideoPlayer] Auto-recovery error:', err);
@@ -135,6 +135,12 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
 
       if (fetchError) throw fetchError;
 
+      // Protection: ne pas écraser video_url local si la DB n'en a pas encore
+      if (video?.video_url && data && !data.video_url) {
+        console.log('[VideoPlayer] Skipping stale DB response (local has video_url, DB does not)');
+        return;
+      }
+
       setVideo(data);
     } catch (err: any) {
       console.error('[VideoPlayer] Error fetching video:', err);
@@ -190,13 +196,15 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           } : prev);
           
           toast.success("✅ Vidéo récupérée !");
+          // Ne pas fetch immédiatement pour éviter écrasement par DB stale
         }
       } catch (err) {
         console.error('[VideoPlayer] Force check error:', err);
       }
     }
     
-    await fetchLatestVideo();
+    // Fetch retardé pour laisser le backend se synchro
+    setTimeout(() => fetchLatestVideo(), 2500);
   };
 
   const content = (
