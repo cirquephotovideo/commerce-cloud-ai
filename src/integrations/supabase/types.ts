@@ -1884,7 +1884,7 @@ export type Database = {
           recyclage: string | null
           reference_interne: string | null
           responsable_conformite: string | null
-          rsgp_valide: boolean | null
+          rsgp_valide: string | null
           service_consommateur: string | null
           user_id: string
           validation_status: string | null
@@ -1927,7 +1927,7 @@ export type Database = {
           recyclage?: string | null
           reference_interne?: string | null
           responsable_conformite?: string | null
-          rsgp_valide?: boolean | null
+          rsgp_valide?: string | null
           service_consommateur?: string | null
           user_id: string
           validation_status?: string | null
@@ -1970,7 +1970,7 @@ export type Database = {
           recyclage?: string | null
           reference_interne?: string | null
           responsable_conformite?: string | null
-          rsgp_valide?: boolean | null
+          rsgp_valide?: string | null
           service_consommateur?: string | null
           user_id?: string
           validation_status?: string | null
