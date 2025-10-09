@@ -45,8 +45,35 @@ export default function Suppliers() {
   });
 
   const handleSync = async (supplierId: string) => {
+    const supplier = suppliers?.find(s => s.id === supplierId);
+    if (!supplier) return;
+
     toast.info("Synchronisation en cours...");
-    // TODO: Implement sync logic based on supplier type
+    
+    try {
+      let functionName = '';
+      
+      if (supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') {
+        functionName = 'supplier-sync-ftp';
+      } else if (supplier.supplier_type === 'api') {
+        functionName = 'supplier-sync-api';
+      } else {
+        toast.error("Type de synchronisation non supporté");
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke(functionName, {
+        body: { supplierId },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Synchronisation terminée: ${data.imported} produits importés`);
+      refetchSuppliers();
+    } catch (error) {
+      console.error('Sync error:', error);
+      toast.error("Erreur lors de la synchronisation");
+    }
   };
 
   const handleEdit = (supplierId: string) => {

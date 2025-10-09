@@ -126,6 +126,12 @@ verify_jwt = true
 [functions.supplier-import-csv]
 verify_jwt = true
 
+[functions.supplier-sync-ftp]
+verify_jwt = true
+
+[functions.supplier-sync-api]
+verify_jwt = true
+
 [functions.auto-market-intelligence]
 verify_jwt = true
 
