@@ -80,7 +80,9 @@ export const OllamaConfiguration = () => {
 
       if (error) throw error;
 
-      if (data.success) {
+      if (data?.error) {
+        toast.error(`Échec de la connexion: ${data.error}`);
+      } else if (data?.success) {
         toast.success("Connexion réussie !");
         if (data.models) {
           setConfig(prev => ({ ...prev, available_models: data.models }));
@@ -90,7 +92,8 @@ export const OllamaConfiguration = () => {
       }
     } catch (error) {
       console.error("Error testing connection:", error);
-      toast.error("Erreur de test de connexion");
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      toast.error(`Erreur de test de connexion: ${message}`);
     } finally {
       setIsTesting(false);
     }
@@ -106,15 +109,19 @@ export const OllamaConfiguration = () => {
         .from("ollama_configurations")
         .upsert({
           user_id: session.user.id,
-          ...config,
-        });
+          ollama_url: config.ollama_url || "http://localhost:11434",
+          api_key_encrypted: config.api_key_encrypted,
+          available_models: config.available_models,
+          is_active: config.is_active,
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
 
       toast.success("Configuration sauvegardée");
     } catch (error) {
       console.error("Error saving config:", error);
-      toast.error("Erreur lors de la sauvegarde");
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      toast.error(`Erreur lors de la sauvegarde: ${message}`);
     } finally {
       setIsSaving(false);
     }
@@ -126,7 +133,9 @@ export const OllamaConfiguration = () => {
     }
 
     for (const configItem of data) {
-      const { error } = await supabase.from('ollama_configurations').upsert(configItem);
+      const { error } = await supabase
+        .from('ollama_configurations')
+        .upsert(configItem, { onConflict: 'user_id' });
       if (error) throw error;
     }
 

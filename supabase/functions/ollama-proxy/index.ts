@@ -17,21 +17,20 @@ serve(async (req) => {
       throw new Error('No authorization header');
     }
 
+    const token = authHeader.replace('Bearer ', '');
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: authHeader },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } }
     );
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError) {
       console.error('Auth error:', authError);
       throw new Error(`Authentication failed: ${authError.message}`);
     }
+    const user = userData?.user;
     if (!user) {
       console.error('No user found in token');
       throw new Error('Not authenticated - no user found');
@@ -77,7 +76,8 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to connect to Ollama');
+        const statusText = response.statusText || 'Unknown error';
+        throw new Error(`Failed to connect to Ollama (status ${response.status}: ${statusText})`);
       }
 
       const data = await response.json();
@@ -108,7 +108,8 @@ serve(async (req) => {
     });
 
     if (!ollamaResponse.ok) {
-      throw new Error(`Ollama request failed: ${ollamaResponse.statusText}`);
+      const statusText = ollamaResponse.statusText || 'Unknown error';
+      throw new Error(`Ollama request failed (status ${ollamaResponse.status}: ${statusText})`);
     }
 
     const result = await ollamaResponse.json();
