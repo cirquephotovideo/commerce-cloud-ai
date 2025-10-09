@@ -724,6 +724,8 @@ serve(async (req) => {
     console.log('[RSGP] ✅ Génération terminée, merging with derived data...');
     
     // Merge derived data with generated data, prioritizing non-empty values
+    // CRITICAL: Flatten manufacturer object to match table columns
+    const manufacturerData = rsgpData.manufacturer || {};
     rsgpData = {
       ...rsgpData,
       product_info: {
@@ -733,19 +735,28 @@ serve(async (req) => {
         garantie: derivedData.garantie || rsgpData.product_info?.garantie || 'non communiqué',
         categorie_rsgp: derivedData.categorie_rsgp || rsgpData.product_info?.categorie_rsgp || 'non communiqué',
       },
-      manufacturer: {
-        ...(rsgpData.manufacturer || {}),
-        fabricant_nom: derivedData.fabricant_nom || rsgpData.manufacturer?.fabricant_nom || 'non communiqué',
-        fournisseur: derivedData.fournisseur || rsgpData.manufacturer?.fournisseur || 'non communiqué',
-      }
+      // Flatten manufacturer fields
+      fabricant_nom: derivedData.fabricant_nom || manufacturerData.fabricant_nom || 'non communiqué',
+      fabricant_adresse: manufacturerData.fabricant_adresse || 'non communiqué',
+      fabricant_pays: manufacturerData.fabricant_pays || 'non communiqué',
+      fabricant_contact: manufacturerData.fabricant_contact || 'non communiqué',
+      responsable_ue_nom: manufacturerData.responsable_ue_nom || 'non communiqué',
+      responsable_ue_adresse: manufacturerData.responsable_ue_adresse || 'non communiqué',
+      responsable_ue_contact: manufacturerData.responsable_ue_contact || 'non communiqué',
+      importateur_nom: manufacturerData.importateur_nom || 'non communiqué',
+      importateur_adresse: manufacturerData.importateur_adresse || 'non communiqué',
+      fournisseur: derivedData.fournisseur || manufacturerData.fournisseur || 'non communiqué',
     };
+    
+    // Remove the nested manufacturer object to avoid conflicts
+    delete rsgpData.manufacturer;
 
     console.log('[RSGP] ✅ Data merged:', {
       method: rsgpData.generation_metadata?.method,
       webSearchMethod: rsgpData.generation_metadata?.web_search_method,
       resultsCount: rsgpData.generation_metadata?.web_results_count,
       hasEan: !!rsgpData.product_info?.ean && rsgpData.product_info.ean !== 'non communiqué',
-      hasBrand: !!rsgpData.manufacturer?.fabricant_nom && rsgpData.manufacturer.fabricant_nom !== 'non communiqué'
+      hasBrand: !!rsgpData.fabricant_nom && rsgpData.fabricant_nom !== 'non communiqué'
     });
 
     // Sanitize date fields before insertion
