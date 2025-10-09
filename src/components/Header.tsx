@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign, Shield, Mail } from "lucide-react";
+import { User, LogOut, History, Database, Layers, TrendingUp, Menu, X, DollarSign, Shield, Mail, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -88,6 +88,15 @@ export const Header = () => {
       >
         <TrendingUp className="mr-2 h-4 w-4" />
         {t("nav.marketIntelligence")}
+      </Button>
+      <Button
+        variant="ghost"
+        size={isMobile ? "default" : "sm"}
+        onClick={() => handleNavigate("/suppliers")}
+        className={isMobile ? "w-full justify-start" : ""}
+      >
+        <Truck className="mr-2 h-4 w-4" />
+        Fournisseurs
       </Button>
       <Button
         variant="ghost"

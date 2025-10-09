@@ -1588,12 +1588,17 @@ export type Database = {
           id: string
           image_urls: Json | null
           is_favorite: boolean | null
+          last_price_update: string | null
           mapped_category_id: string | null
           mapped_category_name: string | null
+          margin_percentage: number | null
           market_position: string | null
           odoo_attributes: Json | null
           product_url: string
+          purchase_currency: string | null
+          purchase_price: number | null
           rsgp_compliance_id: string | null
+          supplier_product_id: string | null
           tags: Json | null
           updated_at: string | null
           use_cases: Json | null
@@ -1612,12 +1617,17 @@ export type Database = {
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_price_update?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
+          margin_percentage?: number | null
           market_position?: string | null
           odoo_attributes?: Json | null
           product_url: string
+          purchase_currency?: string | null
+          purchase_price?: number | null
           rsgp_compliance_id?: string | null
+          supplier_product_id?: string | null
           tags?: Json | null
           updated_at?: string | null
           use_cases?: Json | null
@@ -1636,12 +1646,17 @@ export type Database = {
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_price_update?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
+          margin_percentage?: number | null
           market_position?: string | null
           odoo_attributes?: Json | null
           product_url?: string
+          purchase_currency?: string | null
+          purchase_price?: number | null
           rsgp_compliance_id?: string | null
+          supplier_product_id?: string | null
           tags?: Json | null
           updated_at?: string | null
           use_cases?: Json | null
@@ -1660,6 +1675,13 @@ export type Database = {
             columns: ["rsgp_compliance_id"]
             isOneToOne: false
             referencedRelation: "rsgp_compliance"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_analyses_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
             referencedColumns: ["id"]
           },
           {
@@ -2134,6 +2156,198 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_configurations: {
+        Row: {
+          connection_config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          mapping_config: Json | null
+          supplier_name: string
+          supplier_type: Database["public"]["Enums"]["supplier_type"]
+          sync_frequency: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          connection_config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          mapping_config?: Json | null
+          supplier_name: string
+          supplier_type: Database["public"]["Enums"]["supplier_type"]
+          sync_frequency?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          connection_config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          mapping_config?: Json | null
+          supplier_name?: string
+          supplier_type?: Database["public"]["Enums"]["supplier_type"]
+          sync_frequency?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      supplier_import_logs: {
+        Row: {
+          created_at: string | null
+          error_details: Json | null
+          id: string
+          import_status: Database["public"]["Enums"]["import_status"]
+          import_type: string
+          products_failed: number | null
+          products_found: number | null
+          products_matched: number | null
+          products_new: number | null
+          products_updated: number | null
+          source_file: string | null
+          supplier_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          import_status: Database["public"]["Enums"]["import_status"]
+          import_type: string
+          products_failed?: number | null
+          products_found?: number | null
+          products_matched?: number | null
+          products_new?: number | null
+          products_updated?: number | null
+          source_file?: string | null
+          supplier_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          import_status?: Database["public"]["Enums"]["import_status"]
+          import_type?: string
+          products_failed?: number | null
+          products_found?: number | null
+          products_matched?: number | null
+          products_new?: number | null
+          products_updated?: number | null
+          source_file?: string | null
+          supplier_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_import_logs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_price_history: {
+        Row: {
+          changed_at: string | null
+          currency: string | null
+          id: string
+          purchase_price: number
+          supplier_product_id: string
+        }
+        Insert: {
+          changed_at?: string | null
+          currency?: string | null
+          id?: string
+          purchase_price: number
+          supplier_product_id: string
+        }
+        Update: {
+          changed_at?: string | null
+          currency?: string | null
+          id?: string
+          purchase_price?: number
+          supplier_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_price_history_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_products: {
+        Row: {
+          additional_data: Json | null
+          created_at: string | null
+          currency: string | null
+          delivery_time_days: number | null
+          ean: string | null
+          id: string
+          last_updated: string | null
+          minimum_order_quantity: number | null
+          product_name: string
+          purchase_price: number
+          stock_quantity: number | null
+          supplier_id: string
+          supplier_reference: string | null
+          supplier_url: string | null
+          user_id: string
+        }
+        Insert: {
+          additional_data?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          delivery_time_days?: number | null
+          ean?: string | null
+          id?: string
+          last_updated?: string | null
+          minimum_order_quantity?: number | null
+          product_name: string
+          purchase_price: number
+          stock_quantity?: number | null
+          supplier_id: string
+          supplier_reference?: string | null
+          supplier_url?: string | null
+          user_id: string
+        }
+        Update: {
+          additional_data?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          delivery_time_days?: number | null
+          ean?: string | null
+          id?: string
+          last_updated?: string | null
+          minimum_order_quantity?: number | null
+          product_name?: string
+          purchase_price?: number
+          stock_quantity?: number | null
+          supplier_id?: string
+          supplier_reference?: string | null
+          supplier_url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_health_logs: {
         Row: {
           component_name: string
@@ -2563,7 +2777,17 @@ export type Database = {
         | "analytics"
         | "search_console"
       health_status: "operational" | "failing" | "untested" | "warning"
+      import_status: "success" | "partial" | "failed"
       issue_severity: "critical" | "high" | "medium" | "low"
+      supplier_type:
+        | "email"
+        | "ftp"
+        | "sftp"
+        | "api"
+        | "prestashop"
+        | "odoo"
+        | "sap"
+        | "file"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2706,7 +2930,18 @@ export const Constants = {
         "search_console",
       ],
       health_status: ["operational", "failing", "untested", "warning"],
+      import_status: ["success", "partial", "failed"],
       issue_severity: ["critical", "high", "medium", "low"],
+      supplier_type: [
+        "email",
+        "ftp",
+        "sftp",
+        "api",
+        "prestashop",
+        "odoo",
+        "sap",
+        "file",
+      ],
     },
   },
 } as const

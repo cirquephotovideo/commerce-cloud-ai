@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
 import BatchAnalyzer from "./pages/BatchAnalyzer";
 import MarketIntelligence from "./pages/MarketIntelligence";
+import Suppliers from "./pages/Suppliers";
 import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import ResetPassword from "./pages/ResetPassword";
@@ -46,6 +47,7 @@ const App = () => {
         <Route path="/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
         <Route path="/batch-analyzer" element={<ProtectedRoute><BatchAnalyzer /></ProtectedRoute>} />
         <Route path="/market-intelligence" element={<ProtectedRoute><MarketIntelligence /></ProtectedRoute>} />
+        <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
