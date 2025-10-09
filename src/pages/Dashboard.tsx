@@ -735,13 +735,9 @@ export default function Dashboard() {
       </main>
 
       <ProductDetailModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        analysis={selectedAnalysis}
-        allAnalyses={filteredAnalyses}
-        onDelete={deleteAnalysis}
-        onToggleFavorite={toggleFavorite}
-        onReload={loadAnalyses}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        product={selectedAnalysis}
       />
     </div>
   );

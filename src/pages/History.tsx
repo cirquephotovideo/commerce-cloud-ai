@@ -473,13 +473,9 @@ export default function History() {
       </main>
 
       <ProductDetailModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        analysis={selectedAnalysis}
-        allAnalyses={analyses}
-        onDelete={deleteAnalysis}
-        onToggleFavorite={toggleFavorite}
-        onReload={loadAnalyses}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        product={selectedAnalysis}
       />
     </div>
   );
