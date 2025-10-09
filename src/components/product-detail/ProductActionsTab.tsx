@@ -178,11 +178,12 @@ export const ProductActionsTab = ({
           setIsRegeneratingHeygen(false);
           toast.error("Erreur lors de la génération de la vidéo");
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('[HEYGEN] Monitoring error:', error);
         clearInterval(pollInterval);
         setHeygenStatus('error');
         setIsRegeneratingHeygen(false);
+        toast.error(error.message || "Erreur lors du monitoring de la vidéo");
       }
     }, 5000);
   };

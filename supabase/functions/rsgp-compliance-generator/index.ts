@@ -522,6 +522,31 @@ async function generateRSGPWithFallback(
 }
 
 // ============================================
+// HELPER: Extract data from analysis
+// ============================================
+
+function deriveFromAnalysis(analysis: any): Record<string, any> {
+  const result = analysis?.analysis_result || {};
+  const amazonData = analysis?.amazon_data || {};
+  
+  console.log('[RSGP] 🔍 Extracting from analysis:', {
+    hasResult: !!result,
+    hasAmazon: !!amazonData,
+    brand: result.brand || amazonData.brand,
+    ean: result.ean || amazonData.ean
+  });
+  
+  return {
+    ean: result.ean || amazonData.ean || null,
+    fabricant_nom: result.brand || amazonData.brand || amazonData.manufacturer || null,
+    numero_modele: result.model || amazonData.model || result.model_number || null,
+    garantie: result.warranty || result.warranty_info || null,
+    categorie_rsgp: result.category || result.product_category || null,
+    fournisseur: result.seller || amazonData.buy_box_seller_name || result.supplier || null,
+  };
+}
+
+// ============================================
 // MAIN HANDLER
 // ============================================
 
@@ -616,6 +641,22 @@ serve(async (req) => {
       country: amazonData?.buy_box_ship_country || 'non disponible'
     });
 
+    // ========== PHASE 0: Extract data from existing analysis ==========
+    console.log('[RSGP] 🔍 Extracting data from analysis...');
+    const derivedData = deriveFromAnalysis(analysis);
+    console.log('[RSGP] ✅ Derived data:', derivedData);
+
+    // Update enrichment status to processing
+    await supabase
+      .from('product_analyses')
+      .update({
+        enrichment_status: {
+          ...(analysis.enrichment_status || {}),
+          rsgp: 'processing'
+        }
+      })
+      .eq('id', analysis_id);
+
     // ========== PHASE 1: Recherche Web avec Fallback ==========
     const { searchResults, searchMethod } = await fetchWebData(
       analysis.product_name,
@@ -631,7 +672,7 @@ serve(async (req) => {
     );
 
     // ========== PHASE 2: Génération RSGP avec Cascade Fallback ==========
-    const rsgpData = await generateRSGPWithFallback(
+    let rsgpData = await generateRSGPWithFallback(
       analysis,
       amazonData,
       searchResults,
@@ -639,10 +680,31 @@ serve(async (req) => {
       supabase
     );
 
-    console.log('[RSGP] ✅ Génération terminée:', {
+    console.log('[RSGP] ✅ Génération terminée, merging with derived data...');
+    
+    // Merge derived data with generated data, prioritizing non-empty values
+    rsgpData = {
+      ...rsgpData,
+      product_info: {
+        ...(rsgpData.product_info || {}),
+        ean: derivedData.ean || rsgpData.product_info?.ean || 'non communiqué',
+        numero_modele: derivedData.numero_modele || rsgpData.product_info?.numero_modele || 'non communiqué',
+        garantie: derivedData.garantie || rsgpData.product_info?.garantie || 'non communiqué',
+        categorie_rsgp: derivedData.categorie_rsgp || rsgpData.product_info?.categorie_rsgp || 'non communiqué',
+      },
+      manufacturer: {
+        ...(rsgpData.manufacturer || {}),
+        fabricant_nom: derivedData.fabricant_nom || rsgpData.manufacturer?.fabricant_nom || 'non communiqué',
+        fournisseur: derivedData.fournisseur || rsgpData.manufacturer?.fournisseur || 'non communiqué',
+      }
+    };
+
+    console.log('[RSGP] ✅ Data merged:', {
       method: rsgpData.generation_metadata?.method,
       webSearchMethod: rsgpData.generation_metadata?.web_search_method,
-      resultsCount: rsgpData.generation_metadata?.web_results_count
+      resultsCount: rsgpData.generation_metadata?.web_results_count,
+      hasEan: !!rsgpData.product_info?.ean && rsgpData.product_info.ean !== 'non communiqué',
+      hasBrand: !!rsgpData.manufacturer?.fabricant_nom && rsgpData.manufacturer.fabricant_nom !== 'non communiqué'
     });
 
     // Sanitize date fields before insertion

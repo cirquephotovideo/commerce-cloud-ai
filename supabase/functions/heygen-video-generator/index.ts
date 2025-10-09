@@ -116,12 +116,38 @@ serve(async (req) => {
         );
       }
 
-      // Check status on HeyGen
-      const statusRes = await fetch(`https://api.heygen.com/v2/video/${videoData.video_id}`, {
+      // Check status on HeyGen - Correct API endpoint
+      console.log(`[HEYGEN-VIDEO] Checking status for video: ${videoData.video_id}`);
+      const statusRes = await fetch(`https://api.heygen.com/v2/video/status?video_id=${videoData.video_id}`, {
         headers: { 'X-Api-Key': HEYGEN_API_KEY }
       });
 
-      const statusData = await statusRes.json();
+      if (!statusRes.ok) {
+        const errorText = await statusRes.text();
+        console.error('[HEYGEN-VIDEO] Status check failed:', statusRes.status, errorText);
+        return new Response(
+          JSON.stringify({ 
+            error: `Failed to check video status: ${statusRes.status}`,
+            details: errorText.substring(0, 200)
+          }),
+          { status: statusRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let statusData;
+      try {
+        statusData = await statusRes.json();
+      } catch (parseError) {
+        const responseText = await statusRes.text();
+        console.error('[HEYGEN-VIDEO] Failed to parse JSON:', responseText.substring(0, 200));
+        return new Response(
+          JSON.stringify({ 
+            error: 'Invalid response from HeyGen API',
+            details: 'Response was not valid JSON'
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       // Update database if completed
       if (statusData.data?.status === 'completed') {
