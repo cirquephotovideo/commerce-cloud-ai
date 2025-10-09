@@ -21,6 +21,38 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     fetchLatestVideo();
   }, [analysisId]);
 
+  // Auto-récupération pour les vidéos en timeout
+  useEffect(() => {
+    const autoRecoverIfNeeded = async () => {
+      if (video?.status === 'failed' && 
+          video?.error_message?.includes('Timeout') && 
+          video?.video_id) {
+        console.log('[VideoPlayer] Auto-recovery for timeout video:', video.video_id);
+        toast.info("🔄 Récupération automatique de la vidéo...");
+        
+        try {
+          const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
+            body: { 
+              action: 'check_status',
+              analysis_id: analysisId,
+              video_id: video.video_id,
+              force_recovery: true
+            }
+          });
+          
+          if (!checkError && data?.status === 'completed' && data?.video_url) {
+            toast.success("✅ Vidéo récupérée avec succès !");
+            await fetchLatestVideo();
+          }
+        } catch (err) {
+          console.error('[VideoPlayer] Auto-recovery error:', err);
+        }
+      }
+    };
+    
+    autoRecoverIfNeeded();
+  }, [video?.id, analysisId]);
+
   // Auto-polling pour les vidéos en cours de génération ou pending
   useEffect(() => {
     if (!video || !['processing', 'pending'].includes(video.status)) return;
@@ -205,61 +237,112 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
           )}
 
           {video.status === 'failed' && (
-            <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg space-y-3">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-destructive" />
-                <span className="text-sm font-medium text-destructive">Erreur de génération</span>
-              </div>
-              {video.error_message && (
-                <p className="text-xs text-destructive/80">{video.error_message}</p>
-              )}
-              <div className="flex gap-2">
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={async () => {
-                    toast.info("🔄 Vérification du statut HeyGen...");
-                    
-                    const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
-                      body: { 
-                        action: 'check_status',
-                        analysis_id: analysisId,
-                        video_id: video.video_id,
-                        force_recovery: true
+            <>
+              {/* Si c'est un timeout, afficher message optimiste */}
+              {video.error_message?.includes('Timeout') ? (
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-yellow-600" />
+                    <span className="text-sm font-medium text-yellow-700 dark:text-yellow-500">
+                      ⏳ Récupération de la vidéo en cours...
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    La génération a pris plus de temps que prévu. Tentative de récupération automatique...
+                  </p>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={async () => {
+                      toast.info("🔄 Vérification manuelle...");
+                      
+                      const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
+                        body: { 
+                          action: 'check_status',
+                          analysis_id: analysisId,
+                          video_id: video.video_id,
+                          force_recovery: true
+                        }
+                      });
+                      
+                      if (checkError) {
+                        toast.error("Erreur lors de la vérification");
+                        return;
                       }
-                    });
-                    
-                    if (checkError) {
-                      toast.error("Erreur lors de la vérification");
-                      return;
-                    }
-                    
-                    if (data?.status === 'completed') {
-                      toast.success("✅ Vidéo récupérée !");
-                      await fetchLatestVideo();
-                    } else if (data?.status === 'processing') {
-                      toast.info("⏳ La vidéo est toujours en cours de génération");
-                      await fetchLatestVideo();
-                    } else {
-                      toast.error("La vidéo n'est pas encore disponible");
-                    }
-                  }}
-                >
-                  Vérifier si la vidéo est prête
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => {
-                    const actionsTab = document.querySelector('[data-value="actions"]') as HTMLElement;
-                    if (actionsTab) actionsTab.click();
-                    toast.info("Veuillez régénérer la vidéo depuis l'onglet Actions");
-                  }}
-                >
-                  Régénérer la vidéo
-                </Button>
-              </div>
-            </div>
+                      
+                      if (data?.status === 'completed') {
+                        toast.success("✅ Vidéo récupérée !");
+                        await fetchLatestVideo();
+                      } else if (data?.status === 'processing') {
+                        toast.info("⏳ La vidéo est toujours en cours de génération");
+                        await fetchLatestVideo();
+                      } else {
+                        toast.error("La vidéo n'est pas encore disponible");
+                      }
+                    }}
+                  >
+                    Forcer la vérification
+                  </Button>
+                </div>
+              ) : (
+                /* Affichage normal pour les vraies erreurs */
+                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-destructive" />
+                    <span className="text-sm font-medium text-destructive">Erreur de génération</span>
+                  </div>
+                  {video.error_message && (
+                    <p className="text-xs text-destructive/80">{video.error_message}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={async () => {
+                        toast.info("🔄 Vérification du statut HeyGen...");
+                        
+                        const { data, error: checkError } = await supabase.functions.invoke('heygen-video-generator', {
+                          body: { 
+                            action: 'check_status',
+                            analysis_id: analysisId,
+                            video_id: video.video_id,
+                            force_recovery: true
+                          }
+                        });
+                        
+                        if (checkError) {
+                          toast.error("Erreur lors de la vérification");
+                          return;
+                        }
+                        
+                        if (data?.status === 'completed') {
+                          toast.success("✅ Vidéo récupérée !");
+                          await fetchLatestVideo();
+                        } else if (data?.status === 'processing') {
+                          toast.info("⏳ La vidéo est toujours en cours de génération");
+                          await fetchLatestVideo();
+                        } else {
+                          toast.error("La vidéo n'est pas encore disponible");
+                        }
+                      }}
+                    >
+                      Vérifier si la vidéo est prête
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => {
+                        const actionsTab = document.querySelector('[data-value="actions"]') as HTMLElement;
+                        if (actionsTab) actionsTab.click();
+                        toast.info("Veuillez régénérer la vidéo depuis l'onglet Actions");
+                      }}
+                    >
+                      Régénérer la vidéo
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {video.status === 'completed' && video.video_url && (
