@@ -11,6 +11,7 @@ import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
 import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaManager";
 import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
 import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
+import { GlobalAPIKeysManager } from "@/components/admin/GlobalAPIKeysManager";
 import { RoleDebugger } from "@/components/admin/RoleDebugger";
 import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
 import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
@@ -156,6 +157,7 @@ const AdminDashboard = () => {
           </TabsContent>
 
           <TabsContent value="apikeys" className="space-y-6">
+            <GlobalAPIKeysManager />
             <APIKeyManagement />
           </TabsContent>
 
