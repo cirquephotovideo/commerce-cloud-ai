@@ -470,6 +470,7 @@ async function generateRSGPWithFallback(
   product: any,
   amazonData: any,
   webResults: any[],
+  searchMethod: string,
   userId: string,
   supabase: any
 ) {
@@ -514,7 +515,7 @@ async function generateRSGPWithFallback(
   rsgpData.generation_metadata = {
     method: usedMethod,
     timestamp: new Date().toISOString(),
-    web_search_method: webResults.length > 0 ? 'serper' : 'ai_simulated',
+    web_search_method: searchMethod,
     web_results_count: webResults.length
   };
 

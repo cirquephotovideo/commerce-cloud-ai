@@ -129,7 +129,10 @@ export const ProductActionsTab = ({
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const backendMsg = (data as any)?.error || error.message || 'Erreur lors de la génération vidéo';
+        throw new Error(backendMsg);
+      }
 
       const generatedVideoId = data?.video_id;
       setVideoId(generatedVideoId);

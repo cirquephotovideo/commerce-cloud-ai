@@ -117,10 +117,35 @@ serve(async (req) => {
       }
 
       // Check status on HeyGen - Correct API endpoint
+      // Check status on HeyGen with automatic fallback between v2 and v1 endpoints
       console.log(`[HEYGEN-VIDEO] Checking status for video: ${videoData.video_id}`);
-      const statusRes = await fetch(`https://api.heygen.com/v2/video/status?video_id=${videoData.video_id}`, {
+
+      const statusUrlV2 = `https://api.heygen.com/v2/video/status?video_id=${videoData.video_id}`;
+      let statusRes = await fetch(statusUrlV2, {
         headers: { 'X-Api-Key': HEYGEN_API_KEY }
       });
+
+      // If v2 returns 404, try legacy v1 endpoint
+      if (!statusRes.ok && statusRes.status === 404) {
+        const statusUrlV1 = `https://api.heygen.com/v1/video_status.get?video_id=${videoData.video_id}`;
+        console.warn('[HEYGEN-VIDEO] v2 status 404, trying v1 endpoint:', statusUrlV1);
+        const fallbackRes = await fetch(statusUrlV1, {
+          headers: { 'X-Api-Key': HEYGEN_API_KEY }
+        });
+        if (fallbackRes.ok) {
+          statusRes = fallbackRes;
+        } else {
+          const fbText = await fallbackRes.text();
+          console.error('[HEYGEN-VIDEO] v1 status check failed:', fallbackRes.status, fbText);
+          return new Response(
+            JSON.stringify({
+              error: `Failed to check video status (v1): ${fallbackRes.status}`,
+              details: fbText.substring(0, 300)
+            }),
+            { status: fallbackRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
 
       if (!statusRes.ok) {
         const errorText = await statusRes.text();
@@ -128,18 +153,18 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             error: `Failed to check video status: ${statusRes.status}`,
-            details: errorText.substring(0, 200)
+            details: errorText.substring(0, 300)
           }),
           { status: statusRes.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      let statusData;
+      let statusData: any;
       try {
         statusData = await statusRes.json();
       } catch (parseError) {
         const responseText = await statusRes.text();
-        console.error('[HEYGEN-VIDEO] Failed to parse JSON:', responseText.substring(0, 200));
+        console.error('[HEYGEN-VIDEO] Failed to parse JSON:', responseText.substring(0, 300));
         return new Response(
           JSON.stringify({ 
             error: 'Invalid response from HeyGen API',
@@ -300,11 +325,15 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
       });
 
       if (!heygenRes.ok) {
-        const errorText = await heygenRes.text();
-        console.error('[HEYGEN-VIDEO] Generation failed:', errorText);
+        const rawText = await heygenRes.text();
+        let parsed: any = null;
+        try { parsed = JSON.parse(rawText); } catch {}
+        const status = heygenRes.status;
+        const message = parsed?.message || parsed?.error || rawText?.slice(0, 300) || 'HeyGen API error';
+        console.error('[HEYGEN-VIDEO] Generation failed:', status, message);
         return new Response(
-          JSON.stringify({ error: `HeyGen API error: ${errorText}` }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: message, status, details: parsed || undefined }),
+          { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
