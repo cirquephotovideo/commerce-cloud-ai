@@ -66,10 +66,16 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
         if (data.success) {
           // Validate analysis structure before saving
           if (!data.analysis || typeof data.analysis !== 'object') {
-            console.error('Invalid analysis structure:', data);
+            console.error('❌ Invalid analysis structure received:', {
+              product,
+              hasAnalysis: !!data.analysis,
+              analysisType: typeof data.analysis,
+              analysisKeys: data.analysis ? Object.keys(data.analysis) : [],
+              rawData: data
+            });
             results.push({
               product,
-              error: 'Structure d\'analyse invalide',
+              error: 'Structure d\'analyse invalide - Aucune donnée valide retournée',
               success: false
             });
             continue;

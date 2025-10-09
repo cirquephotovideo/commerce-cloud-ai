@@ -254,7 +254,28 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: 'Tu es un expert en analyse e-commerce. Tu dois retourner UNIQUEMENT un objet JSON valide, sans texte markdown, sans balises de code, juste le JSON pur.'
+            content: `Tu es un expert en analyse e-commerce. 
+
+RÈGLES ABSOLUES:
+1. Tu dois retourner UNIQUEMENT un objet JSON valide
+2. PAS de texte markdown (pas de \`\`\`json)
+3. PAS de balises de code
+4. PAS d'explications avant ou après
+5. UNIQUEMENT le JSON pur qui commence par { et se termine par }
+6. Le JSON DOIT être complet et valide
+7. TOUS les champs requis doivent être présents
+
+Structure minimale requise:
+{
+  "product_name": "string",
+  "description": "string",
+  "description_long": "string",
+  "seo": { "score": number, "keywords": [] },
+  "pricing": { "estimated_price": "string" },
+  "global_report": { "overall_score": number }
+}
+
+Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A" ou des valeurs par défaut, mais retourne TOUJOURS un JSON valide et complet.`
           },
           {
             role: 'user',
@@ -317,21 +338,44 @@ serve(async (req) => {
         analysisResult = JSON.parse(cleanedContent);
         console.log('Successfully repaired JSON');
       } catch (secondError) {
-        console.error('Second parse failed, extracting basic data');
-        // Extract at least basic data
-        analysisResult = {
-          product_name: extractField(cleanedContent, 'product_name'),
-          description: extractField(cleanedContent, 'description'),
-          pricing: { 
-            estimated_price: extractField(cleanedContent, 'estimated_price') 
-          },
-          global_report: {
-            overall_score: 0
-          },
-          error: 'Partial data extracted from incomplete response',
-          raw_analysis: analysisContent.substring(0, 500) // Store first 500 chars for debug
-        };
+        console.error('Second parse failed, cannot extract valid data');
+        console.error('Raw response sample:', analysisContent.substring(0, 200));
+        
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: 'Impossible d\'analyser la réponse de l\'IA. Le format JSON retourné est invalide.',
+            details: 'L\'IA n\'a pas retourné un JSON valide malgré plusieurs tentatives de réparation.',
+            rawSample: analysisContent.substring(0, 200)
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500,
+          }
+        );
       }
+    }
+
+    // CRITICAL: Verify analysisResult is valid before continuing
+    if (!analysisResult || typeof analysisResult !== 'object') {
+      console.error('FATAL: analysisResult is null or not an object');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: 'Structure d\'analyse invalide',
+          details: 'L\'analyse n\'a pas retourné un objet valide'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500,
+        }
+      );
+    }
+
+    // Ensure at least product_name exists
+    if (!analysisResult.product_name || typeof analysisResult.product_name !== 'string') {
+      console.warn('Missing or invalid product_name, using input as fallback');
+      analysisResult.product_name = productInput;
     }
 
     // Search for product images if requested
@@ -340,23 +384,30 @@ serve(async (req) => {
       console.log('Searching for product images...');
       try {
         // Use the search-product-images function for better image results
-        const { data: imageData, error: imageError } = await supabaseClient.functions.invoke(
-          'search-product-images',
-          {
-            body: { 
-              productName: analysisResult.product_name || productInput,
-              maxResults: 8
-            }
-          }
-        );
-
-        if (imageError) {
-          console.error('Error invoking search-product-images:', imageError);
-        } else if (imageData?.images) {
-          imageUrls = imageData.images.map((img: any) => img.url).filter(Boolean);
-          console.log(`Found ${imageUrls.length} images via search-product-images function`);
+        // Safely get product name with fallback
+        const productNameForImages = analysisResult?.product_name || productInput;
+        
+        if (!productNameForImages) {
+          console.warn('No product name available for image search, skipping...');
         } else {
-          console.log('No images found or unexpected response format');
+          const { data: imageData, error: imageError } = await supabaseClient.functions.invoke(
+            'search-product-images',
+            {
+              body: { 
+                productName: productNameForImages,
+                maxResults: 8
+              }
+            }
+          );
+
+          if (imageError) {
+            console.error('Error invoking search-product-images:', imageError);
+          } else if (imageData?.images) {
+            imageUrls = imageData.images.map((img: any) => img.url).filter(Boolean);
+            console.log(`Found ${imageUrls.length} images via search-product-images function`);
+          } else {
+            console.log('No images found or unexpected response format');
+          }
         }
       } catch (imageError) {
         console.error('Error searching images:', imageError);
