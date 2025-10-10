@@ -106,8 +106,6 @@ serve(async (req) => {
           currency: 'EUR',
           description: cleanDescription,
           needs_enrichment: isDescriptionTruncated,
-          brand: columnMapping.brand !== null ? (columns[columnMapping.brand] || null) : null,
-          category: columnMapping.category !== null ? (columns[columnMapping.category] || null) : null,
         };
 
         // Check if product exists
