@@ -357,12 +357,13 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV with column mapping
+    // Parse CSV with column mapping (support both columns)
+    const mapping = (supplier as any).column_mapping || (supplier as any).mapping_config;
     const products = parseCSV(
       csvContent, 
       delimiter, 
       skipFirstRow,
-      supplier.column_mapping
+      mapping
     );
     console.log(`[FTP-SYNC] Parsed ${products.length} products from CSV`);
 

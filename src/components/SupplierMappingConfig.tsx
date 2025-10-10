@@ -92,5 +92,111 @@ export function SupplierMappingConfig({ supplierType, mapping, onMappingChange }
     );
   }
 
+  if (supplierType === 'ftp' || supplierType === 'sftp') {
+    const get = (field: string, key: string) => mapping?.[field]?.[key] ?? '';
+    const updateCsvMap = (field: string, key: 'col' | 'sub' | 'subDelimiter' | 'decimal', value: any) => {
+      const current = mapping?.[field] || {};
+      onMappingChange({ ...mapping, [field]: { ...current, [key]: value } });
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Mapping CSV (FTP/SFTP)</CardTitle>
+          <CardDescription>
+            Indiquez l'index de colonne (0, 1, 2, ...) et facultativement un sous-champ si la cellule contient plusieurs valeurs séparées.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {[
+            { key: 'product_name', label: 'Nom du produit' },
+            { key: 'supplier_reference', label: 'Référence fournisseur' },
+            { key: 'ean', label: 'EAN' },
+            { key: 'stock_quantity', label: 'Stock' },
+          ].map((f) => (
+            <div key={f.key} className="grid grid-cols-4 gap-4 items-end">
+              <div className="space-y-2">
+                <Label>Colonne ({f.label})</Label>
+                <Input
+                  type="number"
+                  value={get(f.key, 'col')}
+                  onChange={(e) => updateCsvMap(f.key, 'col', e.target.value === '' ? '' : parseInt(e.target.value))}
+                  placeholder="ex: 0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Sous-champ (optionnel)</Label>
+                <Input
+                  type="number"
+                  value={get(f.key, 'sub')}
+                  onChange={(e) => updateCsvMap(f.key, 'sub', e.target.value === '' ? '' : parseInt(e.target.value))}
+                  placeholder="ex: 1"
+                />
+              </div>
+              <div className="space-y-2 col-span-2">
+                <Label>Séparateur des sous-champs</Label>
+                <Input
+                  value={get(f.key, 'subDelimiter') || ','}
+                  onChange={(e) => updateCsvMap(f.key, 'subDelimiter', e.target.value)}
+                  placeholder="," maxLength={1}
+                />
+              </div>
+            </div>
+          ))}
+
+          <div className="grid grid-cols-5 gap-4 items-end">
+            <div className="space-y-2">
+              <Label>Colonne (Prix d'achat)</Label>
+              <Input
+                type="number"
+                value={get('purchase_price', 'col')}
+                onChange={(e) => updateCsvMap('purchase_price', 'col', e.target.value === '' ? '' : parseInt(e.target.value))}
+                placeholder="ex: 2"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Sous-champ</Label>
+              <Input
+                type="number"
+                value={get('purchase_price', 'sub')}
+                onChange={(e) => updateCsvMap('purchase_price', 'sub', e.target.value === '' ? '' : parseInt(e.target.value))}
+                placeholder="ex: 3"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Séparateur</Label>
+              <Input
+                value={get('purchase_price', 'subDelimiter') || ','}
+                onChange={(e) => updateCsvMap('purchase_price', 'subDelimiter', e.target.value)}
+                placeholder="," maxLength={1}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Décimal</Label>
+              <Input
+                value={get('purchase_price', 'decimal') || ','}
+                onChange={(e) => updateCsvMap('purchase_price', 'decimal', e.target.value)}
+                placeholder="," maxLength={1}
+              />
+            </div>
+          </div>
+
+          <div className="bg-muted p-4 rounded-lg space-y-2">
+            <p className="text-sm font-medium">Exemple JSON</p>
+            <pre className="text-xs overflow-x-auto">
+{`{
+  "product_name": { "col": 0, "sub": 0, "subDelimiter": "," },
+  "supplier_reference": { "col": 0, "sub": 1, "subDelimiter": "," },
+  "ean": { "col": 2, "sub": 0, "subDelimiter": "," },
+  "stock_quantity": { "col": 2, "sub": 1, "subDelimiter": "," },
+  "purchase_price": { "col": 2, "sub": 3, "subDelimiter": ",", "decimal": "," }
+}`}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return null;
 }
