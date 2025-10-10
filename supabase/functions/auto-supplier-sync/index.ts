@@ -40,6 +40,32 @@ serve(async (req) => {
       try {
         let functionName = '';
         let payload: any = {};
+        let platformConfig = null;
+
+        // Pour les types nécessitant une config plateforme, la récupérer
+        const needsPlatformConfig = ['prestashop', 'woocommerce', 'magento', 'shopify', 'odoo'];
+        
+        if (needsPlatformConfig.includes(supplier.supplier_type)) {
+          const { data: configData } = await supabase
+            .from('platform_configurations')
+            .select('*')
+            .eq('user_id', supplier.user_id)
+            .eq('platform_type', supplier.supplier_type)
+            .eq('is_active', true)
+            .maybeSingle();
+          
+          platformConfig = configData;
+          
+          if (!platformConfig) {
+            console.log(`[AUTO-SYNC] ⚠️ ${supplier.supplier_name}: Configuration plateforme manquante`);
+            results.push({
+              supplier: supplier.supplier_name,
+              status: 'warning',
+              message: 'Configuration plateforme manquante'
+            });
+            continue;
+          }
+        }
 
         // Déterminer la fonction à appeler selon le type
         switch (supplier.supplier_type) {
@@ -58,7 +84,7 @@ serve(async (req) => {
             functionName = 'import-from-prestashop';
             payload = { 
               supplier_id: supplier.id,
-              config: supplier.connection_config
+              config: platformConfig
             };
             break;
           
@@ -66,7 +92,7 @@ serve(async (req) => {
             functionName = 'import-from-woocommerce';
             payload = { 
               supplier_id: supplier.id,
-              config: supplier.connection_config
+              config: platformConfig
             };
             break;
           
@@ -74,7 +100,7 @@ serve(async (req) => {
             functionName = 'import-from-magento';
             payload = { 
               supplier_id: supplier.id,
-              config: supplier.connection_config
+              config: platformConfig
             };
             break;
           
@@ -82,19 +108,25 @@ serve(async (req) => {
             functionName = 'import-from-shopify';
             payload = { 
               supplier_id: supplier.id,
-              config: supplier.connection_config
+              config: platformConfig
             };
             break;
           
           case 'odoo':
             functionName = 'import-from-odoo';
             payload = { 
-              supplier_id: supplier.id
+              supplier_id: supplier.id,
+              config: platformConfig
             };
             break;
           
           default:
-            console.log(`[AUTO-SYNC] Unsupported supplier type: ${supplier.supplier_type}`);
+            console.log(`[AUTO-SYNC] Type non supporté: ${supplier.supplier_type}`);
+            results.push({
+              supplier: supplier.supplier_name,
+              status: 'warning',
+              message: `Type non supporté: ${supplier.supplier_type}`
+            });
             continue;
         }
 

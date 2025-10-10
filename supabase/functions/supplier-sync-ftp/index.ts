@@ -16,29 +16,15 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
-
-    if (userError || !user) {
-      throw new Error('Authentication failed');
-    }
-
     const { supplierId } = await req.json();
 
     console.log('Starting FTP/SFTP sync for supplier:', supplierId);
 
-    // Load supplier configuration
+    // Load supplier configuration (using service role key, no user check)
     const { data: supplier, error: supplierError } = await supabase
       .from('supplier_configurations')
       .select('*')
       .eq('id', supplierId)
-      .eq('user_id', user.id)
       .single();
 
     if (supplierError || !supplier) {

@@ -30,20 +30,55 @@ serve(async (req) => {
     
     console.log('Starting Odoo import for supplier:', supplier_id);
 
-    const authHeader = req.headers.get('Authorization')!;
+    // Utiliser SERVICE_ROLE_KEY pour les appels depuis auto-sync
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      supabaseKey ?? ''
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
+    // Récupérer user_id depuis supplier si pas d'auth header
+    let userId: string;
+    const authHeader = req.headers.get('Authorization');
+    
+    if (authHeader) {
+      // Appelé depuis UI avec authentification utilisateur
+      const { data: { user } } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (!user) throw new Error('Unauthorized');
+      userId = user.id;
+    } else {
+      // Appelé depuis auto-sync, récupérer user_id depuis supplier
+      const { data: supplier } = await supabaseClient
+        .from('supplier_configurations')
+        .select('user_id')
+        .eq('id', supplier_id)
+        .single();
+      
+      if (!supplier) throw new Error('Supplier not found');
+      userId = supplier.user_id;
+    }
+
+    // Si config n'est pas fourni, le récupérer depuis platform_configurations
+    let odooConfig = config;
+    if (!odooConfig) {
+      const { data: platformConfig } = await supabaseClient
+        .from('platform_configurations')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('platform_type', 'odoo')
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (!platformConfig) {
+        throw new Error('Odoo platform configuration not found');
+      }
+      odooConfig = platformConfig;
+    }
 
     // 1. Authentification Odoo XML-RPC
-    const database = config.additional_config?.database || 'odoo';
-    const username = config.additional_config?.username;
-    const password = config.additional_config?.password;
+    const database = odooConfig.additional_config?.database || 'odoo';
+    const username = odooConfig.additional_config?.username;
+    const password = odooConfig.additional_config?.password;
 
     if (!username || !password) {
       throw new Error('Odoo credentials missing in platform configuration');
@@ -60,7 +95,7 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    const authResponse = await fetch(`${config.platform_url}/xmlrpc/2/common`, {
+    const authResponse = await fetch(`${odooConfig.platform_url}/xmlrpc/2/common`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: authPayload,
@@ -118,7 +153,7 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    const productsResponse = await fetch(`${config.platform_url}/xmlrpc/2/object`, {
+    const productsResponse = await fetch(`${odooConfig.platform_url}/xmlrpc/2/object`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: searchPayload,
@@ -170,7 +205,7 @@ serve(async (req) => {
         const { data: supplierProduct, error: insertError } = await supabaseClient
           .from('supplier_products')
           .upsert({
-            user_id: user.id,
+            user_id: userId,
             supplier_id: supplier_id,
             supplier_reference: product.default_code || `odoo_${Date.now()}_${Math.random()}`,
             ean: ean,
@@ -193,7 +228,7 @@ serve(async (req) => {
           const { data: analysis } = await supabaseClient
             .from('product_analyses')
             .select('id')
-            .eq('user_id', user.id)
+            .eq('user_id', userId)
             .eq('ean', ean)
             .maybeSingle();
 
@@ -223,7 +258,7 @@ serve(async (req) => {
 
     // 4. Logger l'import
     await supabaseClient.from('supplier_import_logs').insert({
-      user_id: user.id,
+      user_id: userId,
       supplier_id: supplier_id,
       import_type: 'odoo_api',
       products_count: products.length,
