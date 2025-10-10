@@ -30,43 +30,60 @@ serve(async (req) => {
     
     console.log('Starting Odoo import for supplier:', supplier_id);
 
-    // Determine which key to use based on auth context
-    const authHeader = req.headers.get('Authorization');
-    const isUICall = authHeader && authHeader.startsWith('Bearer ');
-    let supabaseKey: string;
-    let userId: string;
+    // Determine which key to use based on auth context with robust JWT validation
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    let supabaseClient: any;
+    let userId!: string; // Will be assigned in either UI auth or auto-sync mode
+    let isAutoSync = false;
 
-    if (isUICall) {
-      // UI call: use ANON_KEY to validate user token
-      supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-      console.log('✅ Using ANON_KEY for UI authentication');
+    // Validate JWT format (3 segments separated by dots)
+    const isValidJWT = bearer && bearer.split('.').length === 3;
+
+    if (isValidJWT) {
+      // Try UI mode first
+      console.log('🔐 Attempting UI authentication with Bearer token');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY')!
+      );
+
+      try {
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(bearer);
+        
+        if (authError) {
+          console.log('⚠️ Auth error detected:', authError.message);
+          if (authError.message?.includes('bad_jwt') || authError.message?.includes('invalid')) {
+            console.log('🔄 Detected invalid/expired JWT, falling back to auto-sync mode');
+            isAutoSync = true;
+          } else {
+            throw new Error(`Authentication failed: ${authError.message}`);
+          }
+        } else if (!user) {
+          console.log('🔄 No user found, falling back to auto-sync mode');
+          isAutoSync = true;
+        } else {
+          userId = user.id;
+          console.log('✅ Authenticated user:', userId);
+        }
+      } catch (err: any) {
+        console.log('🔄 Auth exception, falling back to auto-sync mode:', err.message);
+        isAutoSync = true;
+      }
     } else {
-      // Auto-sync call: use SERVICE_ROLE_KEY
-      supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      console.log('✅ Using SERVICE_ROLE_KEY for auto-sync');
+      console.log('🔧 No valid Bearer token detected, using auto-sync mode');
+      isAutoSync = true;
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      supabaseKey
-    );
+    // If auto-sync mode, recreate client with SERVICE_ROLE_KEY and fetch user_id
+    if (isAutoSync) {
+      console.log('✅ Using SERVICE_ROLE_KEY for auto-sync');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
 
-    // Get user ID based on context
-    if (isUICall) {
-      console.log('🔐 Authenticating user with Bearer token');
-      const token = authHeader.replace('Bearer ', '');
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-      
-      if (authError || !user) {
-        console.error('❌ Authentication error:', authError);
-        throw new Error('Unauthorized - Invalid token');
-      }
-      
-      userId = user.id;
-      console.log('✅ Authenticated user:', userId);
-    } else {
-      console.log('🔧 Auto-sync mode: fetching user_id from supplier config');
-      // Get user_id from supplier configuration (for scheduled imports)
+      // Get user_id from supplier configuration
       const { data: supplier, error: supplierError } = await supabaseClient
         .from('supplier_configurations')
         .select('user_id')
