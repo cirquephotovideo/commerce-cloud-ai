@@ -19,7 +19,10 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('[RE-ENRICH] No authorization header');
-      throw new Error('No authorization header');
+      return new Response(
+        JSON.stringify({ error: 'No authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const token = authHeader.replace('Bearer ', '');
@@ -27,7 +30,10 @@ serve(async (req) => {
 
     if (userError || !user) {
       console.error('[RE-ENRICH] Authentication failed:', userError);
-      throw new Error('Authentication failed');
+      return new Response(
+        JSON.stringify({ error: 'Authentication failed' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[RE-ENRICH] User authenticated: ${user.id}`);
@@ -36,7 +42,10 @@ serve(async (req) => {
 
     if (!productId) {
       console.error('[RE-ENRICH] No product ID provided');
-      throw new Error('Product ID is required');
+      return new Response(
+        JSON.stringify({ error: 'Product ID is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId} with provider ${provider || 'lovable-ai'}`);
@@ -113,7 +122,10 @@ serve(async (req) => {
 
     if (!supplierProduct && !analysis) {
       console.error('[RE-ENRICH] Product not found - neither supplier product nor analysis exists');
-      throw new Error('Product not found');
+      return new Response(
+        JSON.stringify({ error: 'Product not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log(`[RE-ENRICH] Product data resolved - supplier: ${!!supplierProduct}, analysis: ${!!analysis}`);
@@ -137,8 +149,7 @@ serve(async (req) => {
         analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',
-        status: 'pending',
-        metadata: { provider: provider || 'lovable-ai' }
+        status: 'pending'
       })
       .select()
       .single();
