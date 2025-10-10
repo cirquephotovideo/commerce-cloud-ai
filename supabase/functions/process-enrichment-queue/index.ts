@@ -59,12 +59,12 @@ serve(async (req) => {
         }
 
         // Call product-analyzer
-        console.log(`[ENRICHMENT-QUEUE] Calling product-analyzer for ${supplierProduct.name}`);
+        console.log(`[ENRICHMENT-QUEUE] Calling product-analyzer for ${supplierProduct.product_name}`);
         const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
           'product-analyzer',
           {
             body: {
-              name: supplierProduct.name,
+              name: supplierProduct.product_name,
               description: supplierProduct.description,
               ean: supplierProduct.ean,
               brand: supplierProduct.brand,
@@ -84,7 +84,7 @@ serve(async (req) => {
           .from('product_analyses')
           .insert({
             user_id: task.user_id,
-            product_name: supplierProduct.name,
+            product_name: supplierProduct.product_name,
             product_ean: supplierProduct.ean,
             purchase_price: supplierProduct.purchase_price,
             analysis_result: analysisData,
@@ -137,7 +137,7 @@ serve(async (req) => {
                 await supabase.functions.invoke('generate-image', {
                   body: { 
                     analysisId: analysis.id,
-                    productName: supplierProduct.name,
+                    productName: supplierProduct.product_name,
                     description: supplierProduct.description,
                   }
                 });
@@ -181,7 +181,7 @@ serve(async (req) => {
           user_id: task.user_id,
           alert_type: 'enrichment_complete',
           title: 'Enrichissement terminé',
-          message: `Le produit "${supplierProduct.name}" a été enrichi avec succès`,
+          message: `Le produit "${supplierProduct.product_name}" a été enrichi avec succès`,
           metadata: {
             supplier_product_id: task.supplier_product_id,
             analysis_id: analysis.id,
