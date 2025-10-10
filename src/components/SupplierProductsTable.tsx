@@ -4,16 +4,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle } from "lucide-react";
+import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle, Sparkles, CheckSquare, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SupplierProductDetail } from "./SupplierProductDetail";
+import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
 
 export function SupplierProductsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [showEnrichmentDialog, setShowEnrichmentDialog] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -61,6 +65,8 @@ export function SupplierProductsTable() {
           const hasLink = p.product_links && p.product_links.length > 0;
           if (statusFilter === "linked") return hasLink;
           if (statusFilter === "unlinked") return !hasLink;
+          if (statusFilter === "unlinked_with_ean") return !hasLink && p.ean;
+          if (statusFilter === "unlinked_no_ean") return !hasLink && !p.ean;
           return true;
         });
       }
@@ -72,6 +78,29 @@ export function SupplierProductsTable() {
   const products = productsData?.products || [];
   const totalCount = productsData?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  const handleSelectAll = () => {
+    if (selectedProductIds.size === products.length) {
+      setSelectedProductIds(new Set());
+    } else {
+      setSelectedProductIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handleToggleProduct = (productId: string) => {
+    const newSet = new Set(selectedProductIds);
+    if (newSet.has(productId)) {
+      newSet.delete(productId);
+    } else {
+      newSet.add(productId);
+    }
+    setSelectedProductIds(newSet);
+  };
+
+  const handleEnrichmentComplete = () => {
+    setSelectedProductIds(new Set());
+    setShowEnrichmentDialog(false);
+  };
 
   const getStatusBadge = (product: any) => {
     const hasLink = product.product_links && product.product_links.length > 0;
@@ -117,13 +146,15 @@ export function SupplierProductsTable() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(0); }}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-52">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous</SelectItem>
                   <SelectItem value="linked">✅ Liés</SelectItem>
                   <SelectItem value="unlinked">⏳ Non liés</SelectItem>
+                  <SelectItem value="unlinked_with_ean">🔄 Non liés avec EAN</SelectItem>
+                  <SelectItem value="unlinked_no_ean">⚠️ Non liés sans EAN</SelectItem>
                 </SelectContent>
               </Select>
               <div className="relative w-72">
@@ -139,6 +170,34 @@ export function SupplierProductsTable() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {products?.length > 0 && (
+            <div className="flex items-center justify-between mb-4 pb-4 border-b">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSelectAll}
+                className="gap-2"
+              >
+                {selectedProductIds.size === products.length ? (
+                  <>
+                    <CheckSquare className="h-4 w-4" />
+                    Tout désélectionner
+                  </>
+                ) : (
+                  <>
+                    <Square className="h-4 w-4" />
+                    Tout sélectionner
+                  </>
+                )}
+              </Button>
+              {selectedProductIds.size > 0 && (
+                <Badge variant="secondary" className="text-sm">
+                  {selectedProductIds.size} sélectionné{selectedProductIds.size > 1 ? "s" : ""}
+                </Badge>
+              )}
+            </div>
+          )}
+
           {isLoading ? (
             <div className="text-center py-12 text-muted-foreground">
               Chargement...
@@ -153,13 +212,22 @@ export function SupplierProductsTable() {
               {products?.map((product) => (
                 <Card 
                   key={product.id} 
-                  className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-primary/20 hover:border-l-primary"
-                  onClick={() => setSelectedProduct(product)}
+                  className="hover:shadow-md transition-all border-l-4 border-l-primary/20 hover:border-l-primary"
                 >
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between gap-4">
+                      {/* Checkbox */}
+                      <Checkbox
+                        checked={selectedProductIds.has(product.id)}
+                        onCheckedChange={() => handleToggleProduct(product.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-shrink-0"
+                      />
                       {/* Nom du produit - Colonne principale */}
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => setSelectedProduct(product)}
+                      >
                         <h3 className="font-semibold text-base mb-1 truncate">
                           {product.product_name}
                         </h3>
@@ -258,6 +326,38 @@ export function SupplierProductsTable() {
         )}
       </Card>
 
+      {/* Floating action bar */}
+      {selectedProductIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
+          <Card className="shadow-2xl border-2 border-primary">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-primary" />
+                <span className="font-semibold">
+                  {selectedProductIds.size} produit{selectedProductIds.size > 1 ? "s" : ""} sélectionné{selectedProductIds.size > 1 ? "s" : ""}
+                </span>
+              </div>
+              <div className="h-6 w-px bg-border" />
+              <Button
+                onClick={() => setShowEnrichmentDialog(true)}
+                className="gap-2"
+                disabled={selectedProductIds.size > 500}
+              >
+                <Sparkles className="h-4 w-4" />
+                Enrichir la sélection
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedProductIds(new Set())}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {selectedProduct && (
         <SupplierProductDetail
           product={selectedProduct}
@@ -265,6 +365,13 @@ export function SupplierProductsTable() {
           onOpenChange={(open) => !open && setSelectedProduct(null)}
         />
       )}
+
+      <BatchEnrichmentDialog
+        open={showEnrichmentDialog}
+        onOpenChange={setShowEnrichmentDialog}
+        selectedProducts={selectedProductIds}
+        onComplete={handleEnrichmentComplete}
+      />
     </>
   );
 }
