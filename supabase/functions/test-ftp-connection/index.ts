@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function testFTPConnection(host: string, port: number, username: string, password: string) {
-  console.log(`[FTP-TEST] Connecting to ${host}:${port}...`);
+async function testFTPConnection(host: string, port: number, username: string, password: string, path: string = '/') {
+  console.log(`[FTP-TEST] Connecting to ${host}:${port} path="${path}"...`);
   
   const cleanHost = host.replace(/^(ftp|ftps):\/\//, '');
   
@@ -39,10 +39,21 @@ async function testFTPConnection(host: string, port: number, username: string, p
     throw new Error('Authentication failed');
   }
   
-  // Try different LIST methods
-  const listMethods = ['LIST', 'LIST /', 'NLST', 'NLST /'];
+  // Change directory if specified
+  if (path && path !== '/') {
+    const cwdResp = await sendCommand(`CWD ${path}`);
+    console.log(`[FTP-TEST] CWD ${path}:`, cwdResp.trim());
+    if (!cwdResp.startsWith('250')) {
+      console.log(`[FTP-TEST] Warning: CWD failed, staying in root`);
+    }
+  }
+  
+  // Try different LIST methods including MLSD
+  const listMethods = ['MLSD', 'LIST', 'LIST .', 'NLST', 'NLST .'];
   let fileList = '';
   let successMethod = '';
+  let dirs: string[] = [];
+  let files: string[] = [];
   
   for (const method of listMethods) {
     try {
@@ -51,7 +62,10 @@ async function testFTPConnection(host: string, port: number, username: string, p
       // Enter passive mode
       const pasvResp = await sendCommand('PASV');
       const pasvMatch = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
-      if (!pasvMatch) continue;
+      if (!pasvMatch) {
+        console.log(`[FTP-TEST] ${method}: PASV failed`);
+        continue;
+      }
       
       const dataPort = parseInt(pasvMatch[5]) * 256 + parseInt(pasvMatch[6]);
       const dataHost = `${pasvMatch[1]}.${pasvMatch[2]}.${pasvMatch[3]}.${pasvMatch[4]}`;
@@ -59,7 +73,7 @@ async function testFTPConnection(host: string, port: number, username: string, p
       // Connect to data port
       const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
       
-      // Send LIST/NLST command
+      // Send LIST/NLST/MLSD command
       const listResp = await sendCommand(method);
       console.log(`[FTP-TEST] ${method} response:`, listResp.trim());
       
@@ -79,14 +93,48 @@ async function testFTPConnection(host: string, port: number, username: string, p
       dataConn.close();
       
       // Wait for transfer complete
-      await readResponse();
+      try {
+        await readResponse();
+      } catch (e) {
+        // Ignore timeout
+      }
       
       console.log(`[FTP-TEST] ${method} raw response (${tempList.length} bytes):`);
-      console.log(tempList.substring(0, 500));
+      console.log(tempList.substring(0, 800));
       
       if (tempList.trim()) {
         fileList = tempList;
         successMethod = method;
+        
+        // Parse based on method
+        if (method === 'MLSD') {
+          // MLSD format: type=file;size=123; filename
+          const lines = fileList.split(/\r?\n/).filter(l => l.trim());
+          lines.forEach(line => {
+            const isDir = line.includes('type=dir') || line.includes('type=cdir') || line.includes('type=pdir');
+            const match = line.match(/;\s*(.+)$/);
+            if (match) {
+              const name = match[1].trim();
+              if (name !== '.' && name !== '..') {
+                if (isDir) dirs.push(name);
+                else files.push(name);
+              }
+            }
+          });
+        } else {
+          // LIST/NLST format
+          const lines = fileList.split(/\r?\n/).filter(l => l.trim());
+          lines.forEach(line => {
+            const isDir = line.startsWith('d');
+            const parts = line.split(/\s+/);
+            const name = parts[parts.length - 1];
+            if (name && name !== '.' && name !== '..') {
+              if (isDir) dirs.push(name);
+              else files.push(name);
+            }
+          });
+        }
+        
         break;
       }
     } catch (e) {
@@ -98,22 +146,14 @@ async function testFTPConnection(host: string, port: number, username: string, p
   conn.close();
   
   if (!fileList.trim()) {
-    throw new Error('No files found with any LIST method');
+    throw new Error(`No files found in ${path} with any LIST method. Try a different directory.`);
   }
   
-  console.log(`[FTP-TEST] Success with ${successMethod}`);
+  console.log(`[FTP-TEST] ✅ Success with ${successMethod}`);
+  console.log(`[FTP-TEST] Found ${dirs.length} directories:`, dirs);
+  console.log(`[FTP-TEST] Found ${files.length} files:`, files);
   
-  // Parse files
-  const files = fileList.split('\n')
-    .filter(line => line.trim())
-    .map(line => {
-      const parts = line.split(/\s+/);
-      return parts[parts.length - 1];
-    })
-    .filter(f => f && !f.startsWith('.'));
-  
-  console.log(`[FTP-TEST] ✅ Found ${files.length} files:`, files);
-  return files;
+  return { files, dirs, method: successMethod };
 }
 
 serve(async (req) => {
@@ -122,7 +162,7 @@ serve(async (req) => {
   }
 
   try {
-    const { host, port = 21, username, password } = await req.json();
+    const { host, port = 21, username, password, path = '/' } = await req.json();
 
     if (!host || !username || !password) {
       return new Response(
@@ -137,13 +177,16 @@ serve(async (req) => {
       );
     }
 
-    const files = await testFTPConnection(host, port, username, password);
+    const result = await testFTPConnection(host, port, username, password, path);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `✅ Connexion réussie! ${files.length} fichiers trouvés`,
-        files: files,
+        message: `✅ Connexion réussie! ${result.files.length} fichiers et ${result.dirs.length} dossiers trouvés`,
+        files: result.files,
+        dirs: result.dirs,
+        method: result.method,
+        path: path,
       }),
       { 
         status: 200,

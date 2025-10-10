@@ -18,13 +18,15 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
   const { toast } = useToast();
   const [testing, setTesting] = useState(false);
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+  const [availableDirs, setAvailableDirs] = useState<string[]>([]);
   const [connectionSuccess, setConnectionSuccess] = useState(false);
+  const [currentPath, setCurrentPath] = useState('/');
 
   const updateConfig = (key: string, value: any) => {
     onConfigChange({ ...config, [key]: value });
   };
 
-  const handleTestFTPConnection = async () => {
+  const handleTestFTPConnection = async (customPath?: string) => {
     if (!config?.host || !config?.username || !config?.password) {
       toast({
         title: "❌ Configuration incomplète",
@@ -34,6 +36,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
       return;
     }
 
+    const pathToTest = customPath || currentPath;
     setTesting(true);
     setConnectionSuccess(false);
     
@@ -44,6 +47,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
           port: config.port || 21,
           username: config.username,
           password: config.password,
+          path: pathToTest,
         },
       });
 
@@ -51,13 +55,17 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
 
       if (data.success) {
         setAvailableFiles(data.files || []);
+        setAvailableDirs(data.dirs || []);
+        setCurrentPath(pathToTest);
         setConnectionSuccess(true);
         toast({
           title: "✅ Connexion réussie",
-          description: data.message || `${data.files?.length || 0} fichiers trouvés`,
+          description: data.message || `${data.files?.length || 0} fichiers, ${data.dirs?.length || 0} dossiers`,
         });
       } else {
         setConnectionSuccess(false);
+        setAvailableFiles([]);
+        setAvailableDirs([]);
         toast({
           title: "❌ Échec de connexion",
           description: data.message || data.error,
@@ -67,6 +75,8 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
     } catch (error) {
       console.error('Test FTP error:', error);
       setConnectionSuccess(false);
+      setAvailableFiles([]);
+      setAvailableDirs([]);
       toast({
         title: "❌ Erreur",
         description: error instanceof Error ? error.message : "Erreur de connexion",
@@ -125,11 +135,34 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
           </div>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="ftp_directory">📁 Dossier FTP à parcourir</Label>
+          <div className="flex gap-2">
+            <Input
+              id="ftp_directory"
+              value={currentPath}
+              onChange={(e) => setCurrentPath(e.target.value)}
+              placeholder="/ ou /incoming ou /export"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleTestFTPConnection()}
+              disabled={testing}
+            >
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : '🔍 Lister'}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Changez le dossier et cliquez sur "Lister" pour explorer. Suggestions: /, /incoming, /export, /data
+          </p>
+        </div>
+
         <div className="flex gap-2">
           <Button
             type="button"
             variant={connectionSuccess ? "default" : "outline"}
-            onClick={handleTestFTPConnection}
+            onClick={() => handleTestFTPConnection()}
             disabled={testing}
             className="flex-1"
           >
@@ -149,31 +182,71 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
           </Button>
         </div>
 
-        {availableFiles.length > 0 && (
-          <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-            <Label htmlFor="file_select">📂 Fichiers disponibles sur le serveur FTP</Label>
-            <Select
-              value={config.remote_path || ''}
-              onValueChange={(value) => updateConfig('remote_path', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un fichier CSV..." />
-              </SelectTrigger>
-              <SelectContent>
-                {availableFiles
-                  .filter(f => f.endsWith('.csv') || f.endsWith('.CSV') || f.endsWith('.xlsx') || f.endsWith('.XLSX'))
-                  .map((file) => (
-                    <SelectItem key={file} value={`/${file}`}>
-                      📄 {file}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {availableFiles.length} fichier(s) trouvé(s) - seuls les CSV/XLSX sont affichés
+        <div className="space-y-2 p-3 bg-muted/50 rounded-lg border">
+          <Label>📂 Fichiers et dossiers disponibles</Label>
+          
+          {availableDirs.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Dossiers ({availableDirs.length}):</p>
+              <div className="flex flex-wrap gap-1">
+                {availableDirs.map((dir) => (
+                  <Button
+                    key={dir}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const newPath = currentPath === '/' ? `/${dir}` : `${currentPath}/${dir}`;
+                      setCurrentPath(newPath);
+                      handleTestFTPConnection(newPath);
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    📁 {dir}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {availableFiles.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Fichiers CSV/XLSX ({availableFiles.filter(f => f.match(/\.(csv|xlsx)$/i)).length}):</p>
+              <Select
+                value={config.remote_path || ''}
+                onValueChange={(value) => updateConfig('remote_path', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un fichier..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableFiles
+                    .filter(f => f.match(/\.(csv|xlsx)$/i))
+                    .map((file) => {
+                      const fullPath = currentPath === '/' ? `/${file}` : `${currentPath}/${file}`;
+                      return (
+                        <SelectItem key={file} value={fullPath}>
+                          📄 {file}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : connectionSuccess ? (
+            <p className="text-sm text-muted-foreground">
+              Aucun fichier CSV/XLSX trouvé dans <code className="bg-background px-1 rounded">{currentPath}</code>. 
+              Essayez un autre dossier ci-dessus.
             </p>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Testez la connexion pour voir les fichiers disponibles. Suggestions de dossiers courants: 
+              <code className="bg-background px-1 rounded mx-1">/</code>
+              <code className="bg-background px-1 rounded mx-1">/incoming</code>
+              <code className="bg-background px-1 rounded mx-1">/export</code>
+            </p>
+          )}
+        </div>
 
         <div className="space-y-2">
           <Label htmlFor="remote_path">Chemin du fichier CSV/XLSX</Label>

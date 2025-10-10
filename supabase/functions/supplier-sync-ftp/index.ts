@@ -136,70 +136,123 @@ function parseCSV(
   skipFirstRow: boolean = false,
   columnMapping?: any
 ): any[] {
-  const lines = content.split('\n').filter(l => l.trim());
+  // Remove BOM if present
+  content = content.replace(/^\uFEFF/, '');
   
+  const lines = content.split(/\r?\n/).filter(l => l.trim());
   console.log(`[FTP-SYNC] Total lines in CSV: ${lines.length}`);
-  console.log('[FTP-SYNC] CSV delimiter:', delimiter);
-  console.log('[FTP-SYNC] Skip first row:', skipFirstRow);
-  console.log('[FTP-SYNC] Column mapping:', JSON.stringify(columnMapping));
-  
-  if (lines.length === 0) return [];
+  console.log(`[FTP-SYNC] CSV delimiter: "${delimiter}"`);
+  console.log(`[FTP-SYNC] Skip first row: ${skipFirstRow}`);
+  console.log(`[FTP-SYNC] Column mapping:`, JSON.stringify(columnMapping, null, 2));
   
   // Log first 3 lines to see structure
   console.log('[FTP-SYNC] First 3 lines:');
   lines.slice(0, 3).forEach((line, i) => {
-    console.log(`  Line ${i}: ${line.substring(0, 200)}${line.length > 200 ? '...' : ''}`);
+    console.log(`  Line ${i}: ${line.substring(0, 300)}`);
   });
   
   const startIndex = skipFirstRow ? 1 : 0;
   const products = [];
+  let skipped = 0;
+  
+  // Helper to extract field with sub-field support
+  const extractField = (columns: string[], mapping: any): string | null => {
+    if (!mapping) return null;
+    
+    // Simple column index
+    if (typeof mapping === 'number') {
+      return columns[mapping] || null;
+    }
+    
+    // Object with col/sub support
+    if (typeof mapping === 'object' && mapping.col !== undefined) {
+      const cellValue = columns[mapping.col] || '';
+      
+      // If no sub-field, return whole cell
+      if (mapping.sub === undefined) {
+        return cellValue.trim();
+      }
+      
+      // Extract sub-field
+      const subDelimiter = mapping.subDelimiter || ',';
+      const subFields = cellValue.split(subDelimiter).map(s => s.trim());
+      return subFields[mapping.sub] || null;
+    }
+    
+    return null;
+  };
   
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     
-    const columns = line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''));
+    // Split by delimiter and clean quotes
+    const columns = line.split(delimiter).map(c => c.trim().replace(/^["']|["']$/g, ''));
     
-    if (columns.length < 2) continue; // Need at least name and reference
-    
-    // Use column_mapping if available, otherwise use default indices
-    const product: any = {
-      name: columnMapping?.product_name !== undefined 
-        ? columns[columnMapping.product_name] 
-        : columns[0],
-      supplier_reference: columnMapping?.supplier_reference !== undefined
-        ? columns[columnMapping.supplier_reference]
-        : columns[1],
-      ean: columnMapping?.ean !== undefined
-        ? columns[columnMapping.ean] || null
-        : columns[2] || null,
-      purchase_price: null,
-      stock_quantity: null,
-    };
-    
-    // Parse price
-    const priceIndex = columnMapping?.purchase_price !== undefined 
-      ? columnMapping.purchase_price 
-      : 3;
-    if (columns[priceIndex]) {
-      const priceStr = columns[priceIndex].replace(/,/g, '.');
-      product.purchase_price = parseFloat(priceStr) || null;
+    if (columns.length < 2) {
+      skipped++;
+      continue;
     }
     
-    // Parse stock
-    const stockIndex = columnMapping?.stock_quantity !== undefined 
-      ? columnMapping.stock_quantity 
-      : 4;
-    if (columns[stockIndex]) {
-      product.stock_quantity = parseInt(columns[stockIndex]) || null;
+    // Extract fields using mapping or defaults
+    const productName = extractField(columns, columnMapping?.product_name) || columns[0] || '';
+    const supplierRef = extractField(columns, columnMapping?.supplier_reference) || columns[1] || '';
+    const ean = extractField(columns, columnMapping?.ean) || (columns[2] || null);
+    
+    // Extract price with decimal handling
+    let purchasePrice: number | null = null;
+    const priceMapping = columnMapping?.purchase_price;
+    const priceStr = extractField(columns, priceMapping);
+    
+    if (priceStr) {
+      // Handle decimal separator (default to comma->dot)
+      const decimalSep = (priceMapping && typeof priceMapping === 'object') 
+        ? priceMapping.decimal || ',' 
+        : ',';
+      const normalizedPrice = priceStr.replace(decimalSep, '.');
+      const parsed = parseFloat(normalizedPrice);
+      if (!isNaN(parsed) && parsed > 0) {
+        purchasePrice = parsed;
+      }
     }
     
-    products.push(product);
+    // Extract stock
+    let stockQuantity: number | null = null;
+    const stockStr = extractField(columns, columnMapping?.stock_quantity);
+    if (stockStr) {
+      const parsed = parseInt(stockStr);
+      if (!isNaN(parsed)) {
+        stockQuantity = parsed;
+      }
+    }
+    
+    // Skip if no reference or no valid price
+    if (!supplierRef || !purchasePrice) {
+      skipped++;
+      if (i < startIndex + 5) {
+        console.log(`[FTP-SYNC] Skipping line ${i}: ref="${supplierRef}" price="${purchasePrice}"`);
+      }
+      continue;
+    }
+    
+    products.push({
+      product_name: productName || supplierRef, // Fallback to ref if no name
+      supplier_reference: supplierRef,
+      ean: ean || null,
+      purchase_price: purchasePrice,
+      stock_quantity: stockQuantity,
+      currency: 'EUR',
+    });
   }
   
-  console.log(`[FTP-SYNC] Parsed ${products.length} products`);
+  console.log(`[FTP-SYNC] ✅ Parsed ${products.length} valid products (skipped ${skipped})`);
+  
+  // Log sample products
   if (products.length > 0) {
-    console.log('[FTP-SYNC] First product sample:', JSON.stringify(products[0]));
+    console.log('[FTP-SYNC] Sample products (first 3):');
+    products.slice(0, 3).forEach((p, i) => {
+      console.log(`  ${i + 1}. ${p.product_name} | ${p.supplier_reference} | ${p.purchase_price}€ | stock: ${p.stock_quantity}`);
+    });
   }
   
   return products;
@@ -349,11 +402,11 @@ serve(async (req) => {
           const { error: updateError } = await supabase
             .from('supplier_products')
             .update({
-              name: product.name,
+              product_name: product.product_name,
               ean: product.ean,
               purchase_price: product.purchase_price,
               stock_quantity: product.stock_quantity,
-              last_synced_at: new Date().toISOString(),
+              last_updated: new Date().toISOString(),
             })
             .eq('id', existing.id);
 
@@ -370,13 +423,13 @@ serve(async (req) => {
             .insert({
               supplier_id: supplierId,
               user_id: supplier.user_id,
-              name: product.name,
+              product_name: product.product_name,
               supplier_reference: product.supplier_reference,
               ean: product.ean,
               purchase_price: product.purchase_price,
               currency: 'EUR',
               stock_quantity: product.stock_quantity,
-              last_synced_at: new Date().toISOString(),
+              last_updated: new Date().toISOString(),
             });
 
           if (insertError) {
