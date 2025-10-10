@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, Star, Download, BarChart3 } from "lucide-react";
@@ -258,19 +257,14 @@ export default function History() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex justify-center items-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-4xl font-bold">Historique des Analyses</h1>
           <Button 
@@ -470,13 +464,12 @@ export default function History() {
             </CardContent>
           </Card>
         )}
-      </main>
 
-      <ProductDetailModal
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        product={selectedAnalysis}
-      />
-    </div>
+        <ProductDetailModal
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          product={selectedAnalysis}
+        />
+      </main>
   );
 }

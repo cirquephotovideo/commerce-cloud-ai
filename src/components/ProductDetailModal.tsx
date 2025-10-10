@@ -34,15 +34,36 @@ export function ProductDetailModal({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   const reEnrichMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (provider: string = 'lovable-ai') => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Session expirée, veuillez vous reconnecter');
+      }
+
       const { data, error } = await supabase.functions.invoke('re-enrich-product', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
         body: {
           productId: product.id,
-          enrichmentTypes: ['amazon', 'ai_analysis']
+          enrichmentTypes: ['amazon', 'ai_analysis'],
+          provider
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific error codes
+        if (error.message.includes('401')) {
+          throw new Error('Session expirée, veuillez vous reconnecter');
+        }
+        if (error.message.includes('429')) {
+          throw new Error('Limite de taux atteinte, veuillez réessayer plus tard');
+        }
+        if (error.message.includes('402')) {
+          throw new Error('Crédits insuffisants, veuillez recharger votre compte');
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -91,7 +112,7 @@ export function ProductDetailModal({
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  onClick={() => reEnrichMutation.mutate()}
+                  onClick={() => reEnrichMutation.mutate('lovable-ai')}
                   disabled={reEnrichMutation.isPending}
                 >
                   {reEnrichMutation.isPending ? (
@@ -646,7 +667,56 @@ export function ProductDetailModal({
             </TabsContent>
 
             {/* Detailed Analysis Tab */}
-            <TabsContent value="detailed">
+            <TabsContent value="detailed" className="space-y-4">
+              {/* Re-enrichment Section */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5" />
+                    Enrichir le produit
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Relancez l'enrichissement avec le fournisseur IA de votre choix
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      onClick={() => reEnrichMutation.mutate('lovable-ai')}
+                      disabled={reEnrichMutation.isPending}
+                      variant="default"
+                    >
+                      {reEnrichMutation.isPending ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          En cours...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-2" />
+                          Lovable AI (Recommandé)
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => reEnrichMutation.mutate('ollama')}
+                      disabled={reEnrichMutation.isPending}
+                      variant="outline"
+                    >
+                      Ollama
+                    </Button>
+                    <Button
+                      onClick={() => reEnrichMutation.mutate('openai')}
+                      disabled={reEnrichMutation.isPending}
+                      variant="outline"
+                    >
+                      OpenAI
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Analysis View */}
               <DetailedAnalysisView analysis={analysis} />
             </TabsContent>
 

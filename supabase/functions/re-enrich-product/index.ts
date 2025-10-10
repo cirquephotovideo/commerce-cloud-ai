@@ -18,79 +18,105 @@ serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('[RE-ENRICH] No authorization header');
       throw new Error('No authorization header');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
+      console.error('[RE-ENRICH] Authentication failed:', userError);
       throw new Error('Authentication failed');
     }
+
+    console.log(`[RE-ENRICH] User authenticated: ${user.id}`);
 
     const { productId, enrichmentTypes, provider } = await req.json();
 
     if (!productId) {
+      console.error('[RE-ENRICH] No product ID provided');
       throw new Error('Product ID is required');
     }
 
-    console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId} with provider ${provider || 'default'}`);
+    console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId} with provider ${provider || 'lovable-ai'}`);
 
     // Try to find as product_analysis first
-    const { data: analysisData } = await supabase
+    const { data: analysisData, error: analysisError } = await supabase
       .from('product_analyses')
       .select('*, supplier_product_id')
       .eq('id', productId)
       .eq('user_id', user.id)
       .maybeSingle();
 
+    if (analysisError) {
+      console.error('[RE-ENRICH] Error fetching analysis:', analysisError);
+    }
+
     let supplierProduct = null;
     let analysis = null;
 
     if (analysisData) {
-      // It's a product_analysis ID
+      console.log('[RE-ENRICH] Found as product_analysis ID');
       analysis = analysisData;
       
-      // Get the linked supplier product
+      // Get the linked supplier product if exists
       if (analysisData.supplier_product_id) {
-        const { data: sp } = await supabase
+        const { data: sp, error: spError } = await supabase
           .from('supplier_products')
           .select('*')
           .eq('id', analysisData.supplier_product_id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         
-        supplierProduct = sp;
+        if (spError) {
+          console.error('[RE-ENRICH] Error fetching linked supplier product:', spError);
+        } else if (sp) {
+          supplierProduct = sp;
+          console.log('[RE-ENRICH] Found linked supplier product');
+        }
       }
     } else {
+      console.log('[RE-ENRICH] Not found as analysis, trying as supplier_product ID');
       // Try as supplier_product ID
-      const { data: sp } = await supabase
+      const { data: sp, error: spError } = await supabase
         .from('supplier_products')
         .select('*')
         .eq('id', productId)
         .eq('user_id', user.id)
         .maybeSingle();
 
+      if (spError) {
+        console.error('[RE-ENRICH] Error fetching supplier product:', spError);
+      }
+
       if (sp) {
+        console.log('[RE-ENRICH] Found as supplier_product ID');
         supplierProduct = sp;
         
         // Check if there's a linked analysis
-        const { data: linkedAnalysis } = await supabase
+        const { data: linkedAnalysis, error: linkedError } = await supabase
           .from('product_analyses')
           .select('*')
           .eq('supplier_product_id', sp.id)
           .eq('user_id', user.id)
           .maybeSingle();
         
-        analysis = linkedAnalysis;
+        if (linkedError) {
+          console.error('[RE-ENRICH] Error fetching linked analysis:', linkedError);
+        } else if (linkedAnalysis) {
+          analysis = linkedAnalysis;
+          console.log('[RE-ENRICH] Found linked analysis');
+        }
       }
     }
 
     if (!supplierProduct && !analysis) {
-      console.error('[RE-ENRICH] Neither supplier product nor analysis found');
+      console.error('[RE-ENRICH] Product not found - neither supplier product nor analysis exists');
       throw new Error('Product not found');
     }
+
+    console.log(`[RE-ENRICH] Product data resolved - supplier: ${!!supplierProduct}, analysis: ${!!analysis}`);
 
     // If we have analysis but no supplier product, we can still work with analysis data
     const productData = supplierProduct || {
@@ -133,6 +159,7 @@ serve(async (req) => {
     }
 
     // Process the enrichment immediately
+    console.log('[RE-ENRICH] Invoking product-analyzer...');
     try {
       // Call product analyzer
       if (enrichmentsToRun.includes('amazon') || enrichmentsToRun.includes('ai_analysis')) {

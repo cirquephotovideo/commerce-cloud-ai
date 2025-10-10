@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -135,19 +134,14 @@ export default function ImportExportDashboard() {
 
   if (statsLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex justify-center items-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="container mx-auto px-4 py-8">
+    <main className="container mx-auto px-4 py-8">
         <h1 className="text-4xl font-bold mb-8">Dashboard Import/Export</h1>
 
         {/* Stats globales */}
@@ -298,6 +292,5 @@ export default function ImportExportDashboard() {
           </CardContent>
         </Card>
       </main>
-    </div>
   );
 }
