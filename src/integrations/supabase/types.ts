@@ -2453,12 +2453,14 @@ export type Database = {
           created_at: string | null
           currency: string | null
           delivery_time_days: number | null
+          description: string | null
           ean: string | null
           enrichment_progress: number | null
           enrichment_status: string | null
           id: string
           last_updated: string | null
           minimum_order_quantity: number | null
+          needs_enrichment: boolean | null
           product_name: string
           purchase_price: number
           stock_quantity: number | null
@@ -2472,12 +2474,14 @@ export type Database = {
           created_at?: string | null
           currency?: string | null
           delivery_time_days?: number | null
+          description?: string | null
           ean?: string | null
           enrichment_progress?: number | null
           enrichment_status?: string | null
           id?: string
           last_updated?: string | null
           minimum_order_quantity?: number | null
+          needs_enrichment?: boolean | null
           product_name: string
           purchase_price: number
           stock_quantity?: number | null
@@ -2491,12 +2495,14 @@ export type Database = {
           created_at?: string | null
           currency?: string | null
           delivery_time_days?: number | null
+          description?: string | null
           ean?: string | null
           enrichment_progress?: number | null
           enrichment_status?: string | null
           id?: string
           last_updated?: string | null
           minimum_order_quantity?: number | null
+          needs_enrichment?: boolean | null
           product_name?: string
           purchase_price?: number
           stock_quantity?: number | null

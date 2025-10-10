@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, formatDate, extractAnalysisData } from "@/lib/formatters";
 import { useState } from "react";
 

@@ -1,6 +1,8 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatPrice, formatMargin, getMarginColor } from "@/lib/formatters";
+import { AlertCircle } from "lucide-react";
 
 interface ProductInfoTableProps {
   data: {
@@ -16,8 +18,9 @@ interface ProductInfoTableProps {
     status?: string;
     brand?: string;
     stock?: number;
+    description?: string;
   };
-  columns?: ('name' | 'ean' | 'prices' | 'margin' | 'supplier' | 'category' | 'ranking' | 'images' | 'status' | 'brand' | 'stock')[];
+  columns?: ('name' | 'ean' | 'prices' | 'margin' | 'supplier' | 'category' | 'ranking' | 'images' | 'status' | 'brand' | 'stock' | 'description')[];
 }
 
 export function ProductInfoTable({ data, columns = ['name', 'ean', 'prices', 'margin', 'category'] }: ProductInfoTableProps) {
@@ -29,6 +32,36 @@ export function ProductInfoTable({ data, columns = ['name', 'ean', 'prices', 'ma
   
   if (columns.includes('brand') && data.brand) {
     rows.push({ label: '🏷️ Marque', value: data.brand });
+  }
+
+  if (columns.includes('description') && data.description) {
+    const desc = data.description;
+    const isTruncated = desc.endsWith('...') || desc.includes('jusqu&') || desc.length < 50;
+    const displayDesc = desc.length > 100 ? desc.substring(0, 100) + '...' : desc;
+    
+    rows.push({
+      label: '📝 Description',
+      value: (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">{displayDesc}</span>
+                {isTruncated && (
+                  <Badge variant="destructive" className="text-xs">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    Incomplète
+                  </Badge>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-md">
+              <p>{desc}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ),
+    });
   }
 
   if (columns.includes('ean') && data.ean) {
