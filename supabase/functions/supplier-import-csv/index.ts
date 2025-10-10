@@ -22,6 +22,33 @@ function decodeHtmlEntities(text: string): string {
   return text.replace(/&[a-z]+;/gi, match => entities[match.toLowerCase()] || match);
 }
 
+// Helper to extract field with sub-field support
+function extractField(columns: string[], mapping: any): string | null {
+  if (!mapping) return null;
+  
+  // Simple column index
+  if (typeof mapping === 'number') {
+    return columns[mapping] || null;
+  }
+  
+  // Object with col/sub support
+  if (typeof mapping === 'object' && mapping.col !== undefined) {
+    const cellValue = columns[mapping.col] || '';
+    
+    // If no sub-field, return whole cell
+    if (mapping.sub === undefined) {
+      return cellValue.trim();
+    }
+    
+    // Extract sub-field
+    const subDelimiter = mapping.subDelimiter || ',';
+    const subFields = cellValue.split(subDelimiter).map(s => s.trim());
+    return subFields[mapping.sub] || null;
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -46,83 +73,169 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, fileContent, delimiter = ';', skipRows = 1, columnMapping = {} } = await req.json();
+    const { supplierId, fileContent, delimiter: userDelimiter, skipRows = 1, columnMapping = {} } = await req.json();
 
-    console.log('Starting CSV import for supplier:', supplierId, 'skipping', skipRows, 'rows');
+    console.log('[CSV-IMPORT] Starting for supplier:', supplierId);
+    console.log('[CSV-IMPORT] Skip rows:', skipRows);
+    console.log('[CSV-IMPORT] User delimiter:', userDelimiter);
+    console.log('[CSV-IMPORT] Column mapping:', JSON.stringify(columnMapping, null, 2));
 
-    // Parse CSV
-    const lines = fileContent.split('\n').filter((line: string) => line.trim());
-    const dataLines = skipRows > 0 ? lines.slice(skipRows) : lines;
+    // Remove BOM if present
+    const cleanContent = fileContent.replace(/^\uFEFF/, '');
+    const lines = cleanContent.split(/\r?\n/).filter((line: string) => line.trim());
+    
+    console.log(`[CSV-IMPORT] Total lines: ${lines.length}`);
 
-    const products = [];
+    // Auto-detect delimiter if not specified
+    let delimiter = userDelimiter || ';';
+    if (lines.length > 0) {
+      const firstLine = lines[0];
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const semicolonCount = (firstLine.match(/;/g) || []).length;
+      
+      if (commaCount > 3 && commaCount > semicolonCount) {
+        delimiter = ',';
+        console.log(`[CSV-IMPORT] Auto-detected delimiter: "," (${commaCount} commas vs ${semicolonCount} semicolons)`);
+      } else {
+        console.log(`[CSV-IMPORT] Using delimiter: "${delimiter}"`);
+      }
+    }
+
+    // Log first 3 lines
+    console.log('[CSV-IMPORT] First 3 lines:');
+    lines.slice(0, 3).forEach((line: string, i: number) => {
+      console.log(`  Line ${i}: ${line.substring(0, 300)}`);
+    });
+
+    const startIndex = skipRows;
+    const dataLines = lines.slice(startIndex);
+    console.log(`[CSV-IMPORT] Processing ${dataLines.length} data lines (after skipping ${skipRows})`);
+
     let matched = 0;
     let newProducts = 0;
     let failed = 0;
+    let skippedEmpty = 0;
+    let skippedNoRef = 0;
+    let skippedNoPrice = 0;
+    let dbErrors = 0;
 
-    for (const line of dataLines) {
+    for (let i = 0; i < dataLines.length; i++) {
+      const line = dataLines[i].trim();
+      if (!line) {
+        skippedEmpty++;
+        continue;
+      }
+
       try {
-        const columns = line.split(delimiter).map((col: string) => col.trim());
-        
-        // Use column mapping if provided
-        const getName = () => {
-          if (columnMapping.product_name !== null && columnMapping.product_name !== undefined) {
-            return columns[columnMapping.product_name];
-          }
-          return columns[2]; // Default: column 3
-        };
-        
-        const getPrice = () => {
-          if (columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined) {
-            return columns[columnMapping.purchase_price];
-          }
-          return columns[3]; // Default: column 4
-        };
+        // Split by delimiter and clean quotes
+        const columns = line.split(delimiter).map((col: string) => 
+          col.trim().replace(/^["']|["']$/g, '')
+        );
 
-        const name = getName();
-        const price = getPrice();
+        // Extract fields using advanced mapping
+        const productName = extractField(columns, columnMapping?.product_name) || columns[0] || '';
+        const supplierRef = extractField(columns, columnMapping?.supplier_reference) || columns[1] || '';
+        const ean = extractField(columns, columnMapping?.ean) || (columns[2] || null);
+        
+        // Extract price with decimal handling
+        let purchasePrice: number | null = null;
+        const priceMapping = columnMapping?.purchase_price;
+        const priceStr = extractField(columns, priceMapping);
+        
+        if (priceStr) {
+          const decimalSep = (priceMapping && typeof priceMapping === 'object') 
+            ? priceMapping.decimal || ',' 
+            : ',';
+          const normalizedPrice = priceStr.replace(decimalSep, '.');
+          const parsed = parseFloat(normalizedPrice);
+          if (!isNaN(parsed) && parsed > 0) {
+            purchasePrice = parsed;
+          }
+        }
+        
+        // Extract stock
+        let stockQuantity: number | null = null;
+        const stockStr = extractField(columns, columnMapping?.stock_quantity);
+        if (stockStr) {
+          const parsed = parseInt(stockStr);
+          if (!isNaN(parsed)) {
+            stockQuantity = parsed;
+          }
+        }
 
-        if (!name || !price) {
+        // Validation with detailed logging
+        if (!supplierRef) {
+          skippedNoRef++;
+          if (i < 5) {
+            console.log(`[CSV-IMPORT] Line ${i}: Missing supplier reference`);
+          }
           failed++;
           continue;
         }
 
-        // Decode HTML entities and clean description
-        const descriptionValue = columnMapping.description !== null ? columns[columnMapping.description] : (columns[5] || null);
-        const cleanDescription = descriptionValue ? decodeHtmlEntities(descriptionValue) : null;
-        const isDescriptionTruncated = cleanDescription && (
-          cleanDescription.endsWith('...') || 
-          cleanDescription.includes('jusqu&') ||
-          cleanDescription.length < 50
-        );
+        if (!purchasePrice) {
+          skippedNoPrice++;
+          if (i < 5) {
+            console.log(`[CSV-IMPORT] Line ${i}: Missing or invalid price (ref: ${supplierRef})`);
+          }
+          failed++;
+          continue;
+        }
+
+        // Log first few parsed products
+        if (i < 3) {
+          console.log(`[CSV-IMPORT] Sample product ${i + 1}:`, {
+            name: productName,
+            ref: supplierRef,
+            ean: ean,
+            price: purchasePrice,
+            stock: stockQuantity
+          });
+        }
+
+        // Decode HTML entities
+        const cleanName = decodeHtmlEntities(productName || supplierRef);
 
         const productData = {
           user_id: user.id,
           supplier_id: supplierId,
-          ean: columnMapping.ean !== null ? (columns[columnMapping.ean] || null) : (columns[0] || null),
-          supplier_reference: columnMapping.supplier_reference !== null ? (columns[columnMapping.supplier_reference] || null) : (columns[1] || null),
-          product_name: decodeHtmlEntities(name),
-          purchase_price: parseFloat(String(price).replace(',', '.')),
-          stock_quantity: columnMapping.stock_quantity !== null ? (columns[columnMapping.stock_quantity] ? parseInt(columns[columnMapping.stock_quantity]) : null) : (columns[4] ? parseInt(columns[4]) : null),
+          supplier_reference: supplierRef,
+          product_name: cleanName,
+          ean: ean,
+          purchase_price: purchasePrice,
+          stock_quantity: stockQuantity,
           currency: 'EUR',
-          description: cleanDescription,
-          needs_enrichment: isDescriptionTruncated,
+          needs_enrichment: true,
         };
 
-        // Check if product exists
+        // Check if product exists by supplier_reference
         const { data: existing } = await supabase
           .from('supplier_products')
           .select('id')
           .eq('supplier_id', supplierId)
-          .eq('ean', productData.ean)
+          .eq('supplier_reference', supplierRef)
           .maybeSingle();
 
         if (existing) {
           // Update existing
-          await supabase
+          const { error: updateError } = await supabase
             .from('supplier_products')
-            .update({ ...productData, enrichment_status: 'completed', enrichment_progress: 100 })
+            .update({
+              product_name: productData.product_name,
+              ean: productData.ean,
+              purchase_price: productData.purchase_price,
+              stock_quantity: productData.stock_quantity,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', existing.id);
-          matched++;
+
+          if (updateError) {
+            console.error('[CSV-IMPORT] Update error:', updateError);
+            dbErrors++;
+            failed++;
+          } else {
+            matched++;
+          }
         } else {
           // Insert new
           const { data: newProduct, error: insertError } = await supabase
@@ -131,7 +244,12 @@ serve(async (req) => {
             .select()
             .single();
 
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error('[CSV-IMPORT] Insert error:', insertError);
+            dbErrors++;
+            failed++;
+            continue;
+          }
 
           // Try to match with existing product_analyses by EAN
           let matchedAnalysis = false;
@@ -161,21 +279,25 @@ serve(async (req) => {
             }
           }
 
-          // If no match found, trigger auto-enrichment
-          if (!matchedAnalysis) {
-            console.log(`🔍 Product ${productData.product_name} not found, marking for enrichment...`);
-            // The process-pending-enrichments function will handle this
-          }
-
           newProducts++;
         }
-
-        products.push(productData);
       } catch (error) {
-        console.error('Error processing line:', error);
+        console.error(`[CSV-IMPORT] Error processing line ${i}:`, error);
+        dbErrors++;
         failed++;
       }
     }
+
+    console.log('[CSV-IMPORT] Summary:', {
+      total: dataLines.length,
+      newProducts,
+      matched,
+      failed,
+      skippedEmpty,
+      skippedNoRef,
+      skippedNoPrice,
+      dbErrors
+    });
 
     // Log the import
     await supabase.from('supplier_import_logs').insert([{
@@ -200,7 +322,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        imported: products.length,
+        imported: newProducts + matched,
         matched,
         newProducts,
         failed,
