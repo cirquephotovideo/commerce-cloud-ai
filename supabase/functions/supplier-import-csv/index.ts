@@ -46,12 +46,12 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, csvContent, delimiter = ';', skipFirstRow = true } = await req.json();
+    const { supplierId, fileContent, delimiter = ';', skipFirstRow = true, columnMapping = {} } = await req.json();
 
     console.log('Starting CSV import for supplier:', supplierId);
 
     // Parse CSV
-    const lines = csvContent.split('\n').filter((line: string) => line.trim());
+    const lines = fileContent.split('\n').filter((line: string) => line.trim());
     const dataLines = skipFirstRow ? lines.slice(1) : lines;
 
     const products = [];
@@ -63,8 +63,23 @@ serve(async (req) => {
       try {
         const columns = line.split(delimiter).map((col: string) => col.trim());
         
-        // Extended mapping with description support
-        const [ean, reference, name, price, stock, description] = columns;
+        // Use column mapping if provided
+        const getName = () => {
+          if (columnMapping.product_name !== null && columnMapping.product_name !== undefined) {
+            return columns[columnMapping.product_name];
+          }
+          return columns[2]; // Default: column 3
+        };
+        
+        const getPrice = () => {
+          if (columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined) {
+            return columns[columnMapping.purchase_price];
+          }
+          return columns[3]; // Default: column 4
+        };
+
+        const name = getName();
+        const price = getPrice();
 
         if (!name || !price) {
           failed++;
@@ -72,7 +87,8 @@ serve(async (req) => {
         }
 
         // Decode HTML entities and clean description
-        const cleanDescription = description ? decodeHtmlEntities(description) : null;
+        const descriptionValue = columnMapping.description !== null ? columns[columnMapping.description] : (columns[5] || null);
+        const cleanDescription = descriptionValue ? decodeHtmlEntities(descriptionValue) : null;
         const isDescriptionTruncated = cleanDescription && (
           cleanDescription.endsWith('...') || 
           cleanDescription.includes('jusqu&') ||
@@ -82,14 +98,16 @@ serve(async (req) => {
         const productData = {
           user_id: user.id,
           supplier_id: supplierId,
-          ean: ean || null,
-          supplier_reference: reference || null,
+          ean: columnMapping.ean !== null ? (columns[columnMapping.ean] || null) : (columns[0] || null),
+          supplier_reference: columnMapping.supplier_reference !== null ? (columns[columnMapping.supplier_reference] || null) : (columns[1] || null),
           product_name: decodeHtmlEntities(name),
-          purchase_price: parseFloat(price.replace(',', '.')),
-          stock_quantity: stock ? parseInt(stock) : null,
+          purchase_price: parseFloat(String(price).replace(',', '.')),
+          stock_quantity: columnMapping.stock_quantity !== null ? (columns[columnMapping.stock_quantity] ? parseInt(columns[columnMapping.stock_quantity]) : null) : (columns[4] ? parseInt(columns[4]) : null),
           currency: 'EUR',
           description: cleanDescription,
           needs_enrichment: isDescriptionTruncated,
+          brand: columnMapping.brand !== null ? (columns[columnMapping.brand] || null) : null,
+          category: columnMapping.category !== null ? (columns[columnMapping.category] || null) : null,
         };
 
         // Check if product exists
@@ -97,7 +115,7 @@ serve(async (req) => {
           .from('supplier_products')
           .select('id')
           .eq('supplier_id', supplierId)
-          .eq('ean', ean)
+          .eq('ean', productData.ean)
           .maybeSingle();
 
         if (existing) {
@@ -119,18 +137,18 @@ serve(async (req) => {
 
           // Try to match with existing product_analyses by EAN
           let matchedAnalysis = false;
-          if (ean) {
+          if (productData.ean) {
             const { data: analysis } = await supabase
               .from('product_analyses')
               .select('id')
-              .eq('ean', ean)
+              .eq('ean', productData.ean)
               .maybeSingle();
 
             if (analysis) {
               await supabase
                 .from('product_analyses')
                 .update({
-                  purchase_price: parseFloat(price.replace(',', '.')),
+                  purchase_price: productData.purchase_price,
                   purchase_currency: 'EUR',
                   supplier_product_id: newProduct.id,
                 })
@@ -147,7 +165,7 @@ serve(async (req) => {
 
           // If no match found, trigger auto-enrichment
           if (!matchedAnalysis) {
-            console.log(`🔍 Product ${name} not found, marking for enrichment...`);
+            console.log(`🔍 Product ${productData.product_name} not found, marking for enrichment...`);
             // The process-pending-enrichments function will handle this
           }
 

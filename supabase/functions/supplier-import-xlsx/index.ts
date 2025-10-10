@@ -31,7 +31,7 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, fileContent, skipFirstRow = true } = await req.json();
+    const { supplierId, fileContent, skipFirstRow = true, columnMapping = {} } = await req.json();
 
     console.log('Starting XLSX import for supplier:', supplierId);
 
@@ -56,8 +56,23 @@ serve(async (req) => {
 
     for (const row of dataRows) {
       try {
-        // Basic mapping - can be made configurable later
-        const [ean, reference, name, price, stock] = row;
+        // Use column mapping if provided, otherwise fallback to basic mapping
+        const getName = () => {
+          if (columnMapping.product_name !== null && columnMapping.product_name !== undefined) {
+            return row[columnMapping.product_name];
+          }
+          return row[2]; // Default: column 3
+        };
+        
+        const getPrice = () => {
+          if (columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined) {
+            return row[columnMapping.purchase_price];
+          }
+          return row[3]; // Default: column 4
+        };
+
+        const name = getName();
+        const price = getPrice();
 
         if (!name || !price) {
           failed++;
@@ -67,12 +82,15 @@ serve(async (req) => {
         const productData = {
           user_id: user.id,
           supplier_id: supplierId,
-          ean: ean ? String(ean) : null,
-          supplier_reference: reference ? String(reference) : null,
+          ean: columnMapping.ean !== null ? String(row[columnMapping.ean] || '') : (row[0] ? String(row[0]) : null),
+          supplier_reference: columnMapping.supplier_reference !== null ? String(row[columnMapping.supplier_reference] || '') : (row[1] ? String(row[1]) : null),
           product_name: String(name),
           purchase_price: parseFloat(String(price).replace(',', '.')),
-          stock_quantity: stock ? parseInt(String(stock)) : null,
+          stock_quantity: columnMapping.stock_quantity !== null ? parseInt(String(row[columnMapping.stock_quantity] || 0)) : (row[4] ? parseInt(String(row[4])) : null),
           currency: 'EUR',
+          description: columnMapping.description !== null ? String(row[columnMapping.description] || '') : null,
+          brand: columnMapping.brand !== null ? String(row[columnMapping.brand] || '') : null,
+          category: columnMapping.category !== null ? String(row[columnMapping.category] || '') : null,
         };
 
         // Check if product exists
@@ -80,7 +98,7 @@ serve(async (req) => {
           .from('supplier_products')
           .select('id')
           .eq('supplier_id', supplierId)
-          .eq('ean', ean)
+          .eq('ean', productData.ean)
           .maybeSingle();
 
         if (existing) {
@@ -102,11 +120,11 @@ serve(async (req) => {
 
           // Try to match with existing product_analyses by EAN
           let matchedAnalysis = false;
-          if (ean) {
+          if (productData.ean) {
             const { data: analysis } = await supabase
               .from('product_analyses')
               .select('id')
-              .eq('ean', String(ean))
+              .eq('ean', String(productData.ean))
               .maybeSingle();
 
             if (analysis) {

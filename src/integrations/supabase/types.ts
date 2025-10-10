@@ -2364,6 +2364,7 @@ export type Database = {
       }
       supplier_configurations: {
         Row: {
+          column_mapping: Json | null
           connection_config: Json | null
           created_at: string | null
           id: string
@@ -2378,6 +2379,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
           id?: string
@@ -2392,6 +2394,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
           id?: string

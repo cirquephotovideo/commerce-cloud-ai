@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, ArrowLeft, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { SupplierColumnMapper } from "./SupplierColumnMapper";
 import * as XLSX from "xlsx";
 
 interface SupplierImportWizardProps {
@@ -23,6 +24,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [delimiter, setDelimiter] = useState(";");
   const [skipFirstRow, setSkipFirstRow] = useState(true);
   const [preview, setPreview] = useState<any[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, number | null>>({});
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers"],
@@ -59,12 +61,11 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const workbook = XLSX.read(data);
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
-      const rows = jsonData.slice(skipFirstRow ? 1 : 0, 6);
-      setPreview(rows);
+      setPreview(jsonData.slice(0, 6));
     } else {
       const text = await file.text();
       const allLines = text.split("\n");
-      const lines = allLines.slice(skipFirstRow ? 1 : 0, 6);
+      const lines = allLines.slice(0, 6);
       const parsed = lines.map(line => line.split(delimiter));
       setPreview(parsed);
     }
@@ -76,9 +77,24 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       return;
     }
 
+    // Validate required mappings
+    const hasName = columnMapping.product_name !== null && columnMapping.product_name !== undefined;
+    const hasPrice = columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined;
+    
+    if (!hasName || !hasPrice) {
+      toast.error("Veuillez mapper au minimum le nom du produit et le prix d'achat");
+      return;
+    }
+
     setLoading(true);
     try {
       const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+      
+      // Save column mapping to supplier configuration
+      await supabase
+        .from('supplier_configurations')
+        .update({ column_mapping: columnMapping })
+        .eq('id', supplierId);
       
       if (isXLSX) {
         const arrayBuffer = await file.arrayBuffer();
@@ -94,143 +110,196 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             supplierId,
             fileContent: base64,
             skipFirstRow,
+            columnMapping,
           },
         });
 
         if (error) throw error;
-        toast.success(`Importation réussie: ${data.imported} produits importés`);
+        toast.success(`✅ Import réussi: ${data.imported} produits importés`);
       } else {
         const text = await file.text();
         
         const { data, error } = await supabase.functions.invoke("supplier-import-csv", {
           body: {
             supplierId,
-            csvContent: text,
+            fileContent: text,
             delimiter,
             skipFirstRow,
+            columnMapping,
           },
         });
 
         if (error) throw error;
-        toast.success(`Importation réussie: ${data.imported} produits importés`);
+        toast.success(`✅ Import réussi: ${data.imported} produits importés`);
       }
       
       onClose();
     } catch (error) {
       console.error("Import error:", error);
-      toast.error("Erreur lors de l'importation");
+      toast.error("❌ Erreur lors de l'importation");
     } finally {
       setLoading(false);
     }
   };
 
+  const canProceedToStep3 = file && preview.length > 0;
+  const canImport = columnMapping.product_name !== null && columnMapping.purchase_price !== null;
+
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Assistant d'importation CSV/XLSX</DialogTitle>
+          <DialogTitle>
+            📥 Assistant d'import CSV/XLSX - Étape {step}/3
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Step 1: Supplier selection */}
+          {/* Step 1: Select Supplier & File */}
           {step === 1 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Sélectionner un fournisseur</Label>
-                <Select value={supplierId} onValueChange={setSupplierId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choisir un fournisseur..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers?.map((supplier) => (
-                      <SelectItem key={supplier.id} value={supplier.id}>
-                        {supplier.supplier_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                <div>
+                  <Label>Fournisseur</Label>
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un fournisseur" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers?.map((supplier) => (
+                        <SelectItem key={supplier.id} value={supplier.id}>
+                          {supplier.supplier_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="flex justify-end">
-                <Button onClick={() => setStep(2)} disabled={!supplierId}>
-                  Suivant
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: File upload */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                    <Upload className="h-12 w-12 text-muted-foreground" />
-                    <Label htmlFor="file-upload" className="cursor-pointer">
-                      <div className="text-center">
-                        <p className="text-sm text-muted-foreground">
-                          Cliquez pour sélectionner un fichier CSV ou XLSX
-                        </p>
-                        {file && (
-                          <p className="text-sm font-medium mt-2 flex items-center gap-2 justify-center">
-                            <FileText className="h-4 w-4" />
-                            {file.name}
-                          </p>
-                        )}
-                      </div>
-                    </Label>
+                <div>
+                  <Label>Fichier CSV ou XLSX</Label>
+                  <div className="flex items-center gap-2 mt-2">
                     <Input
-                      id="file-upload"
                       type="file"
                       accept=".csv,.xlsx,.xls"
                       onChange={handleFileSelect}
-                      className="hidden"
                     />
+                    {file && <FileText className="h-5 w-5 text-green-500" />}
                   </div>
-                </CardContent>
-              </Card>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Séparateur</Label>
-                  <Input
-                    value={delimiter}
-                    onChange={(e) => setDelimiter(e.target.value)}
-                    maxLength={1}
-                  />
                 </div>
-                <div className="flex items-center space-x-2 pt-8">
-                  <input
-                    type="checkbox"
-                    id="skip-first"
-                    checked={skipFirstRow}
-                    onChange={(e) => setSkipFirstRow(e.target.checked)}
-                  />
-                  <Label htmlFor="skip-first">Ignorer la première ligne (en-têtes)</Label>
-                </div>
-              </div>
 
-              {preview.length > 0 && (
-                <div className="border rounded-lg p-4 overflow-x-auto">
-                  <p className="text-sm font-medium mb-2">Aperçu:</p>
-                  <pre className="text-xs">
-                    {preview.map((row, i) => (
-                      <div key={i}>{row.join(" | ")}</div>
-                    ))}
-                  </pre>
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep(1)}>
-                  Retour
-                </Button>
-                <Button onClick={handleImport} disabled={!file || loading}>
-                  {loading ? "Importation..." : "Importer"}
-                </Button>
-              </div>
-            </div>
+                {file?.name.endsWith(".csv") && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Séparateur</Label>
+                      <Select value={delimiter} onValueChange={setDelimiter}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value=";">Point-virgule (;)</SelectItem>
+                          <SelectItem value=",">Virgule (,)</SelectItem>
+                          <SelectItem value="\t">Tabulation</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center space-x-2 pt-8">
+                      <input
+                        type="checkbox"
+                        id="skip-first"
+                        checked={skipFirstRow}
+                        onChange={(e) => {
+                          setSkipFirstRow(e.target.checked);
+                          if (file) previewFile(file);
+                        }}
+                      />
+                      <Label htmlFor="skip-first">Ignorer la première ligne (en-têtes)</Label>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
+
+          {/* Step 2: Preview */}
+          {step === 2 && preview.length > 0 && (
+            <Card>
+              <CardContent className="pt-6">
+                <h3 className="font-semibold mb-4">👁️ Aperçu du fichier (premières lignes)</h3>
+                <div className="overflow-x-auto border rounded">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {preview.map((row, i) => (
+                        <tr key={i} className={i === 0 ? "font-bold bg-muted" : "hover:bg-muted/50"}>
+                          {row.map((cell: any, j: number) => (
+                            <td key={j} className="p-2 border-r last:border-r-0">
+                              {String(cell || '-')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 3: Column Mapping */}
+          {step === 3 && (
+            <SupplierColumnMapper
+              previewData={preview}
+              onMappingChange={setColumnMapping}
+              initialMapping={columnMapping}
+            />
+          )}
+
+          {/* Navigation */}
+          <div className="flex justify-between border-t pt-4">
+            <div>
+              {step > 1 && (
+                <Button variant="outline" onClick={() => setStep(step - 1)}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Précédent
+                </Button>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Annuler
+              </Button>
+              
+              {step === 1 && (
+                <Button onClick={() => setStep(2)} disabled={!supplierId || !file}>
+                  Suivant
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              )}
+              
+              {step === 2 && (
+                <Button onClick={() => setStep(3)} disabled={!canProceedToStep3}>
+                  Suivant
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              )}
+              
+              {step === 3 && (
+                <Button onClick={handleImport} disabled={!canImport || loading}>
+                  {loading ? (
+                    <>
+                      <FileText className="mr-2 h-4 w-4 animate-spin" />
+                      Import en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Lancer l'import
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
