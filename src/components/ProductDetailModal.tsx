@@ -11,6 +11,7 @@ import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight, AlertC
 import { formatPrice, formatMargin, getMarginColor, formatDate, extractAnalysisData } from "@/lib/formatters";
 import { useState } from "react";
 import { SupplierPriceHistory } from "./SupplierPriceHistory";
+import { DetailedAnalysisView } from "./DetailedAnalysisView";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
@@ -138,7 +139,7 @@ export function ProductDetailModal({
         </DialogHeader>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="general">Général</TabsTrigger>
             <TabsTrigger value="images">
               Images ({imageCount})
@@ -146,6 +147,7 @@ export function ProductDetailModal({
             <TabsTrigger value="amazon">Amazon</TabsTrigger>
             <TabsTrigger value="pricing">Pricing</TabsTrigger>
             <TabsTrigger value="supplier">Fournisseur</TabsTrigger>
+            <TabsTrigger value="detailed">🔍 Analyse Complète</TabsTrigger>
             <TabsTrigger value="raw">Données brutes</TabsTrigger>
           </TabsList>
 
@@ -641,6 +643,11 @@ export function ProductDetailModal({
               {product.supplier_product_id && (
                 <SupplierPriceHistory supplierProductId={product.supplier_product_id} />
               )}
+            </TabsContent>
+
+            {/* Detailed Analysis Tab */}
+            <TabsContent value="detailed">
+              <DetailedAnalysisView analysis={analysis} />
             </TabsContent>
 
             {/* Raw Data Tab */}
