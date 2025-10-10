@@ -130,9 +130,26 @@ async function downloadFTPFile(ftpClient: any, remotePath: string): Promise<stri
   return content;
 }
 
-function parseCSV(content: string, delimiter: string = ';', skipFirstRow: boolean = false): any[] {
+function parseCSV(
+  content: string, 
+  delimiter: string = ';', 
+  skipFirstRow: boolean = false,
+  columnMapping?: any
+): any[] {
   const lines = content.split('\n').filter(l => l.trim());
+  
+  console.log(`[FTP-SYNC] Total lines in CSV: ${lines.length}`);
+  console.log('[FTP-SYNC] CSV delimiter:', delimiter);
+  console.log('[FTP-SYNC] Skip first row:', skipFirstRow);
+  console.log('[FTP-SYNC] Column mapping:', JSON.stringify(columnMapping));
+  
   if (lines.length === 0) return [];
+  
+  // Log first 3 lines to see structure
+  console.log('[FTP-SYNC] First 3 lines:');
+  lines.slice(0, 3).forEach((line, i) => {
+    console.log(`  Line ${i}: ${line.substring(0, 200)}${line.length > 200 ? '...' : ''}`);
+  });
   
   const startIndex = skipFirstRow ? 1 : 0;
   const products = [];
@@ -143,17 +160,46 @@ function parseCSV(content: string, delimiter: string = ';', skipFirstRow: boolea
     
     const columns = line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''));
     
-    // Assume standard CSV format: name, reference, ean, price, stock
-    // Adjust based on actual CSV structure
-    if (columns.length >= 3) {
-      products.push({
-        name: columns[0] || '',
-        supplier_reference: columns[1] || '',
-        ean: columns[2] || null,
-        purchase_price: columns[3] ? parseFloat(columns[3].replace(/,/g, '.')) : null,
-        stock_quantity: columns[4] ? parseInt(columns[4]) : null,
-      });
+    if (columns.length < 2) continue; // Need at least name and reference
+    
+    // Use column_mapping if available, otherwise use default indices
+    const product: any = {
+      name: columnMapping?.product_name !== undefined 
+        ? columns[columnMapping.product_name] 
+        : columns[0],
+      supplier_reference: columnMapping?.supplier_reference !== undefined
+        ? columns[columnMapping.supplier_reference]
+        : columns[1],
+      ean: columnMapping?.ean !== undefined
+        ? columns[columnMapping.ean] || null
+        : columns[2] || null,
+      purchase_price: null,
+      stock_quantity: null,
+    };
+    
+    // Parse price
+    const priceIndex = columnMapping?.purchase_price !== undefined 
+      ? columnMapping.purchase_price 
+      : 3;
+    if (columns[priceIndex]) {
+      const priceStr = columns[priceIndex].replace(/,/g, '.');
+      product.purchase_price = parseFloat(priceStr) || null;
     }
+    
+    // Parse stock
+    const stockIndex = columnMapping?.stock_quantity !== undefined 
+      ? columnMapping.stock_quantity 
+      : 4;
+    if (columns[stockIndex]) {
+      product.stock_quantity = parseInt(columns[stockIndex]) || null;
+    }
+    
+    products.push(product);
+  }
+  
+  console.log(`[FTP-SYNC] Parsed ${products.length} products`);
+  if (products.length > 0) {
+    console.log('[FTP-SYNC] First product sample:', JSON.stringify(products[0]));
   }
   
   return products;
@@ -241,6 +287,7 @@ serve(async (req) => {
     let csvContent: string;
     try {
       csvContent = await downloadFTPFile(ftpClient, config.remote_path);
+      console.log('[FTP-SYNC] File size:', csvContent.length, 'bytes');
       ftpClient.conn.close();
     } catch (error) {
       ftpClient.conn.close();
@@ -257,8 +304,13 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV
-    const products = parseCSV(csvContent, delimiter, skipFirstRow);
+    // Parse CSV with column mapping
+    const products = parseCSV(
+      csvContent, 
+      delimiter, 
+      skipFirstRow,
+      supplier.column_mapping
+    );
     console.log(`[FTP-SYNC] Parsed ${products.length} products from CSV`);
 
     if (products.length === 0) {

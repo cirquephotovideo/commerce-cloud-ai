@@ -15,7 +15,7 @@ async function testFTPConnection(host: string, port: number, username: string, p
   const decoder = new TextDecoder();
   
   async function readResponse(): Promise<string> {
-    const buffer = new Uint8Array(1024);
+    const buffer = new Uint8Array(4096);
     const n = await conn.read(buffer);
     if (!n) throw new Error('Connection closed');
     return decoder.decode(buffer.subarray(0, n));
@@ -39,38 +39,69 @@ async function testFTPConnection(host: string, port: number, username: string, p
     throw new Error('Authentication failed');
   }
   
-  // Enter passive mode
-  const pasvResp = await sendCommand('PASV');
-  const pasvMatch = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
-  if (!pasvMatch) {
-    conn.close();
-    throw new Error('Failed to enter passive mode');
-  }
-  
-  const dataPort = parseInt(pasvMatch[5]) * 256 + parseInt(pasvMatch[6]);
-  const dataHost = `${pasvMatch[1]}.${pasvMatch[2]}.${pasvMatch[3]}.${pasvMatch[4]}`;
-  
-  // Connect to data port
-  const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
-  
-  // Send LIST command
-  await sendCommand('LIST /');
-  
-  // Read file listing
-  const buffer = new Uint8Array(8192);
+  // Try different LIST methods
+  const listMethods = ['LIST', 'LIST /', 'NLST', 'NLST /'];
   let fileList = '';
-  try {
-    while (true) {
-      const n = await dataConn.read(buffer);
-      if (!n) break;
-      fileList += decoder.decode(buffer.subarray(0, n));
+  let successMethod = '';
+  
+  for (const method of listMethods) {
+    try {
+      console.log(`[FTP-TEST] Trying ${method}...`);
+      
+      // Enter passive mode
+      const pasvResp = await sendCommand('PASV');
+      const pasvMatch = pasvResp.match(/\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+      if (!pasvMatch) continue;
+      
+      const dataPort = parseInt(pasvMatch[5]) * 256 + parseInt(pasvMatch[6]);
+      const dataHost = `${pasvMatch[1]}.${pasvMatch[2]}.${pasvMatch[3]}.${pasvMatch[4]}`;
+      
+      // Connect to data port
+      const dataConn = await Deno.connect({ hostname: dataHost, port: dataPort });
+      
+      // Send LIST/NLST command
+      const listResp = await sendCommand(method);
+      console.log(`[FTP-TEST] ${method} response:`, listResp.trim());
+      
+      // Read file listing with larger buffer
+      const buffer = new Uint8Array(65536); // 64KB buffer
+      let tempList = '';
+      try {
+        while (true) {
+          const n = await dataConn.read(buffer);
+          if (!n) break;
+          tempList += decoder.decode(buffer.subarray(0, n));
+        }
+      } catch (e) {
+        // Expected EOF
+      }
+      
+      dataConn.close();
+      
+      // Wait for transfer complete
+      await readResponse();
+      
+      console.log(`[FTP-TEST] ${method} raw response (${tempList.length} bytes):`);
+      console.log(tempList.substring(0, 500));
+      
+      if (tempList.trim()) {
+        fileList = tempList;
+        successMethod = method;
+        break;
+      }
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : 'Unknown error';
+      console.log(`[FTP-TEST] ${method} failed:`, errorMsg);
     }
-  } catch (e) {
-    // Expected EOF
   }
   
-  dataConn.close();
   conn.close();
+  
+  if (!fileList.trim()) {
+    throw new Error('No files found with any LIST method');
+  }
+  
+  console.log(`[FTP-TEST] Success with ${successMethod}`);
   
   // Parse files
   const files = fileList.split('\n')
@@ -81,7 +112,7 @@ async function testFTPConnection(host: string, port: number, username: string, p
     })
     .filter(f => f && !f.startsWith('.'));
   
-  console.log(`[FTP-TEST] ✅ Found ${files.length} files`);
+  console.log(`[FTP-TEST] ✅ Found ${files.length} files:`, files);
   return files;
 }
 
