@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X } from "lucide-react";
+import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
 import { SubscriptionStatus } from "@/components/SubscriptionStatus";
@@ -76,6 +76,11 @@ export default function Dashboard() {
   const handleOpenDetail = (analysis: ProductAnalysis) => {
     setSelectedAnalysis(analysis);
     setIsModalOpen(true);
+  };
+
+  const handleShowDetails = (analysis: ProductAnalysis) => {
+    setSelectedAnalysis(analysis);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   useEffect(() => {
@@ -448,18 +453,14 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <Header />
-        <div className="flex justify-center items-center h-96">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
+    <>
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
           <div className="lg:col-span-1 space-y-4">
@@ -533,6 +534,33 @@ export default function Dashboard() {
                   className="flex-1"
                 />
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Section Détails de l'Analyse */}
+        {selectedAnalysis && (
+          <Card className="mb-6 border-primary/20 shadow-lg">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  🔍 Détails de l'Analyse
+                </CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSelectedAnalysis(null)}
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Fermer
+                </Button>
+              </div>
+              <CardDescription>
+                Informations complètes sur le produit analysé
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DetailedAnalysisView analysis={selectedAnalysis.analysis_result} />
             </CardContent>
           </Card>
         )}
@@ -622,7 +650,7 @@ export default function Dashboard() {
                         <div className="flex-1">
                           <CardTitle 
                             className="text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
-                            onClick={() => handleOpenDetail(analysis)}
+                            onClick={() => handleShowDetails(analysis)}
                           >
                             {productName}
                           </CardTitle>
@@ -741,6 +769,6 @@ export default function Dashboard() {
         onOpenChange={setIsModalOpen}
         product={selectedAnalysis}
       />
-    </div>
+    </>
   );
 }
