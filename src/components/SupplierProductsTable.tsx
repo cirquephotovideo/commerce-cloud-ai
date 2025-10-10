@@ -107,81 +107,79 @@ export function SupplierProductsTable() {
               <p>Aucun produit trouvé</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="space-y-3">
               {products?.map((product) => (
                 <Card 
                   key={product.id} 
-                  className="hover:shadow-lg transition-shadow cursor-pointer"
+                  className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-primary/20 hover:border-l-primary"
                   onClick={() => setSelectedProduct(product)}
                 >
-                  <CardContent className="p-4">
-                    <div className="space-y-3">
-                      {/* Header avec statut */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm truncate mb-1">
-                            {product.product_name}
-                          </h3>
-                          {product.ean && (
-                            <p className="text-xs font-mono text-muted-foreground">
-                              EAN: {product.ean}
-                            </p>
-                          )}
-                        </div>
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      {/* Nom du produit - Colonne principale */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-base mb-1 truncate">
+                          {product.product_name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {product.supplier_configurations?.supplier_name}
+                        </p>
+                      </div>
+
+                      {/* EAN - Bien visible */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs font-medium text-muted-foreground uppercase">EAN</span>
+                        {product.ean ? (
+                          <p className="text-base font-mono font-semibold">
+                            {product.ean}
+                          </p>
+                        ) : (
+                          <Badge variant="outline" className="text-amber-600 border-amber-600">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Manquant
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Prix - Bien visible */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs font-medium text-muted-foreground uppercase">Prix d'achat</span>
+                        <p className="text-lg font-bold text-primary">
+                          {product.purchase_price?.toFixed(2)} €
+                        </p>
+                      </div>
+
+                      {/* Stock */}
+                      <div className="flex flex-col items-center gap-1 min-w-[80px]">
+                        <span className="text-xs font-medium text-muted-foreground uppercase">Stock</span>
+                        <Badge variant="outline" className="text-sm">
+                          <TrendingUp className="h-3 w-3 mr-1" />
+                          {product.stock_quantity || "0"}
+                        </Badge>
+                      </div>
+
+                      {/* Statut de liaison */}
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-xs font-medium text-muted-foreground uppercase">Statut</span>
                         {getStatusBadge(product)}
                       </div>
 
-                      {/* Informations principales */}
-                      <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Euro className="h-3 w-3" />
-                            <span>Prix d'achat</span>
-                          </div>
-                          <p className="font-semibold text-sm">
-                            {product.purchase_price} {product.currency}
-                          </p>
-                        </div>
-                        
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <TrendingUp className="h-3 w-3" />
-                            <span>Stock</span>
-                          </div>
-                          <p className="font-semibold text-sm">
-                            {product.stock_quantity || "N/A"}
-                          </p>
-                        </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        {product.supplier_url && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(product.supplier_url, "_blank");
+                            }}
+                            title="Voir sur le site fournisseur"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between pt-2 border-t">
-                        <span className="text-xs text-muted-foreground">
-                          {product.supplier_configurations?.supplier_name}
-                        </span>
-                        <div className="flex gap-1">
-                          {product.supplier_url && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(product.supplier_url, "_blank");
-                              }}
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Alerte si pas d'EAN */}
-                      {!product.ean && (
-                        <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950 p-2 rounded">
-                          <AlertCircle className="h-3 w-3" />
-                          <span>Pas d'EAN - liaison manuelle requise</span>
-                        </div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
