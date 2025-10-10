@@ -193,7 +193,9 @@ export function ProductDetailModal({
                   <div>
                     <p className="text-sm text-muted-foreground mb-2 font-medium">Description</p>
                     <p className="text-sm">
-                      {analysisResult?.description || 'Aucune description disponible'}
+                      {analysisResult?.description?.suggested_description || 
+                       analysisResult?.description_long || 
+                       'Aucune description disponible'}
                     </p>
                   </div>
                 </CardContent>
