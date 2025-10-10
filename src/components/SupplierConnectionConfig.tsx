@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, CheckCircle } from "lucide-react";
 
 interface SupplierConnectionConfigProps {
   supplierType: string;
@@ -10,8 +15,66 @@ interface SupplierConnectionConfigProps {
 }
 
 export function SupplierConnectionConfig({ supplierType, config, onConfigChange }: SupplierConnectionConfigProps) {
+  const { toast } = useToast();
+  const [testing, setTesting] = useState(false);
+  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+  const [connectionSuccess, setConnectionSuccess] = useState(false);
+
   const updateConfig = (key: string, value: any) => {
     onConfigChange({ ...config, [key]: value });
+  };
+
+  const handleTestFTPConnection = async () => {
+    if (!config?.host || !config?.username || !config?.password) {
+      toast({
+        title: "❌ Configuration incomplète",
+        description: "Veuillez renseigner host, username et password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTesting(true);
+    setConnectionSuccess(false);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('test-ftp-connection', {
+        body: {
+          host: config.host,
+          port: config.port || 21,
+          username: config.username,
+          password: config.password,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setAvailableFiles(data.files || []);
+        setConnectionSuccess(true);
+        toast({
+          title: "✅ Connexion réussie",
+          description: data.message || `${data.files?.length || 0} fichiers trouvés`,
+        });
+      } else {
+        setConnectionSuccess(false);
+        toast({
+          title: "❌ Échec de connexion",
+          description: data.message || data.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Test FTP error:', error);
+      setConnectionSuccess(false);
+      toast({
+        title: "❌ Erreur",
+        description: error instanceof Error ? error.message : "Erreur de connexion",
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (supplierType === 'ftp' || supplierType === 'sftp') {
@@ -26,7 +89,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
               id="host"
               value={config.host || ''}
               onChange={(e) => updateConfig('host', e.target.value)}
-              placeholder="ftp.example.com"
+              placeholder="ftp.example.com ou ftp://eavs-groupe.fr"
             />
           </div>
 
@@ -62,14 +125,67 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
           </div>
         </div>
 
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant={connectionSuccess ? "default" : "outline"}
+            onClick={handleTestFTPConnection}
+            disabled={testing}
+            className="flex-1"
+          >
+            {testing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Test en cours...
+              </>
+            ) : connectionSuccess ? (
+              <>
+                <CheckCircle className="mr-2 h-4 w-4" />
+                ✅ Connexion OK
+              </>
+            ) : (
+              '🔌 Tester la connexion FTP'
+            )}
+          </Button>
+        </div>
+
+        {availableFiles.length > 0 && (
+          <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+            <Label htmlFor="file_select">📂 Fichiers disponibles sur le serveur FTP</Label>
+            <Select
+              value={config.remote_path || ''}
+              onValueChange={(value) => updateConfig('remote_path', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner un fichier CSV..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableFiles
+                  .filter(f => f.endsWith('.csv') || f.endsWith('.CSV') || f.endsWith('.xlsx') || f.endsWith('.XLSX'))
+                  .map((file) => (
+                    <SelectItem key={file} value={`/${file}`}>
+                      📄 {file}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {availableFiles.length} fichier(s) trouvé(s) - seuls les CSV/XLSX sont affichés
+            </p>
+          </div>
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="remote_path">Chemin du fichier</Label>
+          <Label htmlFor="remote_path">Chemin du fichier CSV/XLSX</Label>
           <Input
             id="remote_path"
-            value={config.remote_path || '/products.csv'}
+            value={config.remote_path || ''}
             onChange={(e) => updateConfig('remote_path', e.target.value)}
-            placeholder="/path/to/products.csv"
+            placeholder="/edi-excel.csv ou /products.csv"
           />
+          <p className="text-xs text-muted-foreground">
+            Utilisez le sélecteur ci-dessus ou entrez le chemin manuellement
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -77,9 +193,10 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
             <Label htmlFor="delimiter">Délimiteur CSV</Label>
             <Input
               id="delimiter"
-              value={config.delimiter || ';'}
-              onChange={(e) => updateConfig('delimiter', e.target.value)}
+              value={config.csv_delimiter || ';'}
+              onChange={(e) => updateConfig('csv_delimiter', e.target.value)}
               maxLength={1}
+              placeholder=";"
             />
           </div>
 
@@ -90,7 +207,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
               checked={config.skip_first_row !== false}
               onChange={(e) => updateConfig('skip_first_row', e.target.checked)}
             />
-            <Label htmlFor="skip_first_row">Ignorer première ligne</Label>
+            <Label htmlFor="skip_first_row">Ignorer première ligne (en-tête)</Label>
           </div>
         </div>
       </div>

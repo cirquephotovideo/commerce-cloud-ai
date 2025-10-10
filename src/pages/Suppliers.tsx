@@ -127,14 +127,29 @@ export default function Suppliers() {
 
       if (error) throw error;
 
+      // Handle warnings (config incomplete)
+      if (data?.warning) {
+        toast.error(data.message || "⚠️ Configuration incomplète");
+        return;
+      }
+
       // Handle different response formats
-      if (supplier.supplier_type === 'odoo') {
-        const found = data?.found || 0;
-        const imported = data?.imported || 0;
-        const matched = data?.matched || 0;
-        toast.success(`✅ Odoo: ${found} trouvés | ${imported} importés | ${matched} matchés`);
+      if (data?.found !== undefined) {
+        // Format détaillé : Odoo, FTP/SFTP
+        const found = data.found || 0;
+        const imported = data.imported || 0;
+        const matched = data.matched || 0;
+        const errors = data.errors || 0;
+        
+        if (errors > 0) {
+          toast.error(`⚠️ Sync: ${found} trouvés | ${imported} importés | ${matched} matchés | ${errors} erreurs`);
+        } else {
+          toast.success(`✅ Sync: ${found} trouvés | ${imported} importés | ${matched} matchés`);
+        }
+      } else if (data?.success === false) {
+        toast.error(data.message || "❌ Échec de la synchronisation");
       } else {
-        toast.success(`Synchronisation terminée: ${data.imported || 0} produits importés`);
+        toast.success(`✅ Synchronisation terminée: ${data.imported || 0} produits importés`);
       }
       refetchSuppliers();
     } catch (error) {
