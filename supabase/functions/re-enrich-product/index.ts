@@ -138,7 +138,7 @@ serve(async (req) => {
         enrichment_type: enrichmentsToRun,
         priority: 'high',
         status: 'pending',
-        metadata: { provider: provider || 'default' }
+        metadata: { provider: provider || 'lovable-ai' }
       })
       .select()
       .single();

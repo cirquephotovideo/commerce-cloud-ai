@@ -124,9 +124,24 @@ export default function Dashboard() {
       }, 3000);
     } catch (error: any) {
       console.error('Re-enrichment error:', error);
+      
+      let description = error.message || "Une erreur est survenue";
+      
+      // Provide specific error messages based on error type
+      if (error.message?.includes('401') || error.message?.includes('Authentication failed')) {
+        description = "Votre session a expiré. Veuillez vous reconnecter.";
+        setTimeout(() => navigate("/auth"), 2000);
+      } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        description = "Limite de taux dépassée. Réessayez dans quelques instants.";
+      } else if (error.message?.includes('402') || error.message?.includes('credits')) {
+        description = "Crédits insuffisants. Rechargez votre compte.";
+      } else if (error.message?.includes('Product not found')) {
+        description = "Produit introuvable. Veuillez réessayer.";
+      }
+      
       toast({
         title: "Erreur lors du re-enrichissement",
-        description: error.message || "Une erreur est survenue",
+        description,
         variant: "destructive",
       });
     } finally {
