@@ -225,7 +225,7 @@ serve(async (req) => {
               ean: productData.ean,
               purchase_price: productData.purchase_price,
               stock_quantity: productData.stock_quantity,
-              updated_at: new Date().toISOString(),
+              last_updated: new Date().toISOString(),
             })
             .eq('id', existing.id);
 
