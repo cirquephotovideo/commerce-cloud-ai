@@ -72,6 +72,9 @@ verify_jwt = true
 [functions.process-pending-enrichments]
 verify_jwt = false
 
+[functions.process-enrichment-queue]
+verify_jwt = false
+
 [functions.ollama-proxy]
 verify_jwt = true
 

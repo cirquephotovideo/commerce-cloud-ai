@@ -3,9 +3,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Check, AlertCircle, Sparkles, Image, Video, FileCheck, Package } from "lucide-react";
+import { Loader2, Sparkles, Image, Video, FileCheck, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -30,71 +29,63 @@ export function BatchEnrichmentDialog({
   });
   const [priority, setPriority] = useState<"low" | "normal" | "high">("normal");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [queue, setQueue] = useState<Array<{
-    id: string;
-    name: string;
-    status: "pending" | "processing" | "completed" | "failed";
-  }>>([]);
 
   const selectedCount = selectedProducts.size;
   const selectedOptionsCount = Object.values(enrichmentOptions).filter(Boolean).length;
   const estimatedTime = selectedCount * selectedOptionsCount * 0.5; // 30s per option per product
   const estimatedCost = selectedCount * selectedOptionsCount * 0.02; // €0.02 per enrichment
 
-  const handleStartEnrichment = async () => {
-    const options = Object.entries(enrichmentOptions)
+  // Always include 'basic' enrichment
+  const getEnrichmentTypes = () => {
+    const types = ['basic']; // Always include basic analysis
+    Object.entries(enrichmentOptions)
       .filter(([_, enabled]) => enabled)
-      .map(([key]) => key);
+      .forEach(([key]) => types.push(key));
+    return types;
+  };
 
-    if (options.length === 0) {
-      toast.error("Veuillez sélectionner au moins une option d'enrichissement");
-      return;
-    }
-
+  const handleStartEnrichment = async () => {
     setIsProcessing(true);
-    setProgress(0);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
+      const enrichmentTypes = getEnrichmentTypes();
+
       // Créer les tâches dans la queue
       const tasks = Array.from(selectedProducts).map(productId => ({
         user_id: user.id,
         supplier_product_id: productId,
-        enrichment_type: options,
+        enrichment_type: enrichmentTypes,
         priority,
         status: "pending" as const,
       }));
 
-      const { error } = await supabase.from("enrichment_queue").insert(tasks);
-      if (error) throw error;
+      const { error: insertError } = await supabase.from("enrichment_queue").insert(tasks);
+      if (insertError) throw insertError;
 
-      // Simuler le traitement (à remplacer par un vrai système de queue)
-      const productsList = Array.from(selectedProducts).map((id, i) => ({
-        id,
-        name: `Produit ${i + 1}`,
-        status: "pending" as const,
-      }));
-      
-      setQueue(productsList);
+      toast.success(`${selectedCount} produits ajoutés à la file d'enrichissement`);
 
-      for (let i = 0; i < productsList.length; i++) {
-        setQueue(prev => prev.map((p, idx) => 
-          idx === i ? { ...p, status: "processing" } : p
-        ));
-        
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
-        
-        setQueue(prev => prev.map((p, idx) => 
-          idx === i ? { ...p, status: "completed" } : p
-        ));
-        
-        setProgress(((i + 1) / productsList.length) * 100);
+      // Déclencher le traitement
+      const { data: processResult, error: processError } = await supabase.functions.invoke(
+        'process-enrichment-queue',
+        { body: { maxItems: Math.min(selectedCount, 10) } }
+      );
+
+      if (processError) {
+        console.error('Erreur traitement:', processError);
+        toast.error("Enrichissement démarré mais erreurs possibles. Vérifiez l'historique.");
+      } else {
+        const { success = 0, errors = 0 } = processResult || {};
+        if (success > 0) {
+          toast.success(`${success} produit${success > 1 ? 's' : ''} enrichi${success > 1 ? 's' : ''} ! Consultez le Dashboard.`);
+        }
+        if (errors > 0) {
+          toast.error(`${errors} échec${errors > 1 ? 's' : ''} d'enrichissement`);
+        }
       }
 
-      toast.success(`${selectedCount} produits enrichis avec succès !`);
       onComplete?.();
       onOpenChange(false);
     } catch (error: any) {
@@ -212,7 +203,7 @@ export function BatchEnrichmentDialog({
 
             <Button
               onClick={handleStartEnrichment}
-              disabled={selectedOptionsCount === 0}
+              disabled={isProcessing}
               className="w-full"
             >
               <Sparkles className="h-4 w-4 mr-2" />
@@ -220,52 +211,16 @@ export function BatchEnrichmentDialog({
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Progression globale</span>
-                <span className="font-semibold">{Math.round(progress)}%</span>
-              </div>
-              <Progress value={progress} className="h-2" />
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {queue.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    {item.status === "pending" && (
-                      <div className="h-4 w-4 rounded-full border-2 border-muted" />
-                    )}
-                    {item.status === "processing" && (
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    )}
-                    {item.status === "completed" && (
-                      <Check className="h-4 w-4 text-green-500" />
-                    )}
-                    {item.status === "failed" && (
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    <span className="text-sm">{item.name}</span>
-                  </div>
-                  <Badge
-                    variant={
-                      item.status === "completed"
-                        ? "default"
-                        : item.status === "failed"
-                        ? "destructive"
-                        : "secondary"
-                    }
-                  >
-                    {item.status === "pending" && "En attente"}
-                    {item.status === "processing" && "En cours"}
-                    {item.status === "completed" && "Terminé"}
-                    {item.status === "failed" && "Échec"}
-                  </Badge>
-                </div>
-              ))}
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="text-center space-y-2">
+              <p className="font-medium">Enrichissement en cours...</p>
+              <p className="text-sm text-muted-foreground">
+                Les produits sont en train d'être traités. Vous pouvez fermer cette fenêtre.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Les résultats apparaîtront dans le Dashboard et l'Historique.
+              </p>
             </div>
           </div>
         )}
