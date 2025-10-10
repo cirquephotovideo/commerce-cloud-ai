@@ -79,15 +79,14 @@ export const SupplierImportMenu = ({
 
   const { toast } = useToast();
 
-  // Récupérer les plateformes avec support import
+  // Récupérer toutes les plateformes actives (pas de vérification supports_import)
   const { data: platforms, isLoading, error } = useQuery({
     queryKey: ['import-platforms'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('platform_configurations')
-        .select('platform_type, is_active, supports_import')
-        .eq('is_active', true)
-        .eq('supports_import', true);
+        .select('platform_type, is_active')
+        .eq('is_active', true);
 
       if (error) {
         console.error('Error fetching platforms:', error);

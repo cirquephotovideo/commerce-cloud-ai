@@ -208,9 +208,33 @@ export function ProductDetailModal({
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-medium text-muted-foreground">
+                          Référence fournisseur
+                        </TableCell>
+                        <TableCell>
+                          <code className="text-xs bg-muted px-2 py-1 rounded">
+                            {product.supplier_reference || 'N/A'}
+                          </code>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
                           Catégorie
                         </TableCell>
                         <TableCell>{category || 'N/A'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
+                          Statut enrichissement
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            product.enrichment_status === 'completed' ? 'default' :
+                            product.enrichment_status === 'pending' ? 'secondary' :
+                            'outline'
+                          }>
+                            {product.enrichment_status || 'Non enrichi'}
+                          </Badge>
+                        </TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-medium text-muted-foreground">
@@ -337,13 +361,17 @@ export function ProductDetailModal({
                 <div className="space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle>Données Amazon</CardTitle>
+                      <CardTitle>Informations détaillées Amazon</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <p className="text-sm text-muted-foreground">ASIN</p>
-                          <p className="font-medium">{amazonData.asin || 'N/A'}</p>
+                          <p className="font-mono text-sm">{amazonData.asin || 'N/A'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">UPC</p>
+                          <p className="font-mono text-sm">{amazonData.upc || 'N/A'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Ranking</p>
@@ -352,18 +380,79 @@ export function ProductDetailModal({
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Prix Amazon</p>
+                          <p className="text-sm text-muted-foreground">Avis clients</p>
                           <p className="font-medium">
-                            {formatPrice(amazonData.price)}
+                            ⭐ {amazonData.rating || 'N/A'} ({amazonData.reviews_count || 0} avis)
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm text-muted-foreground">Nombre d'avis</p>
-                          <p className="font-medium">{amazonData.reviews_count || 0}</p>
+                          <p className="text-sm text-muted-foreground">Prix Amazon</p>
+                          <p className="font-medium">
+                            {formatPrice(amazonData.buy_box_price || amazonData.price)}
+                          </p>
                         </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">Prix le plus bas (neuf)</p>
+                          <p className="font-medium text-green-600">
+                            {formatPrice(amazonData.lowest_new_price)}
+                          </p>
+                        </div>
+                        {amazonData.list_price && (
+                          <>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Prix de liste</p>
+                              <p className="font-medium">{formatPrice(amazonData.list_price)}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-muted-foreground">Offres neuves</p>
+                              <p className="font-medium">{amazonData.offer_count_new || 0} vendeurs</p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Dimensions & Poids */}
+                  {(amazonData.item_dimensions || amazonData.item_weight) && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Dimensions & Poids</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4">
+                          {amazonData.item_dimensions && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Dimensions produit</p>
+                              <p className="text-sm">
+                                {amazonData.item_dimensions.length} × {amazonData.item_dimensions.width} × {amazonData.item_dimensions.height} cm
+                              </p>
+                            </div>
+                          )}
+                          {amazonData.item_weight && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Poids</p>
+                              <p className="text-sm">{amazonData.item_weight} kg</p>
+                            </div>
+                          )}
+                          {amazonData.package_dimensions && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Dimensions colis</p>
+                              <p className="text-sm">
+                                {amazonData.package_dimensions.length} × {amazonData.package_dimensions.width} × {amazonData.package_dimensions.height} cm
+                              </p>
+                            </div>
+                          )}
+                          {amazonData.package_weight && (
+                            <div>
+                              <p className="text-sm text-muted-foreground">Poids colis</p>
+                              <p className="text-sm">{amazonData.package_weight} kg</p>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               ) : (
                 <Card>
@@ -503,6 +592,35 @@ export function ProductDetailModal({
                 </CardContent>
               </Card>
 
+              {/* Actions fournisseur */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actions fournisseur</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Button
+                    className="w-full"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const { data, error } = await supabase.functions.invoke('supplier-sync-single-product', {
+                          body: { productId: product.id }
+                        });
+                        
+                        if (error) throw error;
+                        toast.success('Produit mis à jour depuis le fournisseur !');
+                        if (onEnrich) onEnrich(); // Refresh
+                      } catch (error: any) {
+                        toast.error(`Erreur: ${error.message}`);
+                      }
+                    }}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Mettre à jour depuis le fournisseur
+                  </Button>
+                </CardContent>
+              </Card>
+
               {/* Price History */}
               {product.supplier_product_id && (
                 <SupplierPriceHistory supplierProductId={product.supplier_product_id} />
@@ -513,19 +631,57 @@ export function ProductDetailModal({
             <TabsContent value="raw">
               <Card>
                 <CardHeader>
-                  <CardTitle>Données brutes (JSON)</CardTitle>
+                  <CardTitle className="flex justify-between items-center">
+                    <span>Données brutes (JSON)</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const dataStr = JSON.stringify({
+                          supplier_product: product,
+                          analysis: analysis,
+                          amazon_data: amazonData
+                        }, null, 2);
+                        navigator.clipboard.writeText(dataStr);
+                        toast.success('JSON copié dans le presse-papier !');
+                      }}
+                    >
+                      📋 Copier JSON
+                    </Button>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="text-xs bg-muted p-4 rounded overflow-auto max-h-[500px]">
-                    {JSON.stringify(
-                      {
-                        supplier_product: product,
-                        analysis: analysis,
-                      },
-                      null,
-                      2
-                    )}
-                  </pre>
+                  <Tabs defaultValue="product">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="product">Produit fournisseur</TabsTrigger>
+                      <TabsTrigger value="analysis">Analyse IA</TabsTrigger>
+                      <TabsTrigger value="amazon">Données Amazon</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="product">
+                      <ScrollArea className="h-[450px]">
+                        <pre className="text-xs bg-muted p-4 rounded">
+                          {JSON.stringify(product, null, 2)}
+                        </pre>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="analysis">
+                      <ScrollArea className="h-[450px]">
+                        <pre className="text-xs bg-muted p-4 rounded">
+                          {JSON.stringify(analysisResult, null, 2)}
+                        </pre>
+                      </ScrollArea>
+                    </TabsContent>
+                    
+                    <TabsContent value="amazon">
+                      <ScrollArea className="h-[450px]">
+                        <pre className="text-xs bg-muted p-4 rounded">
+                          {JSON.stringify(amazonData || {}, null, 2)}
+                        </pre>
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
                 </CardContent>
               </Card>
             </TabsContent>
