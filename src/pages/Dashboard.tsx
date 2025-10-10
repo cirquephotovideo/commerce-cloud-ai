@@ -19,6 +19,7 @@ import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
 import { TaxonomyBadges } from "@/components/TaxonomyBadges";
+import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { 
   Select, 
   SelectContent, 
@@ -461,8 +462,9 @@ export default function Dashboard() {
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-4">
             <SubscriptionStatus />
+            <UserAlertsWidget />
           </div>
           <div className="lg:col-span-2 space-y-4">
             <AIProviderManagement />

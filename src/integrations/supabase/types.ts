@@ -441,6 +441,45 @@ export type Database = {
           },
         ]
       }
+      auto_export_rules: {
+        Row: {
+          conditions: Json | null
+          created_at: string | null
+          enabled: boolean | null
+          id: string
+          last_sync_at: string | null
+          platform_type: string
+          products_exported: number | null
+          sync_frequency: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          conditions?: Json | null
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          last_sync_at?: string | null
+          platform_type: string
+          products_exported?: number | null
+          sync_frequency?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          conditions?: Json | null
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          last_sync_at?: string | null
+          platform_type?: string
+          products_exported?: number | null
+          sync_frequency?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       aws_credentials: {
         Row: {
           access_key_id_encrypted: string
@@ -1686,6 +1725,7 @@ export type Database = {
           amazon_enrichment_status: string | null
           amazon_last_attempt: string | null
           analysis_result: Json
+          auto_enrichment_count: number | null
           competitive_cons: Json | null
           competitive_pros: Json | null
           created_at: string | null
@@ -1697,6 +1737,7 @@ export type Database = {
           id: string
           image_urls: Json | null
           is_favorite: boolean | null
+          last_auto_enrichment_at: string | null
           last_exported_at: string | null
           last_price_update: string | null
           mapped_category_id: string | null
@@ -1718,6 +1759,7 @@ export type Database = {
           amazon_enrichment_status?: string | null
           amazon_last_attempt?: string | null
           analysis_result: Json
+          auto_enrichment_count?: number | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           created_at?: string | null
@@ -1729,6 +1771,7 @@ export type Database = {
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_auto_enrichment_at?: string | null
           last_exported_at?: string | null
           last_price_update?: string | null
           mapped_category_id?: string | null
@@ -1750,6 +1793,7 @@ export type Database = {
           amazon_enrichment_status?: string | null
           amazon_last_attempt?: string | null
           analysis_result?: Json
+          auto_enrichment_count?: number | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           created_at?: string | null
@@ -1761,6 +1805,7 @@ export type Database = {
           id?: string
           image_urls?: Json | null
           is_favorite?: boolean | null
+          last_auto_enrichment_at?: string | null
           last_exported_at?: string | null
           last_price_update?: string | null
           mapped_category_id?: string | null
@@ -2324,6 +2369,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           last_sync_at: string | null
+          last_synced_at: string | null
           mapping_config: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
@@ -2337,6 +2383,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          last_synced_at?: string | null
           mapping_config?: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
@@ -2350,6 +2397,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          last_synced_at?: string | null
           mapping_config?: Json | null
           supplier_name?: string
           supplier_type?: Database["public"]["Enums"]["supplier_type"]
@@ -2514,6 +2562,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "supplier_products_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_sync_schedule: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          last_sync_at: string | null
+          next_sync_at: string | null
+          price_changes: number | null
+          products_added: number | null
+          products_updated: number | null
+          stock_changes: number | null
+          supplier_id: string
+          sync_duration_ms: number | null
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          price_changes?: number | null
+          products_added?: number | null
+          products_updated?: number | null
+          stock_changes?: number | null
+          supplier_id: string
+          sync_duration_ms?: number | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          price_changes?: number | null
+          products_added?: number | null
+          products_updated?: number | null
+          stock_changes?: number | null
+          supplier_id?: string
+          sync_duration_ms?: number | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_sync_schedule_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supplier_configurations"

@@ -7,9 +7,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
+import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, formatDate, extractAnalysisData } from "@/lib/formatters";
 import { useState } from "react";
+import { SupplierPriceHistory } from "./SupplierPriceHistory";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useMutation } from "@tanstack/react-query";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -28,6 +32,27 @@ export function ProductDetailModal({
 }: ProductDetailModalProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
+  const reEnrichMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('re-enrich-product', {
+        body: {
+          productId: product.id,
+          enrichmentTypes: ['amazon', 'ai_analysis']
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Re-enrichissement démarré avec succès !');
+      if (onEnrich) onEnrich(); // Refresh parent
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur lors du re-enrichissement : ${error.message}`);
+    },
+  });
+
   if (!product) return null;
 
   const { 
@@ -61,10 +86,24 @@ export function ProductDetailModal({
               {product.product_name}
             </span>
             <div className="flex gap-2">
-              {onEnrich && (
-                <Button size="sm" variant="outline" onClick={onEnrich}>
-                  <Sparkles className="w-4 h-4 mr-1" />
-                  Enrichir
+              {product.id && (
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={() => reEnrichMutation.mutate()}
+                  disabled={reEnrichMutation.isPending}
+                >
+                  {reEnrichMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                      Re-enrichissement...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-1" />
+                      Re-enrichir
+                    </>
+                  )}
                 </Button>
               )}
               {onExport && analysis && (
@@ -370,6 +409,41 @@ export function ProductDetailModal({
 
             {/* Supplier Tab */}
             <TabsContent value="supplier" className="space-y-4">
+              {/* Price Comparator Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Analyse des prix</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Prix d'achat fournisseur:</span>
+                      <span className="font-bold text-lg">{formatPrice(product.purchase_price)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Prix recommandé (IA):</span>
+                      <span className="font-bold text-lg text-green-600">{formatPrice(estimatedPrice)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Marge potentielle:</span>
+                      <Badge variant={getMarginColor(margin)} className="text-base">
+                        {formatMargin(margin)}
+                      </Badge>
+                    </div>
+                    {analysisResult?.market_average_price && (
+                      <>
+                        <Separator />
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Prix moyen marché:</span>
+                          <span>{formatPrice(analysisResult.market_average_price)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Supplier Info Card */}
               <Card>
                 <CardHeader>
                   <CardTitle>Informations fournisseur</CardTitle>
@@ -405,8 +479,8 @@ export function ProductDetailModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Importé le</p>
-                      <p className="font-medium">{formatDate(product.created_at)}</p>
+                      <p className="text-sm text-muted-foreground">Dernière MAJ</p>
+                      <p className="font-medium">{formatDate(product.updated_at || product.created_at)}</p>
                     </div>
                   </div>
 
@@ -428,6 +502,11 @@ export function ProductDetailModal({
                   )}
                 </CardContent>
               </Card>
+
+              {/* Price History */}
+              {product.supplier_product_id && (
+                <SupplierPriceHistory supplierProductId={product.supplier_product_id} />
+              )}
             </TabsContent>
 
             {/* Raw Data Tab */}
