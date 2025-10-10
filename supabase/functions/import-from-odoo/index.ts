@@ -30,38 +30,59 @@ serve(async (req) => {
     
     console.log('Starting Odoo import for supplier:', supplier_id);
 
-    // Utiliser SERVICE_ROLE_KEY pour les appels depuis auto-sync
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_ANON_KEY');
+    // Determine which key to use based on auth context
+    const authHeader = req.headers.get('Authorization');
+    let supabaseKey: string;
+    let userId: string;
+
+    if (authHeader) {
+      // UI call: use ANON_KEY to validate user token
+      supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      console.log('Using ANON_KEY for UI authentication');
+    } else {
+      // Auto-sync call: use SERVICE_ROLE_KEY
+      supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      console.log('Using SERVICE_ROLE_KEY for auto-sync');
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      supabaseKey ?? ''
+      supabaseKey
     );
 
-    // Récupérer user_id depuis supplier si pas d'auth header
-    let userId: string;
-    const authHeader = req.headers.get('Authorization');
-    
+    // Get user ID based on context
     if (authHeader) {
-      // Appelé depuis UI avec authentification utilisateur
-      const { data: { user } } = await supabaseClient.auth.getUser(authHeader.replace('Bearer ', ''));
-      if (!user) throw new Error('Unauthorized');
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+      
+      if (authError || !user) {
+        console.error('Authentication error:', authError);
+        throw new Error('Unauthorized');
+      }
+      
       userId = user.id;
+      console.log('Authenticated user:', userId);
     } else {
-      // Appelé depuis auto-sync, récupérer user_id depuis supplier
-      const { data: supplier } = await supabaseClient
+      // Get user_id from supplier configuration (for scheduled imports)
+      const { data: supplier, error: supplierError } = await supabaseClient
         .from('supplier_configurations')
         .select('user_id')
         .eq('id', supplier_id)
         .single();
-      
-      if (!supplier) throw new Error('Supplier not found');
+
+      if (supplierError || !supplier) {
+        console.error('Supplier lookup error:', supplierError);
+        throw new Error('Supplier not found');
+      }
+
       userId = supplier.user_id;
+      console.log('Using supplier user_id:', userId);
     }
 
-    // Si config n'est pas fourni, le récupérer depuis platform_configurations
+    // Get Odoo configuration
     let odooConfig = config;
     if (!odooConfig) {
-      const { data: platformConfig } = await supabaseClient
+      const { data: platformConfig, error: configError } = await supabaseClient
         .from('platform_configurations')
         .select('*')
         .eq('user_id', userId)
@@ -69,16 +90,20 @@ serve(async (req) => {
         .eq('is_active', true)
         .maybeSingle();
       
-      if (!platformConfig) {
+      if (configError || !platformConfig) {
+        console.error('Platform config error:', configError);
         throw new Error('Odoo platform configuration not found');
       }
       odooConfig = platformConfig;
     }
 
-    // 1. Authentification Odoo XML-RPC
+    // 1. Authenticate with Odoo XML-RPC
     const database = odooConfig.additional_config?.database || 'odoo';
     const username = odooConfig.additional_config?.username;
     const password = odooConfig.additional_config?.password;
+    const odooUrl = odooConfig.platform_url;
+
+    console.log('Odoo connection details:', { odooUrl, database, username: username ? '***' : 'missing' });
 
     if (!username || !password) {
       throw new Error('Odoo credentials missing in platform configuration');
@@ -95,20 +120,31 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    const authResponse = await fetch(`${odooConfig.platform_url}/xmlrpc/2/common`, {
+    console.log('Authenticating with Odoo...');
+    const authResponse = await fetch(`${odooUrl}/xmlrpc/2/common`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: authPayload,
     });
 
+    if (!authResponse.ok) {
+      console.error('Odoo auth response status:', authResponse.status);
+      const errorText = await authResponse.text();
+      console.error('Odoo auth error response:', errorText);
+      throw new Error(`Odoo authentication failed: ${authResponse.status} - ${errorText.substring(0, 200)}`);
+    }
+
     const authText = await authResponse.text();
+    console.log('Odoo auth response sample:', authText.substring(0, 200));
+    
     const uidMatch = authText.match(/<int>(\d+)<\/int>/);
     if (!uidMatch) {
-      throw new Error('Odoo authentication failed');
+      console.error('Failed to parse UID from response:', authText.substring(0, 500));
+      throw new Error('Odoo authentication failed - could not extract UID');
     }
     const uid = parseInt(uidMatch[1]);
 
-    console.log('Odoo authenticated with UID:', uid);
+    console.log('Odoo authenticated successfully with UID:', uid);
 
     // 2. Rechercher produits avec prix d'achat
     const searchPayload = `<?xml version="1.0"?>

@@ -16,28 +16,69 @@ serve(async (req) => {
     
     console.log('Import request:', { platform, supplier_id, filters });
 
-    // Authentification
-    const authHeader = req.headers.get('Authorization')!;
+    // Determine which key to use based on auth context
+    const authHeader = req.headers.get('Authorization');
+    let supabaseKey: string;
+    let userId: string;
+
+    if (authHeader) {
+      // UI call: use ANON_KEY to validate user token
+      supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+      console.log('Using ANON_KEY for UI authentication');
+    } else {
+      // Auto-sync call: use SERVICE_ROLE_KEY
+      supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      console.log('Using SERVICE_ROLE_KEY for auto-sync');
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      supabaseKey
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
+    // Get user ID based on context
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+      
+      if (authError || !user) {
+        console.error('Authentication error:', authError);
+        throw new Error('Unauthorized');
+      }
+      
+      userId = user.id;
+      console.log('Authenticated user:', userId);
+    } else {
+      // Get user_id from supplier configuration
+      const { data: supplier, error: supplierError } = await supabaseClient
+        .from('supplier_configurations')
+        .select('user_id')
+        .eq('id', supplier_id)
+        .single();
 
-    // Vérifier que la plateforme supporte l'import
+      if (supplierError || !supplier) {
+        console.error('Supplier lookup error:', supplierError);
+        throw new Error('Supplier not found');
+      }
+
+      userId = supplier.user_id;
+      console.log('Using supplier user_id:', userId);
+    }
+
+    // Verify that the platform supports import
     const { data: config, error: configError } = await supabaseClient
       .from('platform_configurations')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('platform_type', platform)
       .eq('supports_import', true)
       .eq('is_active', true)
       .maybeSingle();
 
-    if (configError) throw configError;
+    if (configError) {
+      console.error('Platform config error:', configError);
+      throw configError;
+    }
 
     if (!config) {
       throw new Error(`Import not supported or not configured for platform: ${platform}`);
