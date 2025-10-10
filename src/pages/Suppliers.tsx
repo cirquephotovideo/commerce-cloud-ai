@@ -105,23 +105,36 @@ export default function Suppliers() {
     
     try {
       let functionName = '';
+      let bodyParams = {};
       
       if (supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') {
         functionName = 'supplier-sync-ftp';
+        bodyParams = { supplierId };
       } else if (supplier.supplier_type === 'api') {
         functionName = 'supplier-sync-api';
+        bodyParams = { supplierId };
+      } else if (supplier.supplier_type === 'odoo') {
+        functionName = 'import-from-odoo';
+        bodyParams = { supplier_id: supplierId };
       } else {
         toast.error("Type de synchronisation non supporté");
         return;
       }
 
       const { data, error } = await supabase.functions.invoke(functionName, {
-        body: { supplierId },
+        body: bodyParams,
       });
 
       if (error) throw error;
 
-      toast.success(`Synchronisation terminée: ${data.imported} produits importés`);
+      // Handle different response formats
+      if (supplier.supplier_type === 'odoo') {
+        const imported = data?.results?.success || 0;
+        const matched = data?.results?.matched || 0;
+        toast.success(`✅ Synchronisation Odoo terminée: ${imported} importés | ${matched} matchés`);
+      } else {
+        toast.success(`Synchronisation terminée: ${data.imported || 0} produits importés`);
+      }
       refetchSuppliers();
     } catch (error) {
       console.error('Sync error:', error);

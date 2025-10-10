@@ -97,16 +97,22 @@ serve(async (req) => {
       odooConfig = platformConfig;
     }
 
-    // 1. Authenticate with Odoo XML-RPC
-    const database = odooConfig.additional_config?.database || 'odoo';
-    const username = odooConfig.additional_config?.username;
-    const password = odooConfig.additional_config?.password;
+    // 1. Extract credentials with fallback logic
+    const additionalConfig = odooConfig.additional_config || {};
     const odooUrl = odooConfig.platform_url;
+    const database = additionalConfig.database || odooConfig.api_key_encrypted || 'odoo';
+    const username = additionalConfig.username || odooConfig.api_secret_encrypted;
+    const password = additionalConfig.password || odooConfig.access_token_encrypted;
 
-    console.log('Odoo connection details:', { odooUrl, database, username: username ? '***' : 'missing' });
+    console.log('[ODOO] Configuration extracted:', {
+      url: odooUrl,
+      database: database,
+      username: username ? '***' : 'missing',
+      password: password ? '***' : 'missing'
+    });
 
-    if (!username || !password) {
-      throw new Error('Odoo credentials missing in platform configuration');
+    if (!odooUrl || !database || !username || !password) {
+      throw new Error('Incomplete Odoo credentials. Please check Platform Configuration (URL, Database, Username, Password).');
     }
 
     const authPayload = `<?xml version="1.0"?>
@@ -120,31 +126,29 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    console.log('Authenticating with Odoo...');
+    console.log('[ODOO] Authenticating with Odoo...');
     const authResponse = await fetch(`${odooUrl}/xmlrpc/2/common`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: authPayload,
     });
 
-    if (!authResponse.ok) {
-      console.error('Odoo auth response status:', authResponse.status);
-      const errorText = await authResponse.text();
-      console.error('Odoo auth error response:', errorText);
-      throw new Error(`Odoo authentication failed: ${authResponse.status} - ${errorText.substring(0, 200)}`);
-    }
-
     const authText = await authResponse.text();
-    console.log('Odoo auth response sample:', authText.substring(0, 200));
+    console.log('[ODOO] Auth response status:', authResponse.status);
+    console.log('[ODOO] Auth response:', authText.substring(0, 300));
+
+    if (!authResponse.ok) {
+      throw new Error(`Odoo authentication failed (HTTP ${authResponse.status}): ${authText.substring(0, 200)}`);
+    }
     
     const uidMatch = authText.match(/<int>(\d+)<\/int>/);
     if (!uidMatch) {
-      console.error('Failed to parse UID from response:', authText.substring(0, 500));
-      throw new Error('Odoo authentication failed - could not extract UID');
+      console.error('[ODOO] Failed to parse UID from response:', authText.substring(0, 500));
+      throw new Error('Odoo authentication failed - invalid credentials or database name');
     }
     const uid = parseInt(uidMatch[1]);
 
-    console.log('Odoo authenticated successfully with UID:', uid);
+    console.log('[ODOO] Authenticated with UID:', uid);
 
     // 2. Rechercher produits avec prix d'achat
     const searchPayload = `<?xml version="1.0"?>
@@ -189,13 +193,19 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    const productsResponse = await fetch(`${odooConfig.platform_url}/xmlrpc/2/object`, {
+    const productsResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: searchPayload,
     });
 
     const productsXML = await productsResponse.text();
+    console.log('[ODOO] Products response status:', productsResponse.status);
+    console.log('[ODOO] Products response:', productsXML.substring(0, 500));
+
+    if (!productsResponse.ok) {
+      throw new Error(`Odoo products fetch failed (HTTP ${productsResponse.status})`);
+    }
     
     // Parser XML simplifié
     const products: any[] = [];

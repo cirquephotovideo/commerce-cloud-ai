@@ -19,14 +19,22 @@ export const SupplierAutoSync = () => {
       
       if (error) throw error;
 
-      toast.success(`Synchronisation terminée: ${data.suppliers_processed} fournisseurs traités`);
+      const successCount = data.successCount || 0;
+      const warningCount = data.warningCount || 0;
+      const errorCount = data.errorCount || 0;
+
+      toast.success(
+        `Synchronisation terminée: ${data.suppliers_processed} fournisseurs traités\n` +
+        `✅ ${successCount} succès | ⚠️ ${warningCount} avertissements | ❌ ${errorCount} erreurs`,
+        { duration: 5000 }
+      );
       
-      // Afficher les résultats détaillés
+      // Show detailed results
       if (data.results && data.results.length > 0) {
-        const successCount = data.results.filter((r: any) => r.status === 'success').length;
-        const errorCount = data.results.filter((r: any) => r.status === 'error').length;
-        
-        toast.info(`✅ ${successCount} succès | ❌ ${errorCount} erreurs`);
+        const warnings = data.results.filter((r: any) => r.status === 'warning');
+        if (warnings.length > 0) {
+          console.log('Sync warnings:', warnings);
+        }
       }
     } catch (error: any) {
       console.error('Sync error:', error);

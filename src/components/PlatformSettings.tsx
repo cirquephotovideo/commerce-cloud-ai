@@ -83,21 +83,34 @@ export const PlatformSettings = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Build upsert object with Odoo-specific fields
+      const upsertData: any = {
+        user_id: user.id,
+        platform_type: selectedPlatform,
+        ...config,
+        is_active: true,
+        supports_import: selectedPlatform === 'odoo' || undefined,
+      };
+
+      // For Odoo, also store in additional_config for better compatibility
+      if (selectedPlatform === 'odoo') {
+        upsertData.additional_config = {
+          database: config.api_key_encrypted,
+          username: config.api_secret_encrypted,
+          password: config.access_token_encrypted,
+        };
+      }
+
       const { error } = await supabase
         .from('platform_configurations')
-        .upsert({
-          user_id: user.id,
-          platform_type: selectedPlatform,
-          ...config,
-          is_active: true,
-        });
+        .upsert(upsertData);
 
       if (error) throw error;
 
-      toast.success(`Configuration ${selectedPlatform} saved successfully`);
+      toast.success(`✅ Configuration ${selectedPlatform} enregistrée avec succès`);
     } catch (error) {
       console.error('Error saving configuration:', error);
-      toast.error('Error saving configuration');
+      toast.error('Erreur lors de l\'enregistrement');
     } finally {
       setSaving(false);
     }

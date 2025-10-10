@@ -33,8 +33,19 @@ serve(async (req) => {
 
     const config = supplier.connection_config as any;
     
-    if (!config.host || !config.username || !config.password) {
-      throw new Error('Missing FTP configuration');
+    if (!config?.host || !config?.username || !config?.password) {
+      console.log('FTP config incomplete for supplier:', supplierId);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: '⚠️ Configuration FTP incomplète (host/username/password manquant)',
+          warning: true
+        }),
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     // For now, FTP sync requires manual file upload
@@ -44,9 +55,13 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        message: 'FTP/SFTP sync will be available in a future update. Please use manual CSV import for now.',
+        message: '⚠️ FTP/SFTP non encore supporté – utilisez Import CSV/XLSX',
+        warning: true
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   } catch (error) {
     console.error('FTP sync error:', error);

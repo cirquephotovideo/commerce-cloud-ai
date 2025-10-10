@@ -142,21 +142,33 @@ serve(async (req) => {
             status: 'error',
             error: error.message
           });
-        } else {
-          console.log(`[AUTO-SYNC] Successfully synced ${supplier.supplier_name}:`, data);
+          continue;
+        }
+
+        // Check if result is a warning (not fully implemented or incomplete config)
+        if (data?.success === false && data?.warning) {
+          console.log(`[AUTO-SYNC] ⚠️ Warning for ${supplier.supplier_name}: ${data.message}`);
           results.push({
             supplier: supplier.supplier_name,
-            status: 'success',
-            imported: data.imported || 0,
-            matched: data.matched || 0
+            status: 'warning',
+            message: data.message
           });
-
-          // Mettre à jour last_sync_at
-          await supabase
-            .from('supplier_configurations')
-            .update({ last_sync_at: new Date().toISOString() })
-            .eq('id', supplier.id);
+          continue;
         }
+
+        console.log(`[AUTO-SYNC] ✅ Successfully synced ${supplier.supplier_name}:`, data);
+        results.push({
+          supplier: supplier.supplier_name,
+          status: 'success',
+          imported: data.imported || 0,
+          matched: data.matched || 0
+        });
+
+        // Mettre à jour last_sync_at
+        await supabase
+          .from('supplier_configurations')
+          .update({ last_sync_at: new Date().toISOString() })
+          .eq('id', supplier.id);
 
       } catch (err: any) {
         console.error(`[AUTO-SYNC] Exception for ${supplier.supplier_name}:`, err);
@@ -170,10 +182,18 @@ serve(async (req) => {
 
     console.log('[AUTO-SYNC] Synchronization complete:', results);
 
+    // Count results by status
+    const successCount = results.filter(r => r.status === 'success').length;
+    const warningCount = results.filter(r => r.status === 'warning').length;
+    const errorCount = results.filter(r => r.status === 'error').length;
+
     return new Response(
       JSON.stringify({
         success: true,
         suppliers_processed: suppliers?.length || 0,
+        successCount,
+        warningCount,
+        errorCount,
         results
       }),
       { 
