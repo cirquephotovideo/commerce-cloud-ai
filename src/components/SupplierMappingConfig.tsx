@@ -182,14 +182,17 @@ export function SupplierMappingConfig({ supplierType, mapping, onMappingChange }
           </div>
 
           <div className="bg-muted p-4 rounded-lg space-y-2">
-            <p className="text-sm font-medium">Exemple JSON</p>
+            <p className="text-sm font-medium">💡 Exemple avec sous-champs séparés par "/"</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Si votre CSV contient : <code>0.6/2.8,V1319,...</code> (produit/référence dans col 0)
+            </p>
             <pre className="text-xs overflow-x-auto">
 {`{
-  "product_name": { "col": 0, "sub": 0, "subDelimiter": "," },
-  "supplier_reference": { "col": 0, "sub": 1, "subDelimiter": "," },
-  "ean": { "col": 2, "sub": 0, "subDelimiter": "," },
-  "stock_quantity": { "col": 2, "sub": 1, "subDelimiter": "," },
-  "purchase_price": { "col": 2, "sub": 3, "subDelimiter": ",", "decimal": "," }
+  "product_name": { "col": 0, "sub": 0, "subDelimiter": "/" },
+  "supplier_reference": { "col": 0, "sub": 1, "subDelimiter": "/" },
+  "ean": { "col": 3 },
+  "stock_quantity": { "col": 4 },
+  "purchase_price": { "col": 6, "decimal": "." }
 }`}
             </pre>
           </div>

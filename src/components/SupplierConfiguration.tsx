@@ -65,10 +65,17 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
+      // Save mapping in both column_mapping and mapping_config for compatibility
+      const dataToSave = {
+        ...formData,
+        column_mapping: formData.mapping_config,
+        mapping_config: formData.mapping_config,
+      };
+
       if (supplierId) {
         const { error } = await supabase
           .from("supplier_configurations")
-          .update(formData)
+          .update(dataToSave)
           .eq("id", supplierId);
 
         if (error) throw error;
@@ -76,7 +83,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
       } else {
         const { error } = await supabase
           .from("supplier_configurations")
-          .insert([{ ...formData, user_id: user.id }]);
+          .insert([{ ...dataToSave, user_id: user.id }]);
 
         if (error) throw error;
         toast.success("Fournisseur créé");

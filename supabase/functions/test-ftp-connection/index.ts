@@ -108,16 +108,25 @@ async function testFTPConnection(host: string, port: number, username: string, p
         
         // Parse based on method
         if (method === 'MLSD') {
-          // MLSD format: type=file;size=123; filename
+          // MLSD format: type=file;size=123;modify=...; filename
           const lines = fileList.split(/\r?\n/).filter(l => l.trim());
           lines.forEach(line => {
-            const isDir = line.includes('type=dir') || line.includes('type=cdir') || line.includes('type=pdir');
-            const match = line.match(/;\s*(.+)$/);
-            if (match) {
-              const name = match[1].trim();
-              if (name !== '.' && name !== '..') {
-                if (isDir) dirs.push(name);
-                else files.push(name);
+            // Extract type and filename
+            const typeMatch = line.match(/type=([^;]+)/);
+            const type = typeMatch ? typeMatch[1].toLowerCase() : '';
+            
+            // Skip current/parent directory entries
+            if (type === 'cdir' || type === 'pdir') return;
+            
+            // Extract filename (after last semicolon + space)
+            const parts = line.split(/;\s*/);
+            const filename = parts[parts.length - 1].trim();
+            
+            if (filename && filename !== '.' && filename !== '..') {
+              if (type === 'dir') {
+                dirs.push(filename);
+              } else if (type === 'file') {
+                files.push(filename);
               }
             }
           });

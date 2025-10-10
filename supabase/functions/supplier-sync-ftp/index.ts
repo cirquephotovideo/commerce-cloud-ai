@@ -140,6 +140,20 @@ function parseCSV(
   content = content.replace(/^\uFEFF/, '');
   
   const lines = content.split(/\r?\n/).filter(l => l.trim());
+  
+  // Auto-detect delimiter if not manually set
+  if (lines.length > 0) {
+    const firstLine = lines[0];
+    const commaCount = (firstLine.match(/,/g) || []).length;
+    const semicolonCount = (firstLine.match(/;/g) || []).length;
+    
+    // Use comma if it appears more frequently
+    if (commaCount > 3 && commaCount > semicolonCount) {
+      delimiter = ',';
+      console.log(`[FTP-SYNC] Auto-detected delimiter: "," (found ${commaCount} commas vs ${semicolonCount} semicolons)`);
+    }
+  }
+  
   console.log(`[FTP-SYNC] Total lines in CSV: ${lines.length}`);
   console.log(`[FTP-SYNC] CSV delimiter: "${delimiter}"`);
   console.log(`[FTP-SYNC] Skip first row: ${skipFirstRow}`);
@@ -407,7 +421,7 @@ serve(async (req) => {
               ean: product.ean,
               purchase_price: product.purchase_price,
               stock_quantity: product.stock_quantity,
-              last_updated: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
             })
             .eq('id', existing.id);
 
@@ -430,7 +444,6 @@ serve(async (req) => {
               purchase_price: product.purchase_price,
               currency: 'EUR',
               stock_quantity: product.stock_quantity,
-              last_updated: new Date().toISOString(),
             });
 
           if (insertError) {

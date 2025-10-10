@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Truck, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Progress } from "@/components/ui/progress";
 import { SupplierConfiguration } from "@/components/SupplierConfiguration";
 import { SupplierProductsTable } from "@/components/SupplierProductsTable";
 import { SupplierImportWizard } from "@/components/SupplierImportWizard";
@@ -16,6 +17,38 @@ import { SupplierAutoSync } from "@/components/SupplierAutoSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+// Progress cell component
+function SupplierProgressCell({ supplierId }: { supplierId: string }) {
+  const { data: progress } = useQuery({
+    queryKey: ["supplier-progress", supplierId],
+    queryFn: async () => {
+      const { data: products } = await supabase
+        .from("supplier_products")
+        .select("id, enrichment_status")
+        .eq("supplier_id", supplierId);
+
+      const total = products?.length || 0;
+      const enriched = products?.filter(p => p.enrichment_status === "completed").length || 0;
+      
+      return { total, enriched, percentage: total > 0 ? Math.round((enriched / total) * 100) : 0 };
+    },
+    refetchInterval: 10000, // Refresh every 10s
+  });
+
+  if (!progress || progress.total === 0) {
+    return <span className="text-sm text-muted-foreground">-</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 min-w-[120px]">
+      <Progress value={progress.percentage} className="h-2" />
+      <span className="text-xs text-muted-foreground">
+        {progress.enriched} / {progress.total} enrichis
+      </span>
+    </div>
+  );
+}
 
 export default function Suppliers() {
   const { t } = useTranslation();
@@ -235,6 +268,7 @@ export default function Suppliers() {
                     <TableHead>Statut</TableHead>
                     <TableHead>Dernière synchro</TableHead>
                     <TableHead>Produits</TableHead>
+                    <TableHead>Progression</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -266,6 +300,9 @@ export default function Suppliers() {
                         <Badge variant="secondary">
                           {supplier.product_count || 0} produits
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <SupplierProgressCell supplierId={supplier.id} />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
