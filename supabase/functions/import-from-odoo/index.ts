@@ -170,15 +170,52 @@ serve(async (req) => {
 
     console.log('[ODOO] Authenticated with UID:', uid);
 
-    // 2. Rechercher TOUS les produits actifs avec pagination
+    // 2. First get the total count of active products
+    console.log('[ODOO] Getting total product count...');
+    const countPayload = `<?xml version="1.0"?>
+      <methodCall>
+        <methodName>execute_kw</methodName>
+        <params>
+          <param><string>${database}</string></param>
+          <param><int>${uid}</int></param>
+          <param><string>${password}</string></param>
+          <param><string>product.product</string></param>
+          <param><string>search_count</string></param>
+          <param>
+            <array><data>
+              <value><array><data>
+                <value><array><data>
+                  <value><string>active</string></value>
+                  <value><string>=</string></value>
+                  <value><boolean>1</boolean></value>
+                </data></array></value>
+              </data></array></value>
+            </data></array>
+          </param>
+        </params>
+      </methodCall>`;
+
+    const countResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml' },
+      body: countPayload,
+    });
+
+    const countText = await countResponse.text();
+    const countMatch = countText.match(/<int>(\d+)<\/int>/);
+    const totalCount = countMatch ? parseInt(countMatch[1]) : 0;
+    console.log(`[ODOO] ✅ Total active products in Odoo: ${totalCount}`);
+
+    // 3. Fetch all products with pagination
     const allProducts: any[] = [];
     let offset = 0;
     const limit = 500;
-    let hasMore = true;
 
-    console.log('[ODOO] Starting paginated product fetch...');
+    while (offset < totalCount) {
+      const currentPage = Math.floor(offset / limit) + 1;
+      const totalPages = Math.ceil(totalCount / limit);
+      console.log(`[ODOO] 📦 Fetching page ${currentPage}/${totalPages} (offset: ${offset}, limit: ${limit})`);
 
-    while (hasMore) {
       const searchPayload = `<?xml version="1.0"?>
         <methodCall>
           <methodName>execute_kw</methodName>
@@ -232,7 +269,6 @@ serve(async (req) => {
       });
 
       const productsXML = await productsResponse.text();
-      console.log(`[ODOO] Page ${Math.floor(offset/limit) + 1} - Status:`, productsResponse.status);
 
       if (!productsResponse.ok) {
         throw new Error(`Odoo products fetch failed (HTTP ${productsResponse.status})`);
@@ -242,9 +278,11 @@ serve(async (req) => {
       const productMatches = productsXML.match(/<struct>[\s\S]*?<\/struct>/g) || [];
       
       if (productMatches.length === 0) {
-        hasMore = false;
+        console.log(`[ODOO] ⚠️ No more products found at offset ${offset}`);
         break;
       }
+
+      console.log(`[ODOO] ✓ Parsed ${productMatches.length} products from page`);
 
       for (const structMatch of productMatches) {
         // Extraction améliorée qui préserve les types
@@ -280,17 +318,11 @@ serve(async (req) => {
         allProducts.push(product);
       }
 
-      console.log(`[ODOO] Page ${Math.floor(offset/limit) + 1}: ${productMatches.length} products`);
-      
-      // Continue si on a reçu exactement "limit" produits
-      if (productMatches.length < limit) {
-        hasMore = false;
-      } else {
-        offset += limit;
-      }
+      offset += limit;
+      console.log(`[ODOO] Progress: ${allProducts.length}/${totalCount} products collected`);
     }
 
-    console.log(`[ODOO] Total found: ${allProducts.length} products`);
+    console.log(`[ODOO] ✅ Total products collected: ${allProducts.length}/${totalCount}`);
 
     // 3. Importer dans supplier_products
     let imported = 0, matched = 0, errors = 0;
