@@ -22,7 +22,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [delimiter, setDelimiter] = useState(";");
-  const [skipFirstRow, setSkipFirstRow] = useState(true);
+  const [skipRows, setSkipRows] = useState(1);
   const [preview, setPreview] = useState<any[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, number | null>>({});
 
@@ -61,11 +61,13 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const workbook = XLSX.read(data);
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
-      setPreview(jsonData.slice(0, 6));
+      // Show first 10 rows including headers for preview
+      setPreview(jsonData.slice(0, 10));
     } else {
       const text = await file.text();
       const allLines = text.split("\n");
-      const lines = allLines.slice(0, 6);
+      // Show first 10 rows including headers for preview
+      const lines = allLines.slice(0, 10);
       const parsed = lines.map(line => line.split(delimiter));
       setPreview(parsed);
     }
@@ -109,7 +111,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
           body: {
             supplierId,
             fileContent: base64,
-            skipFirstRow,
+            skipRows,
             columnMapping,
           },
         });
@@ -124,7 +126,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             supplierId,
             fileContent: text,
             delimiter,
-            skipFirstRow,
+            skipRows,
             columnMapping,
           },
         });
@@ -187,8 +189,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                   </div>
                 </div>
 
-                {file?.name.endsWith(".csv") && (
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {file?.name.endsWith(".csv") && (
                     <div>
                       <Label>Séparateur</Label>
                       <Select value={delimiter} onValueChange={setDelimiter}>
@@ -202,20 +204,19 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center space-x-2 pt-8">
-                      <input
-                        type="checkbox"
-                        id="skip-first"
-                        checked={skipFirstRow}
-                        onChange={(e) => {
-                          setSkipFirstRow(e.target.checked);
-                          if (file) previewFile(file);
-                        }}
-                      />
-                      <Label htmlFor="skip-first">Ignorer la première ligne (en-têtes)</Label>
-                    </div>
+                  )}
+                  <div>
+                    <Label>Nombre de lignes à ignorer</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={10}
+                      value={skipRows}
+                      onChange={(e) => setSkipRows(parseInt(e.target.value) || 0)}
+                      placeholder="0 = aucune, 1 = en-têtes..."
+                    />
                   </div>
-                )}
+                </div>
               </CardContent>
             </Card>
           )}

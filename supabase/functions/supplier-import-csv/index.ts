@@ -46,13 +46,13 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, fileContent, delimiter = ';', skipFirstRow = true, columnMapping = {} } = await req.json();
+    const { supplierId, fileContent, delimiter = ';', skipRows = 1, columnMapping = {} } = await req.json();
 
-    console.log('Starting CSV import for supplier:', supplierId);
+    console.log('Starting CSV import for supplier:', supplierId, 'skipping', skipRows, 'rows');
 
     // Parse CSV
     const lines = fileContent.split('\n').filter((line: string) => line.trim());
-    const dataLines = skipFirstRow ? lines.slice(1) : lines;
+    const dataLines = skipRows > 0 ? lines.slice(skipRows) : lines;
 
     const products = [];
     let matched = 0;

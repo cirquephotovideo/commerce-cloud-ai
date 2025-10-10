@@ -34,8 +34,9 @@ export function SupplierColumnMapper({
 }: SupplierColumnMapperProps) {
   const [mapping, setMapping] = useState<Record<string, number | null>>(initialMapping);
   
-  const headers = previewData[0] || [];
-  const dataRows = previewData.slice(1, 4);
+  // Use first row as headers, next 3 rows as data examples
+  const headers = previewData.length > 0 ? previewData[0] : [];
+  const dataRows = previewData.length > 1 ? previewData.slice(1, 4) : [];
 
   useEffect(() => {
     // Auto-detect columns based on common patterns

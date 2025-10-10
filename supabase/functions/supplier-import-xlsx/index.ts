@@ -31,9 +31,9 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, fileContent, skipFirstRow = true, columnMapping = {} } = await req.json();
+    const { supplierId, fileContent, skipRows = 1, columnMapping = {} } = await req.json();
 
-    console.log('Starting XLSX import for supplier:', supplierId);
+    console.log('Starting XLSX import for supplier:', supplierId, 'skipping', skipRows, 'rows');
 
     // Decode base64 content
     const binaryString = atob(fileContent);
@@ -47,117 +47,123 @@ serve(async (req) => {
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
 
-    const dataRows = skipFirstRow ? data.slice(1) : data;
+    const dataRows = skipRows > 0 ? data.slice(skipRows) : data;
 
     const products = [];
     let matched = 0;
     let newProducts = 0;
     let failed = 0;
 
-    for (const row of dataRows) {
-      try {
-        // Use column mapping if provided, otherwise fallback to basic mapping
-        const getName = () => {
-          if (columnMapping.product_name !== null && columnMapping.product_name !== undefined) {
-            return row[columnMapping.product_name];
-          }
-          return row[2]; // Default: column 3
-        };
-        
-        const getPrice = () => {
-          if (columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined) {
-            return row[columnMapping.purchase_price];
-          }
-          return row[3]; // Default: column 4
-        };
-
-        const name = getName();
-        const price = getPrice();
-
-        if (!name || !price) {
-          failed++;
-          continue;
-        }
-
-        const productData = {
-          user_id: user.id,
-          supplier_id: supplierId,
-          ean: columnMapping.ean !== null ? String(row[columnMapping.ean] || '') : (row[0] ? String(row[0]) : null),
-          supplier_reference: columnMapping.supplier_reference !== null ? String(row[columnMapping.supplier_reference] || '') : (row[1] ? String(row[1]) : null),
-          product_name: String(name),
-          purchase_price: parseFloat(String(price).replace(',', '.')),
-          stock_quantity: columnMapping.stock_quantity !== null ? parseInt(String(row[columnMapping.stock_quantity] || 0)) : (row[4] ? parseInt(String(row[4])) : null),
-          currency: 'EUR',
-          description: columnMapping.description !== null ? String(row[columnMapping.description] || '') : null,
-          brand: columnMapping.brand !== null ? String(row[columnMapping.brand] || '') : null,
-          category: columnMapping.category !== null ? String(row[columnMapping.category] || '') : null,
-        };
-
-        // Check if product exists
-        const { data: existing } = await supabase
-          .from('supplier_products')
-          .select('id')
-          .eq('supplier_id', supplierId)
-          .eq('ean', productData.ean)
-          .maybeSingle();
-
-        if (existing) {
-          // Update existing
-          await supabase
-            .from('supplier_products')
-            .update({ ...productData, enrichment_status: 'completed', enrichment_progress: 100 })
-            .eq('id', existing.id);
-          matched++;
-        } else {
-          // Insert new
-          const { data: newProduct, error: insertError } = await supabase
-            .from('supplier_products')
-            .insert([productData])
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-
-          // Try to match with existing product_analyses by EAN
-          let matchedAnalysis = false;
-          if (productData.ean) {
-            const { data: analysis } = await supabase
-              .from('product_analyses')
-              .select('id')
-              .eq('ean', String(productData.ean))
-              .maybeSingle();
-
-            if (analysis) {
-              await supabase
-                .from('product_analyses')
-                .update({
-                  purchase_price: parseFloat(String(price).replace(',', '.')),
-                  purchase_currency: 'EUR',
-                  supplier_product_id: newProduct.id,
-                })
-                .eq('id', analysis.id);
-              
-              await supabase
-                .from('supplier_products')
-                .update({ enrichment_status: 'completed', enrichment_progress: 100 })
-                .eq('id', newProduct.id);
-              
-              matchedAnalysis = true;
+    // Process in batches to avoid timeout
+    const batchSize = 50;
+    for (let i = 0; i < dataRows.length; i += batchSize) {
+      const batch = dataRows.slice(i, i + batchSize);
+      
+      for (const row of batch) {
+        try {
+          // Use column mapping if provided, otherwise fallback to basic mapping
+          const getName = () => {
+            if (columnMapping.product_name !== null && columnMapping.product_name !== undefined) {
+              return row[columnMapping.product_name];
             }
+            return row[2]; // Default: column 3
+          };
+          
+          const getPrice = () => {
+            if (columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined) {
+              return row[columnMapping.purchase_price];
+            }
+            return row[3]; // Default: column 4
+          };
+
+          const name = getName();
+          const price = getPrice();
+
+          if (!name || !price) {
+            failed++;
+            continue;
           }
 
-          // If no match found, marked for enrichment (handled by process-pending-enrichments)
-          if (!matchedAnalysis) {
-            console.log(`🔍 Product ${name} marked for enrichment`);
+          const productData = {
+            user_id: user.id,
+            supplier_id: supplierId,
+            ean: columnMapping.ean !== null ? String(row[columnMapping.ean] || '') : (row[0] ? String(row[0]) : null),
+            supplier_reference: columnMapping.supplier_reference !== null ? String(row[columnMapping.supplier_reference] || '') : (row[1] ? String(row[1]) : null),
+            product_name: String(name),
+            purchase_price: parseFloat(String(price).replace(',', '.')),
+            stock_quantity: columnMapping.stock_quantity !== null ? parseInt(String(row[columnMapping.stock_quantity] || 0)) : (row[4] ? parseInt(String(row[4])) : null),
+            currency: 'EUR',
+            description: columnMapping.description !== null ? String(row[columnMapping.description] || '') : null,
+            brand: columnMapping.brand !== null ? String(row[columnMapping.brand] || '') : null,
+            category: columnMapping.category !== null ? String(row[columnMapping.category] || '') : null,
+          };
+
+          // Check if product exists
+          const { data: existing } = await supabase
+            .from('supplier_products')
+            .select('id')
+            .eq('supplier_id', supplierId)
+            .eq('ean', productData.ean)
+            .maybeSingle();
+
+          if (existing) {
+            // Update existing
+            await supabase
+              .from('supplier_products')
+              .update({ ...productData, enrichment_status: 'completed', enrichment_progress: 100 })
+              .eq('id', existing.id);
+            matched++;
+          } else {
+            // Insert new
+            const { data: newProduct, error: insertError } = await supabase
+              .from('supplier_products')
+              .insert([productData])
+              .select()
+              .single();
+
+            if (insertError) throw insertError;
+
+            // Try to match with existing product_analyses by EAN
+            let matchedAnalysis = false;
+            if (productData.ean) {
+              const { data: analysis } = await supabase
+                .from('product_analyses')
+                .select('id')
+                .eq('ean', String(productData.ean))
+                .maybeSingle();
+
+              if (analysis) {
+                await supabase
+                  .from('product_analyses')
+                  .update({
+                    purchase_price: parseFloat(String(price).replace(',', '.')),
+                    purchase_currency: 'EUR',
+                    supplier_product_id: newProduct.id,
+                  })
+                  .eq('id', analysis.id);
+                
+                await supabase
+                  .from('supplier_products')
+                  .update({ enrichment_status: 'completed', enrichment_progress: 100 })
+                  .eq('id', newProduct.id);
+                
+                matchedAnalysis = true;
+              }
+            }
+
+            // If no match found, marked for enrichment
+            if (!matchedAnalysis) {
+              console.log(`🔍 Product ${name} marked for enrichment`);
+            }
+
+            newProducts++;
           }
 
-          newProducts++;
+          products.push(productData);
+        } catch (error) {
+          console.error('Error processing row:', error);
+          failed++;
         }
-
-        products.push(productData);
-      } catch (error) {
-        console.error('Error processing row:', error);
-        failed++;
       }
     }
 
