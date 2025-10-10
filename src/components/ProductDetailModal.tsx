@@ -227,13 +227,29 @@ export function ProductDetailModal({
                           Statut enrichissement
                         </TableCell>
                         <TableCell>
-                          <Badge variant={
-                            product.enrichment_status === 'completed' ? 'default' :
-                            product.enrichment_status === 'pending' ? 'secondary' :
-                            'outline'
-                          }>
-                            {product.enrichment_status || 'Non enrichi'}
-                          </Badge>
+                          {typeof product.enrichment_status === 'object' && product.enrichment_status !== null ? (
+                            <div className="flex gap-1">
+                              {product.enrichment_status.rsgp && (
+                                <Badge variant="outline" className="text-xs">
+                                  RSGP: {product.enrichment_status.rsgp}
+                                </Badge>
+                              )}
+                              {product.enrichment_status.heygen && (
+                                <Badge variant="outline" className="text-xs">
+                                  HeyGen: {product.enrichment_status.heygen}
+                                </Badge>
+                              )}
+                              {!product.enrichment_status.rsgp && !product.enrichment_status.heygen && (
+                                <Badge variant="outline">Non enrichi</Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <Badge variant="outline">
+                              {typeof product.enrichment_status === 'string' 
+                                ? product.enrichment_status 
+                                : 'Non enrichi'}
+                            </Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                       <TableRow>
