@@ -450,137 +450,65 @@ export default function ImportedProducts() {
                           <Checkbox
                             checked={selectedProducts.has(product.id)}
                             onCheckedChange={() => toggleSelection(product.id)}
-                            disabled={tab === 'enriching' || tab === 'failed'}
+                            className="mt-1"
                           />
                           
                           <div className="flex-1 space-y-3">
-                            {/* Header */}
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Package className="w-4 h-4 text-muted-foreground" />
-                                  <h3 className="font-semibold">{product.product_name}</h3>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                  🏢 {product.supplier_configurations?.supplier_name} • 📊 EAN: {product.ean || 'N/A'}
-                                </p>
+                            {/* Product Name */}
+                            <h3 className="font-semibold text-lg">{product.product_name}</h3>
+                            
+                            {/* Compact Info Table */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">EAN:</span>
+                                <span className="ml-1 font-medium">{product.ean || 'N/A'}</span>
                               </div>
-                              
-                              {/* Status Card */}
-                              {product.enrichment_status === 'pending' && (
-                                <div className="bg-orange-50 dark:bg-orange-950 border-l-4 border-orange-500 p-2 rounded">
-                                  <div className="flex items-center gap-2">
-                                    <AlertCircle className="w-4 h-4 text-orange-500" />
-                                    <div>
-                                      <p className="text-xs font-semibold text-orange-700 dark:text-orange-300">En attente</p>
-                                    </div>
-                                  </div>
+                              <div>
+                                <span className="text-muted-foreground">Prix achat:</span>
+                                <span className="ml-1 font-medium">{formatPrice(product.purchase_price)}</span>
+                              </div>
+                              {estimatedPrice && (
+                                <div>
+                                  <span className="text-muted-foreground">Prix vente:</span>
+                                  <span className="ml-1 font-medium">{formatPrice(estimatedPrice)}</span>
                                 </div>
                               )}
-                              {product.enrichment_status === 'enriching' && (
-                                <div className="bg-blue-50 dark:bg-blue-950 border-l-4 border-blue-500 p-2 rounded min-w-[200px]">
-                                  <div className="flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
-                                    <div className="flex-1">
-                                      <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">En cours</p>
-                                      <Progress value={product.enrichment_progress || 0} className="h-1 mt-1" />
-                                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{product.enrichment_progress || 0}%</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {product.enrichment_status === 'completed' && (
-                                <div className="bg-green-50 dark:bg-green-950 border-l-4 border-green-500 p-2 rounded">
-                                  <div className="flex items-center gap-2">
-                                    <Check className="w-4 h-4 text-green-500" />
-                                    <div>
-                                      <p className="text-xs font-semibold text-green-700 dark:text-green-300">Prêt à exporter</p>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {product.enrichment_status === 'failed' && (
-                                <div className="bg-red-50 dark:bg-red-950 border-l-4 border-red-500 p-2 rounded">
-                                  <div className="flex items-center gap-2">
-                                    <AlertCircle className="w-4 h-4 text-red-500" />
-                                    <div>
-                                      <p className="text-xs font-semibold text-red-700 dark:text-red-300">Erreur</p>
-                                    </div>
-                                  </div>
+                              {margin !== undefined && (
+                                <div>
+                                  <span className="text-muted-foreground">Marge:</span>
+                                  <Badge variant={getMarginColor(margin)} className="ml-1">
+                                    {formatMargin(margin)}
+                                  </Badge>
                                 </div>
                               )}
                             </div>
 
-                            {/* Enriched Data Grid */}
-                            {product.product_analyses && (
-                              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
-                                {/* Row 1: Pricing */}
-                                <div className="grid grid-cols-3 gap-4">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">💰 Prix achat</span>
-                                    <span className="font-semibold text-sm">{product.purchase_price?.toFixed(2)}€</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">💵 Prix vente</span>
-                                    <span className="font-semibold text-sm text-green-600 dark:text-green-400">
-                                      {estimatedPrice ? `${estimatedPrice}€` : 'N/A'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">📈 Marge</span>
-                                    <Badge variant={margin > 30 ? "default" : margin > 15 ? "secondary" : "destructive"}>
-                                      {margin ? `${margin.toFixed(1)}%` : '0%'}
-                                    </Badge>
-                                  </div>
-                                </div>
-
-                                {/* Row 2: Category & Market */}
-                                <div className="grid grid-cols-2 gap-4 text-xs">
-                                  <div>
-                                    <span className="text-muted-foreground">🏷️ Catégorie: </span>
-                                    <span className="font-medium">{category || 'Non catégorisé'}</span>
-                                  </div>
-                                  <div>
-                                    <span className="text-muted-foreground">🌐 Marché Amazon: </span>
-                                    <span className="font-medium">{ranking ? `Top ${ranking}%` : 'N/A'}</span>
-                                  </div>
-                                </div>
-
-                                {/* Row 3: Images */}
-                                {imageCount > 0 && (
-                                  <div className="flex items-center gap-4 text-xs pt-2 border-t">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-muted-foreground">🖼️ Images:</span>
-                                      <Badge variant="outline">{imageCount}</Badge>
-                                    </div>
-                                    <div className="flex gap-1">
-                                      {analysis.image_urls.slice(0, 3).map((url: string, idx: number) => (
-                                        <img
-                                          key={idx}
-                                          src={url}
-                                          alt=""
-                                          className="w-8 h-8 rounded border object-cover"
-                                        />
-                                      ))}
-                                      {imageCount > 3 && (
-                                        <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center text-xs font-medium">
-                                          +{imageCount - 3}
-                                        </div>
-                                      )}
-                                    </div>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      onClick={() => setSelectedProductDetail(product.id)}
-                                      className="ml-auto"
-                                    >
-                                      <Eye className="w-4 h-4 mr-2" />
-                                      Détails
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            {/* Additional Info */}
+                            <div className="flex flex-wrap gap-2 text-xs">
+                              {category && (
+                                <Badge variant="secondary">📊 {category}</Badge>
+                              )}
+                              {imageCount > 0 && (
+                                <Badge variant="outline">📷 {imageCount} images</Badge>
+                              )}
+                              {product.supplier_configurations?.supplier_name && (
+                                <Badge variant="outline">
+                                  🏢 {product.supplier_configurations.supplier_name}
+                                </Badge>
+                              )}
+                            </div>
+                            
+                            {/* Action Button */}
+                            <div>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => setSelectedProductDetail(product.id)}
+                              >
+                                <Eye className="w-4 h-4 mr-2" />
+                                Voir les détails
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </Card>

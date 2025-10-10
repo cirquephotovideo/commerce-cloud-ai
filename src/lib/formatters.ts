@@ -120,3 +120,68 @@ export const calculateSimilarity = (str1: string, str2: string): number => {
   
   return 1 - distance / maxLength;
 };
+
+/**
+ * Format specifications object into key-value pairs
+ */
+export const formatSpecifications = (specs: any): Array<{key: string, value: string}> => {
+  if (!specs || typeof specs !== 'object') return [];
+  
+  const formatted: Array<{key: string, value: string}> = [];
+  
+  Object.entries(specs).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      // Format key to be more readable
+      const formattedKey = key
+        .replace(/_/g, ' ')
+        .replace(/([A-Z])/g, ' $1')
+        .trim()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      
+      // Format value
+      let formattedValue = String(value);
+      if (typeof value === 'object') {
+        formattedValue = JSON.stringify(value);
+      }
+      
+      formatted.push({ key: formattedKey, value: formattedValue });
+    }
+  });
+  
+  return formatted;
+};
+
+/**
+ * Format features array for display
+ */
+export const formatFeaturesList = (features: any[]): string[] => {
+  if (!Array.isArray(features)) return [];
+  
+  return features
+    .filter(f => f && typeof f === 'string' && f.trim().length > 0)
+    .map(f => f.trim());
+};
+
+/**
+ * Extract and format product info for table display
+ */
+export const formatProductInfo = (product: any, analysis?: any) => {
+  const analysisData = analysis || extractAnalysisData(product);
+  
+  return {
+    productName: product.product_name,
+    ean: product.ean,
+    purchasePrice: product.purchase_price,
+    sellingPrice: analysisData.estimatedPrice,
+    margin: analysisData.margin,
+    supplier: product.supplier_configurations?.supplier_name,
+    category: analysisData.category,
+    ranking: analysisData.ranking,
+    imageCount: analysisData.imageCount,
+    status: product.enrichment_status,
+    brand: analysisData.analysis?.analysis_result?.brand,
+    stock: product.stock_quantity,
+  };
+};

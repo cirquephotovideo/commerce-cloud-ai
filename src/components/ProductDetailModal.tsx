@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sparkles, Upload, Package, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, formatDate, extractAnalysisData } from "@/lib/formatters";
@@ -157,30 +158,40 @@ export function ProductDetailModal({
                 <CardHeader>
                   <CardTitle>Informations produit</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">EAN</p>
-                      <p className="font-medium">{product.ean || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Catégorie</p>
-                      <p className="font-medium">{category || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Marque</p>
-                      <p className="font-medium">{analysisResult?.brand || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Stock</p>
-                      <p className="font-medium">{product.stock_quantity || 'N/A'}</p>
-                    </div>
-                  </div>
+                <CardContent>
+                  <Table>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground w-[200px]">
+                          EAN
+                        </TableCell>
+                        <TableCell>{product.ean || 'N/A'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
+                          Catégorie
+                        </TableCell>
+                        <TableCell>{category || 'N/A'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
+                          Marque
+                        </TableCell>
+                        <TableCell>{analysisResult?.brand || 'N/A'}</TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium text-muted-foreground">
+                          Stock
+                        </TableCell>
+                        <TableCell>{product.stock_quantity || 'N/A'}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
 
-                  <Separator />
+                  <Separator className="my-4" />
 
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2">Description</p>
+                    <p className="text-sm text-muted-foreground mb-2 font-medium">Description</p>
                     <p className="text-sm">
                       {analysisResult?.description || 'Aucune description disponible'}
                     </p>

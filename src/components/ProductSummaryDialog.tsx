@@ -11,6 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { 
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -458,47 +466,78 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {specifications.dimensions && (
-                    <div className="flex flex-col items-center text-center p-3 bg-muted rounded-lg">
-                      <Ruler className="w-6 h-6 mb-2 text-primary" />
-                      <div className="text-xs text-muted-foreground">Dimensions</div>
-                      <div className="text-sm font-semibold mt-1">{specifications.dimensions}</div>
-                    </div>
-                  )}
-                  {specifications.weight && (
-                    <div className="flex flex-col items-center text-center p-3 bg-muted rounded-lg">
-                      <Weight className="w-6 h-6 mb-2 text-primary" />
-                      <div className="text-xs text-muted-foreground">Poids</div>
-                      <div className="text-sm font-semibold mt-1">{specifications.weight}</div>
-                    </div>
-                  )}
-                  {specifications.connectivity && (
-                    <div className="flex flex-col items-center text-center p-3 bg-muted rounded-lg">
-                      <Wifi className="w-6 h-6 mb-2 text-primary" />
-                      <div className="text-xs text-muted-foreground">Connectivité</div>
-                      <div className="text-sm font-semibold mt-1">{specifications.connectivity}</div>
-                    </div>
-                  )}
-                  {specifications.battery && (
-                    <div className="flex flex-col items-center text-center p-3 bg-muted rounded-lg">
-                      <Battery className="w-6 h-6 mb-2 text-primary" />
-                      <div className="text-xs text-muted-foreground">Batterie</div>
-                      <div className="text-sm font-semibold mt-1">{specifications.battery}</div>
-                    </div>
-                  )}
-                  {/* Additional specs */}
-                  {Object.entries(specifications)
-                    .filter(([key]) => !['dimensions', 'weight', 'connectivity', 'battery'].includes(key))
-                    .slice(0, 4)
-                    .map(([key, value]) => (
-                      <div key={key} className="flex flex-col items-center text-center p-3 bg-muted rounded-lg">
-                        <Box className="w-6 h-6 mb-2 text-primary" />
-                        <div className="text-xs text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</div>
-                        <div className="text-sm font-semibold mt-1">{String(value)}</div>
-                      </div>
-                    ))}
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[200px]">Caractéristique</TableHead>
+                      <TableHead>Valeur</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Dimensions */}
+                    {(specifications.dimensions || specifications.product_dimensions) && (
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          <Ruler className="w-4 h-4 inline mr-2" />
+                          Dimensions
+                        </TableCell>
+                        <TableCell>
+                          {specifications.dimensions || specifications.product_dimensions}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {/* Weight */}
+                    {(specifications.weight || specifications.product_weight) && (
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          <Weight className="w-4 h-4 inline mr-2" />
+                          Poids
+                        </TableCell>
+                        <TableCell>
+                          {specifications.weight || specifications.product_weight}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {/* Connectivity */}
+                    {specifications.connectivity && (
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          <Wifi className="w-4 h-4 inline mr-2" />
+                          Connectivité
+                        </TableCell>
+                        <TableCell>{specifications.connectivity}</TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {/* Battery */}
+                    {(specifications.battery || specifications.battery_life) && (
+                      <TableRow>
+                        <TableCell className="font-medium">
+                          <Battery className="w-4 h-4 inline mr-2" />
+                          Batterie
+                        </TableCell>
+                        <TableCell>
+                          {specifications.battery || specifications.battery_life}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    
+                    {/* Other specifications */}
+                    {Object.entries(specifications)
+                      .filter(([key]) => !['dimensions', 'product_dimensions', 'weight', 'product_weight', 'connectivity', 'battery', 'battery_life'].includes(key))
+                      .slice(0, 6)
+                      .map(([key, value]: [string, any]) => (
+                        <TableRow key={key}>
+                          <TableCell className="font-medium">
+                            {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </TableCell>
+                          <TableCell>{String(value)}</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
           )}
