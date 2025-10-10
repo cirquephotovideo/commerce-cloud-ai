@@ -78,6 +78,17 @@ serve(async (req) => {
     console.log('[CSV-IMPORT] Starting for supplier:', supplierId);
     console.log('[CSV-IMPORT] Skip rows:', skipRows);
     console.log('[CSV-IMPORT] User delimiter:', userDelimiter);
+    
+    // Whitelist of supported fields
+    const supportedFields = ['product_name', 'supplier_reference', 'ean', 'purchase_price', 'stock_quantity'];
+    const mappingFields = Object.keys(columnMapping);
+    const unsupportedFields = mappingFields.filter(field => !supportedFields.includes(field));
+    
+    if (unsupportedFields.length > 0) {
+      console.log('[CSV-IMPORT] ⚠️ Ignoring unsupported fields:', unsupportedFields.join(', '));
+    }
+    
+    console.log('[CSV-IMPORT] Using fields:', mappingFields.filter(field => supportedFields.includes(field)).join(', '));
     console.log('[CSV-IMPORT] Column mapping:', JSON.stringify(columnMapping, null, 2));
 
     // Remove BOM if present
