@@ -6,6 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Decode HTML entities
+function decodeHtmlEntities(text: string): string {
+  const entities: Record<string, string> = {
+    '&agrave;': 'à', '&aacute;': 'á', '&acirc;': 'â', '&atilde;': 'ã', '&auml;': 'ä',
+    '&egrave;': 'è', '&eacute;': 'é', '&ecirc;': 'ê', '&euml;': 'ë',
+    '&igrave;': 'ì', '&iacute;': 'í', '&icirc;': 'î', '&iuml;': 'ï',
+    '&ograve;': 'ò', '&oacute;': 'ó', '&ocirc;': 'ô', '&otilde;': 'õ', '&ouml;': 'ö',
+    '&ugrave;': 'ù', '&uacute;': 'ú', '&ucirc;': 'û', '&uuml;': 'ü',
+    '&ccedil;': 'ç', '&ntilde;': 'ñ',
+    '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
+    '&euro;': '€', '&pound;': '£', '&yen;': '¥', '&copy;': '©', '&reg;': '®',
+  };
+  
+  return text.replace(/&[a-z]+;/gi, match => entities[match.toLowerCase()] || match);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -47,23 +63,33 @@ serve(async (req) => {
       try {
         const columns = line.split(delimiter).map((col: string) => col.trim());
         
-        // Basic mapping - can be made configurable later
-        const [ean, reference, name, price, stock] = columns;
+        // Extended mapping with description support
+        const [ean, reference, name, price, stock, description] = columns;
 
         if (!name || !price) {
           failed++;
           continue;
         }
 
+        // Decode HTML entities and clean description
+        const cleanDescription = description ? decodeHtmlEntities(description) : null;
+        const isDescriptionTruncated = cleanDescription && (
+          cleanDescription.endsWith('...') || 
+          cleanDescription.includes('jusqu&') ||
+          cleanDescription.length < 50
+        );
+
         const productData = {
           user_id: user.id,
           supplier_id: supplierId,
           ean: ean || null,
           supplier_reference: reference || null,
-          product_name: name,
+          product_name: decodeHtmlEntities(name),
           purchase_price: parseFloat(price.replace(',', '.')),
           stock_quantity: stock ? parseInt(stock) : null,
           currency: 'EUR',
+          description: cleanDescription,
+          needs_enrichment: isDescriptionTruncated,
         };
 
         // Check if product exists

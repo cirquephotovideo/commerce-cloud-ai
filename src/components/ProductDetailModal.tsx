@@ -191,10 +191,25 @@ export function ProductDetailModal({
                   <Separator className="my-4" />
 
                   <div>
-                    <p className="text-sm text-muted-foreground mb-2 font-medium">Description</p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <p className="text-sm text-muted-foreground font-medium">Description</p>
+                      {(() => {
+                        const desc = analysisResult?.description?.suggested_description || 
+                                    analysisResult?.description_long || 
+                                    product.description || '';
+                        const isTruncated = desc.endsWith('...') || desc.includes('jusqu&') || desc.length < 50;
+                        return isTruncated ? (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertCircle className="w-3 h-3 mr-1" />
+                            Description incomplète
+                          </Badge>
+                        ) : null;
+                      })()}
+                    </div>
                     <p className="text-sm">
                       {analysisResult?.description?.suggested_description || 
-                       analysisResult?.description_long || 
+                       analysisResult?.description_long ||
+                       product.description || 
                        'Aucune description disponible'}
                     </p>
                   </div>
