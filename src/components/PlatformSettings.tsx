@@ -13,6 +13,7 @@ const PLATFORMS = [
   { value: 'woocommerce', label: '🌐 WooCommerce', icon: '🌐' },
   { value: 'prestashop', label: '🛒 PrestaShop', icon: '🛒' },
   { value: 'magento', label: '📦 Magento', icon: '📦' },
+  { value: 'odoo', label: '🟣 Odoo', icon: '🟣' },
   { value: 'salesforce', label: '☁️ Salesforce', icon: '☁️' },
   { value: 'sap', label: '🏢 SAP', icon: '🏢' },
   { value: 'uber_eats', label: '🍔 Uber Eats', icon: '🍔' },
@@ -158,6 +159,47 @@ export const PlatformSettings = () => {
                 type="password"
                 value={config.api_secret_encrypted}
                 onChange={(e) => setConfig({ ...config, api_secret_encrypted: e.target.value })}
+              />
+            </div>
+          </>
+        );
+      case 'odoo':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="platform_url">Odoo URL</Label>
+              <Input
+                id="platform_url"
+                placeholder="https://your-instance.odoo.com"
+                value={config.platform_url}
+                onChange={(e) => setConfig({ ...config, platform_url: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_key">Database Name</Label>
+              <Input
+                id="api_key"
+                placeholder="your_database"
+                value={config.api_key_encrypted}
+                onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_secret">Username</Label>
+              <Input
+                id="api_secret"
+                placeholder="admin"
+                value={config.api_secret_encrypted}
+                onChange={(e) => setConfig({ ...config, api_secret_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access_token">Password / API Key</Label>
+              <Input
+                id="access_token"
+                type="password"
+                value={config.access_token_encrypted}
+                onChange={(e) => setConfig({ ...config, access_token_encrypted: e.target.value })}
               />
             </div>
           </>
