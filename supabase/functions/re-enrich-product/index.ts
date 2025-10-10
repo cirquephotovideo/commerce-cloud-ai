@@ -37,24 +37,28 @@ serve(async (req) => {
 
     console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId}`);
 
-    // Get the product analysis
-    const { data: analysis, error: analysisError } = await supabase
-      .from('product_analyses')
-      .select('*, supplier_products(*)')
+    // Get the supplier product first
+    const { data: supplierProduct, error: productError } = await supabase
+      .from('supplier_products')
+      .select('*')
       .eq('id', productId)
       .eq('user_id', user.id)
       .single();
 
-    if (analysisError || !analysis) {
-      throw new Error('Product not found or access denied');
-    }
-
-    // Get supplier product details
-    const supplierProduct = analysis.supplier_products;
-    
-    if (!supplierProduct) {
+    if (productError || !supplierProduct) {
+      console.error('[RE-ENRICH] Supplier product not found:', productError);
       throw new Error('Supplier product not found');
     }
+
+    // Check if there's a linked analysis
+    const { data: linkedAnalysis } = await supabase
+      .from('product_analyses')
+      .select('*')
+      .eq('user_id', user.id)
+      .or(`id.eq.${productId},supplier_product_id.eq.${productId}`)
+      .maybeSingle();
+
+    const analysis = linkedAnalysis || null;
 
     // Determine which enrichments to run
     const enrichmentsToRun = enrichmentTypes || ['amazon', 'ai_analysis'];
@@ -65,7 +69,7 @@ serve(async (req) => {
       .insert({
         user_id: user.id,
         supplier_product_id: supplierProduct.id,
-        analysis_id: productId,
+        analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',
         status: 'pending'
@@ -77,14 +81,16 @@ serve(async (req) => {
       throw new Error(`Failed to queue re-enrichment: ${queueError.message}`);
     }
 
-    // Update analysis tracking
-    await supabase
-      .from('product_analyses')
-      .update({
-        last_auto_enrichment_at: new Date().toISOString(),
-        auto_enrichment_count: (analysis.auto_enrichment_count || 0) + 1
-      })
-      .eq('id', productId);
+    // Update analysis tracking if analysis exists
+    if (analysis) {
+      await supabase
+        .from('product_analyses')
+        .update({
+          last_auto_enrichment_at: new Date().toISOString(),
+          auto_enrichment_count: (analysis.auto_enrichment_count || 0) + 1
+        })
+        .eq('id', analysis.id);
+    }
 
     // Process the enrichment immediately
     try {
@@ -108,15 +114,27 @@ serve(async (req) => {
         if (analyzerError) {
           console.error('[RE-ENRICH] Analyzer error:', analyzerError);
         } else {
-          // Update analysis with new data
-          await supabase
-            .from('product_analyses')
-            .update({
-              analysis_result: analyzerResult,
-              enrichment_status: 'completed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', productId);
+          // Update or create analysis with new data
+          if (analysis) {
+            await supabase
+              .from('product_analyses')
+              .update({
+                analysis_result: analyzerResult,
+                enrichment_status: 'completed',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', analysis.id);
+          } else {
+            // Create new analysis if none exists
+            await supabase
+              .from('product_analyses')
+              .insert({
+                user_id: user.id,
+                supplier_product_id: supplierProduct.id,
+                analysis_result: analyzerResult,
+                enrichment_status: 'completed'
+              });
+          }
 
           // Update queue status
           await supabase
@@ -134,8 +152,8 @@ serve(async (req) => {
             severity: 'info',
             title: 'Re-enrichissement terminé',
             message: `Le produit "${supplierProduct.name}" a été enrichi avec succès.`,
-            related_product_id: productId,
-            action_url: `/imported-products?highlight=${productId}`
+            related_product_id: supplierProduct.id,
+            action_url: `/imported-products?highlight=${supplierProduct.id}`
           });
         }
       }
