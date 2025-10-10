@@ -11,6 +11,8 @@ import { SupplierConfiguration } from "@/components/SupplierConfiguration";
 import { SupplierProductsTable } from "@/components/SupplierProductsTable";
 import { SupplierImportWizard } from "@/components/SupplierImportWizard";
 import { SupplierImportMenu } from "@/components/SupplierImportMenu";
+import { PlatformSettings } from "@/components/PlatformSettings";
+import { SupplierAutoSync } from "@/components/SupplierAutoSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -189,6 +191,7 @@ export default function Suppliers() {
         <TabsList>
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
           <TabsTrigger value="products">Produits</TabsTrigger>
+          <TabsTrigger value="platforms">🔑 Plateformes E-commerce</TabsTrigger>
           <TabsTrigger value="logs">Historique</TabsTrigger>
         </TabsList>
 
@@ -296,6 +299,13 @@ export default function Suppliers() {
 
         <TabsContent value="products">
           <SupplierProductsTable />
+        </TabsContent>
+
+        <TabsContent value="platforms" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <PlatformSettings />
+            <SupplierAutoSync />
+          </div>
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
