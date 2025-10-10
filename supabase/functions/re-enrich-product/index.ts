@@ -29,36 +29,75 @@ serve(async (req) => {
       throw new Error('Authentication failed');
     }
 
-    const { productId, enrichmentTypes } = await req.json();
+    const { productId, enrichmentTypes, provider } = await req.json();
 
     if (!productId) {
       throw new Error('Product ID is required');
     }
 
-    console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId}`);
+    console.log(`[RE-ENRICH] Starting re-enrichment for product ${productId} with provider ${provider || 'default'}`);
 
-    // Get the supplier product first
-    const { data: supplierProduct, error: productError } = await supabase
-      .from('supplier_products')
-      .select('*')
+    // Try to find as product_analysis first
+    const { data: analysisData } = await supabase
+      .from('product_analyses')
+      .select('*, supplier_product_id')
       .eq('id', productId)
       .eq('user_id', user.id)
-      .single();
-
-    if (productError || !supplierProduct) {
-      console.error('[RE-ENRICH] Supplier product not found:', productError);
-      throw new Error('Supplier product not found');
-    }
-
-    // Check if there's a linked analysis
-    const { data: linkedAnalysis } = await supabase
-      .from('product_analyses')
-      .select('*')
-      .eq('user_id', user.id)
-      .or(`id.eq.${productId},supplier_product_id.eq.${productId}`)
       .maybeSingle();
 
-    const analysis = linkedAnalysis || null;
+    let supplierProduct = null;
+    let analysis = null;
+
+    if (analysisData) {
+      // It's a product_analysis ID
+      analysis = analysisData;
+      
+      // Get the linked supplier product
+      if (analysisData.supplier_product_id) {
+        const { data: sp } = await supabase
+          .from('supplier_products')
+          .select('*')
+          .eq('id', analysisData.supplier_product_id)
+          .eq('user_id', user.id)
+          .single();
+        
+        supplierProduct = sp;
+      }
+    } else {
+      // Try as supplier_product ID
+      const { data: sp } = await supabase
+        .from('supplier_products')
+        .select('*')
+        .eq('id', productId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (sp) {
+        supplierProduct = sp;
+        
+        // Check if there's a linked analysis
+        const { data: linkedAnalysis } = await supabase
+          .from('product_analyses')
+          .select('*')
+          .eq('supplier_product_id', sp.id)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        analysis = linkedAnalysis;
+      }
+    }
+
+    if (!supplierProduct && !analysis) {
+      console.error('[RE-ENRICH] Neither supplier product nor analysis found');
+      throw new Error('Product not found');
+    }
+
+    // If we have analysis but no supplier product, we can still work with analysis data
+    const productData = supplierProduct || {
+      name: analysis?.analysis_result?.product_name || 'Unknown Product',
+      ean: analysis?.analysis_result?.ean || null,
+      description: analysis?.analysis_result?.description || null
+    };
 
     // Determine which enrichments to run
     const enrichmentsToRun = enrichmentTypes || ['amazon', 'ai_analysis'];
@@ -68,11 +107,12 @@ serve(async (req) => {
       .from('enrichment_queue')
       .insert({
         user_id: user.id,
-        supplier_product_id: supplierProduct.id,
+        supplier_product_id: supplierProduct?.id || null,
         analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',
-        status: 'pending'
+        status: 'pending',
+        metadata: { provider: provider || 'default' }
       })
       .select()
       .single();
@@ -101,12 +141,13 @@ serve(async (req) => {
           {
             body: {
               product: {
-                name: supplierProduct.name,
-                ean: supplierProduct.ean,
-                purchase_price: supplierProduct.purchase_price,
-                description: supplierProduct.description
+                name: productData.name,
+                ean: productData.ean,
+                purchase_price: productData.purchase_price || null,
+                description: productData.description
               },
-              enrichmentOptions: enrichmentsToRun
+              enrichmentOptions: enrichmentsToRun,
+              provider: provider || 'lovable-ai'
             }
           }
         );
@@ -151,9 +192,9 @@ serve(async (req) => {
             alert_type: 'enrichment_complete',
             severity: 'info',
             title: 'Re-enrichissement terminé',
-            message: `Le produit "${supplierProduct.name}" a été enrichi avec succès.`,
-            related_product_id: supplierProduct.id,
-            action_url: `/imported-products?highlight=${supplierProduct.id}`
+            message: `Le produit "${productData.name}" a été enrichi avec succès.`,
+            related_product_id: supplierProduct?.id || null,
+            action_url: supplierProduct?.id ? `/imported-products?highlight=${supplierProduct.id}` : '/dashboard'
           });
         }
       }

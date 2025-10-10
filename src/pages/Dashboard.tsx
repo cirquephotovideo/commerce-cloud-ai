@@ -83,6 +83,61 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleReEnrich = async (analysisId: string, provider: 'lovable-ai' | 'ollama' | 'openai') => {
+    setEnrichingIds(prev => new Set(prev).add(analysisId));
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast({
+          title: "Authentification requise",
+          description: "Votre session a expiré.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('re-enrich-product', {
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: { 
+          productId: analysisId,
+          enrichmentTypes: ['ai_analysis', 'amazon'],
+          provider: provider
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Re-enrichissement lancé",
+        description: `L'enrichissement avec ${provider} a été lancé avec succès.`,
+      });
+      
+      // Reload after a delay
+      setTimeout(() => {
+        loadAnalyses();
+        if (selectedAnalysis?.id === analysisId) {
+          // Refresh the selected analysis
+          const refreshed = analyses.find(a => a.id === analysisId);
+          if (refreshed) setSelectedAnalysis(refreshed);
+        }
+      }, 3000);
+    } catch (error: any) {
+      console.error('Re-enrichment error:', error);
+      toast({
+        title: "Erreur lors du re-enrichissement",
+        description: error.message || "Une erreur est survenue",
+        variant: "destructive",
+      });
+    } finally {
+      setEnrichingIds(prev => {
+        const next = new Set(prev);
+        next.delete(analysisId);
+        return next;
+      });
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -540,29 +595,92 @@ export default function Dashboard() {
 
         {/* Section Détails de l'Analyse */}
         {selectedAnalysis && (
-          <Card className="mb-6 border-primary/20 shadow-lg">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+          <>
+            <Card className="mb-6 border-primary/20 shadow-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    🔍 Détails de l'Analyse
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setSelectedAnalysis(null)}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Fermer
+                  </Button>
+                </div>
+                <CardDescription>
+                  Informations complètes sur le produit analysé
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DetailedAnalysisView analysis={selectedAnalysis.analysis_result} />
+              </CardContent>
+            </Card>
+
+            {/* Section Re-enrichissement */}
+            <Card className="mb-6 border-primary/20">
+              <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  🔍 Détails de l'Analyse
+                  <Sparkles className="w-5 h-5" />
+                  Re-enrichir avec IA
                 </CardTitle>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setSelectedAnalysis(null)}
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Fermer
-                </Button>
-              </div>
-              <CardDescription>
-                Informations complètes sur le produit analysé
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DetailedAnalysisView analysis={selectedAnalysis.analysis_result} />
-            </CardContent>
-          </Card>
+                <CardDescription>
+                  Enrichir à nouveau ce produit avec différents providers d'IA
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Button
+                    onClick={() => handleReEnrich(selectedAnalysis.id, 'lovable-ai')}
+                    disabled={enrichingIds.has(selectedAnalysis.id)}
+                    className="w-full"
+                    variant="default"
+                  >
+                    {enrichingIds.has(selectedAnalysis.id) ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    Lovable AI
+                  </Button>
+                  
+                  <Button
+                    onClick={() => handleReEnrich(selectedAnalysis.id, 'ollama')}
+                    disabled={enrichingIds.has(selectedAnalysis.id)}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    {enrichingIds.has(selectedAnalysis.id) ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Package className="w-4 h-4 mr-2" />
+                    )}
+                    Ollama
+                  </Button>
+                  
+                  <Button
+                    onClick={() => handleReEnrich(selectedAnalysis.id, 'openai')}
+                    disabled={enrichingIds.has(selectedAnalysis.id)}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    {enrichingIds.has(selectedAnalysis.id) ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4 mr-2" />
+                    )}
+                    OpenAI
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-4">
+                  💡 Le re-enrichissement mettra à jour toutes les données du produit avec le provider sélectionné
+                </p>
+              </CardContent>
+            </Card>
+          </>
         )}
 
         <div className="flex justify-between items-center mb-6">
