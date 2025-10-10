@@ -12,30 +12,52 @@ import { SupplierProductDetail } from "./SupplierProductDetail";
 export function SupplierProductsTable() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const pageSize = 50;
 
-  const { data: products, isLoading } = useQuery({
-    queryKey: ["supplier-products", searchQuery, statusFilter],
+  // Fetch suppliers for filter
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers-for-filter"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("supplier_configurations")
+        .select("id, supplier_name")
+        .order("supplier_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: productsData, isLoading } = useQuery({
+    queryKey: ["supplier-products", searchQuery, statusFilter, supplierFilter, page],
     queryFn: async () => {
       let query = supabase
         .from("supplier_products")
         .select(`
           *,
-          supplier_configurations(supplier_name),
+          supplier_configurations(supplier_name, id),
           product_links(id, analysis_id, link_type, confidence_score)
-        `)
-        .order("created_at", { ascending: false });
+        `, { count: 'exact' })
+        .order("created_at", { ascending: false })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (searchQuery) {
         query = query.or(`ean.ilike.%${searchQuery}%,product_name.ilike.%${searchQuery}%,supplier_reference.ilike.%${searchQuery}%`);
       }
 
-      const { data, error } = await query;
+      if (supplierFilter !== "all") {
+        query = query.eq("supplier_id", supplierFilter);
+      }
+
+      const { data, error, count } = await query;
       if (error) throw error;
 
-      // Filter by status
+      // Filter by status (after fetch for simplicity)
+      let filteredData = data || [];
       if (statusFilter !== "all") {
-        return data?.filter((p) => {
+        filteredData = filteredData.filter((p) => {
           const hasLink = p.product_links && p.product_links.length > 0;
           if (statusFilter === "linked") return hasLink;
           if (statusFilter === "unlinked") return !hasLink;
@@ -43,9 +65,13 @@ export function SupplierProductsTable() {
         });
       }
 
-      return data;
+      return { products: filteredData, totalCount: count || 0 };
     },
   });
+
+  const products = productsData?.products || [];
+  const totalCount = productsData?.totalCount || 0;
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const getStatusBadge = (product: any) => {
     const hasLink = product.product_links && product.product_links.length > 0;
@@ -71,10 +97,26 @@ export function SupplierProductsTable() {
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5" />
               <span>Produits Fournisseurs</span>
-              <Badge variant="outline">{products?.length || 0}</Badge>
+              <Badge variant="outline">{totalCount}</Badge>
+              {totalPages > 1 && (
+                <span className="text-sm text-muted-foreground ml-2">
+                  Page {page + 1}/{totalPages}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={supplierFilter} onValueChange={(val) => { setSupplierFilter(val); setPage(0); }}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Fournisseur" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tous les fournisseurs</SelectItem>
+                  {suppliers?.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.supplier_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(0); }}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
@@ -89,7 +131,7 @@ export function SupplierProductsTable() {
                 <Input
                   placeholder="Rechercher par EAN, nom..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => { setSearchQuery(e.target.value); setPage(0); }}
                   className="pl-10"
                 />
               </div>
@@ -187,6 +229,33 @@ export function SupplierProductsTable() {
             </div>
           )}
         </CardContent>
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              Affichage {page * pageSize + 1} - {Math.min((page + 1) * pageSize, totalCount)} sur {totalCount}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+              >
+                ← Précédent
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+              >
+                Suivant →
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {selectedProduct && (

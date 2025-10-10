@@ -129,9 +129,10 @@ export default function Suppliers() {
 
       // Handle different response formats
       if (supplier.supplier_type === 'odoo') {
-        const imported = data?.results?.success || 0;
-        const matched = data?.results?.matched || 0;
-        toast.success(`✅ Synchronisation Odoo terminée: ${imported} importés | ${matched} matchés`);
+        const found = data?.found || 0;
+        const imported = data?.imported || 0;
+        const matched = data?.matched || 0;
+        toast.success(`✅ Odoo: ${found} trouvés | ${imported} importés | ${matched} matchés`);
       } else {
         toast.success(`Synchronisation terminée: ${data.imported || 0} produits importés`);
       }

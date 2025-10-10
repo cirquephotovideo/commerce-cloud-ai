@@ -170,98 +170,133 @@ serve(async (req) => {
 
     console.log('[ODOO] Authenticated with UID:', uid);
 
-    // 2. Rechercher produits avec prix d'achat
-    const searchPayload = `<?xml version="1.0"?>
-      <methodCall>
-        <methodName>execute_kw</methodName>
-        <params>
-          <param><string>${database}</string></param>
-          <param><int>${uid}</int></param>
-          <param><string>${password}</string></param>
-          <param><string>product.product</string></param>
-          <param><string>search_read</string></param>
-          <param>
-            <array><data>
-              <value><array><data>
+    // 2. Rechercher TOUS les produits actifs avec pagination
+    const allProducts: any[] = [];
+    let offset = 0;
+    const limit = 500;
+    let hasMore = true;
+
+    console.log('[ODOO] Starting paginated product fetch...');
+
+    while (hasMore) {
+      const searchPayload = `<?xml version="1.0"?>
+        <methodCall>
+          <methodName>execute_kw</methodName>
+          <params>
+            <param><string>${database}</string></param>
+            <param><int>${uid}</int></param>
+            <param><string>${password}</string></param>
+            <param><string>product.product</string></param>
+            <param><string>search_read</string></param>
+            <param>
+              <array><data>
                 <value><array><data>
-                  <value><string>standard_price</string></value>
-                  <value><string>!=</string></value>
-                  <value><double>0</double></value>
+                  <value><array><data>
+                    <value><string>active</string></value>
+                    <value><string>=</string></value>
+                    <value><boolean>1</boolean></value>
+                  </data></array></value>
                 </data></array></value>
-              </data></array></value>
-            </data></array>
-          </param>
-          <param>
-            <struct>
-              <member>
-                <name>fields</name>
-                <value><array><data>
-                  <value><string>barcode</string></value>
-                  <value><string>default_code</string></value>
-                  <value><string>name</string></value>
-                  <value><string>standard_price</string></value>
-                  <value><string>lst_price</string></value>
-                  <value><string>qty_available</string></value>
-                </data></array></value>
-              </member>
-              <member>
-                <name>limit</name>
-                <value><int>500</int></value>
-              </member>
-            </struct>
-          </param>
-        </params>
-      </methodCall>`;
+              </data></array>
+            </param>
+            <param>
+              <struct>
+                <member>
+                  <name>fields</name>
+                  <value><array><data>
+                    <value><string>barcode</string></value>
+                    <value><string>default_code</string></value>
+                    <value><string>name</string></value>
+                    <value><string>standard_price</string></value>
+                    <value><string>lst_price</string></value>
+                    <value><string>qty_available</string></value>
+                  </data></array></value>
+                </member>
+                <member>
+                  <name>limit</name>
+                  <value><int>${limit}</int></value>
+                </member>
+                <member>
+                  <name>offset</name>
+                  <value><int>${offset}</int></value>
+                </member>
+              </struct>
+            </param>
+          </params>
+        </methodCall>`;
 
-    const productsResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml' },
-      body: searchPayload,
-    });
+      const productsResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml' },
+        body: searchPayload,
+      });
 
-    const productsXML = await productsResponse.text();
-    console.log('[ODOO] Products response status:', productsResponse.status);
-    console.log('[ODOO] Products response:', productsXML.substring(0, 500));
+      const productsXML = await productsResponse.text();
+      console.log(`[ODOO] Page ${Math.floor(offset/limit) + 1} - Status:`, productsResponse.status);
 
-    if (!productsResponse.ok) {
-      throw new Error(`Odoo products fetch failed (HTTP ${productsResponse.status})`);
-    }
-    
-    // Parser XML simplifié
-    const products: any[] = [];
-    const structRegex = /<member>[\s\S]*?<\/member>/g;
-    
-    // Extraction simplifiée des produits (à améliorer avec un vrai parser XML)
-    const productMatches = productsXML.match(/<struct>[\s\S]*?<\/struct>/g) || [];
-    
-    for (const structMatch of productMatches.slice(0, 100)) { // Limiter à 100 produits
-      const extractValue = (key: string) => {
-        const regex = new RegExp(`<name>${key}</name>\\s*<value>(?:<[^>]+>)?([^<]*)(?:<\/[^>]+>)?<\/value>`, 's');
-        const m = structMatch.match(regex);
-        return m ? m[1].trim() : null;
-      };
+      if (!productsResponse.ok) {
+        throw new Error(`Odoo products fetch failed (HTTP ${productsResponse.status})`);
+      }
+      
+      // Parser XML amélioré pour extraire correctement les valeurs
+      const productMatches = productsXML.match(/<struct>[\s\S]*?<\/struct>/g) || [];
+      
+      if (productMatches.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-      const product = {
-        default_code: extractValue('default_code'),
-        barcode: extractValue('barcode'),
-        name: extractValue('name'),
-        standard_price: parseFloat(extractValue('standard_price') || '0'),
-        lst_price: parseFloat(extractValue('lst_price') || '0'),
-        qty_available: parseInt(extractValue('qty_available') || '0'),
-      };
+      for (const structMatch of productMatches) {
+        // Extraction améliorée qui préserve les types
+        const extractValue = (key: string, type: 'string' | 'double' | 'int' = 'string') => {
+          const regex = new RegExp(`<name>${key}</name>\\s*<value><${type}>([^<]*)<\/${type}><\/value>`, 's');
+          const m = structMatch.match(regex);
+          return m ? m[1].trim() : null;
+        };
 
-      if (product.name) {
-        products.push(product);
+        const extractStringOrFalse = (key: string) => {
+          // Gère <string>value</string> ou <boolean>0</boolean> (False)
+          const strMatch = structMatch.match(new RegExp(`<name>${key}</name>\\s*<value><string>([^<]*)</string></value>`, 's'));
+          if (strMatch) return strMatch[1].trim();
+          
+          const boolMatch = structMatch.match(new RegExp(`<name>${key}</name>\\s*<value><boolean>([01])</boolean></value>`, 's'));
+          if (boolMatch && boolMatch[1] === '0') return null;
+          
+          return null;
+        };
+
+        const name = extractValue('name', 'string');
+        if (!name) continue; // Skip si pas de nom
+
+        const product = {
+          default_code: extractStringOrFalse('default_code'),
+          barcode: extractStringOrFalse('barcode'),
+          name: name,
+          standard_price: parseFloat(extractValue('standard_price', 'double') || '0'),
+          lst_price: parseFloat(extractValue('lst_price', 'double') || '0'),
+          qty_available: parseInt(extractValue('qty_available', 'int') || '0'),
+        };
+
+        allProducts.push(product);
+      }
+
+      console.log(`[ODOO] Page ${Math.floor(offset/limit) + 1}: ${productMatches.length} products`);
+      
+      // Continue si on a reçu exactement "limit" produits
+      if (productMatches.length < limit) {
+        hasMore = false;
+      } else {
+        offset += limit;
       }
     }
 
-    console.log(`Found ${products.length} products from Odoo`);
+    console.log(`[ODOO] Total found: ${allProducts.length} products`);
 
     // 3. Importer dans supplier_products
     let imported = 0, matched = 0, errors = 0;
     const errorDetails = [];
 
-    for (const product of products) {
+    for (const product of allProducts) {
       try {
         // Valider et nettoyer EAN
         const rawEan = product.barcode?.trim();
@@ -327,7 +362,7 @@ serve(async (req) => {
       user_id: userId,
       supplier_id: supplier_id,
       import_type: 'odoo_api',
-      products_count: products.length,
+      products_count: allProducts.length,
       success_count: imported,
       error_count: errors,
       error_details: errorDetails.length > 0 ? errorDetails : null,
@@ -345,6 +380,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
+        found: allProducts.length,
         imported,
         matched,
         new: imported - matched,
