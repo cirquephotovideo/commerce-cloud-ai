@@ -125,6 +125,7 @@ Réponds UNIQUEMENT en JSON valide:
     let productsCreated = 0;
     let productsUpdated = 0;
     let productsFound = 0;
+    const updatedVariantIds: string[] = []; // Track variant IDs for price alerts
 
     for (const row of rows.slice(0, 100)) { // Limit to 100 for performance
       try {
@@ -211,7 +212,7 @@ Réponds UNIQUEMENT en JSON valide:
 
         if (matchedAnalysis && inbox.supplier_id) {
           // Update or create supplier_price_variants
-          const { error: upsertError } = await supabase
+          const { data: variant, error: upsertError } = await supabase
             .from('supplier_price_variants')
             .upsert({
               analysis_id: matchedAnalysis.id,
@@ -223,11 +224,15 @@ Réponds UNIQUEMENT en JSON valide:
               match_type: matchType,
               match_confidence: matchConfidence,
               last_updated: new Date().toISOString(),
+              product_name: normalizedRow.product_name,
             }, {
               onConflict: 'analysis_id,supplier_id'
-            });
+            })
+            .select('id')
+            .single();
 
-          if (!upsertError) {
+          if (!upsertError && variant) {
+            updatedVariantIds.push(variant.id);
             productsUpdated++;
           }
         } else if (inbox.supplier_id) {
@@ -265,6 +270,43 @@ Réponds UNIQUEMENT en JSON valide:
         products_created: productsCreated,
       })
       .eq('id', inbox_id);
+
+    // Check for price variations and create alerts
+    console.log('[PROCESS-ATTACHMENT] Checking for price variations...');
+    
+    for (const variantId of updatedVariantIds) {
+      const { data: variant } = await supabase
+        .from('supplier_price_variants')
+        .select('*, supplier_configurations(supplier_name)')
+        .eq('id', variantId)
+        .single();
+      
+      if (variant?.price_history && Array.isArray(variant.price_history)) {
+        const history = variant.price_history;
+        if (history.length > 0) {
+          const lastChange = history[history.length - 1];
+          const variationPct = Math.abs(lastChange.variation_pct || 0);
+          
+          // Create alert if variation > 10%
+          if (variationPct > 10) {
+            await supabase.from('user_alerts').insert({
+              user_id: user_id,
+              alert_type: 'price_variation',
+              severity: lastChange.variation_pct > 0 ? 'warning' : 'info',
+              title: `Variation de prix importante (${lastChange.variation_pct > 0 ? '+' : ''}${lastChange.variation_pct}%)`,
+              message: `Le fournisseur ${variant.supplier_configurations?.supplier_name || 'Inconnu'} a modifié le prix de ${lastChange.old_price}€ à ${lastChange.new_price}€ pour le produit ${variant.product_name}`,
+              product_id: variant.analysis_id,
+              is_read: false,
+            });
+            
+            console.log('[PROCESS-ATTACHMENT] Alert created for price variation:', {
+              supplier: variant.supplier_configurations?.supplier_name,
+              variation: lastChange.variation_pct
+            });
+          }
+        }
+      }
+    }
 
     console.log('[PROCESS-ATTACHMENT] Completed:', { productsFound, productsUpdated, productsCreated });
 
