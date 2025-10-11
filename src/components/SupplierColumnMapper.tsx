@@ -240,7 +240,7 @@ export function SupplierColumnMapper({
   }, [mapping, confidence]);
 
   const handleMappingChange = (field: string, value: string) => {
-    const columnIndex = value === '' ? null : parseInt(value);
+    const columnIndex = (value === '' || value === '__ignore__') ? null : parseInt(value);
     setMapping(prev => ({
       ...prev,
       [field]: columnIndex
@@ -438,7 +438,7 @@ export function SupplierColumnMapper({
                     <SelectValue placeholder="Sélectionner une colonne..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Ignorer ce champ</SelectItem>
+                    <SelectItem value="__ignore__">Ignorer ce champ</SelectItem>
                     {Object.keys(previewData[0] || {}).map((header, index) => (
                       <SelectItem key={index} value={index.toString()}>
                         <div className="flex items-center gap-2">
