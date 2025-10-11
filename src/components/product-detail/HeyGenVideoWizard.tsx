@@ -147,6 +147,11 @@ export function HeyGenVideoWizard({ analysisId, onGenerate, onClose }: HeyGenVid
 
   const handleGenerate = () => {
     if (selectedAvatar && selectedVoice) {
+      console.log('[WIZARD] Generating video with:', {
+        analysisId,
+        avatarId: selectedAvatar,
+        voiceId: selectedVoice
+      });
       onGenerate(selectedAvatar, selectedVoice);
       onClose();
     }

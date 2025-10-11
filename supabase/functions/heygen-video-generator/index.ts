@@ -303,18 +303,31 @@ serve(async (req) => {
 
     // Action: generate video
     if (action === 'generate') {
+      console.log('[HEYGEN-VIDEO] Generate request received:', {
+        analysis_id,
+        avatar_id,
+        voice_id,
+        has_avatar: !!avatar_id,
+        has_voice: !!voice_id,
+        has_analysis: !!analysis_id
+      });
+
       // Validation des paramètres obligatoires
       if (!analysis_id) {
+        console.error('[HEYGEN-VIDEO] Missing analysis_id');
         return new Response(
-          JSON.stringify({ error: 'analysis_id is required' }),
+          JSON.stringify({ 
+            error: '⚠️ analysis_id manquant. Paramètre requis pour générer une vidéo.' 
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
       if (!avatar_id || !voice_id) {
+        console.error('[HEYGEN-VIDEO] Missing avatar_id or voice_id:', { avatar_id, voice_id });
         return new Response(
           JSON.stringify({ 
-            error: 'avatar_id and voice_id are required for video generation. Please select an avatar and voice using the wizard.' 
+            error: '⚠️ Avatar et voix requis. Veuillez sélectionner un avatar et une voix via le wizard.' 
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -414,7 +427,15 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
         heygenPayload.template_id = template_id;
       }
 
-      console.log('[HEYGEN] Request payload:', JSON.stringify(heygenPayload, null, 2));
+      console.log('[HEYGEN-VIDEO] Request payload:', JSON.stringify(heygenPayload, null, 2));
+      console.log('[HEYGEN-VIDEO] Calling HeyGen API with:', {
+        video_inputs_count: heygenPayload.video_inputs?.length,
+        has_avatar_id: !!heygenPayload.video_inputs?.[0]?.character?.avatar_id,
+        has_voice_id: !!heygenPayload.video_inputs?.[0]?.voice?.voice_id,
+        script_length: heygenPayload.video_inputs?.[0]?.voice?.input_text?.length,
+        dimension: heygenPayload.dimension,
+        aspect_ratio: heygenPayload.aspect_ratio
+      });
 
       const heygenRes = await fetch('https://api.heygen.com/v2/video/generate', {
         method: 'POST',
@@ -425,29 +446,40 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
         body: JSON.stringify(heygenPayload)
       });
 
-      console.log('[HEYGEN] Response status:', heygenRes.status);
+      console.log('[HEYGEN-VIDEO] HeyGen API response status:', heygenRes.status, heygenRes.statusText);
 
       if (!heygenRes.ok) {
         const rawText = await heygenRes.text();
-        console.error('[HEYGEN] Error response body:', rawText);
+        console.error('[HEYGEN-VIDEO] HeyGen API error response:', {
+          status: heygenRes.status,
+          statusText: heygenRes.statusText,
+          body: rawText.substring(0, 500)
+        });
+        
         let parsed: any = null;
         try { parsed = JSON.parse(rawText); } catch {}
-        const status = heygenRes.status;
-        const message = parsed?.message || parsed?.error || rawText?.slice(0, 300) || 'HeyGen API error';
-        console.error('[HEYGEN-VIDEO] Generation failed:', status, message);
         
-        // Enhanced error messages based on status codes
-        let userMessage = message;
+        const status = heygenRes.status;
+        const apiMessage = parsed?.message || parsed?.error || rawText?.slice(0, 300);
+        
+        let userMessage = apiMessage;
         if (status === 402) {
-          userMessage = '💳 Crédits insuffisants pour générer une vidéo. Veuillez recharger votre compte HeyGen.';
+          userMessage = '💳 Crédits HeyGen insuffisants. Rechargez votre compte sur heygen.com';
         } else if (status === 429) {
-          userMessage = '⏱️ Limite de génération atteinte. Réessayez dans quelques minutes.';
+          userMessage = '⏱️ Limite de génération atteinte. Réessayez dans 5-10 minutes.';
         } else if (status === 401 || status === 403) {
-          userMessage = '🔑 Clé API HeyGen invalide ou expirée. Contactez l\'administrateur.';
+          userMessage = '🔑 Clé API HeyGen invalide ou expirée. Vérifiez la configuration.';
+        } else if (status === 400) {
+          userMessage = `⚠️ Requête invalide : ${apiMessage}`;
         }
         
         return new Response(
-          JSON.stringify({ error: userMessage, status, details: parsed || undefined }),
+          JSON.stringify({ 
+            error: userMessage, 
+            status, 
+            details: parsed,
+            raw: rawText.substring(0, 300)
+          }),
           { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

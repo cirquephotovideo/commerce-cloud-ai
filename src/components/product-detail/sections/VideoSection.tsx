@@ -26,10 +26,11 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
     try {
       const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
         body: {
-          action: 'generate_video',
-          analysisId: analysis.id,
-          avatarId,
-          voiceId
+          action: 'generate',
+          analysis_id: analysis.id,
+          avatar_id: avatarId,
+          voice_id: voiceId,
+          auto_generate_script: true
         }
       });
 
