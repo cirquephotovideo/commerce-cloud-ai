@@ -2517,6 +2517,7 @@ export type Database = {
           connection_config: Json | null
           created_at: string | null
           dedicated_email: string | null
+          email_mode: string | null
           id: string
           is_active: boolean | null
           last_preview_at: string | null
@@ -2538,6 +2539,7 @@ export type Database = {
           connection_config?: Json | null
           created_at?: string | null
           dedicated_email?: string | null
+          email_mode?: string | null
           id?: string
           is_active?: boolean | null
           last_preview_at?: string | null
@@ -2559,6 +2561,7 @@ export type Database = {
           connection_config?: Json | null
           created_at?: string | null
           dedicated_email?: string | null
+          email_mode?: string | null
           id?: string
           is_active?: boolean | null
           last_preview_at?: string | null

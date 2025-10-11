@@ -222,6 +222,10 @@ verify_jwt = false
 [functions.email-imap-poller]
 verify_jwt = false
 
+# Cron job pour polling IMAP/POP3 toutes les 15 minutes
+[functions.email-imap-poller.schedule]
+cron = "*/15 * * * *"
+
 [functions.process-email-attachment]
 verify_jwt = false
 

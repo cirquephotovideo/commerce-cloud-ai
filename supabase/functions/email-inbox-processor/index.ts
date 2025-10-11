@@ -17,29 +17,56 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    const url = new URL(req.url);
+    const source = url.searchParams.get('source') || 'dedicated';
+    const supplierIdFromUrl = url.searchParams.get('supplier_id');
+
     const payload = await req.json();
-    console.log('[EMAIL-PROCESSOR] Received email from:', payload.from);
+    console.log('[EMAIL-PROCESSOR] Received email from:', payload.from, 'Source:', source);
 
     const fromEmail = payload.from || payload.from_email;
     const fromName = payload.from_name || '';
     const subject = payload.subject || '';
-    const toEmail = payload.to; // ✅ L'adresse email dédiée du fournisseur
+    const toEmail = payload.to;
     const receivedAt = payload.date || new Date().toISOString();
 
-    // ✅ LOOKUP DIRECT DU FOURNISSEUR PAR SON EMAIL DÉDIÉ
-    const { data: supplier, error: supplierError } = await supabase
-      .from('supplier_configurations')
-      .select('id, supplier_name, user_id, supplier_type, auto_matching_enabled, matching_threshold')
-      .eq('dedicated_email', toEmail)
-      .eq('is_active', true)
-      .single();
+    // Identifier le fournisseur selon le mode
+    let supplier;
+    let supplierError;
+
+    if (source === 'webhook' && supplierIdFromUrl) {
+      // Mode webhook : lookup direct par supplier_id
+      console.log('[EMAIL-PROCESSOR] Webhook mode: looking up supplier by ID');
+      const result = await supabase
+        .from('supplier_configurations')
+        .select('id, supplier_name, user_id, supplier_type, auto_matching_enabled, matching_threshold')
+        .eq('id', supplierIdFromUrl)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      supplier = result.data;
+      supplierError = result.error;
+    } else {
+      // Mode dedicated : lookup par dedicated_email (comportement actuel)
+      console.log('[EMAIL-PROCESSOR] Dedicated mode: looking up supplier by email');
+      const result = await supabase
+        .from('supplier_configurations')
+        .select('id, supplier_name, user_id, supplier_type, auto_matching_enabled, matching_threshold')
+        .eq('dedicated_email', toEmail)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      supplier = result.data;
+      supplierError = result.error;
+    }
 
     if (supplierError || !supplier) {
-      console.error('[EMAIL-PROCESSOR] Unknown recipient email:', toEmail);
+      console.error('[EMAIL-PROCESSOR] Supplier not found:', supplierError);
       return new Response(JSON.stringify({ 
-        error: 'Unknown recipient email',
-        hint: `L'adresse ${toEmail} n'est associée à aucun fournisseur configuré.`,
-        suggestion: 'Vérifiez la configuration de vos fournisseurs dans l\'onglet "Fournisseurs".'
+        error: 'Supplier not found',
+        mode: source,
+        lookup: source === 'webhook' ? supplierIdFromUrl : toEmail,
+        hint: 'Vérifiez la configuration de vos fournisseurs.'
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 404
@@ -112,7 +139,7 @@ serve(async (req) => {
         attachment_size_kb: attachmentSizeKb,
         detected_supplier_name: supplierName,
         detection_confidence: 100, // ✅ 100% car identification directe
-        detection_method: 'dedicated_email', // ✅ Méthode fiable
+        detection_method: source === 'webhook' ? 'webhook' : 'dedicated_email',
         status: 'pending',
       })
       .select()
@@ -165,7 +192,7 @@ serve(async (req) => {
       supplier: supplierName,
       supplier_id: supplierId,
       confidence: 100,
-      method: 'dedicated_email'
+      method: source === 'webhook' ? 'webhook' : 'dedicated_email'
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
