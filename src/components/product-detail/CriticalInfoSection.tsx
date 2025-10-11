@@ -75,10 +75,10 @@ export const CriticalInfoSection = ({
   };
 
   return (
-    <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20">
+    <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20 shadow-lg">
       <CardContent className="pt-6">
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-lg font-semibold">Informations Critiques</h3>
+        <div className="flex justify-between items-start mb-6">
+          <h3 className="text-2xl font-bold text-primary">📊 Informations Critiques</h3>
           <Button 
             variant="ghost" 
             size="sm"
@@ -89,10 +89,10 @@ export const CriticalInfoSection = ({
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {/* Prix d'achat */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <DollarSign className="h-4 w-4" />
               <span>Prix d'Achat</span>
             </div>
@@ -103,7 +103,7 @@ export const CriticalInfoSection = ({
                 value={purchasePrice}
                 onChange={(e) => setPurchasePrice(e.target.value)}
                 placeholder="0.00"
-                className="h-12 text-2xl font-bold"
+                className="h-14 text-2xl font-bold"
               />
             ) : (
               <div className="text-3xl font-bold">
@@ -114,7 +114,7 @@ export const CriticalInfoSection = ({
 
           {/* Prix de vente */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <TrendingUp className="h-4 w-4" />
               <span>Prix de Vente</span>
             </div>
@@ -125,7 +125,7 @@ export const CriticalInfoSection = ({
                 value={sellingPrice}
                 onChange={(e) => setSellingPrice(e.target.value)}
                 placeholder="0.00"
-                className="h-12 text-2xl font-bold"
+                className="h-14 text-2xl font-bold"
               />
             ) : (
               <div className="text-3xl font-bold text-primary">
@@ -136,9 +136,9 @@ export const CriticalInfoSection = ({
 
           {/* Marge */}
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Marge</div>
-            <div className="flex flex-col gap-1">
-              <div className="text-2xl font-bold">
+            <div className="text-sm font-medium text-muted-foreground">Marge</div>
+            <div className="flex flex-col gap-2">
+              <div className="text-3xl font-bold">
                 {margin ? `${margin}%` : 'N/A'}
               </div>
               {getMarginBadge(margin)}
@@ -147,19 +147,19 @@ export const CriticalInfoSection = ({
 
           {/* Fournisseurs */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Truck className="h-4 w-4" />
-              <span>Fournisseurs</span>
+              <span>Fournisseurs Liés</span>
             </div>
-            <div className="text-3xl font-bold">
+            <div className="text-3xl font-bold text-primary">
               {supplierCount}
             </div>
           </div>
         </div>
 
         {isEditing && (
-          <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
-            <Button onClick={handleSave}>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+            <Button onClick={handleSave} size="lg">
               Enregistrer
             </Button>
           </div>

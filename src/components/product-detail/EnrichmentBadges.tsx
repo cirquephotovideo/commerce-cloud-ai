@@ -105,8 +105,8 @@ export const EnrichmentBadges = ({
             key={badge.key}
             variant={getVariant(status)}
             className={cn(
-              "cursor-pointer transition-all hover:scale-105",
-              compact ? "text-xs px-2 py-0.5" : "text-sm px-3 py-1"
+              "cursor-pointer transition-all hover:scale-105 font-semibold",
+              compact ? "text-xs px-2 py-0.5" : "text-sm px-3 py-1.5"
             )}
             onClick={() => onBadgeClick?.(badge.key)}
           >
