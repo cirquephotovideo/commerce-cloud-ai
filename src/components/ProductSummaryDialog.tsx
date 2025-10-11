@@ -46,6 +46,7 @@ import {
   Award,
   Tag,
   ShoppingCart,
+  Video,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +57,7 @@ import {
   getProductScore,
   getProductCategory 
 } from "@/lib/analysisDataExtractors";
+import { VideoPlayer } from "@/components/product-detail/VideoPlayer";
 
 interface ProductSummaryDialogProps {
   analysis: any;
@@ -65,6 +67,7 @@ interface ProductSummaryDialogProps {
 export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDialogProps) {
   const [open, setOpen] = useState(false);
   const [taxonomyMappings, setTaxonomyMappings] = useState<any[]>([]);
+  const [hasVideo, setHasVideo] = useState(false);
 
   // Safety check
   if (!analysis || !analysis.analysis_result) {
@@ -136,7 +139,7 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
                       analysisResult?.launch_date || 
                       "";
 
-  // Load taxonomy mappings
+  // Load taxonomy mappings and check video
   useEffect(() => {
     const loadTaxonomyMappings = async () => {
       if (!analysis?.id) return;
@@ -151,8 +154,21 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
       }
     };
 
+    const checkVideo = async () => {
+      if (!analysis?.id) return;
+      
+      const { data } = await supabase
+        .from('product_videos')
+        .select('id')
+        .eq('analysis_id', analysis.id)
+        .maybeSingle();
+      
+      setHasVideo(!!data);
+    };
+
     if (open) {
       loadTaxonomyMappings();
+      checkVideo();
     }
   }, [analysis?.id, open]);
 
@@ -577,6 +593,24 @@ export function ProductSummaryDialog({ analysis, productName }: ProductSummaryDi
                 {reviews.summary && (
                   <p className="text-sm text-muted-foreground">{reviews.summary}</p>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* HeyGen Video Section */}
+          {hasVideo && (
+            <Card className="border-purple-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Video className="w-5 h-5 text-purple-600" />
+                  Vidéo Promotionnelle
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VideoPlayer 
+                  analysisId={analysis.id} 
+                  showCard={false}
+                />
               </CardContent>
             </Card>
           )}

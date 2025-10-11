@@ -58,19 +58,23 @@ serve(async (req) => {
           throw new Error('Supplier product not found');
         }
 
-        // Call product-analyzer
+        // Call product-analyzer with correct format
         console.log(`[ENRICHMENT-QUEUE] Calling product-analyzer for ${supplierProduct.product_name}`);
         const { data: analysisData, error: analysisError } = await supabase.functions.invoke(
           'product-analyzer',
           {
             body: {
-              name: supplierProduct.product_name,
-              description: supplierProduct.description,
-              ean: supplierProduct.ean,
-              brand: supplierProduct.brand,
-              category: supplierProduct.category,
-              purchase_price: supplierProduct.purchase_price,
-              supplier_reference: supplierProduct.supplier_reference,
+              productInput: supplierProduct.product_name || supplierProduct.ean,
+              includeImages: task.enrichment_type?.includes('images'),
+              additionalData: {
+                description: supplierProduct.description,
+                ean: supplierProduct.ean,
+                brand: supplierProduct.brand,
+                category: supplierProduct.category,
+                purchase_price: supplierProduct.purchase_price,
+                currency: supplierProduct.currency,
+                supplier_reference: supplierProduct.supplier_reference,
+              }
             }
           }
         );

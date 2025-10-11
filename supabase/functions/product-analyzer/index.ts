@@ -54,7 +54,7 @@ function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
   return 'product_name';
 }
 
-const analysisPrompt = (productInfo: string, inputType: string, searchResults: SearchResult[], categories: any[]) => {
+const analysisPrompt = (productInfo: string, inputType: string, searchResults: SearchResult[], categories: any[], additionalData?: any) => {
   const searchContext = searchResults.length > 0 
     ? `\n\nInformations trouvées sur le web:\n${searchResults.map(r => `- ${r.title}: ${r.description}`).join('\n')}`
     : '';
@@ -63,12 +63,23 @@ const analysisPrompt = (productInfo: string, inputType: string, searchResults: S
     ? `\n\nCatégories Odoo disponibles:\n${categories.map(c => `- ${c.full_path} (ID: ${c.odoo_category_id})`).join('\n')}`
     : '';
 
+  const additionalContext = additionalData 
+    ? `\n\nDonnées fournisseur existantes:
+       - Description: ${additionalData.description || 'N/A'}
+       - EAN: ${additionalData.ean || 'N/A'}
+       - Marque: ${additionalData.brand || 'N/A'}
+       - Catégorie: ${additionalData.category || 'N/A'}
+       - Prix d'achat: ${additionalData.purchase_price || 'N/A'} ${additionalData.currency || ''}
+       - Référence fournisseur: ${additionalData.supplier_reference || 'N/A'}`
+    : '';
+
   return `Analyse complète du produit e-commerce.
 
 Type d'entrée: ${inputType}
 ${inputType === 'url' ? `URL du produit: ${productInfo}` : 
   inputType === 'barcode' ? `Code-barres: ${productInfo}` : 
   `Nom du produit: ${productInfo}`}
+${additionalContext}
 ${searchContext}
 ${categoriesContext}
 
@@ -190,7 +201,27 @@ serve(async (req) => {
   }
 
   try {
-    const { productInput, includeImages = true } = await req.json();
+    const body = await req.json();
+    
+    // Handle multiple input formats
+    let productInput: string;
+    let additionalData: any = {};
+    let includeImages = true;
+
+    if (typeof body === 'string') {
+      productInput = body;
+    } else if (body.productInput) {
+      productInput = body.productInput;
+      additionalData = body.additionalData || {};
+      includeImages = body.includeImages !== false;
+    } else if (body.name) {
+      // Backward compatibility with old format
+      productInput = body.name;
+      additionalData = body;
+    } else {
+      throw new Error('Missing productInput, name, or structured data');
+    }
+
     console.log('Analyzing product:', productInput);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -279,7 +310,7 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
           },
           {
             role: 'user',
-            content: analysisPrompt(productInput, inputType, searchResults, categories)
+            content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
           }
         ],
       }),
