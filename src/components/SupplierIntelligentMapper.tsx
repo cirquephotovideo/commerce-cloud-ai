@@ -72,9 +72,21 @@ export function SupplierIntelligentMapper({
 
       if (error) throw error;
 
-      if (data.success && data.preview) {
-        onPreviewLoad(data.preview);
-        toast.success("✅ Prévisualisation chargée avec succès!");
+      if (data.success && data.preview && Array.isArray(data.preview)) {
+        // Convert CSV array format to object format
+        const [headers, ...rows] = data.preview;
+        const previewObjects = rows.map(row => {
+          const obj: Record<string, string> = {};
+          headers.forEach((header: string, index: number) => {
+            obj[header] = row[index] || '';
+          });
+          return obj;
+        });
+        
+        onPreviewLoad(previewObjects);
+        toast.success(`✅ Prévisualisation chargée: ${previewObjects.length} lignes`);
+      } else if (data.success && data.files?.length > 0) {
+        toast.info(`📂 ${data.files.length} fichiers trouvés. Spécifiez le fichier CSV dans le chemin.`);
       } else {
         toast.error("Impossible de charger la prévisualisation");
       }
