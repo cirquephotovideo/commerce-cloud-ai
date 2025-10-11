@@ -148,3 +148,37 @@ export const getProductCategory = (analysis: any): string => {
     return 'Non catégorisé';
   }
 };
+
+export interface ExtractedAnalysisData {
+  productName: string;
+  productPrice: string;
+  productImages: string[];
+  estimatedPrice: string | null;
+  productMargin: string | null;
+  productScore: number | null;
+  productCategory: string;
+}
+
+export const extractAnalysisData = (analysis: any): ExtractedAnalysisData => {
+  const productPrice = getProductPrice(analysis);
+  const estimatedPrice = analysis?.analysis_result?.pricing?.recommended_price || null;
+  
+  let productMargin: string | null = null;
+  if (productPrice !== 'N/A' && estimatedPrice) {
+    const price = parseFloat(productPrice);
+    const estimated = parseFloat(estimatedPrice);
+    if (!isNaN(price) && !isNaN(estimated) && price > 0) {
+      productMargin = (((estimated - price) / price) * 100).toFixed(1);
+    }
+  }
+
+  return {
+    productName: getProductName(analysis),
+    productPrice,
+    productImages: getProductImages(analysis),
+    estimatedPrice,
+    productMargin,
+    productScore: getProductScore(analysis),
+    productCategory: getProductCategory(analysis),
+  };
+};
