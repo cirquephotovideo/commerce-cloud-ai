@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { CheckCircle2, AlertCircle, HelpCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CheckCircle2, AlertCircle, HelpCircle, Sparkles, Wand2, Trophy, TrendingUp } from "lucide-react";
 
 interface SupplierColumnMapperProps {
   previewData: any[];
@@ -66,8 +70,37 @@ export function SupplierColumnMapper({
 }: SupplierColumnMapperProps) {
   const [mapping, setMapping] = useState<Record<string, number | null>>(initialMapping);
   const [confidence, setConfidence] = useState<Record<string, number>>({});
+  const [highlightedColumn, setHighlightedColumn] = useState<number | null>(null);
+  const [autoDetected, setAutoDetected] = useState<string[]>([]);
+  const [invalidCount, setInvalidCount] = useState(0);
 
-  // Calculate confidence score for a field-column match
+  // Smart parsers for complex formats
+  const smartParsePrice = (value: string): number | null => {
+    if (!value || value === '') return null;
+    let cleaned = String(value).replace(/[€$£¥\s]/g, '').trim();
+    const hasCommaDecimal = /\d+,\d{2}$/.test(cleaned);
+    if (hasCommaDecimal) {
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      cleaned = cleaned.replace(/,/g, '');
+    }
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? null : parsed;
+  };
+
+  const smartParseEAN = (value: string): string | null => {
+    if (!value) return null;
+    const digits = String(value).replace(/\D/g, '');
+    return digits.length === 13 ? digits : null;
+  };
+
+  const smartParseStock = (value: string): number | null => {
+    if (!value) return null;
+    const match = String(value).match(/\d+/);
+    return match ? parseInt(match[0]) : null;
+  };
+
+  // Calculate confidence score with smart parsing
   const calculateConfidence = (fieldKey: string, columnName: string, columnValues: any[]): number => {
     const patterns = SMART_PATTERNS[fieldKey] || [];
     let score = 0;
@@ -76,18 +109,18 @@ export function SupplierColumnMapper({
     const headerMatch = patterns.some(pattern => pattern.test(columnName));
     if (headerMatch) score += 40;
 
-    // Data format validation (60 points)
+    // Data format validation with smart parsing (60 points)
     const validValues = columnValues.filter(v => v !== null && v !== undefined && v !== '');
     if (validValues.length === 0) return score;
 
     if (fieldKey === 'purchase_price') {
-      const numericValues = validValues.filter(v => !isNaN(parseFloat(String(v).replace(',', '.'))));
+      const numericValues = validValues.filter(v => smartParsePrice(String(v)) !== null);
       score += Math.round((numericValues.length / validValues.length) * 60);
     } else if (fieldKey === 'ean') {
-      const eanValues = validValues.filter(v => /^\d{13}$/.test(String(v)));
+      const eanValues = validValues.filter(v => smartParseEAN(String(v)) !== null);
       score += Math.round((eanValues.length / validValues.length) * 60);
     } else if (fieldKey === 'stock_quantity') {
-      const intValues = validValues.filter(v => Number.isInteger(parseFloat(String(v))));
+      const intValues = validValues.filter(v => smartParseStock(String(v)) !== null);
       score += Math.round((intValues.length / validValues.length) * 60);
     } else if (fieldKey === 'vat_rate') {
       const vatValues = validValues.filter(v => {
@@ -96,23 +129,22 @@ export function SupplierColumnMapper({
       });
       score += Math.round((vatValues.length / validValues.length) * 60);
     } else {
-      // For text fields, check non-empty
       score += Math.round((validValues.length / columnValues.length) * 60);
     }
 
     return Math.min(100, score);
   };
 
-  // Validate data format
+  // Validate data format with smart parsing
   const isValidFormat = (fieldKey: string, value: any): boolean => {
     if (value === null || value === undefined || value === '') return false;
 
     if (fieldKey === 'purchase_price') {
-      return !isNaN(parseFloat(String(value).replace(',', '.')));
+      return smartParsePrice(String(value)) !== null;
     } else if (fieldKey === 'ean') {
-      return /^\d{13}$/.test(String(value));
+      return smartParseEAN(String(value)) !== null;
     } else if (fieldKey === 'stock_quantity') {
-      return Number.isInteger(parseFloat(String(value)));
+      return smartParseStock(String(value)) !== null;
     } else if (fieldKey === 'vat_rate') {
       const num = parseFloat(String(value).replace(',', '.'));
       return !isNaN(num) && num >= 0 && num <= 100;
@@ -120,12 +152,48 @@ export function SupplierColumnMapper({
     return true;
   };
 
+  // Calculate mapping quality score
+  const calculateMappingQuality = (): number => {
+    const requiredMapped = REQUIRED_FIELDS.every(f => mapping[f.key] !== null);
+    const optionalMapped = OPTIONAL_FIELDS.filter(f => mapping[f.key] !== null).length;
+    const avgConfidence = Object.values(confidence).length > 0
+      ? Object.values(confidence).reduce((a, b) => a + b, 0) / Object.values(confidence).length
+      : 0;
+    
+    return Math.round(
+      (requiredMapped ? 40 : 0) +
+      (optionalMapped / OPTIONAL_FIELDS.length) * 30 +
+      (avgConfidence * 0.3)
+    );
+  };
+
+  // Count invalid data
+  useEffect(() => {
+    let count = 0;
+    [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].forEach(field => {
+      const columnIndex = mapping[field.key];
+      if (columnIndex !== null && columnIndex !== undefined) {
+        const headers = Object.keys(previewData[0] || {});
+        const columnKey = headers[columnIndex];
+        previewData.forEach(row => {
+          if (!isValidFormat(field.key, row[columnKey])) {
+            count++;
+          }
+        });
+      }
+    });
+    setInvalidCount(count);
+  }, [mapping, previewData]);
+
+  const mappingQuality = calculateMappingQuality();
+
   // Auto-detect columns on mount with confidence scoring
   useEffect(() => {
     if (previewData.length === 0 || Object.keys(initialMapping).length > 0) return;
 
     const detectedMapping: Record<string, number | null> = {};
     const detectedConfidence: Record<string, number> = {};
+    const detected: string[] = [];
     const headers = Object.keys(previewData[0] || {});
 
     // Try to auto-detect each field with confidence scoring
@@ -135,7 +203,6 @@ export function SupplierColumnMapper({
       let bestScore = 0;
 
       headers.forEach((header, index) => {
-        // Get column values for validation
         const columnValues = previewData.map(row => row[header]);
         const score = calculateConfidence(field.key, header, columnValues);
 
@@ -145,9 +212,10 @@ export function SupplierColumnMapper({
         }
       });
 
-      if (bestMatch !== -1 && bestScore > 30) { // Minimum 30% confidence
+      if (bestMatch !== -1 && bestScore > 30) {
         detectedMapping[field.key] = bestMatch;
         detectedConfidence[field.key] = bestScore;
+        detected.push(field.key);
       } else {
         detectedMapping[field.key] = null;
         detectedConfidence[field.key] = 0;
@@ -156,6 +224,7 @@ export function SupplierColumnMapper({
 
     setMapping(detectedMapping);
     setConfidence(detectedConfidence);
+    setAutoDetected(detected);
     onMappingChange(detectedMapping);
     if (onConfidenceChange) {
       onConfidenceChange(detectedConfidence);
@@ -212,6 +281,72 @@ export function SupplierColumnMapper({
 
   return (
     <div className="space-y-6">
+      {/* Mapping Quality Score */}
+      <Card className="border-2" style={{ borderColor: mappingQuality > 80 ? 'hsl(var(--primary))' : 'hsl(var(--orange))' }}>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Qualité du mapping
+            </CardTitle>
+            <Badge variant={mappingQuality > 80 ? "default" : "secondary"} className="text-lg">
+              {mappingQuality}/100
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Progress value={mappingQuality} className="h-3" />
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <div className="text-muted-foreground">Champs requis</div>
+              <div className="font-bold">
+                {REQUIRED_FIELDS.filter(f => mapping[f.key] !== null).length}/{REQUIRED_FIELDS.length}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Champs optionnels</div>
+              <div className="font-bold">
+                {OPTIONAL_FIELDS.filter(f => mapping[f.key] !== null).length}/{OPTIONAL_FIELDS.length}
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Auto-détectés</div>
+              <div className="font-bold flex items-center gap-1">
+                <Sparkles className="h-4 w-4 text-yellow-500" />
+                {autoDetected.length}
+              </div>
+            </div>
+          </div>
+          
+          {mappingQuality === 100 && (
+            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+              <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
+                <Trophy className="h-5 w-5 text-yellow-600" />
+                <AlertTitle className="text-yellow-800 dark:text-yellow-200">
+                  🎉 Mapping parfait!
+                </AlertTitle>
+                <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                  Tous les champs sont mappés avec une confiance élevée
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {invalidCount > 0 && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span>{invalidCount} valeurs avec format invalide détectées</span>
+                <Button variant="ghost" size="sm" className="h-8">
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Auto-corriger
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Validation Alert */}
       {!isValid && (
         <Alert variant="destructive">
@@ -222,43 +357,68 @@ export function SupplierColumnMapper({
         </Alert>
       )}
 
-      {isValid && (
-        <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-          <CheckCircle2 className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800 dark:text-green-200">
-            ✅ Mapping valide!
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Mapping Configuration */}
       <Card>
         <CardHeader>
           <CardTitle>🔗 Configuration du mapping</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Required Fields */}
-          <div className="space-y-3">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Badge variant="destructive">Obligatoire</Badge>
-              Champs requis
-            </h4>
+          <div className="space-y-4">
           {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field) => {
             const fieldConfidence = confidence[field.key] || 0;
             const isMapped = mapping[field.key] !== null && mapping[field.key] !== undefined;
+            const isAutoDetected = autoDetected.includes(field.key);
 
             return (
-              <div key={field.key} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor={field.key}>
+              <motion.div
+                key={field.key}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-2"
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Label htmlFor={field.key} className="flex items-center gap-2">
                     {field.label}
-                    {field.required && <span className="text-destructive ml-1">*</span>}
+                    {field.required && <Badge variant="destructive" className="h-5">Requis</Badge>}
                   </Label>
-                  {isMapped && fieldConfidence > 0 && (
+                  
+                  <AnimatePresence>
+                    {isAutoDetected && (
+                      <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.8, opacity: 0 }}
+                      >
+                        <Badge variant="default" className="animate-pulse">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Auto-détecté à {fieldConfidence}%
+                        </Badge>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {isMapped && !isAutoDetected && fieldConfidence > 0 && (
                     <Badge variant={fieldConfidence > 80 ? "default" : fieldConfidence > 50 ? "secondary" : "outline"}>
                       {fieldConfidence}%
                     </Badge>
                   )}
+                  
+                  {fieldConfidence < 50 && isMapped && (
+                    <Popover>
+                      <PopoverTrigger>
+                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                      </PopoverTrigger>
+                      <PopoverContent>
+                        <div className="space-y-2">
+                          <div className="font-semibold">⚠️ Confiance faible</div>
+                          <div className="text-xs text-muted-foreground">
+                            Le mapping détecté pourrait ne pas être optimal. Vérifiez les données.
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger>
@@ -281,12 +441,17 @@ export function SupplierColumnMapper({
                     <SelectItem value="">Ignorer ce champ</SelectItem>
                     {Object.keys(previewData[0] || {}).map((header, index) => (
                       <SelectItem key={index} value={index.toString()}>
-                        {header}
+                        <div className="flex items-center gap-2">
+                          <span>{header}</span>
+                          {mapping[field.key] === index && (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          )}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </motion.div>
             );
           })}
           </div>
@@ -304,9 +469,29 @@ export function SupplierColumnMapper({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-12">#</TableHead>
-                  {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field) => (
-                    <TableHead key={field.key}>{field.label}</TableHead>
-                  ))}
+                  {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field, fieldIdx) => {
+                    const columnIndex = mapping[field.key];
+                    const isMapped = columnIndex !== null && columnIndex !== undefined;
+                    const isHighlighted = highlightedColumn === columnIndex;
+                    
+                    return (
+                      <TableHead 
+                        key={field.key}
+                        onMouseEnter={() => isMapped && setHighlightedColumn(columnIndex)}
+                        onMouseLeave={() => setHighlightedColumn(null)}
+                        className={isHighlighted ? 'bg-primary/10' : ''}
+                      >
+                        <div className="flex items-center gap-2">
+                          {field.label}
+                          {isMapped && (
+                            <Badge variant="secondary" className="text-xs">
+                              Col {columnIndex}
+                            </Badge>
+                          )}
+                        </div>
+                      </TableHead>
+                    );
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -319,25 +504,37 @@ export function SupplierColumnMapper({
                     const columnKey = isMapped ? Object.keys(previewData[0])[columnIndex] : null;
                     const value = columnKey ? row[columnKey] : null;
                     const isValid = isMapped && isValidFormat(field.key, value);
+                    const isHighlighted = highlightedColumn === columnIndex;
 
                     return (
-                      <TableCell key={field.key}>
+                      <TableCell 
+                        key={field.key}
+                        className={isHighlighted ? 'bg-primary/5' : isMapped && isValid ? 'bg-green-50 dark:bg-green-950' : ''}
+                      >
                         {isMapped ? (
                           <div className="flex items-center gap-2">
                             <span className="truncate max-w-[150px]">{value}</span>
                             {isValid ? (
                               <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
                             ) : (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger>
-                                    <AlertCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Format invalide pour {field.label}</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <Popover>
+                                <PopoverTrigger>
+                                  <AlertCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                                </PopoverTrigger>
+                                <PopoverContent>
+                                  <div className="space-y-2">
+                                    <div className="font-semibold">Format attendu:</div>
+                                    <div className="text-xs">
+                                      {field.key === 'purchase_price' && "Nombre décimal (ex: 19.99)"}
+                                      {field.key === 'ean' && "13 chiffres (ex: 3760123456789)"}
+                                      {field.key === 'stock_quantity' && "Nombre entier (ex: 45)"}
+                                      {field.key === 'vat_rate' && "Pourcentage (ex: 20)"}
+                                    </div>
+                                    <div className="font-semibold mt-2">Valeur actuelle:</div>
+                                    <code className="text-xs bg-muted p-1 rounded block">{value}</code>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             )}
                           </div>
                         ) : (
