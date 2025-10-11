@@ -191,3 +191,24 @@ verify_jwt = true
 
 [functions.import-from-windev]
 verify_jwt = true
+
+[functions.supplier-import-batch]
+verify_jwt = false
+
+[functions.auto-supplier-sync]
+verify_jwt = false
+
+[functions.auto-export-manager]
+verify_jwt = false
+
+[functions.send-user-alert]
+verify_jwt = false
+
+[functions.supplier-sync-scheduler]
+verify_jwt = false
+
+[functions.supplier-sync-single-product]
+verify_jwt = true
+
+[functions.re-enrich-product]
+verify_jwt = true

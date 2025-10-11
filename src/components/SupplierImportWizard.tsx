@@ -9,8 +9,11 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, FileText, ArrowLeft, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SupplierColumnMapper } from "./SupplierColumnMapper";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
+import { useEffect } from "react";
 
 interface SupplierImportWizardProps {
   onClose: () => void;
@@ -25,6 +28,12 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [skipRows, setSkipRows] = useState(1);
   const [preview, setPreview] = useState<any[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, number | null>>({});
+  const [importProgress, setImportProgress] = useState({
+    current: 0,
+    total: 0,
+    status: 'idle' as 'idle' | 'processing' | 'complete' | 'error',
+    message: '',
+  });
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers"],
@@ -37,6 +46,26 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       return data;
     },
   });
+
+  // Load existing mapping when supplier is selected
+  useEffect(() => {
+    if (!supplierId) return;
+    
+    const loadMapping = async () => {
+      const { data: supplier } = await supabase
+        .from('supplier_configurations')
+        .select('column_mapping')
+        .eq('id', supplierId)
+        .single();
+      
+      if (supplier?.column_mapping) {
+        console.log('[WIZARD] Loaded existing mapping:', supplier.column_mapping);
+        setColumnMapping(supplier.column_mapping as Record<string, number | null>);
+      }
+    };
+    
+    loadMapping();
+  }, [supplierId]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -89,6 +118,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     }
 
     setLoading(true);
+    setImportProgress({ current: 0, total: 100, status: 'processing', message: 'Préparation de l\'import...' });
+    
     try {
       const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
       
@@ -98,6 +129,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         .update({ column_mapping: columnMapping })
         .eq('id', supplierId);
       
+      setImportProgress({ current: 20, total: 100, status: 'processing', message: 'Envoi du fichier...' });
+      
       if (isXLSX) {
         const arrayBuffer = await file.arrayBuffer();
         const base64 = btoa(
@@ -106,6 +139,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             ''
           )
         );
+        
+        setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement des produits...' });
         
         const { data, error } = await supabase.functions.invoke("supplier-import-xlsx", {
           body: {
@@ -117,9 +152,13 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         });
 
         if (error) throw error;
+        
+        setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.imported} produits importés` });
         toast.success(`✅ Import réussi: ${data.imported} produits importés`);
       } else {
         const text = await file.text();
+        
+        setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement des produits...' });
         
         const { data, error } = await supabase.functions.invoke("supplier-import-csv", {
           body: {
@@ -132,12 +171,15 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         });
 
         if (error) throw error;
+        
+        setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.imported} produits importés` });
         toast.success(`✅ Import réussi: ${data.imported} produits importés`);
       }
       
-      onClose();
+      setTimeout(() => onClose(), 1500); // Close after 1.5s
     } catch (error) {
       console.error("Import error:", error);
+      setImportProgress({ current: 0, total: 100, status: 'error', message: '❌ Erreur lors de l\'importation' });
       toast.error("❌ Erreur lors de l'importation");
     } finally {
       setLoading(false);
@@ -252,6 +294,42 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
               onMappingChange={setColumnMapping}
               initialMapping={columnMapping}
             />
+          )}
+
+          {/* Progress Bar */}
+          {importProgress.status === 'processing' && (
+            <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{importProgress.message}</span>
+                    <span className="text-muted-foreground">{importProgress.current}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                    <div 
+                      className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${importProgress.current}%` }}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {importProgress.status === 'complete' && (
+            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800 dark:text-green-200">
+                {importProgress.message}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {importProgress.status === 'error' && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{importProgress.message}</AlertDescription>
+            </Alert>
           )}
 
           {/* Navigation */}

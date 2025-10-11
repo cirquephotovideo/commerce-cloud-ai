@@ -166,8 +166,15 @@ function parseCSV(
   });
   
   const startIndex = skipFirstRow ? 1 : 0;
+  const MAX_PRODUCTS = 50000; // Limit to 50k products per import to avoid timeout
+  const endIndex = Math.min(startIndex + MAX_PRODUCTS, lines.length);
   const products = [];
   let skipped = 0;
+  
+  console.log(`[FTP-SYNC] Processing lines ${startIndex} to ${endIndex} (max: ${MAX_PRODUCTS})`);
+  if (lines.length > endIndex) {
+    console.log(`[FTP-SYNC] ⚠️ File contains ${lines.length} lines but only ${MAX_PRODUCTS} will be processed to avoid timeout`);
+  }
   
   // Helper to extract field with sub-field support
   const extractField = (columns: string[], mapping: any): string | null => {
@@ -196,7 +203,7 @@ function parseCSV(
     return null;
   };
   
-  for (let i = startIndex; i < lines.length; i++) {
+  for (let i = startIndex; i < endIndex; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     
@@ -371,8 +378,25 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV with column mapping (support both columns)
-    const mapping = (supplier as any).column_mapping || (supplier as any).mapping_config;
+    // Parse CSV with column mapping
+    const mapping = supplier.column_mapping;
+    console.log('[FTP-SYNC] Loaded mapping from DB:', JSON.stringify(mapping, null, 2));
+    
+    if (!mapping || Object.keys(mapping).length === 0) {
+      console.error('[FTP-SYNC] ❌ No column mapping configured for this supplier!');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          message: '⚠️ Aucun mapping de colonnes configuré. Veuillez d\'abord importer un fichier manuellement pour configurer le mapping.',
+          warning: true
+        }),
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
     const products = parseCSV(
       csvContent, 
       delimiter, 
