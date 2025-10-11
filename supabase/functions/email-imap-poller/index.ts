@@ -15,45 +15,8 @@ interface EmailConfig {
   type: "imap" | "pop3";
 }
 
-async function detectEmailConfig(email: string, password: string): Promise<EmailConfig> {
-  const domain = email.split("@")[1];
-  console.log(`🔍 Détection automatique de configuration pour ${email}`);
-
-  const possibleConfigs: EmailConfig[] = [
-    // Serveurs Infomaniak (prioritaires)
-    { host: "mail.infomaniak.com", port: 993, tls: true, type: "imap" },
-    { host: "mail.infomaniak.com", port: 143, tls: false, starttls: true, type: "imap" },
-    
-    // Serveurs génériques (fallback)
-    { host: `imap.${domain}`, port: 993, tls: true, type: "imap" },
-    { host: `mail.${domain}`, port: 993, tls: true, type: "imap" },
-    { host: domain, port: 993, tls: true, type: "imap" },
-  ];
-
-  for (const config of possibleConfigs) {
-    try {
-      console.log(`🔌 Test connexion ${config.type}://${config.host}:${config.port}`);
-      
-      // Test basique de connexion TCP
-      const conn = await Deno.connect({
-        hostname: config.host,
-        port: config.port,
-      });
-      conn.close();
-      
-      console.log(`✅ Configuration détectée : ${config.type}://${config.host}:${config.port}`);
-      return config;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.log(`❌ Échec ${config.host}:${config.port} - ${errorMessage}`);
-    }
-  }
-
-  throw new Error("Impossible de détecter la configuration email automatiquement");
-}
-
-async function fetchEmailsViaAPI(email: string, password: string, config: EmailConfig) {
-  console.log(`📧 Connexion IMAP à ${config.host}:${config.port}`);
+async function fetchEmailsViaAPI(email: string, password: string, config: EmailConfig, isDebug = false) {
+  console.log(`📧 Tentative de connexion IMAP à ${config.host}:${config.port} (TLS: ${config.tls})`);
   
   const client = new ImapFlow({
     host: config.host,
@@ -63,22 +26,40 @@ async function fetchEmailsViaAPI(email: string, password: string, config: EmailC
       user: email,
       pass: password,
     },
-    logger: false,
+    logger: isDebug ? console : false, // Active les logs IMAP en mode debug
   });
 
   try {
+    console.log(`🔐 Authentification pour ${email}...`);
     await client.connect();
-    console.log("✅ Connexion IMAP établie");
+    console.log("✅ Connexion IMAP établie avec succès");
 
     const lock = await client.getMailboxLock("INBOX");
     
     try {
-      const messages = await client.search({ seen: false });
-      console.log(`📬 ${messages.length} email(s) non lu(s) trouvés`);
+      // Chercher les emails non lus
+      console.log(`🔍 Recherche d'emails non lus...`);
+      const unseenMessages = await client.search({ seen: false });
+      console.log(`📬 ${unseenMessages.length} email(s) non lu(s) trouvés (tous types)`);
+
+      // En mode debug, chercher aussi tous les emails récents
+      if (isDebug) {
+        const recentMessages = await client.search({ 
+          since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+        });
+        console.log(`📬 ${recentMessages.length} email(s) des 30 derniers jours`);
+      }
+
+      const messages = unseenMessages;
+
+      if (messages.length > 0) {
+        console.log(`📋 UIDs des emails à traiter : ${messages.slice(0, 10).join(', ')}`);
+      }
 
       const emailsWithAttachments = [];
 
       for (const uid of messages.slice(0, 10)) {
+        console.log(`\n📧 === Traitement de l'email UID #${uid} ===`);
         const message = await client.fetchOne(uid, { 
           envelope: true,
           bodyStructure: true,
@@ -87,35 +68,53 @@ async function fetchEmailsViaAPI(email: string, password: string, config: EmailC
 
         // Parse les headers pour extraire les infos
         const fromMatch = message.envelope?.from?.[0];
-        const subject = message.envelope?.subject || "";
+        const subject = message.envelope?.subject || "(sans objet)";
         const date = message.envelope?.date || new Date();
+
+        console.log(`  📤 De: ${fromMatch?.name || "?"} <${fromMatch?.address || "?"}>`);
+        console.log(`  📝 Objet: "${subject}"`);
+        console.log(`  📅 Date: ${date.toISOString()}`);
 
         // Chercher les pièces jointes dans la structure du message
         const attachments: any[] = [];
         
-        const extractAttachments = (part: any, partId = '') => {
+        const extractAttachments = (part: any, partId = '', depth = 0) => {
+          const indent = '  '.repeat(depth + 1);
+          const partType = `${part.type || '?'}/${part.subtype || '?'}`;
+          console.log(`${indent}📦 Part ${partId || 'root'}: ${partType}, disposition: ${part.disposition || 'none'}`);
+          
           if (part.disposition === 'attachment' || part.disposition === 'inline') {
             const filename = part.dispositionParameters?.filename || part.parameters?.name || 'unknown';
+            console.log(`${indent}  → Fichier détecté: "${filename}"`);
+            
             if (filename.match(/\.(csv|xlsx|xls)$/i)) {
+              console.log(`${indent}  ✅ Pièce jointe CSV/XLSX valide !`);
               attachments.push({
                 partId: partId || '1',
                 filename,
-                contentType: part.type + '/' + part.subtype,
+                contentType: partType,
                 size: part.size || 0,
               });
+            } else {
+              console.log(`${indent}  ⚠️ Type de fichier ignoré (ni CSV ni XLSX)`);
             }
           }
           
           if (part.childNodes) {
+            console.log(`${indent}  └─ ${part.childNodes.length} sous-partie(s)`);
             part.childNodes.forEach((child: any, index: number) => {
               const childId = partId ? `${partId}.${index + 1}` : `${index + 1}`;
-              extractAttachments(child, childId);
+              extractAttachments(child, childId, depth + 1);
             });
           }
         };
 
         if (message.bodyStructure) {
+          console.log(`  📎 Analyse de la structure du message:`);
           extractAttachments(message.bodyStructure);
+          console.log(`  📊 Résultat: ${attachments.length} pièce(s) jointe(s) CSV/XLSX trouvée(s)`);
+        } else {
+          console.log(`  ⚠️ Aucune structure de message disponible`);
         }
 
         if (attachments.length > 0) {
@@ -152,7 +151,9 @@ async function fetchEmailsViaAPI(email: string, password: string, config: EmailC
           });
 
           await client.messageFlagsAdd(uid, ["\\Seen"]);
-          console.log(`✅ Email traité: ${subject} (${attachments.length} pièce(s) jointe(s))`);
+          console.log(`  ✅ Email UID #${uid} traité: ${attachments.length} pièce(s) jointe(s) extraite(s)\n`);
+        } else {
+          console.log(`  ⚠️ Email UID #${uid} ignoré: aucune pièce jointe CSV/XLSX\n`);
         }
       }
 
@@ -164,10 +165,20 @@ async function fetchEmailsViaAPI(email: string, password: string, config: EmailC
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("❌ Erreur IMAP:", errorMessage);
-    throw error;
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("❌ Erreur IMAP détaillée:", errorMessage);
+    if (errorStack && isDebug) {
+      console.error("Stack trace:", errorStack);
+    }
+    throw new Error(`Erreur IMAP sur ${config.host}:${config.port} - ${errorMessage}`);
   } finally {
-    await client.logout();
+    console.log("🔌 Fermeture de la connexion IMAP...");
+    try {
+      await client.logout();
+      console.log("✅ Déconnexion IMAP réussie");
+    } catch (logoutError) {
+      console.error("⚠️ Erreur lors de la déconnexion:", logoutError);
+    }
   }
 }
 
@@ -185,11 +196,19 @@ serve(async (req) => {
     const password = Deno.env.get("CATALOG_EMAIL_PASSWORD");
 
     if (!password) {
-      throw new Error("CATALOG_EMAIL_PASSWORD not configured");
+      throw new Error("❌ CATALOG_EMAIL_PASSWORD non configuré dans les secrets Supabase");
     }
+
+    // Masquer le mot de passe pour la sécurité
+    console.log(`🔐 Mot de passe configuré : ${password.substring(0, 3)}...${password.substring(password.length - 3)}`);
 
     const url = new URL(req.url);
     const isTest = url.searchParams.get("test") === "true";
+    const isDebug = url.searchParams.get("debug") === "true";
+
+    if (isDebug) {
+      console.log("🐛 MODE DEBUG ACTIVÉ - Logs détaillés IMAP");
+    }
 
     console.log("🚀 Début du polling IMAP pour", email);
 
@@ -225,8 +244,15 @@ serve(async (req) => {
     }
 
     // Récupérer les emails
-    const emails = await fetchEmailsViaAPI(email, password, config);
-    console.log(`📬 ${emails.length} email(s) non lu(s) avec pièces jointes`);
+    console.log("\n═══════════════════════════════════════");
+    console.log("📥 RÉCUPÉRATION DES EMAILS");
+    console.log("═══════════════════════════════════════\n");
+    
+    const emails = await fetchEmailsViaAPI(email, password, config, isDebug);
+    
+    console.log("\n═══════════════════════════════════════");
+    console.log(`📊 RÉSULTAT: ${emails.length} email(s) avec pièces jointes CSV/XLSX`);
+    console.log("═══════════════════════════════════════\n");
 
     let processedCount = 0;
     let errorCount = 0;
