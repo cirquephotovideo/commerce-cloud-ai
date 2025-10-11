@@ -14,6 +14,7 @@ import { SupplierImportWizard } from "@/components/SupplierImportWizard";
 import { SupplierImportMenu } from "@/components/SupplierImportMenu";
 import { PlatformSettings } from "@/components/PlatformSettings";
 import { SupplierAutoSync } from "@/components/SupplierAutoSync";
+import { FTPMappingWizard } from "@/components/FTPMappingWizard";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -54,6 +55,7 @@ export default function Suppliers() {
   const { t } = useTranslation();
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
+  const [showFTPWizard, setShowFTPWizard] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
 
   // Mapping des types de fournisseurs
@@ -306,6 +308,20 @@ export default function Suppliers() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {/* FTP Mapping Button */}
+                          {(supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') && !supplier.column_mapping && (
+                            <Button 
+                              variant="default" 
+                              size="sm" 
+                              onClick={() => {
+                                setSelectedSupplierId(supplier.id);
+                                setShowFTPWizard(true);
+                              }}
+                            >
+                              🔧 Configurer FTP
+                            </Button>
+                          )}
+                          
                           <SupplierImportMenu 
                             supplierId={supplier.id}
                             onImportComplete={refetchSuppliers}
@@ -317,6 +333,7 @@ export default function Suppliers() {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleSync(supplier.id)}
+                              disabled={(supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') && !supplier.column_mapping}
                             >
                               🔄 Synchroniser
                             </Button>
@@ -458,6 +475,22 @@ export default function Suppliers() {
       {showImportWizard && (
         <SupplierImportWizard
           onClose={() => setShowImportWizard(false)}
+        />
+      )}
+
+      {showFTPWizard && selectedSupplierId && (
+        <FTPMappingWizard
+          supplierId={selectedSupplierId}
+          open={showFTPWizard}
+          onClose={() => {
+            setShowFTPWizard(false);
+            setSelectedSupplierId(null);
+          }}
+          onComplete={() => {
+            refetchSuppliers();
+            setShowFTPWizard(false);
+            setSelectedSupplierId(null);
+          }}
         />
       )}
     </div>

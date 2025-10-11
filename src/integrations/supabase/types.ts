@@ -2369,9 +2369,12 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          last_preview_at: string | null
           last_sync_at: string | null
           last_synced_at: string | null
+          mapping_confidence: Json | null
           mapping_config: Json | null
+          preview_sample: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
           sync_frequency: string | null
@@ -2384,9 +2387,12 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          last_preview_at?: string | null
           last_sync_at?: string | null
           last_synced_at?: string | null
+          mapping_confidence?: Json | null
           mapping_config?: Json | null
+          preview_sample?: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
           sync_frequency?: string | null
@@ -2399,9 +2405,12 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          last_preview_at?: string | null
           last_sync_at?: string | null
           last_synced_at?: string | null
+          mapping_confidence?: Json | null
           mapping_config?: Json | null
+          preview_sample?: Json | null
           supplier_name?: string
           supplier_type?: Database["public"]["Enums"]["supplier_type"]
           sync_frequency?: string | null

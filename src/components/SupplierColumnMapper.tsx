@@ -1,109 +1,214 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { CheckCircle2, AlertCircle, HelpCircle } from "lucide-react";
 
 interface SupplierColumnMapperProps {
-  previewData: any[][];
+  previewData: any[];
   onMappingChange: (mapping: Record<string, number | null>) => void;
+  onConfidenceChange?: (confidence: Record<string, number>) => void;
   initialMapping?: Record<string, number | null>;
 }
 
+const SMART_PATTERNS: Record<string, RegExp[]> = {
+  product_name: [
+    /nom/i, /name/i, /libelle/i, /libellé/i, /designation/i, /désignation/i,
+    /titre/i, /title/i, /produit/i, /product/i, /article/i, /description/i
+  ],
+  purchase_price: [
+    /prix/i, /price/i, /cout/i, /coût/i, /cost/i, /tarif/i, /montant/i,
+    /achat/i, /purchase/i, /\bpa\b/i, /buying/i, /wholesale/i
+  ],
+  ean: [
+    /ean/i, /gtin/i, /barcode/i, /code.*barre/i, /upc/i, /isbn/i, /\bean\b/i
+  ],
+  supplier_reference: [
+    /ref/i, /reference/i, /référence/i, /sku/i, /code/i, /article/i, /item/i
+  ],
+  stock_quantity: [
+    /stock/i, /quantity/i, /quantité/i, /qty/i, /qte/i, /disponible/i, /available/i
+  ],
+  vat_rate: [
+    /tva/i, /vat/i, /tax/i, /taxe/i, /rate/i, /taux/i
+  ],
+  category: [
+    /categorie/i, /catégorie/i, /category/i, /famille/i, /family/i, /type/i
+  ],
+  brand: [
+    /marque/i, /brand/i, /manufacturer/i, /fabricant/i, /maker/i
+  ],
+};
+
 const REQUIRED_FIELDS = [
-  { key: "product_name", label: "Nom du produit", required: true },
-  { key: "purchase_price", label: "Prix d'achat", required: true },
+  { key: 'product_name', label: 'Nom du produit', required: true, tooltip: 'Le nom ou la désignation du produit' },
+  { key: 'purchase_price', label: 'Prix d\'achat', required: true, tooltip: 'Le prix d\'achat HT' },
 ];
 
 const OPTIONAL_FIELDS = [
-  { key: "ean", label: "EAN/Code-barres", required: false },
-  { key: "supplier_reference", label: "Référence fournisseur", required: false },
-  { key: "stock_quantity", label: "Stock disponible", required: false },
-  { key: "description", label: "Description", required: false },
-  { key: "brand", label: "Marque", required: false },
-  { key: "category", label: "Catégorie", required: false },
+  { key: 'ean', label: 'Code EAN', required: false, tooltip: 'Code-barres EAN13 (13 chiffres)' },
+  { key: 'supplier_reference', label: 'Référence fournisseur', required: false, tooltip: 'Référence unique chez le fournisseur' },
+  { key: 'stock_quantity', label: 'Stock disponible', required: false, tooltip: 'Quantité en stock' },
+  { key: 'vat_rate', label: 'Taux TVA (%)', required: false, tooltip: 'Taux de TVA en pourcentage (ex: 20)' },
+  { key: 'category', label: 'Catégorie', required: false, tooltip: 'Catégorie ou famille de produit' },
+  { key: 'brand', label: 'Marque', required: false, tooltip: 'Marque du produit' },
 ];
 
-export function SupplierColumnMapper({ 
-  previewData, 
+export function SupplierColumnMapper({
+  previewData,
   onMappingChange,
+  onConfidenceChange,
   initialMapping = {}
 }: SupplierColumnMapperProps) {
   const [mapping, setMapping] = useState<Record<string, number | null>>(initialMapping);
-  
-  // Use first row as headers, next 3 rows as data examples
-  const headers = previewData.length > 0 ? previewData[0] : [];
-  const dataRows = previewData.length > 1 ? previewData.slice(1, 4) : [];
+  const [confidence, setConfidence] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    // Auto-detect columns based on common patterns
-    const autoMapping: Record<string, number | null> = {};
-    
-    headers.forEach((header: string, index: number) => {
-      const headerLower = String(header).toLowerCase();
-      
-      // Auto-detect name
-      if (headerLower.includes('nom') || headerLower.includes('name') || headerLower.includes('libelle')) {
-        autoMapping.product_name = index;
-      }
-      // Auto-detect price
-      if (headerLower.includes('prix') || headerLower.includes('price') || headerLower.includes('cout')) {
-        autoMapping.purchase_price = index;
-      }
-      // Auto-detect EAN
-      if (headerLower.includes('ean') || headerLower.includes('barcode') || headerLower.includes('gtin')) {
-        autoMapping.ean = index;
-      }
-      // Auto-detect reference
-      if (headerLower.includes('ref') || headerLower.includes('sku') || headerLower.includes('code')) {
-        autoMapping.supplier_reference = index;
-      }
-      // Auto-detect stock
-      if (headerLower.includes('stock') || headerLower.includes('quantite') || headerLower.includes('quantity')) {
-        autoMapping.stock_quantity = index;
-      }
-      // Auto-detect description
-      if (headerLower.includes('desc') || headerLower.includes('detail')) {
-        autoMapping.description = index;
-      }
-      // Auto-detect brand
-      if (headerLower.includes('marque') || headerLower.includes('brand') || headerLower.includes('fabricant')) {
-        autoMapping.brand = index;
-      }
-      // Auto-detect category
-      if (headerLower.includes('categorie') || headerLower.includes('category')) {
-        autoMapping.category = index;
-      }
-    });
+  // Calculate confidence score for a field-column match
+  const calculateConfidence = (fieldKey: string, columnName: string, columnValues: any[]): number => {
+    const patterns = SMART_PATTERNS[fieldKey] || [];
+    let score = 0;
 
-    setMapping(prev => ({ ...autoMapping, ...prev }));
-  }, [previewData]);
+    // Header name matching (40 points)
+    const headerMatch = patterns.some(pattern => pattern.test(columnName));
+    if (headerMatch) score += 40;
 
-  useEffect(() => {
-    onMappingChange(mapping);
-  }, [mapping, onMappingChange]);
+    // Data format validation (60 points)
+    const validValues = columnValues.filter(v => v !== null && v !== undefined && v !== '');
+    if (validValues.length === 0) return score;
 
-  const handleMappingChange = (field: string, value: string) => {
-    const newMapping = { ...mapping };
-    
-    // Remove old mapping for this column index
-    const columnIndex = value === "none" ? null : parseInt(value);
-    Object.keys(newMapping).forEach(key => {
-      if (newMapping[key] === columnIndex && key !== field) {
-        newMapping[key] = null;
-      }
-    });
-    
-    newMapping[field] = columnIndex;
-    setMapping(newMapping);
+    if (fieldKey === 'purchase_price') {
+      const numericValues = validValues.filter(v => !isNaN(parseFloat(String(v).replace(',', '.'))));
+      score += Math.round((numericValues.length / validValues.length) * 60);
+    } else if (fieldKey === 'ean') {
+      const eanValues = validValues.filter(v => /^\d{13}$/.test(String(v)));
+      score += Math.round((eanValues.length / validValues.length) * 60);
+    } else if (fieldKey === 'stock_quantity') {
+      const intValues = validValues.filter(v => Number.isInteger(parseFloat(String(v))));
+      score += Math.round((intValues.length / validValues.length) * 60);
+    } else if (fieldKey === 'vat_rate') {
+      const vatValues = validValues.filter(v => {
+        const num = parseFloat(String(v).replace(',', '.'));
+        return !isNaN(num) && num >= 0 && num <= 100;
+      });
+      score += Math.round((vatValues.length / validValues.length) * 60);
+    } else {
+      // For text fields, check non-empty
+      score += Math.round((validValues.length / columnValues.length) * 60);
+    }
+
+    return Math.min(100, score);
   };
 
-  const isValid = REQUIRED_FIELDS.every(field => 
+  // Validate data format
+  const isValidFormat = (fieldKey: string, value: any): boolean => {
+    if (value === null || value === undefined || value === '') return false;
+
+    if (fieldKey === 'purchase_price') {
+      return !isNaN(parseFloat(String(value).replace(',', '.')));
+    } else if (fieldKey === 'ean') {
+      return /^\d{13}$/.test(String(value));
+    } else if (fieldKey === 'stock_quantity') {
+      return Number.isInteger(parseFloat(String(value)));
+    } else if (fieldKey === 'vat_rate') {
+      const num = parseFloat(String(value).replace(',', '.'));
+      return !isNaN(num) && num >= 0 && num <= 100;
+    }
+    return true;
+  };
+
+  // Auto-detect columns on mount with confidence scoring
+  useEffect(() => {
+    if (previewData.length === 0 || Object.keys(initialMapping).length > 0) return;
+
+    const detectedMapping: Record<string, number | null> = {};
+    const detectedConfidence: Record<string, number> = {};
+    const headers = Object.keys(previewData[0] || {});
+
+    // Try to auto-detect each field with confidence scoring
+    [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].forEach(field => {
+      const patterns = SMART_PATTERNS[field.key] || [];
+      let bestMatch = -1;
+      let bestScore = 0;
+
+      headers.forEach((header, index) => {
+        // Get column values for validation
+        const columnValues = previewData.map(row => row[header]);
+        const score = calculateConfidence(field.key, header, columnValues);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = index;
+        }
+      });
+
+      if (bestMatch !== -1 && bestScore > 30) { // Minimum 30% confidence
+        detectedMapping[field.key] = bestMatch;
+        detectedConfidence[field.key] = bestScore;
+      } else {
+        detectedMapping[field.key] = null;
+        detectedConfidence[field.key] = 0;
+      }
+    });
+
+    setMapping(detectedMapping);
+    setConfidence(detectedConfidence);
+    onMappingChange(detectedMapping);
+    if (onConfidenceChange) {
+      onConfidenceChange(detectedConfidence);
+    }
+  }, [previewData]);
+
+  // Update mapping when user changes selection
+  useEffect(() => {
+    onMappingChange(mapping);
+    if (onConfidenceChange) {
+      onConfidenceChange(confidence);
+    }
+  }, [mapping, confidence]);
+
+  const handleMappingChange = (field: string, value: string) => {
+    const columnIndex = value === '' ? null : parseInt(value);
+    setMapping(prev => ({
+      ...prev,
+      [field]: columnIndex
+    }));
+
+    // Recalculate confidence when manually changed
+    if (columnIndex !== null) {
+      const headers = Object.keys(previewData[0] || {});
+      const header = headers[columnIndex];
+      const columnValues = previewData.map(row => row[header]);
+      const score = calculateConfidence(field, header, columnValues);
+      setConfidence(prev => ({
+        ...prev,
+        [field]: score
+      }));
+    } else {
+      setConfidence(prev => ({
+        ...prev,
+        [field]: 0
+      }));
+    }
+  };
+
+  const isValid = REQUIRED_FIELDS.every(field =>
     mapping[field.key] !== null && mapping[field.key] !== undefined
   );
+
+  if (previewData.length === 0) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Aucune donnée de prévisualisation disponible. Veuillez d'abord charger un fichier.
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -112,7 +217,7 @@ export function SupplierColumnMapper({
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Veuillez mapper au minimum les champs obligatoires : <strong>Nom du produit</strong> et <strong>Prix d'achat</strong>
+            Veuillez mapper au minimum: <strong>Nom du produit</strong> et <strong>Prix d'achat</strong>
           </AlertDescription>
         </Alert>
       )}
@@ -121,7 +226,7 @@ export function SupplierColumnMapper({
         <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
           <CheckCircle2 className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800 dark:text-green-200">
-            Le mapping est valide ! Vous pouvez procéder à l'import.
+            ✅ Mapping valide!
           </AlertDescription>
         </Alert>
       )}
@@ -129,69 +234,61 @@ export function SupplierColumnMapper({
       {/* Mapping Configuration */}
       <Card>
         <CardHeader>
-          <CardTitle>📋 Configuration du mapping</CardTitle>
+          <CardTitle>🔗 Configuration du mapping</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {/* Required Fields */}
           <div className="space-y-3">
             <h4 className="font-semibold text-sm flex items-center gap-2">
               <Badge variant="destructive">Obligatoire</Badge>
               Champs requis
             </h4>
-            {REQUIRED_FIELDS.map(field => (
-              <div key={field.key} className="grid grid-cols-2 gap-4 items-center">
-                <Label className="text-sm font-medium">
-                  {field.label} *
-                </Label>
-                <Select
-                  value={mapping[field.key]?.toString() ?? "none"}
-                  onValueChange={(value) => handleMappingChange(field.key, value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une colonne" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">-- Non mappé --</SelectItem>
-                    {headers.map((header: string, index: number) => (
-                      <SelectItem key={index} value={index.toString()}>
-                        Colonne {index + 1}: {String(header)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-          </div>
+          {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field) => {
+            const fieldConfidence = confidence[field.key] || 0;
+            const isMapped = mapping[field.key] !== null && mapping[field.key] !== undefined;
 
-          {/* Optional Fields */}
-          <div className="space-y-3 pt-4 border-t">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Badge variant="secondary">Optionnel</Badge>
-              Champs supplémentaires
-            </h4>
-            {OPTIONAL_FIELDS.map(field => (
-              <div key={field.key} className="grid grid-cols-2 gap-4 items-center">
-                <Label className="text-sm font-medium text-muted-foreground">
-                  {field.label}
-                </Label>
+            return (
+              <div key={field.key} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={field.key}>
+                    {field.label}
+                    {field.required && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  {isMapped && fieldConfidence > 0 && (
+                    <Badge variant={fieldConfidence > 80 ? "default" : fieldConfidence > 50 ? "secondary" : "outline"}>
+                      {fieldConfidence}%
+                    </Badge>
+                  )}
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{field.tooltip}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Select
-                  value={mapping[field.key]?.toString() ?? "none"}
+                  value={mapping[field.key]?.toString() || ''}
                   onValueChange={(value) => handleMappingChange(field.key, value)}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner une colonne" />
+                  <SelectTrigger id={field.key}>
+                    <SelectValue placeholder="Sélectionner une colonne..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">-- Non mappé --</SelectItem>
-                    {headers.map((header: string, index: number) => (
+                    <SelectItem value="">Ignorer ce champ</SelectItem>
+                    {Object.keys(previewData[0] || {}).map((header, index) => (
                       <SelectItem key={index} value={index.toString()}>
-                        Colonne {index + 1}: {String(header)}
+                        {header}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            ))}
+            );
+          })}
           </div>
         </CardContent>
       </Card>
@@ -199,46 +296,61 @@ export function SupplierColumnMapper({
       {/* Preview with Mapping */}
       <Card>
         <CardHeader>
-          <CardTitle>👁️ Aperçu avec mapping appliqué</CardTitle>
+          <CardTitle>👁️ Aperçu avec mapping</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Champ</TableHead>
-                <TableHead>Exemple 1</TableHead>
-                <TableHead>Exemple 2</TableHead>
-                <TableHead>Exemple 3</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map(field => {
-                const columnIndex = mapping[field.key];
-                const isRequired = field.required;
-                const isMapped = columnIndex !== null && columnIndex !== undefined;
-                
-                return (
-                  <TableRow key={field.key} className={!isMapped && isRequired ? "bg-red-50 dark:bg-red-950/20" : ""}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {field.label}
-                        {isRequired && <Badge variant="destructive" className="text-xs">*</Badge>}
-                      </div>
-                    </TableCell>
-                    {dataRows.map((row, rowIndex) => (
-                      <TableCell key={rowIndex}>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field) => (
+                    <TableHead key={field.key}>{field.label}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {previewData.slice(0, 5).map((row, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{idx + 1}</TableCell>
+                  {[...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].map((field) => {
+                    const columnIndex = mapping[field.key];
+                    const isMapped = columnIndex !== null && columnIndex !== undefined;
+                    const columnKey = isMapped ? Object.keys(previewData[0])[columnIndex] : null;
+                    const value = columnKey ? row[columnKey] : null;
+                    const isValid = isMapped && isValidFormat(field.key, value);
+
+                    return (
+                      <TableCell key={field.key}>
                         {isMapped ? (
-                          <span className="text-sm">{String(row[columnIndex] || '-')}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate max-w-[150px]">{value}</span>
+                            {isValid ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            ) : (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger>
+                                    <AlertCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Format invalide pour {field.label}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </div>
                         ) : (
-                          <span className="text-sm text-muted-foreground italic">Non mappé</span>
+                          <span className="text-muted-foreground text-sm">Non mappé</span>
                         )}
                       </TableCell>
-                    ))}
+                    );
+                  })}
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
