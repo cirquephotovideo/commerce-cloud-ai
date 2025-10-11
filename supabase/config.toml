@@ -215,3 +215,9 @@ verify_jwt = true
 
 [functions.re-enrich-product]
 verify_jwt = true
+
+[functions.email-inbox-processor]
+verify_jwt = false
+
+[functions.process-email-attachment]
+verify_jwt = false
