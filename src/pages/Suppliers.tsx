@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload } from "lucide-react";
+import { Truck, Plus, Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,6 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SupplierConfiguration } from "@/components/SupplierConfiguration";
 import { SupplierProductsTable } from "@/components/SupplierProductsTable";
 import { SupplierImportWizard } from "@/components/SupplierImportWizard";
@@ -57,6 +59,8 @@ export default function Suppliers() {
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [showFTPWizard, setShowFTPWizard] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
 
   // Mapping des types de fournisseurs
   const supplierTypeLabels: Record<string, string> = {
@@ -198,6 +202,42 @@ export default function Suppliers() {
     setShowNewSupplier(true);
   };
 
+  const handleDeleteClick = (supplierId: string) => {
+    setSupplierToDelete(supplierId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!supplierToDelete) return;
+
+    try {
+      // Supprimer d'abord les produits associés
+      const { error: productsError } = await supabase
+        .from('supplier_products')
+        .delete()
+        .eq('supplier_id', supplierToDelete);
+
+      if (productsError) throw productsError;
+
+      // Supprimer le fournisseur
+      const { error: supplierError } = await supabase
+        .from('supplier_configurations')
+        .delete()
+        .eq('id', supplierToDelete);
+
+      if (supplierError) throw supplierError;
+
+      toast.success("✅ Fournisseur supprimé avec succès");
+      refetchSuppliers();
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error("❌ Erreur lors de la suppression");
+    } finally {
+      setDeleteDialogOpen(false);
+      setSupplierToDelete(null);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -251,6 +291,15 @@ export default function Suppliers() {
         </Card>
       </div>
 
+      {/* Alert for unconfigured FTP suppliers */}
+      {suppliers?.some(s => (s.supplier_type === 'ftp' || s.supplier_type === 'sftp') && !s.column_mapping) && (
+        <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950">
+          <AlertDescription className="text-orange-800 dark:text-orange-200">
+            ⚠️ Vous avez des fournisseurs FTP non configurés. Cliquez sur "🔧 Configurer FTP" pour activer la synchronisation automatique.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs defaultValue="list" className="w-full">
         <TabsList>
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
@@ -276,11 +325,27 @@ export default function Suppliers() {
                 </TableHeader>
                 <TableBody>
                   {suppliers?.map((supplier) => (
-                    <TableRow key={supplier.id}>
+                  <TableRow key={supplier.id}>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Truck className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{supplier.supplier_name}</span>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <Truck className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{supplier.supplier_name}</span>
+                          </div>
+                          {/* FTP Configuration Status */}
+                          {(supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') && (
+                            <div className="ml-6">
+                              {supplier.column_mapping ? (
+                                <Badge variant="outline" className="text-xs border-green-500 text-green-700 dark:text-green-400">
+                                  ✅ Mapping configuré
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs border-orange-500 text-orange-700 dark:text-orange-400">
+                                  ⚠️ Mapping requis
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -359,6 +424,15 @@ export default function Suppliers() {
                             onClick={() => handleEdit(supplier.id)}
                           >
                             ✏️ Modifier
+                          </Button>
+                          
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteClick(supplier.id)}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -493,6 +567,28 @@ export default function Suppliers() {
           }}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🗑️ Supprimer le fournisseur ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Tous les produits associés à ce fournisseur seront également supprimés.
+              Êtes-vous sûr de vouloir continuer ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
