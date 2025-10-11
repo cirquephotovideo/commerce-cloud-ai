@@ -138,6 +138,9 @@ verify_jwt = true
 [functions.supplier-sync-ftp]
 verify_jwt = true
 
+[functions.supplier-sync-background]
+verify_jwt = true
+
 [functions.test-ftp-connection]
 verify_jwt = true
 

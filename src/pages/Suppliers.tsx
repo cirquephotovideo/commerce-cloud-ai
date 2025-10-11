@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload, Trash2 } from "lucide-react";
+import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -96,6 +96,27 @@ export default function Suppliers() {
   });
 
   // Statistiques fournisseurs
+  // Query for import jobs
+  const { data: importJobs, refetch: refetchImportJobs } = useQuery({
+    queryKey: ['import-jobs'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('import_jobs')
+        .select('*, supplier_configurations(supplier_name)')
+        .order('started_at', { ascending: false })
+        .limit(50);
+      
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 5000, // Refresh every 5 seconds
+  });
+
+  // Running imports
+  const runningJobs = importJobs?.filter(job => 
+    job.status === 'pending' || job.status === 'running'
+  );
+
   const { data: stats } = useQuery({
     queryKey: ['supplier-stats'],
     queryFn: async () => {
@@ -107,14 +128,40 @@ export default function Suppliers() {
         .from('supplier_products')
         .select('id, enrichment_status');
       
+      const enrichedCount = products?.filter(p => p.enrichment_status === 'completed').length || 0;
+      const pendingCount = products?.filter(p => p.enrichment_status === 'pending').length || 0;
+      const totalProducts = products?.length || 0;
+      
       return {
         total_suppliers: suppliers?.length || 0,
         active_suppliers: suppliers?.filter(s => s.is_active).length || 0,
-        total_products: products?.length || 0,
-        pending_enrichment: products?.filter(p => p.enrichment_status === 'pending').length || 0,
+        total_products: totalProducts,
+        pending_enrichment: pendingCount,
+        enriched_products: enrichedCount,
+        enrichment_percentage: totalProducts > 0 ? Math.round((enrichedCount / totalProducts) * 100) : 0,
       };
     },
   });
+
+  // Realtime listener for import_jobs
+  useEffect(() => {
+    const channel = supabase
+      .channel('import-jobs-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'import_jobs'
+      }, (payload) => {
+        console.log('Import job updated:', payload);
+        refetchImportJobs();
+        refetchSuppliers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const { data: importLogs } = useQuery({
     queryKey: ["supplier-import-logs"],
@@ -134,63 +181,67 @@ export default function Suppliers() {
     const supplier = suppliers?.find(s => s.id === supplierId);
     if (!supplier) return;
 
-    // ✅ AJOUT : Vérifier que ce n'est pas un fichier
     if (supplier.supplier_type === 'file') {
-      toast.error("❌ Les fournisseurs de type 'Fichier' ne peuvent pas être synchronisés automatiquement. Utilisez 'Import CSV/XLSX' à la place.");
+      toast.error("❌ Les fournisseurs de type 'Fichier' ne peuvent pas être synchronisés automatiquement.");
       return;
     }
 
-    toast.info("Synchronisation en cours...");
-    
     try {
-      let functionName = '';
-      let bodyParams = {};
-      
+      // Use background sync for FTP/SFTP
       if (supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') {
-        functionName = 'supplier-sync-ftp';
-        bodyParams = { supplierId };
-      } else if (supplier.supplier_type === 'api') {
-        functionName = 'supplier-sync-api';
-        bodyParams = { supplierId };
-      } else if (supplier.supplier_type === 'odoo') {
-        functionName = 'import-from-odoo';
-        bodyParams = { supplier_id: supplierId };
+        const { data, error } = await supabase.functions.invoke('supplier-sync-background', {
+          body: { supplierId },
+        });
+
+        if (error) throw error;
+
+        toast.success("✅ Import démarré en arrière-plan", {
+          description: `${supplier.product_count || 0} produits en cours d'import`,
+          action: {
+            label: "Voir la progression",
+            onClick: () => {
+              const tabsList = document.querySelector('[role="tablist"]');
+              const importsTab = Array.from(tabsList?.querySelectorAll('[role="tab"]') || [])
+                .find(tab => tab.textContent?.includes('Imports'));
+              (importsTab as HTMLElement)?.click();
+            }
+          },
+          duration: 10000
+        });
       } else {
-        toast.error("Type de synchronisation non supporté");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body: bodyParams,
-      });
-
-      if (error) throw error;
-
-      // Handle warnings (config incomplete)
-      if (data?.warning) {
-        toast.error(data.message || "⚠️ Configuration incomplète");
-        return;
-      }
-
-      // Handle different response formats
-      if (data?.found !== undefined) {
-        // Format détaillé : Odoo, FTP/SFTP
-        const found = data.found || 0;
-        const imported = data.imported || 0;
-        const matched = data.matched || 0;
-        const errors = data.errors || 0;
+        // Other types use direct sync
+        let functionName = '';
+        let bodyParams = {};
         
-        if (errors > 0) {
-          toast.error(`⚠️ Sync: ${found} trouvés | ${imported} importés | ${matched} matchés | ${errors} erreurs`);
+        if (supplier.supplier_type === 'api') {
+          functionName = 'supplier-sync-api';
+          bodyParams = { supplierId };
+        } else if (supplier.supplier_type === 'odoo') {
+          functionName = 'import-from-odoo';
+          bodyParams = { supplier_id: supplierId };
         } else {
-          toast.success(`✅ Sync: ${found} trouvés | ${imported} importés | ${matched} matchés`);
+          toast.error("Type de synchronisation non supporté");
+          return;
         }
-      } else if (data?.success === false) {
-        toast.error(data.message || "❌ Échec de la synchronisation");
-      } else {
-        toast.success(`✅ Synchronisation terminée: ${data.imported || 0} produits importés`);
+
+        toast.info("Synchronisation en cours...");
+        const { data, error } = await supabase.functions.invoke(functionName, {
+          body: bodyParams,
+        });
+
+        if (error) throw error;
+
+        if (data?.warning) {
+          toast.error(data.message || "⚠️ Configuration incomplète");
+        } else if (data?.found !== undefined) {
+          toast.success(`✅ Sync: ${data.found} trouvés | ${data.imported} importés | ${data.matched} matchés`);
+        } else {
+          toast.success(`✅ Synchronisation terminée`);
+        }
       }
+      
       refetchSuppliers();
+      refetchImportJobs();
     } catch (error) {
       console.error('Sync error:', error);
       toast.error("Erreur lors de la synchronisation");
@@ -264,7 +315,7 @@ export default function Suppliers() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold">{stats?.total_suppliers || 0}</div>
@@ -285,8 +336,44 @@ export default function Suppliers() {
         </Card>
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-orange-500">{stats?.pending_enrichment || 0}</div>
-            <p className="text-sm text-muted-foreground">En attente enrichissement</p>
+            <div className="flex items-center gap-2">
+              {runningJobs && runningJobs.length > 0 ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                  <div>
+                    <div className="text-3xl font-bold text-blue-500">{runningJobs.length}</div>
+                    <p className="text-sm text-muted-foreground">Imports en cours</p>
+                    {runningJobs.length > 0 && runningJobs[0].progress_total > 0 && (
+                      <Progress 
+                        value={(runningJobs[0].progress_current / runningJobs[0].progress_total) * 100} 
+                        className="mt-2 h-1" 
+                      />
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <div className="text-3xl font-bold">0</div>
+                    <p className="text-sm text-muted-foreground">Imports en cours</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-orange-500" />
+              <div>
+                <div className="text-3xl font-bold text-orange-500">{stats?.pending_enrichment || 0}</div>
+                <p className="text-sm text-muted-foreground">
+                  En attente d'enrichissement ({100 - (stats?.enrichment_percentage || 0)}%)
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -305,6 +392,14 @@ export default function Suppliers() {
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
           <TabsTrigger value="products">Produits</TabsTrigger>
           <TabsTrigger value="platforms">🔑 Plateformes E-commerce</TabsTrigger>
+          <TabsTrigger value="imports">
+            📊 Imports
+            {runningJobs && runningJobs.length > 0 && (
+              <Badge variant="secondary" className="ml-2 animate-pulse">
+                {runningJobs.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="logs">Historique</TabsTrigger>
         </TabsList>
 
@@ -345,14 +440,21 @@ export default function Suppliers() {
                                 </Badge>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {supplierTypeLabels[supplier.supplier_type] || supplier.supplier_type}
-                        </Badge>
-                      </TableCell>
+                           )}
+                           {/* Running import indicator */}
+                           {runningJobs?.some(job => job.supplier_id === supplier.id) && (
+                             <Badge variant="outline" className="ml-6 animate-pulse border-blue-500 text-blue-700 dark:text-blue-400">
+                               <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                               Import en cours... {runningJobs.find(j => j.supplier_id === supplier.id)?.progress_current || 0} / {runningJobs.find(j => j.supplier_id === supplier.id)?.progress_total || 0}
+                             </Badge>
+                           )}
+                         </div>
+                       </TableCell>
+                       <TableCell>
+                         <Badge variant="outline">
+                           {supplierTypeLabels[supplier.supplier_type] || supplier.supplier_type}
+                         </Badge>
+                       </TableCell>
                       <TableCell>
                         <Badge variant={supplier.is_active ? "default" : "secondary"}>
                           {supplier.is_active ? "✅ Actif" : "⏸️ Inactif"}
@@ -463,6 +565,114 @@ export default function Suppliers() {
             <PlatformSettings />
             <SupplierAutoSync />
           </div>
+        </TabsContent>
+
+        <TabsContent value="imports" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex justify-between items-center">
+                <span>📊 Historique des imports en temps réel</span>
+                {runningJobs && runningJobs.length > 0 && (
+                  <Badge variant="secondary" className="animate-pulse">
+                    {runningJobs.length} import(s) en cours
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Suivez l'état de tous vos imports en temps réel (rafraîchissement automatique toutes les 5 secondes)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Fournisseur</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead>Progression</TableHead>
+                    <TableHead>Importés / Erreurs</TableHead>
+                    <TableHead>Démarré</TableHead>
+                    <TableHead>Durée</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {importJobs?.map((job) => {
+                    const duration = job.completed_at 
+                      ? Math.round((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000)
+                      : job.status === 'running' 
+                        ? Math.round((new Date().getTime() - new Date(job.started_at).getTime()) / 1000)
+                        : 0;
+                    
+                    return (
+                      <TableRow key={job.id}>
+                        <TableCell className="font-medium">
+                          {job.supplier_configurations?.supplier_name || 'Inconnu'}
+                        </TableCell>
+                        <TableCell>
+                          {job.status === 'running' && (
+                            <Badge variant="secondary" className="animate-pulse border-blue-500">
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              En cours
+                            </Badge>
+                          )}
+                          {job.status === 'completed' && (
+                            <Badge variant="default" className="border-green-500 bg-green-50 text-green-700">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Terminé
+                            </Badge>
+                          )}
+                          {job.status === 'failed' && (
+                            <Badge variant="destructive">
+                              ❌ Échoué
+                            </Badge>
+                          )}
+                          {job.status === 'pending' && (
+                            <Badge variant="outline">
+                              ⏳ En attente
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {job.status === 'running' && job.progress_total > 0 && (
+                            <div className="space-y-1 min-w-[150px]">
+                              <Progress value={(job.progress_current / job.progress_total) * 100} />
+                              <p className="text-xs text-muted-foreground">
+                                {job.progress_current} / {job.progress_total} ({Math.round((job.progress_current / job.progress_total) * 100)}%)
+                              </p>
+                            </div>
+                          )}
+                          {job.status === 'completed' && (
+                            <span className="text-sm text-muted-foreground">
+                              {job.progress_total} produits
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Badge variant="default">{job.products_imported}</Badge>
+                            {job.products_errors > 0 && (
+                              <Badge variant="destructive">{job.products_errors}</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(job.started_at).toLocaleString('fr-FR')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {duration > 0 ? `${duration}s` : '-'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              {!importJobs?.length && (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Clock className="h-12 w-12 mb-4" />
+                  <p>Aucun import effectué pour le moment</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">

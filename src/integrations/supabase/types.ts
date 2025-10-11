@@ -1150,6 +1150,68 @@ export type Database = {
         }
         Relationships: []
       }
+      import_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          products_errors: number | null
+          products_imported: number | null
+          products_matched: number | null
+          progress_current: number | null
+          progress_total: number | null
+          started_at: string | null
+          status: string
+          supplier_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          products_errors?: number | null
+          products_imported?: number | null
+          products_matched?: number | null
+          progress_current?: number | null
+          progress_total?: number | null
+          started_at?: string | null
+          status?: string
+          supplier_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          products_errors?: number | null
+          products_imported?: number | null
+          products_matched?: number | null
+          progress_current?: number | null
+          progress_total?: number | null
+          started_at?: string | null
+          status?: string
+          supplier_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_jobs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       market_trends: {
         Row: {
           confidence_score: number | null

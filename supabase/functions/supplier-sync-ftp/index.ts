@@ -166,15 +166,10 @@ function parseCSV(
   });
   
   const startIndex = skipFirstRow ? 1 : 0;
-  const MAX_PRODUCTS = 50000; // Limit to 50k products per import to avoid timeout
-  const endIndex = Math.min(startIndex + MAX_PRODUCTS, lines.length);
   const products = [];
   let skipped = 0;
   
-  console.log(`[FTP-SYNC] Processing lines ${startIndex} to ${endIndex} (max: ${MAX_PRODUCTS})`);
-  if (lines.length > endIndex) {
-    console.log(`[FTP-SYNC] ⚠️ File contains ${lines.length} lines but only ${MAX_PRODUCTS} will be processed to avoid timeout`);
-  }
+  console.log(`[FTP-SYNC] Processing ALL lines from ${startIndex} to ${lines.length} (NO LIMIT)`);
   
   // Helper to extract field with sub-field support
   const extractField = (columns: string[], mapping: any): string | null => {
@@ -203,7 +198,7 @@ function parseCSV(
     return null;
   };
   
-  for (let i = startIndex; i < endIndex; i++) {
+  for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     
