@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { SupplierConnectionConfig } from "./SupplierConnectionConfig";
 import { SupplierMappingConfig } from "./SupplierMappingConfig";
 import { SupplierIntelligentMapper } from "./SupplierIntelligentMapper";
+import { SupplierEmailConfig } from "./SupplierEmailConfig";
 
 interface SupplierConfigurationProps {
   supplierId?: string | null;
@@ -199,11 +200,18 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
             </TabsContent>
 
             <TabsContent value="connection" className="mt-4">
-              <SupplierConnectionConfig
-                supplierType={formData.supplier_type}
-                config={formData.connection_config}
-                onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
-              />
+              {formData.supplier_type === 'email' ? (
+                <SupplierEmailConfig
+                  config={formData.connection_config}
+                  onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
+                />
+              ) : (
+                <SupplierConnectionConfig
+                  supplierType={formData.supplier_type}
+                  config={formData.connection_config}
+                  onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="mapping" className="mt-4">

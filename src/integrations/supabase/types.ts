@@ -803,6 +803,92 @@ export type Database = {
         }
         Relationships: []
       }
+      email_inbox: {
+        Row: {
+          attachment_name: string | null
+          attachment_size_kb: number | null
+          attachment_type: string | null
+          attachment_url: string | null
+          created_at: string | null
+          detected_supplier_name: string | null
+          detection_confidence: number | null
+          detection_method: string | null
+          error_message: string | null
+          from_email: string
+          from_name: string | null
+          id: string
+          processed_at: string | null
+          processing_logs: Json | null
+          products_created: number | null
+          products_found: number | null
+          products_updated: number | null
+          received_at: string | null
+          status: string | null
+          subject: string | null
+          supplier_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          attachment_name?: string | null
+          attachment_size_kb?: number | null
+          attachment_type?: string | null
+          attachment_url?: string | null
+          created_at?: string | null
+          detected_supplier_name?: string | null
+          detection_confidence?: number | null
+          detection_method?: string | null
+          error_message?: string | null
+          from_email: string
+          from_name?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_logs?: Json | null
+          products_created?: number | null
+          products_found?: number | null
+          products_updated?: number | null
+          received_at?: string | null
+          status?: string | null
+          subject?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          attachment_name?: string | null
+          attachment_size_kb?: number | null
+          attachment_type?: string | null
+          attachment_url?: string | null
+          created_at?: string | null
+          detected_supplier_name?: string | null
+          detection_confidence?: number | null
+          detection_method?: string | null
+          error_message?: string | null
+          from_email?: string
+          from_name?: string | null
+          id?: string
+          processed_at?: string | null
+          processing_logs?: Json | null
+          products_created?: number | null
+          products_found?: number | null
+          products_updated?: number | null
+          received_at?: string | null
+          status?: string | null
+          subject?: string | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbox_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           category: string | null
@@ -2562,6 +2648,85 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "supplier_price_history_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_price_variants: {
+        Row: {
+          analysis_id: string | null
+          created_at: string | null
+          currency: string | null
+          id: string
+          last_updated: string | null
+          match_confidence: number | null
+          match_type: string | null
+          price_history: Json | null
+          purchase_price: number | null
+          selling_price: number | null
+          stock_quantity: number | null
+          supplier_id: string | null
+          supplier_product_id: string | null
+          supplier_reference: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          last_updated?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          price_history?: Json | null
+          purchase_price?: number | null
+          selling_price?: number | null
+          stock_quantity?: number | null
+          supplier_id?: string | null
+          supplier_product_id?: string | null
+          supplier_reference?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          id?: string
+          last_updated?: string | null
+          match_confidence?: number | null
+          match_type?: string | null
+          price_history?: Json | null
+          purchase_price?: number | null
+          selling_price?: number | null
+          stock_quantity?: number | null
+          supplier_id?: string | null
+          supplier_product_id?: string | null
+          supplier_reference?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_price_variants_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_price_variants_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_price_variants_supplier_product_id_fkey"
             columns: ["supplier_product_id"]
             isOneToOne: false
             referencedRelation: "supplier_products"

@@ -17,6 +17,7 @@ import { SupplierImportMenu } from "@/components/SupplierImportMenu";
 import { PlatformSettings } from "@/components/PlatformSettings";
 import { SupplierAutoSync } from "@/components/SupplierAutoSync";
 import { FTPMappingWizard } from "@/components/FTPMappingWizard";
+import { EmailInboxTable } from "@/components/EmailInboxTable";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -391,6 +392,7 @@ export default function Suppliers() {
         <TabsList>
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
           <TabsTrigger value="products">Produits</TabsTrigger>
+          <TabsTrigger value="inbox">📧 Boîte de réception</TabsTrigger>
           <TabsTrigger value="platforms">🔑 Plateformes E-commerce</TabsTrigger>
           <TabsTrigger value="imports">
             📊 Imports
@@ -558,6 +560,10 @@ export default function Suppliers() {
 
         <TabsContent value="products">
           <SupplierProductsTable />
+        </TabsContent>
+
+        <TabsContent value="inbox">
+          <EmailInboxTable />
         </TabsContent>
 
         <TabsContent value="platforms" className="space-y-6">
