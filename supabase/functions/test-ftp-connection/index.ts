@@ -152,9 +152,8 @@ async function testFTPConnection(host: string, port: number, username: string, p
     }
   }
   
-  conn.close();
-  
   if (!fileList.trim()) {
+    conn.close();
     throw new Error(`No files found in ${path} with any LIST method. Try a different directory.`);
   }
   
@@ -300,7 +299,12 @@ serve(async (req) => {
       }
     }
     
-    result.conn.close();
+    // Close connection after all operations
+    try {
+      result.conn.close();
+    } catch (e) {
+      // Connection may already be closed, ignore
+    }
 
     return new Response(
       JSON.stringify({
