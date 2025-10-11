@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface POP3ConfigProps {
   config: any;
@@ -10,6 +14,48 @@ interface POP3ConfigProps {
 }
 
 export function POP3Config({ config, onConfigChange }: POP3ConfigProps) {
+  const [testing, setTesting] = useState(false);
+
+  const handleTestConnection = async () => {
+    if (!config.pop3_host || !config.pop3_email || !config.pop3_password) {
+      toast.error("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setTesting(true);
+    const loadingToast = toast.loading("Test de connexion POP3 en cours...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-pop3-connection', {
+        body: {
+          host: config.pop3_host,
+          port: parseInt(config.pop3_port) || 995,
+          email: config.pop3_email,
+          password: config.pop3_password,
+          ssl: config.pop3_ssl !== false
+        }
+      });
+
+      toast.dismiss(loadingToast);
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(
+          `✅ Connexion réussie! ${data.messageCount} messages (${Math.round(data.totalBytes / 1024)} KB)`
+        );
+      } else {
+        toast.error(data.error || "Échec de connexion");
+      }
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      console.error('POP3 test error:', error);
+      toast.error(`Erreur: ${error.message}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -81,6 +127,15 @@ export function POP3Config({ config, onConfigChange }: POP3ConfigProps) {
             </SelectContent>
           </Select>
         </div>
+
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={handleTestConnection}
+          disabled={testing || !config.pop3_host || !config.pop3_email || !config.pop3_password}
+        >
+          {testing ? '⏳ Test en cours...' : '🔌 Tester la connexion'}
+        </Button>
       </CardContent>
     </Card>
   );

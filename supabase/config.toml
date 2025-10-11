@@ -231,3 +231,9 @@ verify_jwt = false
 
 [functions.auto-link-supplier-products]
 verify_jwt = false
+
+[functions.test-imap-connection]
+verify_jwt = false
+
+[functions.test-pop3-connection]
+verify_jwt = false

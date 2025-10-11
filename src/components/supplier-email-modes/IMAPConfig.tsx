@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface IMAPConfigProps {
   config: any;
@@ -11,6 +14,49 @@ interface IMAPConfigProps {
 }
 
 export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
+  const [testing, setTesting] = useState(false);
+
+  const handleTestConnection = async () => {
+    if (!config.imap_host || !config.imap_email || !config.imap_password) {
+      toast.error("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setTesting(true);
+    const loadingToast = toast.loading("Test de connexion IMAP en cours...");
+
+    try {
+      const { data, error } = await supabase.functions.invoke('test-imap-connection', {
+        body: {
+          host: config.imap_host,
+          port: parseInt(config.imap_port) || 993,
+          email: config.imap_email,
+          password: config.imap_password,
+          ssl: config.imap_ssl !== false,
+          folder: config.imap_folder || 'INBOX'
+        }
+      });
+
+      toast.dismiss(loadingToast);
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(
+          `✅ Connexion réussie! ${data.messageCount} messages dans ${data.selectedFolder}. Dossiers trouvés: ${data.folders.slice(0, 5).join(', ')}${data.folders.length > 5 ? '...' : ''}`
+        );
+      } else {
+        toast.error(data.error || "Échec de connexion");
+      }
+    } catch (error: any) {
+      toast.dismiss(loadingToast);
+      console.error('IMAP test error:', error);
+      toast.error(`Erreur: ${error.message}`);
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -82,8 +128,13 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
           </AlertDescription>
         </Alert>
 
-        <Button type="button" variant="outline" disabled>
-          🔌 Tester la connexion (bientôt disponible)
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={handleTestConnection}
+          disabled={testing || !config.imap_host || !config.imap_email || !config.imap_password}
+        >
+          {testing ? '⏳ Test en cours...' : '🔌 Tester la connexion'}
         </Button>
       </CardContent>
     </Card>
