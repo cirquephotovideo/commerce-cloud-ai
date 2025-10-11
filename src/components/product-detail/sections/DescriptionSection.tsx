@@ -8,9 +8,14 @@ interface DescriptionSectionProps {
 }
 
 export const DescriptionSection = ({ analysis }: DescriptionSectionProps) => {
-  const description = analysis?.analysis_result?.description || 
-                      analysis?.analysis_result?.product_description ||
-                      'Aucune description disponible';
+  // Gérer le cas où description est un objet ou une chaîne
+  const descriptionData = analysis?.analysis_result?.description;
+  const description = typeof descriptionData === 'string' 
+    ? descriptionData 
+    : descriptionData?.suggested_description || 
+      analysis?.analysis_result?.product_description ||
+      analysis?.description ||
+      'Aucune description disponible';
   
   const strengths = analysis?.analysis_result?.strengths || 
                     analysis?.analysis_result?.pros || [];
