@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,13 @@ import { FileText, RefreshCw, Mail } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { useState, useEffect } from "react";
 
 export function EmailInboxTable() {
-  const { data: emailInbox, refetch } = useQuery({
+  const [lastUpdate, setLastUpdate] = useState(new Date());
+  
+  const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -20,9 +24,17 @@ export function EmailInboxTable() {
         .limit(50);
       
       if (error) throw error;
+      setLastUpdate(new Date());
       return data;
     },
+    refetchInterval: 30000, // 30 secondes
+    refetchIntervalInBackground: false,
   });
+
+  const handleManualRefresh = () => {
+    refetch();
+    toast.info("Actualisation en cours...");
+  };
 
   const handleReprocess = async (inboxId: string) => {
     try {
@@ -60,10 +72,27 @@ export function EmailInboxTable() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5" />
-          Emails reçus
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Emails reçus
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-1">
+              Dernière actualisation : {formatDistanceToNow(lastUpdate, { locale: fr, addSuffix: true })}
+              · Auto-refresh toutes les 30s
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualRefresh}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
+            Actualiser
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {!emailInbox || emailInbox.length === 0 ? (
