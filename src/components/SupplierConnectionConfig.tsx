@@ -177,7 +177,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
                 ✅ Connexion OK
               </>
             ) : (
-              '🔌 Tester la connexion FTP'
+              '🔌 Tester la connexion'
             )}
           </Button>
         </div>

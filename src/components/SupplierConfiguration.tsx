@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SupplierConnectionConfig } from "./SupplierConnectionConfig";
 import { SupplierMappingConfig } from "./SupplierMappingConfig";
+import { SupplierIntelligentMapper } from "./SupplierIntelligentMapper";
 
 interface SupplierConfigurationProps {
   supplierId?: string | null;
@@ -18,6 +20,9 @@ interface SupplierConfigurationProps {
 
 export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigurationProps) {
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("basic");
+  const [mappingQuality, setMappingQuality] = useState(0);
+  
   type SupplierType = "email" | "ftp" | "sftp" | "api" | "prestashop" | "odoo" | "sap" | "file";
   
   const [formData, setFormData] = useState<{
@@ -27,6 +32,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
     sync_frequency: string;
     connection_config: any;
     mapping_config: any;
+    preview_sample: any;
   }>({
     supplier_name: "",
     supplier_type: "file",
@@ -34,6 +40,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
     sync_frequency: "manual",
     connection_config: {},
     mapping_config: {},
+    preview_sample: null,
   });
 
   useEffect(() => {
@@ -108,11 +115,26 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs defaultValue="basic" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="basic">Configuration</TabsTrigger>
-              <TabsTrigger value="connection">Connexion</TabsTrigger>
-              <TabsTrigger value="mapping">Mapping</TabsTrigger>
+              <TabsTrigger value="connection">
+                Connexion
+                {formData.connection_config?.host && (
+                  <Badge variant="default" className="ml-2 h-5">✓</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="mapping">
+                Mapping
+                {mappingQuality > 0 && (
+                  <Badge 
+                    variant={mappingQuality > 80 ? "default" : "secondary"}
+                    className="ml-2 h-5"
+                  >
+                    {mappingQuality}%
+                  </Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="basic" className="space-y-4 mt-4">
@@ -185,11 +207,33 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
             </TabsContent>
 
             <TabsContent value="mapping" className="mt-4">
-              <SupplierMappingConfig
-                supplierType={formData.supplier_type}
-                mapping={formData.mapping_config}
-                onMappingChange={(mapping) => setFormData({ ...formData, mapping_config: mapping })}
-              />
+              {(formData.supplier_type === 'ftp' || formData.supplier_type === 'sftp') ? (
+                <SupplierIntelligentMapper
+                  supplierId={supplierId || undefined}
+                  supplierType={formData.supplier_type}
+                  connectionConfig={formData.connection_config}
+                  currentMapping={formData.mapping_config}
+                  previewSample={formData.preview_sample}
+                  onMappingChange={(mapping) => {
+                    setFormData({ 
+                      ...formData, 
+                      mapping_config: mapping,
+                    });
+                  }}
+                  onPreviewLoad={(preview) => {
+                    setFormData({ ...formData, preview_sample: preview });
+                    setActiveTab("mapping");
+                  }}
+                  onSwitchToConnection={() => setActiveTab("connection")}
+                  onQualityChange={setMappingQuality}
+                />
+              ) : (
+                <SupplierMappingConfig
+                  supplierType={formData.supplier_type}
+                  mapping={formData.mapping_config}
+                  onMappingChange={(mapping) => setFormData({ ...formData, mapping_config: mapping })}
+                />
+              )}
             </TabsContent>
           </Tabs>
 
