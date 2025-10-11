@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DollarSign } from "lucide-react";
 import { useSupplierPricesRealtime } from "@/hooks/useSupplierPricesRealtime";
 import { formatDistanceToNow } from "date-fns";
@@ -37,9 +38,24 @@ export const PurchasePriceSection = ({ analysisId }: PurchasePriceSectionProps) 
             Prix d'Achat par Fournisseur
           </CardTitle>
           <CardDescription>
-            Aucun prix fournisseur disponible
+            Aucun fournisseur lié à ce produit
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Aucun fournisseur n'est actuellement lié à ce produit.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" className="w-full" onClick={() => {
+                // Navigate to suppliers tab or show supplier link dialog
+                window.location.href = '/suppliers';
+              }}>
+                Lier un fournisseur
+              </Button>
+            </div>
+          </div>
+        </CardContent>
       </Card>
     );
   }

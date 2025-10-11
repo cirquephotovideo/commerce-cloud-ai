@@ -37,9 +37,21 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
 
       toast.success('🎬 Vidéo en cours de génération !');
       if (onEnrich) onEnrich();
-    } catch (error) {
-      toast.error('❌ Erreur lors de la génération de la vidéo');
-      console.error(error);
+    } catch (error: any) {
+      console.error('[VIDEO-GENERATION] Error:', error);
+      
+      // Enhanced error handling with specific messages
+      if (error.message?.includes('402')) {
+        toast.error('💳 Crédits insuffisants pour générer une vidéo. Veuillez recharger votre compte HeyGen.');
+      } else if (error.message?.includes('429')) {
+        toast.error('⏱️ Limite de génération atteinte. Réessayez dans quelques minutes.');
+      } else if (error.message?.includes('API key') || error.message?.includes('not configured')) {
+        toast.error('🔑 Clé API HeyGen manquante. Contactez l\'administrateur.');
+      } else if (error.message?.includes('avatar_id') || error.message?.includes('voice_id')) {
+        toast.error('⚠️ Configuration manquante. Veuillez sélectionner un avatar et une voix.');
+      } else {
+        toast.error(`❌ Erreur vidéo : ${error.message || 'Erreur inconnue'}`);
+      }
     } finally {
       setGenerating(false);
       setShowWizard(false);

@@ -1,19 +1,21 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Sparkles, Upload, Package, RefreshCw, DollarSign, TrendingUp, Truck, ImageIcon, Video, ShieldCheck, Trophy, FileText, Settings } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
-// Import du sélecteur et des sections
-import { EnrichmentSelector, EnrichmentModule } from "./product-detail/EnrichmentSelector";
+// Import des composants
+import { CriticalInfoSection } from "./product-detail/CriticalInfoSection";
+import { EnrichmentBadges } from "./product-detail/EnrichmentBadges";
+import { EnrichmentPrompt } from "./product-detail/EnrichmentPrompt";
 import { EnrichmentProgress } from "./product-detail/EnrichmentProgress";
 import { OverviewSection } from "./product-detail/sections/OverviewSection";
 import { PurchasePriceSection } from "./product-detail/sections/PurchasePriceSection";
-import { SellingPriceSection } from "./product-detail/sections/SellingPriceSection";
+import { SellingPriceSectionEditable } from "./product-detail/sections/SellingPriceSectionEditable";
 import { SuppliersSection } from "./product-detail/sections/SuppliersSection";
 import { AmazonSection } from "./product-detail/sections/AmazonSection";
 import { ImagesSection } from "./product-detail/sections/ImagesSection";
@@ -23,6 +25,8 @@ import { CompetitorsSection } from "./product-detail/sections/CompetitorsSection
 import { StockSection } from "./product-detail/sections/StockSection";
 import { DescriptionSection } from "./product-detail/sections/DescriptionSection";
 import { SpecsSection } from "./product-detail/sections/SpecsSection";
+import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -39,66 +43,89 @@ export function ProductDetailModal({
   onExport,
   onEnrich
 }: ProductDetailModalProps) {
-  const [enabledModules, setEnabledModules] = useState<Set<string>>(
-    new Set(['overview', 'purchase_price', 'selling_price', 'suppliers'])
-  );
-
+  const [showVideoWizard, setShowVideoWizard] = useState(false);
   const queryClient = useQueryClient();
 
+  // Récupérer l'analyse complète
+  const { data: analysis } = useQuery({
+    queryKey: ['product-analysis', product?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('product_analyses')
+        .select('*')
+        .eq('id', product.linked_analysis_id || product.id)
+        .single();
+      return data;
+    },
+    enabled: !!product?.id && open
+  });
+
+  // Hook d'enrichissement
+  const enrichmentMutation = useEnrichment(product?.id, () => {
+    handleRefresh();
+  });
+
+  // Mutation de re-enrichissement global
   const reEnrichMutation = useMutation({
     mutationFn: async ({ provider = 'lovable-ai', types = ['amazon', 'ai_analysis'] }: { provider?: string; types?: string[] }) => {
       const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        throw new Error('Session expirée, veuillez vous reconnecter');
-      }
+      if (!sessionData.session) throw new Error('Session expirée');
 
       const { data, error } = await supabase.functions.invoke('re-enrich-product', {
-        headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`
-        },
-        body: {
-          productId: product.id,
-          enrichmentTypes: types,
-          provider
-        }
+        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: { productId: product.id, enrichmentTypes: types, provider }
       });
 
-      if (error) {
-        if (error.message.includes('401')) {
-          throw new Error('Session expirée, veuillez vous reconnecter');
-        }
-        if (error.message.includes('429')) {
-          throw new Error('Limite de taux atteinte, veuillez réessayer plus tard');
-        }
-        if (error.message.includes('402')) {
-          throw new Error('Crédits insuffisants, veuillez recharger votre compte');
-        }
-        throw error;
-      }
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      toast.success('✨ Re-enrichissement démarré avec succès !');
-      queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
-      if (onEnrich) onEnrich();
+      toast.success('✨ Re-enrichissement démarré !');
+      handleRefresh();
     },
     onError: (error: Error) => {
-      toast.error(`❌ Erreur lors du re-enrichissement : ${error.message}`);
+      toast.error(`❌ ${error.message}`);
     },
   });
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
+    queryClient.invalidateQueries({ queryKey: ['enrichment-queue', analysis?.id] });
     if (onEnrich) onEnrich();
+  };
+
+  const handleEnrich = (type: string) => {
+    const typeMap: Record<string, string[]> = {
+      amazon: ['amazon'],
+      images: ['images'],
+      video: ['video'],
+      rsgp: ['rsgp'],
+      description: ['description'],
+      specs: ['specifications']
+    };
+    
+    enrichmentMutation.mutate({ enrichmentType: typeMap[type] || [type] });
+  };
+
+  const handleBadgeClick = (type: string) => {
+    // Scroll to the section in accordion
+    const element = document.getElementById(`section-${type}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleGenerateImages = () => {
+    enrichmentMutation.mutate({ enrichmentType: ['images'] });
+  };
+
+  const handleGenerateVideo = () => {
+    setShowVideoWizard(true);
   };
 
   if (!product) return null;
 
-  const analysis = product.linked_analysis_id ? 
-    { id: product.linked_analysis_id, ...product } : 
-    null;
-
-  // Déterminer la disponibilité des modules
+  // Calculer le statut d'enrichissement
   const hasAmazonData = product.amazon_enriched_at !== null;
   const hasVideoData = product.video_url !== null;
   const imageCount = product.image_urls?.length || 0;
@@ -115,276 +142,322 @@ export function ProductDetailModal({
     product.analysis_result?.dimensions
   );
 
-  // Configuration des modules
-  const modules: EnrichmentModule[] = [
-    { 
-      id: 'overview', 
-      label: 'Vue Globale', 
-      icon: <Package className="h-3 w-3" />, 
-      status: 'available', 
-      enabled: true // Toujours activé
-    },
-    { 
-      id: 'purchase_price', 
-      label: 'Prix Achat', 
-      icon: <DollarSign className="h-3 w-3" />, 
-      status: 'available', 
-      enabled: enabledModules.has('purchase_price') 
-    },
-    { 
-      id: 'selling_price', 
-      label: 'Prix Vente', 
-      icon: <TrendingUp className="h-3 w-3" />, 
-      status: 'available', 
-      enabled: enabledModules.has('selling_price') 
-    },
-    { 
-      id: 'suppliers', 
-      label: 'Fournisseurs', 
-      icon: <Truck className="h-3 w-3" />, 
-      status: 'available', 
-      enabled: enabledModules.has('suppliers') 
-    },
-    { 
-      id: 'amazon', 
-      label: 'Amazon', 
-      icon: <Package className="h-3 w-3" />, 
-      status: hasAmazonData ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('amazon') 
-    },
-    { 
-      id: 'images', 
-      label: 'Images', 
-      icon: <ImageIcon className="h-3 w-3" />, 
-      status: hasImages ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('images') 
-    },
-    { 
-      id: 'video', 
-      label: 'Vidéo', 
-      icon: <Video className="h-3 w-3" />, 
-      status: hasVideoData ? 'available' : 'pending', 
-      enabled: enabledModules.has('video') 
-    },
-    { 
-      id: 'rsgp', 
-      label: 'RSGP', 
-      icon: <ShieldCheck className="h-3 w-3" />, 
-      status: hasRSGPData ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('rsgp') 
-    },
-    { 
-      id: 'competitors', 
-      label: 'Concurrents', 
-      icon: <Trophy className="h-3 w-3" />, 
-      status: hasCompetitors ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('competitors') 
-    },
-    { 
-      id: 'stock', 
-      label: 'Stock', 
-      icon: <Package className="h-3 w-3" />, 
-      status: 'available', 
-      enabled: enabledModules.has('stock') 
-    },
-    { 
-      id: 'description', 
-      label: 'Description', 
-      icon: <FileText className="h-3 w-3" />, 
-      status: hasDescription ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('description') 
-    },
-    { 
-      id: 'specs', 
-      label: 'Specs', 
-      icon: <Settings className="h-3 w-3" />, 
-      status: hasSpecs ? 'available' : 'unavailable', 
-      enabled: enabledModules.has('specs') 
-    },
-  ];
+  // Compter les fournisseurs
+  const supplierCount = product.supplier_count || 0;
 
-  const toggleModule = (id: string) => {
-    if (id === 'overview') return; // Vue globale toujours active
-    
-    const newSet = new Set(enabledModules);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setEnabledModules(newSet);
-  };
-
-  const handleEnrichClick = (type: string) => {
-    toast.info(`Enrichissement ${type} en cours de développement`);
+  // Statut d'enrichissement pour badges
+  const enrichmentStatus = {
+    images: { status: hasImages ? 'available' : 'missing', count: imageCount } as const,
+    video: { status: hasVideoData ? 'available' : 'missing' } as const,
+    amazon: { status: hasAmazonData ? 'available' : 'missing' } as const,
+    description: { status: hasDescription ? 'available' : 'missing' } as const,
+    rsgp: { status: hasRSGPData ? 'available' : 'missing' } as const,
+    specs: { status: hasSpecs ? 'available' : 'missing' } as const
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-7xl max-h-[95vh]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                {product.product_name}
-              </div>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-7xl max-h-[95vh]">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              {product.product_name || product.name}
               {product.ean && (
-                <div className="text-xs text-muted-foreground font-normal">
-                  EAN: {product.ean} | Catégorie: {product.mapped_category_name || 'Non catégorisé'}
-                </div>
+                <span className="text-sm text-muted-foreground ml-3">
+                  EAN: {product.ean}
+                </span>
               )}
-            </div>
-            <div className="flex gap-2">
-              {product.id && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      disabled={reEnrichMutation.isPending}
-                    >
-                      {reEnrichMutation.isPending ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                          Re-enrichissement...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-1" />
-                          Re-enrichir
-                        </>
-                      )}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai' })}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Tout re-enrichir
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['amazon'] })}>
-                      <Package className="h-4 w-4 mr-2" />
-                      Amazon uniquement
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['ai_analysis'] })}>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Analyse IA uniquement
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['ai_images'] })}>
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      Générer images IA
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['video'] })}>
-                      <Video className="h-4 w-4 mr-2" />
-                      Générer vidéo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-              {onExport && analysis && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline">
-                      <Upload className="w-4 h-4 mr-1" />
-                      Exporter
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => onExport('shopify')}>
-                      Shopify
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExport('woocommerce')}>
-                      WooCommerce
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExport('prestashop')}>
-                      PrestaShop
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExport('magento')}>
-                      Magento
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onExport('odoo')}>
-                      Odoo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
-          </DialogTitle>
-        </DialogHeader>
+            </DialogTitle>
+          </DialogHeader>
 
-        {/* Indicateur de progression */}
-        {analysis && <EnrichmentProgress analysisId={analysis.id} />}
+          <div className="space-y-4">
+            {/* Progress d'enrichissement */}
+            {analysis?.id && <EnrichmentProgress analysisId={analysis.id} />}
 
-        {/* Sélecteur d'enrichissements */}
-        <EnrichmentSelector modules={modules} onToggle={toggleModule} />
-
-        {/* Contenu dynamique */}
-        <ScrollArea className="h-[70vh]">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4">
-            {/* Vue Globale (toujours visible) */}
-            <OverviewSection 
-              analysis={analysis || product} 
-              onEnrichClick={handleEnrichClick}
+            {/* Section Critique - TOUJOURS VISIBLE */}
+            <CriticalInfoSection
+              product={product}
+              analysis={analysis}
+              supplierCount={supplierCount}
+              onUpdate={handleRefresh}
             />
 
-            {/* Prix d'achat */}
-            {enabledModules.has('purchase_price') && analysis && (
-              <PurchasePriceSection analysisId={analysis.id} />
-            )}
+            {/* Badges Enrichissement - INTERACTIFS */}
+            <div className="px-4">
+              <div className="text-sm font-medium mb-2">État des Enrichissements</div>
+              <EnrichmentBadges
+                enrichmentStatus={enrichmentStatus}
+                onBadgeClick={handleBadgeClick}
+              />
+            </div>
 
-            {/* Prix de vente */}
-            {enabledModules.has('selling_price') && analysis && (
-              <SellingPriceSection analysis={analysis} />
-            )}
+            {/* Actions Rapides */}
+            <div className="flex flex-wrap gap-2 px-4">
+              <Button
+                onClick={() => reEnrichMutation.mutate({ types: ['amazon', 'ai_analysis'] })}
+                disabled={reEnrichMutation.isPending}
+                variant="default"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tout Réenrichir
+              </Button>
+              <Button
+                onClick={handleGenerateImages}
+                disabled={enrichmentMutation.isPending}
+                variant="outline"
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Générer Images IA
+              </Button>
+              <Button
+                onClick={handleGenerateVideo}
+                variant="outline"
+              >
+                <Video className="h-4 w-4 mr-2" />
+                Générer Vidéo HeyGen
+              </Button>
+              {onExport && (
+                <Button
+                  onClick={() => onExport('shopify')}
+                  variant="outline"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Exporter
+                </Button>
+              )}
+            </div>
 
-            {/* Fournisseurs */}
-            {enabledModules.has('suppliers') && analysis && (
-              <SuppliersSection analysisId={analysis.id} />
-            )}
+            {/* DÉTAILS ÉTENDUS - ACCORDION */}
+            <ScrollArea className="h-[60vh] px-4">
+              <Accordion type="multiple" className="space-y-2">
+                {/* Vue Globale */}
+                <AccordionItem value="overview" id="section-overview">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Vue Globale
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {analysis ? (
+                      <OverviewSection analysis={analysis} />
+                    ) : (
+                      <p className="text-muted-foreground">Aucune analyse disponible</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Amazon */}
-            {enabledModules.has('amazon') && hasAmazonData && analysis && (
-              <AmazonSection analysisId={analysis.id} onEnrich={handleRefresh} />
-            )}
+                {/* Fournisseurs - TOUJOURS AFFICHER */}
+                <AccordionItem value="suppliers" id="section-suppliers">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Truck className="h-5 w-5" />
+                      Fournisseurs ({supplierCount})
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {analysis?.id ? (
+                      <div className="space-y-4">
+                        <PurchasePriceSection analysisId={analysis.id} />
+                        <SuppliersSection analysisId={analysis.id} />
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">Aucun fournisseur lié</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Images */}
-            {enabledModules.has('images') && hasImages && (
-              <ImagesSection analysis={analysis || product} onEnrich={handleRefresh} />
-            )}
+                {/* Prix de Vente */}
+                <AccordionItem value="selling" id="section-selling">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      Prix de Vente
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {analysis ? (
+                      <SellingPriceSectionEditable 
+                        analysis={analysis} 
+                        onUpdate={handleRefresh}
+                      />
+                    ) : (
+                      <p className="text-muted-foreground">Aucune analyse disponible</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Vidéo */}
-            {enabledModules.has('video') && hasVideoData && (
-              <VideoSection analysis={analysis || product} onEnrich={handleRefresh} />
-            )}
+                {/* Images - TOUJOURS AFFICHER */}
+                <AccordionItem value="images" id="section-images">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <ImageIcon className="h-5 w-5" />
+                      Images ({imageCount})
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasImages && analysis ? (
+                      <ImagesSection analysis={analysis} onEnrich={handleRefresh} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="images" 
+                        onEnrich={() => handleEnrich('images')}
+                        isLoading={enrichmentMutation.isPending}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* RSGP */}
-            {enabledModules.has('rsgp') && hasRSGPData && (
-              <RSGPSection analysis={analysis || product} onEnrich={handleRefresh} />
-            )}
+                {/* Vidéo - TOUJOURS AFFICHER */}
+                <AccordionItem value="video" id="section-video">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Video className="h-5 w-5" />
+                      Vidéo
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {analysis ? (
+                      <VideoSection analysis={analysis} onEnrich={handleRefresh} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="video" 
+                        onEnrich={handleGenerateVideo}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Concurrents */}
-            {enabledModules.has('competitors') && hasCompetitors && (
-              <CompetitorsSection analysis={analysis || product} />
-            )}
+                {/* Amazon - TOUJOURS AFFICHER */}
+                <AccordionItem value="amazon" id="section-amazon">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Amazon
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasAmazonData && analysis ? (
+                      <AmazonSection analysisId={analysis.id} onEnrich={handleRefresh} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="amazon" 
+                        onEnrich={() => handleEnrich('amazon')}
+                        isLoading={enrichmentMutation.isPending}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Stock */}
-            {enabledModules.has('stock') && analysis && (
-              <StockSection analysisId={analysis.id} />
-            )}
+                {/* Description - TOUJOURS AFFICHER */}
+                <AccordionItem value="description" id="section-description">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Description
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasDescription && analysis ? (
+                      <DescriptionSection analysis={analysis} onEnrich={handleRefresh} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="description" 
+                        onEnrich={() => handleEnrich('description')}
+                        isLoading={enrichmentMutation.isPending}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Description */}
-            {enabledModules.has('description') && hasDescription && (
-              <DescriptionSection analysis={analysis || product} onEnrich={handleRefresh} />
-            )}
+                {/* Spécifications - TOUJOURS AFFICHER */}
+                <AccordionItem value="specs" id="section-specs">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Spécifications Techniques
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasSpecs && analysis ? (
+                      <SpecsSection analysis={analysis} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="specs" 
+                        onEnrich={() => handleEnrich('specs')}
+                        isLoading={enrichmentMutation.isPending}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
 
-            {/* Specs */}
-            {enabledModules.has('specs') && hasSpecs && (
-              <SpecsSection analysis={analysis || product} />
-            )}
+                {/* RSGP - TOUJOURS AFFICHER */}
+                <AccordionItem value="rsgp" id="section-rsgp">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-5 w-5" />
+                      RSGP / Conformité
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasRSGPData && analysis ? (
+                      <RSGPSection analysis={analysis} />
+                    ) : (
+                      <EnrichmentPrompt 
+                        type="rsgp" 
+                        onEnrich={() => handleEnrich('rsgp')}
+                        isLoading={enrichmentMutation.isPending}
+                      />
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Concurrents */}
+                {hasCompetitors && analysis && (
+                  <AccordionItem value="competitors" id="section-competitors">
+                    <AccordionTrigger className="text-lg font-semibold">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-5 w-5" />
+                        Concurrents
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <CompetitorsSection analysis={analysis} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+
+                {/* Stock */}
+                {analysis && (
+                  <AccordionItem value="stock" id="section-stock">
+                    <AccordionTrigger className="text-lg font-semibold">
+                      <div className="flex items-center gap-2">
+                        <Package className="h-5 w-5" />
+                        Stock
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <StockSection analysisId={analysis.id} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+              </Accordion>
+            </ScrollArea>
           </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Video Wizard */}
+      {showVideoWizard && analysis && (
+        <HeyGenVideoWizard
+          analysisId={analysis.id}
+          onGenerate={() => {
+            setShowVideoWizard(false);
+            handleRefresh();
+          }}
+          onClose={() => setShowVideoWizard(false)}
+        />
+      )}
+    </>
   );
 }
