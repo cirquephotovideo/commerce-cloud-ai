@@ -34,10 +34,18 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // Gestion d'un doublon: une vidéo est déjà active pour cette analyse
+        if ((data as any)?.error === 'duplicate_active_video') {
+          toast.info('ℹ️ Une génération est déjà en cours. Vérification du statut...');
+          onEnrich?.();
+          return;
+        }
+        throw error;
+      }
 
       toast.success('🎬 Vidéo en cours de génération !');
-      if (onEnrich) onEnrich();
+      onEnrich?.();
     } catch (error: any) {
       console.error('[VIDEO-GENERATION] Error:', error);
       
@@ -77,6 +85,7 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
               className="w-full gap-2"
               onClick={() => setShowWizard(true)}
               disabled={generating}
+              aria-label="Générer une vidéo promotionnelle"
             >
               {generating ? (
                 <>
@@ -159,7 +168,7 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
               Télécharger MP4
             </a>
           </Button>
-          <Button size="sm" variant="outline" className="gap-2">
+          <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowWizard(true)} disabled={generating}>
             <RefreshCw className="h-3 w-3" />
             Régénérer
           </Button>
@@ -168,6 +177,13 @@ export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
             Modifier script
           </Button>
         </div>
+        {showWizard && (
+          <HeyGenVideoWizard
+            analysisId={analysis.id}
+            onGenerate={handleGenerateVideo}
+            onClose={() => setShowWizard(false)}
+          />
+        )}
       </CardContent>
     </Card>
   );

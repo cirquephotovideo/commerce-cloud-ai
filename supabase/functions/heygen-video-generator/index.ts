@@ -498,8 +498,9 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
         );
       }
 
-      // Save to database
-      const { data: videoRecord, error: insertError } = await supabase
+      // Save to database (gracefully handle duplicate active record)
+      let videoRecord;
+      const insertRes = await supabase
         .from('product_videos')
         .insert({
           analysis_id,
@@ -514,10 +515,62 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
         .select()
         .single();
 
-      if (insertError) {
-        console.error('[HEYGEN-VIDEO] Database insert error:', insertError);
-        throw insertError;
+      if (insertRes.error) {
+        console.error('[HEYGEN-VIDEO] Database insert error:', insertRes.error);
+        // 23505 => unique violation (likely unique active video per analysis)
+        if ((insertRes.error as any).code === '23505') {
+          console.warn('[HEYGEN-VIDEO] Duplicate active video. Updating existing record instead.');
+
+          // Find the latest record for this analysis
+          const { data: existing, error: findError } = await supabase
+            .from('product_videos')
+            .select('*')
+            .eq('analysis_id', analysis_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (findError || !existing) {
+            console.error('[HEYGEN-VIDEO] Could not find existing record to update:', findError);
+            return new Response(
+              JSON.stringify({ error: 'duplicate_active_video', message: 'Une génération est déjà en cours.' }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          const { data: updated, error: updateError } = await supabase
+            .from('product_videos')
+            .update({
+              video_id,
+              status: 'processing',
+              template_id: template_id || null,
+              avatar_id,
+              voice_id,
+              script
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (updateError) {
+            console.error('[HEYGEN-VIDEO] Failed to update existing record:', updateError);
+            return new Response(
+              JSON.stringify({ error: 'update_failed', details: updateError }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          videoRecord = updated;
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'insert_failed', details: insertRes.error }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } else {
+        videoRecord = insertRes.data;
       }
+
 
       // Update product_analyses
       await supabase
