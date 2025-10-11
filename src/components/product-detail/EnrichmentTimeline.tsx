@@ -12,6 +12,13 @@ export const EnrichmentTimeline = ({ analysisId }: EnrichmentTimelineProps) => {
   const { data: events, isLoading } = useQuery({
     queryKey: ['enrichment-timeline', analysisId],
     queryFn: async () => {
+      const timeline: Array<{
+        time: string;
+        event: string;
+        status: string;
+        icon: React.ReactNode;
+      }> = [];
+
       const [amazon, video, enrichmentQueue] = await Promise.all([
         supabase
           .from('amazon_product_data')
