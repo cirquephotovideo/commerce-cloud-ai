@@ -20,6 +20,7 @@ import { ProductDetailModal } from "@/components/ProductDetailModal";
 import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
 import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
+import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
 import { 
   Select, 
   SelectContent, 
@@ -536,6 +537,7 @@ export default function Dashboard() {
           <div className="lg:col-span-1 space-y-4">
             <SubscriptionStatus />
             <UserAlertsWidget />
+            <EnrichmentProgressMonitor />
           </div>
           <div className="lg:col-span-2 space-y-4">
             <AIProviderManagement />
