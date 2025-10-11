@@ -1,15 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, ExternalLink, RefreshCw } from "lucide-react";
+import { Package, ExternalLink, RefreshCw, Sparkles, Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface AmazonSectionProps {
   analysisId: string;
+  onEnrich?: () => void;
 }
 
-export const AmazonSection = ({ analysisId }: AmazonSectionProps) => {
+export const AmazonSection = ({ analysisId, onEnrich }: AmazonSectionProps) => {
+  const enrichMutation = useEnrichment(analysisId, onEnrich);
+  
   const { data: amazonData, isLoading, refetch } = useQuery({
     queryKey: ['amazon-data', analysisId],
     queryFn: async () => {
@@ -52,6 +56,25 @@ export const AmazonSection = ({ analysisId }: AmazonSectionProps) => {
             Données Amazon non disponibles
           </CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button 
+            className="w-full gap-2"
+            onClick={() => enrichMutation.mutate({ enrichmentType: ['amazon'] })}
+            disabled={enrichMutation.isPending}
+          >
+            {enrichMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Enrichissement en cours...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Enrichir avec Amazon
+              </>
+            )}
+          </Button>
+        </CardContent>
       </Card>
     );
   }

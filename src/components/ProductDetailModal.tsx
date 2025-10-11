@@ -1,15 +1,16 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sparkles, Upload, Package, RefreshCw, DollarSign, TrendingUp, Truck, ImageIcon, Video, ShieldCheck, Trophy, FileText, Settings } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Import du sélecteur et des sections
 import { EnrichmentSelector, EnrichmentModule } from "./product-detail/EnrichmentSelector";
+import { EnrichmentProgress } from "./product-detail/EnrichmentProgress";
 import { OverviewSection } from "./product-detail/sections/OverviewSection";
 import { PurchasePriceSection } from "./product-detail/sections/PurchasePriceSection";
 import { SellingPriceSection } from "./product-detail/sections/SellingPriceSection";
@@ -42,8 +43,10 @@ export function ProductDetailModal({
     new Set(['overview', 'purchase_price', 'selling_price', 'suppliers'])
   );
 
+  const queryClient = useQueryClient();
+
   const reEnrichMutation = useMutation({
-    mutationFn: async (provider: string = 'lovable-ai') => {
+    mutationFn: async ({ provider = 'lovable-ai', types = ['amazon', 'ai_analysis'] }: { provider?: string; types?: string[] }) => {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
         throw new Error('Session expirée, veuillez vous reconnecter');
@@ -55,7 +58,7 @@ export function ProductDetailModal({
         },
         body: {
           productId: product.id,
-          enrichmentTypes: ['amazon', 'ai_analysis'],
+          enrichmentTypes: types,
           provider
         }
       });
@@ -75,13 +78,19 @@ export function ProductDetailModal({
       return data;
     },
     onSuccess: () => {
-      toast.success('Re-enrichissement démarré avec succès !');
+      toast.success('✨ Re-enrichissement démarré avec succès !');
+      queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
       if (onEnrich) onEnrich();
     },
     onError: (error: Error) => {
-      toast.error(`Erreur lors du re-enrichissement : ${error.message}`);
+      toast.error(`❌ Erreur lors du re-enrichissement : ${error.message}`);
     },
   });
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
+    if (onEnrich) onEnrich();
+  };
 
   if (!product) return null;
 
@@ -228,24 +237,50 @@ export function ProductDetailModal({
             </div>
             <div className="flex gap-2">
               {product.id && (
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => reEnrichMutation.mutate('lovable-ai')}
-                  disabled={reEnrichMutation.isPending}
-                >
-                  {reEnrichMutation.isPending ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
-                      Re-enrichissement...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-1" />
-                      Re-enrichir
-                    </>
-                  )}
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      disabled={reEnrichMutation.isPending}
+                    >
+                      {reEnrichMutation.isPending ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-1 animate-spin" />
+                          Re-enrichissement...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 mr-1" />
+                          Re-enrichir
+                        </>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai' })}>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Tout re-enrichir
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['amazon'] })}>
+                      <Package className="h-4 w-4 mr-2" />
+                      Amazon uniquement
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['ai_analysis'] })}>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Analyse IA uniquement
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['ai_images'] })}>
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Générer images IA
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => reEnrichMutation.mutate({ types: ['video'] })}>
+                      <Video className="h-4 w-4 mr-2" />
+                      Générer vidéo
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {onExport && analysis && (
                 <DropdownMenu>
@@ -278,6 +313,9 @@ export function ProductDetailModal({
           </DialogTitle>
         </DialogHeader>
 
+        {/* Indicateur de progression */}
+        {analysis && <EnrichmentProgress analysisId={analysis.id} />}
+
         {/* Sélecteur d'enrichissements */}
         <EnrichmentSelector modules={modules} onToggle={toggleModule} />
 
@@ -307,22 +345,22 @@ export function ProductDetailModal({
 
             {/* Amazon */}
             {enabledModules.has('amazon') && hasAmazonData && analysis && (
-              <AmazonSection analysisId={analysis.id} />
+              <AmazonSection analysisId={analysis.id} onEnrich={handleRefresh} />
             )}
 
             {/* Images */}
             {enabledModules.has('images') && hasImages && (
-              <ImagesSection analysis={analysis || product} />
+              <ImagesSection analysis={analysis || product} onEnrich={handleRefresh} />
             )}
 
             {/* Vidéo */}
             {enabledModules.has('video') && hasVideoData && (
-              <VideoSection analysis={analysis || product} />
+              <VideoSection analysis={analysis || product} onEnrich={handleRefresh} />
             )}
 
             {/* RSGP */}
             {enabledModules.has('rsgp') && hasRSGPData && (
-              <RSGPSection analysis={analysis || product} />
+              <RSGPSection analysis={analysis || product} onEnrich={handleRefresh} />
             )}
 
             {/* Concurrents */}
@@ -337,7 +375,7 @@ export function ProductDetailModal({
 
             {/* Description */}
             {enabledModules.has('description') && hasDescription && (
-              <DescriptionSection analysis={analysis || product} />
+              <DescriptionSection analysis={analysis || product} onEnrich={handleRefresh} />
             )}
 
             {/* Specs */}

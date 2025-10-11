@@ -1,13 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Edit, Sparkles, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, Edit, Sparkles, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface DescriptionSectionProps {
   analysis: any;
+  onEnrich?: () => void;
 }
 
-export const DescriptionSection = ({ analysis }: DescriptionSectionProps) => {
+export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionProps) => {
+  const enrichMutation = useEnrichment(analysis.id, onEnrich);
   // Gérer le cas où description est un objet ou une chaîne
   const descriptionData = analysis?.analysis_result?.description;
   const description = typeof descriptionData === 'string' 
@@ -79,9 +82,24 @@ export const DescriptionSection = ({ analysis }: DescriptionSectionProps) => {
             <Edit className="h-3 w-3" />
             Modifier
           </Button>
-          <Button size="sm" variant="outline" className="gap-2">
-            <Sparkles className="h-3 w-3" />
-            Régénérer avec IA
+          <Button 
+            size="sm" 
+            variant="outline" 
+            className="gap-2"
+            onClick={() => enrichMutation.mutate({ enrichmentType: ['ai_analysis'] })}
+            disabled={enrichMutation.isPending}
+          >
+            {enrichMutation.isPending ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Régénération...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3 w-3" />
+                Régénérer avec IA
+              </>
+            )}
           </Button>
         </div>
       </CardContent>

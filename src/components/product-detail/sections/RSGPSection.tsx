@@ -1,15 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, FileText, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, FileText, RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface RSGPSectionProps {
   analysis: any;
+  onEnrich?: () => void;
 }
 
-export const RSGPSection = ({ analysis }: RSGPSectionProps) => {
+export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
+  const enrichMutation = useEnrichment(analysis.id, onEnrich);
   const rsgpData = analysis?.rsgp_data;
   const rsgpGeneratedAt = analysis?.rsgp_generated_at;
 
@@ -26,9 +29,22 @@ export const RSGPSection = ({ analysis }: RSGPSectionProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="w-full gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            Analyser la conformité
+          <Button 
+            className="w-full gap-2"
+            onClick={() => enrichMutation.mutate({ enrichmentType: ['rsgp'] })}
+            disabled={enrichMutation.isPending}
+          >
+            {enrichMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyse en cours...
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="h-4 w-4" />
+                Analyser la conformité
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>

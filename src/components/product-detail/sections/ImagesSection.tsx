@@ -1,14 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Download, Trash2, Sparkles } from "lucide-react";
+import { ImageIcon, Download, Trash2, Sparkles, Loader2 } from "lucide-react";
 import { MediaGalleryUnified } from "../MediaGalleryUnified";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface ImagesSectionProps {
   analysis: any;
+  onEnrich?: () => void;
 }
 
-export const ImagesSection = ({ analysis }: ImagesSectionProps) => {
+export const ImagesSection = ({ analysis, onEnrich }: ImagesSectionProps) => {
+  const enrichMutation = useEnrichment(analysis.id, onEnrich);
+  
   const analysisImages = analysis?.image_urls || [];
   const amazonImages = analysis?.amazon_product_data?.images || [];
   const aiGeneratedImages = analysis?.generated_images || [];
@@ -62,9 +66,21 @@ export const ImagesSection = ({ analysis }: ImagesSectionProps) => {
             <div className="text-sm text-muted-foreground">🎨 IA générées</div>
             <div className="flex items-center justify-center gap-2">
               <Badge variant="outline">{aiGeneratedImages.length} images</Badge>
-              <Button size="sm" variant="default" className="h-6 gap-1 px-2">
-                <Sparkles className="h-3 w-3" />
-                Générer
+              <Button 
+                size="sm" 
+                variant="default" 
+                className="h-6 gap-1 px-2"
+                onClick={() => enrichMutation.mutate({ enrichmentType: ['ai_images'] })}
+                disabled={enrichMutation.isPending}
+              >
+                {enrichMutation.isPending ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3" />
+                    Générer
+                  </>
+                )}
               </Button>
             </div>
           </div>

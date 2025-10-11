@@ -1,38 +1,93 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Video, Download, RefreshCw, Edit } from "lucide-react";
+import { Video, Download, RefreshCw, Edit, Loader2 } from "lucide-react";
 import { VideoPlayer } from "../VideoPlayer";
+import { HeyGenVideoWizard } from "../HeyGenVideoWizard";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface VideoSectionProps {
   analysis: any;
+  onEnrich?: () => void;
 }
 
-export const VideoSection = ({ analysis }: VideoSectionProps) => {
+export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
+  const [showWizard, setShowWizard] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const videoUrl = analysis?.video_url;
   const videoCreatedAt = analysis?.video_created_at;
 
+  const handleGenerateVideo = async (avatarId: string, voiceId: string) => {
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
+        body: {
+          action: 'generate_video',
+          analysisId: analysis.id,
+          avatarId,
+          voiceId
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success('🎬 Vidéo en cours de génération !');
+      if (onEnrich) onEnrich();
+    } catch (error) {
+      toast.error('❌ Erreur lors de la génération de la vidéo');
+      console.error(error);
+    } finally {
+      setGenerating(false);
+      setShowWizard(false);
+    }
+  };
+
   if (!videoUrl) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Video className="h-5 w-5" />
-            Vidéo Promotionnelle IA
-          </CardTitle>
-          <CardDescription>
-            Aucune vidéo disponible
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button className="w-full gap-2">
-            <Video className="h-4 w-4" />
-            Générer une vidéo
-          </Button>
-        </CardContent>
-      </Card>
+      <>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Video className="h-5 w-5" />
+              Vidéo Promotionnelle IA
+            </CardTitle>
+            <CardDescription>
+              Aucune vidéo disponible
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              className="w-full gap-2"
+              onClick={() => setShowWizard(true)}
+              disabled={generating}
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Génération en cours...
+                </>
+              ) : (
+                <>
+                  <Video className="h-4 w-4" />
+                  Générer une vidéo
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {showWizard && (
+          <HeyGenVideoWizard
+            analysisId={analysis.id}
+            onGenerate={handleGenerateVideo}
+            onClose={() => setShowWizard(false)}
+          />
+        )}
+      </>
     );
   }
 
