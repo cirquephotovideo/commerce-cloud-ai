@@ -7,6 +7,7 @@ import { ArrowUpDown, Eye, Truck } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { EnrichmentBadges } from "@/components/product-detail/EnrichmentBadges";
 
 interface ProductsTableProps {
   products: any[];
@@ -176,20 +177,45 @@ export function ProductsTable({
                     }}
                   />
                 </TableCell>
-                <TableCell className="font-medium max-w-[300px] truncate">
-                  <div className="flex items-center gap-2">
-                    {product.product_name}
-                    {imageCount > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        ({imageCount} 🖼️)
-                      </span>
-                    )}
-                    {supplierCount > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        <Truck className="h-3 w-3 mr-1" />
-                        {supplierCount}
-                      </Badge>
-                    )}
+                <TableCell className="font-medium max-w-[300px]">
+                  <div className="space-y-1">
+                    <div 
+                      className="flex items-center gap-2 cursor-pointer hover:underline"
+                      onClick={() => onViewDetails(product.id)}
+                    >
+                      {product.product_name}
+                      {supplierCount > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          <Truck className="h-3 w-3 mr-1" />
+                          {supplierCount}
+                        </Badge>
+                      )}
+                    </div>
+                    <EnrichmentBadges
+                      enrichmentStatus={{
+                        images: {
+                          status: imageCount > 0 ? 'available' : 'missing',
+                          count: imageCount
+                        },
+                        video: {
+                          status: product.product_videos?.length > 0 ? 'available' : 'missing'
+                        },
+                        amazon: {
+                          status: product.amazon_enriched_at ? 'available' : 'missing'
+                        },
+                        description: {
+                          status: product.ai_generated_description ? 'available' : 'missing'
+                        },
+                        rsgp: {
+                          status: product.rsgp_compliance ? 'available' : 'missing'
+                        },
+                        specs: {
+                          status: product.technical_specs ? 'available' : 'missing'
+                        }
+                      }}
+                      onBadgeClick={(type) => onViewDetails(product.id)}
+                      compact
+                    />
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
