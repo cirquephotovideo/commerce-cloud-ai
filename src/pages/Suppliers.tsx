@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye } from "lucide-react";
+import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -95,6 +95,24 @@ export default function Suppliers() {
         product_count: s.supplier_products?.[0]?.count || 0
       }));
     },
+  });
+
+  const { data: imapStats } = useQuery({
+    queryKey: ["imap-email-stats"],
+    queryFn: async () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const { count, error } = await supabase
+        .from("email_inbox")
+        .select("id", { count: "exact", head: true })
+        .eq("detection_method", "imap_polling")
+        .gte("received_at", yesterday.toISOString());
+
+      if (error) throw error;
+      return count || 0;
+    },
+    refetchInterval: 60000,
   });
 
   // Statistiques fournisseurs
@@ -317,7 +335,7 @@ export default function Suppliers() {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-3xl font-bold">{stats?.total_suppliers || 0}</div>
@@ -334,6 +352,17 @@ export default function Suppliers() {
           <CardContent className="pt-6">
             <div className="text-3xl font-bold">{stats?.total_products || 0}</div>
             <p className="text-sm text-muted-foreground">Produits importés</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <div className="text-3xl font-bold">{imapStats || 0}</div>
+                <p className="text-sm text-muted-foreground">Emails IMAP (24h)</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
         <Card>

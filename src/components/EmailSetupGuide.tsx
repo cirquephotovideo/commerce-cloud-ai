@@ -1,18 +1,42 @@
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Mail, CheckCircle, ExternalLink, Copy } from "lucide-react";
+import { Mail, CheckCircle, ExternalLink, Copy, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export function EmailSetupGuide() {
+  const [isPolling, setIsPolling] = useState(false);
+  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
   const projectUrl = import.meta.env.VITE_SUPABASE_URL;
   const webhookUrl = `${projectUrl}/functions/v1/email-inbox-processor`;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copié dans le presse-papiers`);
+  };
+
+  const handleManualPoll = async () => {
+    setIsPolling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("email-imap-poller");
+      
+      if (error) throw error;
+
+      setLastPollTime(new Date());
+      toast.success(`✅ Vérification terminée`, {
+        description: `${data.stats?.emails_found || 0} email(s) trouvé(s), ${data.stats?.processed || 0} traité(s)`,
+      });
+    } catch (error: any) {
+      toast.error("❌ Erreur lors de la vérification", {
+        description: error.message,
+      });
+    } finally {
+      setIsPolling(false);
+    }
   };
 
   return (
@@ -154,6 +178,67 @@ export function EmailSetupGuide() {
               Documentation SendGrid Parse
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Section IMAP/POP3 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            Configuration IMAP/POP3
+          </CardTitle>
+          <CardDescription>
+            Récupération automatique depuis catalogapp@inplt.net
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Alert>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <AlertDescription>
+              <div className="space-y-1">
+                <div>✅ Connecté à <strong>catalogapp@inplt.net</strong></div>
+                <div className="text-xs text-muted-foreground">
+                  Vérification automatique toutes les 5 minutes
+                </div>
+                {lastPollTime && (
+                  <div className="text-xs text-muted-foreground">
+                    Dernière vérification : {lastPollTime.toLocaleTimeString()}
+                  </div>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+
+          <Button 
+            onClick={handleManualPoll} 
+            disabled={isPolling}
+            className="w-full"
+          >
+            {isPolling ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Vérification en cours...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Vérifier maintenant
+              </>
+            )}
+          </Button>
+
+          <Alert>
+            <AlertDescription className="text-xs">
+              <strong>Configuration détectée automatiquement :</strong>
+              <br />
+              • Protocole : IMAP
+              <br />
+              • Serveur : mail.inplt.net:993 (TLS)
+              <br />
+              • Polling : Actif
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     </div>
