@@ -202,6 +202,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
             <TabsContent value="connection" className="mt-4">
               {formData.supplier_type === 'email' ? (
                 <SupplierEmailConfig
+                  supplierId={supplierId!}
                   config={formData.connection_config}
                   onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
                 />

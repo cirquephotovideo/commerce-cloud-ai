@@ -22,18 +22,35 @@ export function EmailSetupGuide() {
   const handleManualPoll = async () => {
     setIsPolling(true);
     try {
-      const { data, error } = await supabase.functions.invoke("email-imap-poller");
+      const { data, error } = await supabase.functions.invoke('email-imap-poller', {
+        body: { test: true, debug: true }
+      });
       
-      if (error) throw error;
-
+      if (error) {
+        // Gérer explicitement le status 501
+        if (error.message?.includes('501') || error.message?.includes('IMAP_UNSUPPORTED')) {
+          toast.info("Le polling IMAP n'est pas supporté. Utilisez les adresses email dédiées par fournisseur.", {
+            duration: 6000
+          });
+        } else {
+          throw error;
+        }
+      } else if (data?.code === 'IMAP_UNSUPPORTED') {
+        toast.info(
+          <div className="space-y-2">
+            <p className="font-semibold">Configuration recommandée</p>
+            <p className="text-sm">Utilisez les adresses email dédiées dans chaque fournisseur pour une réception automatique et fiable.</p>
+          </div>,
+          { duration: 8000 }
+        );
+      } else {
+        toast.success(`Emails vérifiés avec succès`);
+      }
+      
       setLastPollTime(new Date());
-      toast.success(`✅ Vérification terminée`, {
-        description: `${data.stats?.emails_found || 0} email(s) trouvé(s), ${data.stats?.processed || 0} traité(s)`,
-      });
-    } catch (error: any) {
-      toast.error("❌ Erreur lors de la vérification", {
-        description: error.message,
-      });
+    } catch (error) {
+      console.error('Error polling emails:', error);
+      toast.error("Erreur lors de la vérification des emails");
     } finally {
       setIsPolling(false);
     }
@@ -181,64 +198,63 @@ export function EmailSetupGuide() {
         </CardContent>
       </Card>
 
-      {/* Section IMAP/POP3 */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5" />
-            Configuration IMAP/POP3
+            📬 Configuration recommandée : Adresses dédiées
           </CardTitle>
-          <CardDescription>
-            Récupération automatique depuis catalogapp@inplt.net
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Alert>
-            <CheckCircle className="h-4 w-4 text-green-500" />
             <AlertDescription>
-              <div className="space-y-1">
-                <div>✅ Connecté à <strong>catalogapp@inplt.net</strong></div>
-                <div className="text-xs text-muted-foreground">
-                  Vérification automatique toutes les 5 minutes
-                </div>
-                {lastPollTime && (
-                  <div className="text-xs text-muted-foreground">
-                    Dernière vérification : {lastPollTime.toLocaleTimeString()}
-                  </div>
-                )}
-              </div>
+              <strong>Nouveau système simplifié :</strong> Chaque fournisseur dispose désormais 
+              d'une adresse email unique pour une identification instantanée et fiable à 100%.
+            </AlertDescription>
+          </Alert>
+          
+          <div className="space-y-2">
+            <h4 className="font-semibold text-sm">Étapes de configuration :</h4>
+            <ol className="list-decimal list-inside space-y-2 text-sm">
+              <li>Allez dans l'onglet <strong>"Configuration"</strong> de chaque fournisseur</li>
+              <li>Copiez l'<strong>adresse email dédiée</strong> affichée (ex: metro-abc123@inbox.tarifique.com)</li>
+              <li>Communiquez cette adresse à votre fournisseur pour l'envoi de ses tarifs</li>
+              <li>Les emails seront automatiquement identifiés et traités</li>
+            </ol>
+          </div>
+          
+          <Alert variant="default" className="bg-blue-50 dark:bg-blue-950">
+            <AlertDescription className="text-sm">
+              💡 <strong>Avantage :</strong> Plus besoin de liste d'expéditeurs autorisés, 
+              plus de détection IA probabiliste. Chaque email arrive directement dans la 
+              "boîte aux lettres" de son fournisseur.
             </AlertDescription>
           </Alert>
 
-          <Button 
-            onClick={handleManualPoll} 
-            disabled={isPolling}
-            className="w-full"
-          >
-            {isPolling ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Vérification en cours...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Vérifier maintenant
-              </>
-            )}
-          </Button>
-
-          <Alert>
-            <AlertDescription className="text-xs">
-              <strong>Configuration détectée automatiquement :</strong>
-              <br />
-              • Protocole : IMAP
-              <br />
-              • Serveur : mail.inplt.net:993 (TLS)
-              <br />
-              • Polling : Actif
-            </AlertDescription>
-          </Alert>
+          <div className="pt-4 border-t">
+            <p className="text-xs text-muted-foreground mb-2">
+              Configuration technique (optionnel - pour test manuel) :
+            </p>
+            <Button 
+              onClick={handleManualPoll} 
+              disabled={isPolling}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              {isPolling ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Vérification...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Tester la configuration
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

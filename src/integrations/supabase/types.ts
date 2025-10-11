@@ -2515,6 +2515,7 @@ export type Database = {
           column_mapping: Json | null
           connection_config: Json | null
           created_at: string | null
+          dedicated_email: string | null
           id: string
           is_active: boolean | null
           last_preview_at: string | null
@@ -2533,6 +2534,7 @@ export type Database = {
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
+          dedicated_email?: string | null
           id?: string
           is_active?: boolean | null
           last_preview_at?: string | null
@@ -2551,6 +2553,7 @@ export type Database = {
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
+          dedicated_email?: string | null
           id?: string
           is_active?: boolean | null
           last_preview_at?: string | null
