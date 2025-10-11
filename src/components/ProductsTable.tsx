@@ -3,8 +3,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpDown, Eye } from "lucide-react";
+import { ArrowUpDown, Eye, Truck } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ProductsTableProps {
   products: any[];
@@ -26,6 +28,37 @@ export function ProductsTable({
 }: ProductsTableProps) {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  // Query pour récupérer le nombre de fournisseurs liés par produit
+  const { data: suppliersCount } = useQuery({
+    queryKey: ['suppliers-count', products.map(p => p.id)],
+    queryFn: async () => {
+      if (!products.length) return {};
+      
+      // Récupérer tous les analysis_id
+      const analysisIds = products
+        .filter(p => p.linked_analysis_id)
+        .map(p => p.linked_analysis_id);
+      
+      if (!analysisIds.length) return {};
+
+      const { data, error } = await supabase
+        .from('product_links')
+        .select('analysis_id, supplier_product_id')
+        .in('analysis_id', analysisIds);
+
+      if (error) throw error;
+
+      // Compter par analysis_id
+      const counts: Record<string, number> = {};
+      data?.forEach(link => {
+        counts[link.analysis_id] = (counts[link.analysis_id] || 0) + 1;
+      });
+      
+      return counts;
+    },
+    enabled: products.length > 0,
+  });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -123,6 +156,7 @@ export function ProductsTable({
           {sortedProducts.map((product) => {
             const { margin, estimatedPrice, category, imageCount } = extractAnalysisData(product);
             const imageUrl = getImageUrl(product);
+            const supplierCount = suppliersCount?.[product.linked_analysis_id] || 0;
             
             return (
               <TableRow key={product.id}>
@@ -143,12 +177,20 @@ export function ProductsTable({
                   />
                 </TableCell>
                 <TableCell className="font-medium max-w-[300px] truncate">
-                  {product.product_name}
-                  {imageCount > 0 && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      ({imageCount} 🖼️)
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {product.product_name}
+                    {imageCount > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        ({imageCount} 🖼️)
+                      </span>
+                    )}
+                    {supplierCount > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        <Truck className="h-3 w-3 mr-1" />
+                        {supplierCount}
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {product.ean || 'N/A'}

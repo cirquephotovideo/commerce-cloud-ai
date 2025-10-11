@@ -2512,6 +2512,7 @@ export type Database = {
       }
       supplier_configurations: {
         Row: {
+          auto_matching_enabled: boolean | null
           column_mapping: Json | null
           connection_config: Json | null
           created_at: string | null
@@ -2523,6 +2524,7 @@ export type Database = {
           last_synced_at: string | null
           mapping_confidence: Json | null
           mapping_config: Json | null
+          matching_threshold: number | null
           preview_sample: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
@@ -2531,6 +2533,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          auto_matching_enabled?: boolean | null
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
@@ -2542,6 +2545,7 @@ export type Database = {
           last_synced_at?: string | null
           mapping_confidence?: Json | null
           mapping_config?: Json | null
+          matching_threshold?: number | null
           preview_sample?: Json | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
@@ -2550,6 +2554,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          auto_matching_enabled?: boolean | null
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
@@ -2561,6 +2566,7 @@ export type Database = {
           last_synced_at?: string | null
           mapping_confidence?: Json | null
           mapping_config?: Json | null
+          matching_threshold?: number | null
           preview_sample?: Json | null
           supplier_name?: string
           supplier_type?: Database["public"]["Enums"]["supplier_type"]

@@ -13,6 +13,9 @@ import { SupplierConnectionConfig } from "./SupplierConnectionConfig";
 import { SupplierMappingConfig } from "./SupplierMappingConfig";
 import { SupplierIntelligentMapper } from "./SupplierIntelligentMapper";
 import { SupplierEmailConfig } from "./SupplierEmailConfig";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sparkles, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SupplierConfigurationProps {
   supplierId?: string | null;
@@ -34,6 +37,8 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
     connection_config: any;
     mapping_config: any;
     preview_sample: any;
+    auto_matching_enabled: boolean;
+    matching_threshold: number;
   }>({
     supplier_name: "",
     supplier_type: "file",
@@ -42,6 +47,8 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
     connection_config: {},
     mapping_config: {},
     preview_sample: null,
+    auto_matching_enabled: true,
+    matching_threshold: 70,
   });
 
   useEffect(() => {
@@ -117,7 +124,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="basic">Configuration</TabsTrigger>
               <TabsTrigger value="connection">
                 Connexion
@@ -135,6 +142,9 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
                     {mappingQuality}%
                   </Badge>
                 )}
+              </TabsTrigger>
+              <TabsTrigger value="ai-settings">
+                🤖 IA
               </TabsTrigger>
             </TabsList>
 
@@ -202,7 +212,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
             <TabsContent value="connection" className="mt-4">
               {formData.supplier_type === 'email' ? (
                 <SupplierEmailConfig
-                  supplierId={supplierId!}
+                  supplierId={supplierId}
                   config={formData.connection_config}
                   onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
                 />
@@ -243,6 +253,73 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
                   onMappingChange={(mapping) => setFormData({ ...formData, mapping_config: mapping })}
                 />
               )}
+            </TabsContent>
+
+            <TabsContent value="ai-settings" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Matching automatique des produits</CardTitle>
+                  <CardDescription>
+                    Lier automatiquement les produits fournisseurs aux analyses existantes
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="auto_matching">Activer le matching automatique</Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Utilise l'IA pour détecter si un produit importé correspond à une analyse existante
+                      </p>
+                    </div>
+                    <Switch 
+                      id="auto_matching"
+                      checked={formData.auto_matching_enabled}
+                      onCheckedChange={(val) => setFormData({...formData, auto_matching_enabled: val})}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="threshold">Seuil de confiance minimum</Label>
+                    <Select 
+                      value={formData.matching_threshold?.toString() || "70"}
+                      onValueChange={(val) => setFormData({...formData, matching_threshold: parseInt(val)})}
+                    >
+                      <SelectTrigger id="threshold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="60">60% - Permissif</SelectItem>
+                        <SelectItem value="70">70% - Équilibré (recommandé)</SelectItem>
+                        <SelectItem value="80">80% - Strict</SelectItem>
+                        <SelectItem value="90">90% - Très strict</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Plus le seuil est élevé, plus les correspondances seront précises mais moins nombreuses
+                    </p>
+                  </div>
+
+                  <Alert>
+                    <Sparkles className="h-4 w-4" />
+                    <AlertDescription>
+                      L'IA comparera automatiquement les nouveaux produits importés (EAN, nom, marque) 
+                      avec vos analyses existantes pour créer des liens automatiques.
+                    </AlertDescription>
+                  </Alert>
+
+                  <Alert variant="default" className="bg-blue-50 dark:bg-blue-950 border-blue-200">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-sm">
+                      <strong>Comment ça fonctionne :</strong>
+                      <ul className="list-disc ml-4 mt-2 space-y-1">
+                        <li>Si l'EAN est présent : correspondance exacte à 100%</li>
+                        <li>Sinon : comparaison IA du nom et de la marque</li>
+                        <li>Seuls les liens au-dessus du seuil sont créés automatiquement</li>
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
 

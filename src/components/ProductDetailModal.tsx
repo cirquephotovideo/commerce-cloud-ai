@@ -16,6 +16,7 @@ import { DetailedAnalysisView } from "./DetailedAnalysisView";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
+import { SupplierLinkedTab } from "./SupplierLinkedTab";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -161,7 +162,7 @@ export function ProductDetailModal({
         </DialogHeader>
 
         <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="general">Général</TabsTrigger>
             <TabsTrigger value="images">
               Images ({imageCount})
@@ -170,6 +171,7 @@ export function ProductDetailModal({
             <TabsTrigger value="pricing">Pricing</TabsTrigger>
             <TabsTrigger value="supplier">Fournisseur</TabsTrigger>
             <TabsTrigger value="supplier-prices">Prix Fournisseurs</TabsTrigger>
+            <TabsTrigger value="suppliers-linked">📦 Fournisseurs</TabsTrigger>
             <TabsTrigger value="detailed">🔍 Analyse Complète</TabsTrigger>
             <TabsTrigger value="raw">Données brutes</TabsTrigger>
           </TabsList>
@@ -725,6 +727,19 @@ export function ProductDetailModal({
             {/* Supplier Prices Tab */}
             <TabsContent value="supplier-prices" className="space-y-4">
               <SupplierPricesCard productAnalysisId={analysis?.id || ''} />
+            </TabsContent>
+
+            {/* Suppliers Linked Tab */}
+            <TabsContent value="suppliers-linked" className="space-y-4">
+              {analysis?.id ? (
+                <SupplierLinkedTab analysisId={analysis.id} />
+              ) : (
+                <Card>
+                  <CardContent className="p-12 text-center text-muted-foreground">
+                    <p>Ce produit n'a pas encore été analysé</p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             {/* Raw Data Tab */}

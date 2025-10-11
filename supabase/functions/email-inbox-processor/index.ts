@@ -29,7 +29,7 @@ serve(async (req) => {
     // ✅ LOOKUP DIRECT DU FOURNISSEUR PAR SON EMAIL DÉDIÉ
     const { data: supplier, error: supplierError } = await supabase
       .from('supplier_configurations')
-      .select('id, supplier_name, user_id, supplier_type')
+      .select('id, supplier_name, user_id, supplier_type, auto_matching_enabled, matching_threshold')
       .eq('dedicated_email', toEmail)
       .eq('is_active', true)
       .single();
@@ -138,6 +138,26 @@ serve(async (req) => {
         user_id: userId,
       }),
     }).catch(err => console.error('[EMAIL-PROCESSOR] Background trigger failed:', err));
+
+    // Si le matching automatique est activé, déclencher après l'import
+    if (supplier.auto_matching_enabled) {
+      console.log('[EMAIL-PROCESSOR] Auto-matching enabled, will trigger after import completes');
+      const autoLinkUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/auto-link-supplier-products`;
+      setTimeout(() => {
+        fetch(autoLinkUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            supplierId: supplier.id,
+            userId: userId,
+            threshold: supplier.matching_threshold || 70,
+          }),
+        }).catch(err => console.error('[EMAIL-PROCESSOR] Auto-link trigger failed:', err));
+      }, 5000); // Attendre 5s que l'import soit terminé
+    }
 
     return new Response(JSON.stringify({ 
       success: true, 

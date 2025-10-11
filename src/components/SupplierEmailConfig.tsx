@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface SupplierEmailConfigProps {
-  supplierId: string;
+  supplierId?: string | null;
   config: any;
   onConfigChange: (config: any) => void;
 }
@@ -24,6 +24,13 @@ export function SupplierEmailConfig({ supplierId, config, onConfigChange }: Supp
       if (!user) return;
       
       setUserId(user.id);
+      
+      // Si pas de supplierId, on est en mode création -> montrer un preview
+      if (!supplierId) {
+        const previewEmail = `[id-auto]-${user.id.slice(0, 8)}@inbox.tarifique.com`;
+        setDedicatedEmail(previewEmail);
+        return;
+      }
       
       // Vérifier si un email dédié existe déjà en DB
       const { data: supplier } = await supabase
@@ -51,6 +58,11 @@ export function SupplierEmailConfig({ supplierId, config, onConfigChange }: Supp
   }, [supplierId]);
 
   const regenerateEmail = async () => {
+    if (!supplierId) {
+      toast.error("Veuillez d'abord créer le fournisseur");
+      return;
+    }
+    
     setIsGenerating(true);
     const newEmail = `${supplierId.slice(0, 8)}-${userId.slice(0, 8)}-${Date.now().toString(36)}@inbox.tarifique.com`;
     
@@ -92,19 +104,27 @@ export function SupplierEmailConfig({ supplierId, config, onConfigChange }: Supp
             disabled 
             className="font-mono text-sm"
           />
-          <Button size="sm" variant="outline" onClick={copyEmail}>
-            <Copy className="h-4 w-4" />
-          </Button>
+          {supplierId && (
+            <Button size="sm" variant="outline" onClick={copyEmail}>
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Communiquez cette adresse à votre fournisseur pour l'envoi de ses tarifs
-        </p>
+        {!supplierId ? (
+          <p className="text-xs text-muted-foreground mt-1">
+            ⏳ L'adresse finale sera générée après la création du fournisseur
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground mt-1">
+            Communiquez cette adresse à votre fournisseur pour l'envoi de ses tarifs
+          </p>
+        )}
         <Button 
           type="button"
           size="sm" 
           variant="ghost" 
           onClick={regenerateEmail}
-          disabled={isGenerating}
+          disabled={isGenerating || !supplierId}
           className="mt-2"
         >
           {isGenerating ? "Génération..." : "🔄 Régénérer l'adresse"}
