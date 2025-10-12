@@ -3107,30 +3107,42 @@ export type Database = {
       }
       user_alerts: {
         Row: {
-          alert_data: Json
+          action_url: string | null
           alert_type: string
           created_at: string | null
           id: string
           is_read: boolean | null
-          priority: string | null
+          message: string
+          metadata: Json | null
+          read_at: string | null
+          severity: string
+          title: string
           user_id: string
         }
         Insert: {
-          alert_data: Json
+          action_url?: string | null
           alert_type: string
           created_at?: string | null
           id?: string
           is_read?: boolean | null
-          priority?: string | null
+          message: string
+          metadata?: Json | null
+          read_at?: string | null
+          severity: string
+          title: string
           user_id: string
         }
         Update: {
-          alert_data?: Json
+          action_url?: string | null
           alert_type?: string
           created_at?: string | null
           id?: string
           is_read?: boolean | null
-          priority?: string | null
+          message?: string
+          metadata?: Json | null
+          read_at?: string | null
+          severity?: string
+          title?: string
           user_id?: string
         }
         Relationships: []
