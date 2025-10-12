@@ -1041,6 +1041,36 @@ export type Database = {
           },
         ]
       }
+      enrichment_queue_health: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_run_at: string | null
+          queue_status: string | null
+          tasks_failed: number | null
+          tasks_processed: number | null
+          tasks_succeeded: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_run_at?: string | null
+          queue_status?: string | null
+          tasks_failed?: number | null
+          tasks_processed?: number | null
+          tasks_succeeded?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_run_at?: string | null
+          queue_status?: string | null
+          tasks_failed?: number | null
+          tasks_processed?: number | null
+          tasks_succeeded?: number | null
+        }
+        Relationships: []
+      }
       export_history: {
         Row: {
           analysis_id: string | null

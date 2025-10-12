@@ -422,9 +422,22 @@ export default function ImportedProducts() {
                     <Loader2 className="h-8 w-8 animate-spin mx-auto" />
                   </div>
                 ) : products?.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>Aucun produit dans cette catégorie</p>
+                  <div className="text-center py-12 space-y-4">
+                    <Package className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">
+                        {tab === 'pending' && '⏳ Aucun produit en attente'}
+                        {tab === 'enriching' && '🔄 Aucun enrichissement en cours'}
+                        {tab === 'completed' && '✅ Aucun produit enrichi'}
+                        {tab === 'failed' && '❌ Aucune erreur'}
+                      </h3>
+                      <p className="text-muted-foreground max-w-md mx-auto">
+                        {tab === 'pending' && 'Importez des produits depuis vos fournisseurs pour commencer l\'enrichissement automatique.'}
+                        {tab === 'enriching' && 'Les produits en cours d\'enrichissement apparaîtront ici.'}
+                        {tab === 'completed' && 'Les produits enrichis et prêts à être exportés apparaîtront ici.'}
+                        {tab === 'failed' && 'Les produits ayant rencontré des erreurs lors de l\'enrichissement apparaîtront ici.'}
+                      </p>
+                    </div>
                   </div>
                 ) : viewMode === 'table' ? (
                   <ProductsTable

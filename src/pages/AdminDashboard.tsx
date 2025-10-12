@@ -1,208 +1,252 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell } from "lucide-react";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
-import { Analytics } from "@/components/admin/Analytics";
-import { SystemHealthCheck } from "@/components/admin/SystemHealthCheck";
 import { BillingManagement } from "@/components/admin/BillingManagement";
+import { Analytics } from "@/components/admin/Analytics";
+import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
+import { SystemHealthCheck } from "@/components/admin/SystemHealthCheck";
 import { SystemLogs } from "@/components/admin/SystemLogs";
+import { DatabaseHealthChecker } from "@/components/admin/DatabaseHealthChecker";
 import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
 import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaManager";
-import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
-import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
-import { GlobalAPIKeysManager } from "@/components/admin/GlobalAPIKeysManager";
-import { RoleDebugger } from "@/components/admin/RoleDebugger";
-import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
-import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
-import { AmazonLogs } from "@/components/admin/AmazonLogs";
-import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
-import AIProviderManagement from "@/components/AIProviderManagement";
-import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
-import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
-import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { AmazonCredentialsManager } from "@/components/admin/AmazonCredentialsManager";
+import AIProviderManagement from "@/components/AIProviderManagement";
+import { FixHistoryDashboard } from "@/components/admin/FixHistoryDashboard";
+import { FeatureIdeaGenerator } from "@/components/admin/FeatureIdeaGenerator";
+import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
+import { GlobalAPIKeysManager } from "@/components/admin/GlobalAPIKeysManager";
+import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
+import { FeaturePermissions } from "@/components/admin/FeaturePermissions";
+import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
+import { AmazonLogs } from "@/components/admin/AmazonLogs";
+import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
+import { RoleDebugger } from "@/components/admin/RoleDebugger";
+import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
+import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
+import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
-import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings, Sparkles } from "lucide-react";
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState("analytics");
+  const [activeTab, setActiveTab] = useState("monitoring");
   useRealtimeAlerts();
 
   return (
-    <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <Shield className="h-8 w-8 text-primary" />
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Administration
-            </h1>
-          </div>
-          <p className="text-muted-foreground">
-            Tableau de bord super administrateur - Gestion complète de la plateforme
-          </p>
-        </div>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Administration</h1>
+        <p className="text-muted-foreground mt-2">
+          Gérez les utilisateurs, les abonnements et les paramètres système
+        </p>
+      </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="bg-card rounded-lg border p-2">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 h-auto bg-transparent">
-              <TabsTrigger value="analytics" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Analytics</span>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+          <TabsTrigger value="monitoring" className="flex items-center gap-2">
+            <LineChart className="h-4 w-4" />
+            <span>📊 Monitoring</span>
+          </TabsTrigger>
+          <TabsTrigger value="configuration" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <span>🔐 Configuration</span>
+          </TabsTrigger>
+          <TabsTrigger value="users" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span>👥 Users & Billing</span>
+          </TabsTrigger>
+          <TabsTrigger value="advanced" className="flex items-center gap-2">
+            <Server className="h-4 w-4" />
+            <span>🛠️ Advanced</span>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* 📊 MONITORING */}
+        <TabsContent value="monitoring" className="space-y-6">
+          <div className="grid gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>System Health & Metrics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SystemHealthCheck />
+              </CardContent>
+            </Card>
+            
+            <EnrichmentProgressMonitor />
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Analytics & Usage</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Analytics />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>User Alerts</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UserAlertsWidget />
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* 🔐 CONFIGURATION */}
+        <TabsContent value="configuration" className="space-y-6">
+          <Tabs defaultValue="amazon" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="amazon">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Amazon
               </TabsTrigger>
-              <TabsTrigger value="health" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline">System Health</span>
+              <TabsTrigger value="ai">
+                <Brain className="h-4 w-4 mr-2" />
+                AI Providers
               </TabsTrigger>
-              <TabsTrigger value="users" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Utilisateurs</span>
+              <TabsTrigger value="api">
+                <Key className="h-4 w-4 mr-2" />
+                API Keys
               </TabsTrigger>
-              <TabsTrigger value="plans" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Package className="h-4 w-4" />
-                <span className="hidden sm:inline">Plans</span>
+              <TabsTrigger value="prompts">
+                <Brain className="h-4 w-4 mr-2" />
+                AI Prompts
               </TabsTrigger>
-              <TabsTrigger value="billing" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <DollarSign className="h-4 w-4" />
-                <span className="hidden sm:inline">Facturation</span>
-              </TabsTrigger>
-              <TabsTrigger value="ai-prompts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Zap className="h-4 w-4" />
-                <span className="hidden sm:inline">Prompts IA</span>
-              </TabsTrigger>
-              <TabsTrigger value="ai-providers" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Brain className="h-4 w-4" />
-                <span className="hidden sm:inline">Providers IA</span>
-              </TabsTrigger>
-              <TabsTrigger value="apikeys" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Key className="h-4 w-4" />
-                <span className="hidden sm:inline">API Keys</span>
-              </TabsTrigger>
-              <TabsTrigger value="permissions" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline">Permissions</span>
-              </TabsTrigger>
-              <TabsTrigger value="email" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Mail className="h-4 w-4" />
-                <span className="hidden sm:inline">Email</span>
-              </TabsTrigger>
-              <TabsTrigger value="social" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Share2 className="h-4 w-4" />
-                <span className="hidden sm:inline">Réseaux</span>
-              </TabsTrigger>
-              <TabsTrigger value="newsletter" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Bell className="h-4 w-4" />
-                <span className="hidden sm:inline">Newsletter</span>
-              </TabsTrigger>
-              <TabsTrigger value="logs" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Logs</span>
-              </TabsTrigger>
-              <TabsTrigger value="amazon-logs" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Amazon Logs</span>
-              </TabsTrigger>
-              <TabsTrigger value="amazon-tester" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <SearchIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Amazon Tester</span>
-              </TabsTrigger>
-              <TabsTrigger value="global-config" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Settings className="h-4 w-4" />
-                <span className="hidden sm:inline">Config Globale</span>
-              </TabsTrigger>
-              <TabsTrigger value="alerts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Bell className="h-4 w-4" />
-                <span className="hidden sm:inline">Alertes</span>
-              </TabsTrigger>
-              <TabsTrigger value="amazon" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <ShoppingCart className="h-4 w-4" />
-                <span className="hidden sm:inline">Amazon Creds</span>
-              </TabsTrigger>
-              <TabsTrigger value="debug" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                <Info className="h-4 w-4" />
-                <span className="hidden sm:inline">Debug</span>
+              <TabsTrigger value="permissions">
+                <Shield className="h-4 w-4 mr-2" />
+                Permissions
               </TabsTrigger>
             </TabsList>
-          </div>
 
-          <TabsContent value="analytics" className="space-y-6">
-            <Analytics />
-          </TabsContent>
+            <TabsContent value="amazon">
+              <AmazonCredentialsManager />
+            </TabsContent>
 
-          <TabsContent value="health" className="space-y-6">
-            <SystemHealthCheck />
-          </TabsContent>
+            <TabsContent value="ai">
+              <AIProviderManagement />
+            </TabsContent>
 
-          <TabsContent value="users" className="space-y-6">
-            <UserManagement />
-          </TabsContent>
+            <TabsContent value="api" className="space-y-6">
+              <GlobalAPIKeysManager />
+              <APIKeyManagement />
+              <OllamaConfiguration />
+            </TabsContent>
 
-          <TabsContent value="plans" className="space-y-6">
-            <PlanManagement />
-          </TabsContent>
+            <TabsContent value="prompts">
+              <AIPromptsManagement />
+            </TabsContent>
 
-          <TabsContent value="billing" className="space-y-6">
-            <BillingManagement />
-          </TabsContent>
+            <TabsContent value="permissions">
+              <FeaturePermissions />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
 
-          <TabsContent value="logs" className="space-y-6">
-            <SystemLogs />
-          </TabsContent>
+        {/* 👥 USERS & BILLING */}
+        <TabsContent value="users" className="space-y-6">
+          <Tabs defaultValue="users" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="users">
+                <Users className="h-4 w-4 mr-2" />
+                Users
+              </TabsTrigger>
+              <TabsTrigger value="plans">
+                <Package className="h-4 w-4 mr-2" />
+                Plans
+              </TabsTrigger>
+              <TabsTrigger value="billing">
+                <CreditCard className="h-4 w-4 mr-2" />
+                Billing
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="amazon-logs" className="space-y-6">
-            <AmazonLogs />
-          </TabsContent>
+            <TabsContent value="users">
+              <UserManagement />
+            </TabsContent>
 
-          <TabsContent value="email" className="space-y-6">
-            <EmailMarketing />
-          </TabsContent>
+            <TabsContent value="plans">
+              <PlanManagement />
+            </TabsContent>
 
-          <TabsContent value="social" className="space-y-6">
-            <SocialMediaManager />
-          </TabsContent>
+            <TabsContent value="billing">
+              <BillingManagement />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
 
-          <TabsContent value="newsletter" className="space-y-6">
-            <NewsletterManager />
-          </TabsContent>
+        {/* 🛠️ ADVANCED */}
+        <TabsContent value="advanced" className="space-y-6">
+          <Tabs defaultValue="database" className="space-y-6">
+            <TabsList>
+              <TabsTrigger value="database">
+                <Server className="h-4 w-4 mr-2" />
+                Database
+              </TabsTrigger>
+              <TabsTrigger value="logs">
+                <Server className="h-4 w-4 mr-2" />
+                System Logs
+              </TabsTrigger>
+              <TabsTrigger value="amazon-logs">
+                <ShoppingCart className="h-4 w-4 mr-2" />
+                Amazon Logs
+              </TabsTrigger>
+              <TabsTrigger value="fixes">
+                <Server className="h-4 w-4 mr-2" />
+                Fix History
+              </TabsTrigger>
+              <TabsTrigger value="ideas">
+                <Server className="h-4 w-4 mr-2" />
+                Feature Ideas
+              </TabsTrigger>
+              <TabsTrigger value="marketing">
+                <Mail className="h-4 w-4 mr-2" />
+                Marketing
+              </TabsTrigger>
+              <TabsTrigger value="debug">
+                <Settings className="h-4 w-4 mr-2" />
+                Debug Tools
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="apikeys" className="space-y-6">
-            <GlobalAPIKeysManager />
-            <APIKeyManagement />
-            <OllamaConfiguration />
-          </TabsContent>
+            <TabsContent value="database">
+              <DatabaseHealthChecker />
+            </TabsContent>
 
-          <TabsContent value="debug" className="space-y-6">
-            <RoleDebugger />
-          </TabsContent>
+            <TabsContent value="logs">
+              <SystemLogs />
+            </TabsContent>
 
-          <TabsContent value="permissions" className="space-y-6">
-            <FeaturePermissions />
-          </TabsContent>
+            <TabsContent value="amazon-logs">
+              <AmazonLogs />
+            </TabsContent>
 
-          <TabsContent value="ai-prompts" className="space-y-6">
-            <AIPromptsManagement />
-          </TabsContent>
+            <TabsContent value="fixes">
+              <FixHistoryDashboard />
+            </TabsContent>
 
-          <TabsContent value="ai-providers" className="space-y-6">
-            <AIProviderManagement />
-          </TabsContent>
+            <TabsContent value="ideas">
+              <FeatureIdeaGenerator />
+            </TabsContent>
 
-          <TabsContent value="amazon-tester" className="space-y-6">
-            <AmazonProductTester />
-          </TabsContent>
+            <TabsContent value="marketing" className="space-y-6">
+              <EmailMarketing />
+              <SocialMediaManager />
+              <NewsletterManager />
+            </TabsContent>
 
-          <TabsContent value="global-config" className="space-y-6">
-            <GlobalConfigManager />
-          </TabsContent>
-
-          <TabsContent value="alerts" className="space-y-6">
-            <UserAlertsWidget />
-          </TabsContent>
-
-          <TabsContent value="amazon" className="space-y-6">
-            <AmazonCredentialsManager />
-          </TabsContent>
-        </Tabs>
-      </div>
+            <TabsContent value="debug" className="space-y-6">
+              <GlobalConfigManager />
+              <AmazonProductTester />
+              <RoleDebugger />
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 };
 

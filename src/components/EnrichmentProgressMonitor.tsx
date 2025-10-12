@@ -3,10 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 interface EnrichmentTask {
   id: string;
@@ -44,6 +46,7 @@ const ENRICHMENT_LABELS: Record<string, string> = {
 export function EnrichmentProgressMonitor() {
   const [tasks, setTasks] = useState<EnrichmentTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [forceProcessing, setForceProcessing] = useState(false);
 
   useEffect(() => {
     loadTasks();
@@ -136,7 +139,60 @@ export function EnrichmentProgressMonitor() {
     };
   };
 
+  // Déterminer l'état de la queue
+  const getQueueStatus = () => {
+    const now = Date.now();
+    const pendingTasks = tasks.filter(t => t.status === 'pending');
+    
+    if (pendingTasks.length === 0) return { status: 'idle', color: 'bg-muted', icon: CheckCircle2, label: 'Aucune tâche' };
+    
+    // Queue bloquée si tasks > 30 min en pending
+    const blockedTasks = pendingTasks.filter(t => {
+      const createdAt = new Date(t.created_at).getTime();
+      return (now - createdAt) > 30 * 60 * 1000; // 30 minutes
+    });
+    
+    if (blockedTasks.length > 0) {
+      return { status: 'blocked', color: 'bg-red-500/10 text-red-600 border-red-500/20', icon: AlertTriangle, label: '⚠️ Queue bloquée' };
+    }
+    
+    // Queue lente si aucune task traitée depuis 10 min
+    const processingOrCompleted = tasks.filter(t => t.status === 'processing' || (t.status === 'completed' && t.completed_at));
+    const recentActivity = processingOrCompleted.some(t => {
+      const timestamp = t.completed_at || t.started_at;
+      if (!timestamp) return false;
+      return (now - new Date(timestamp).getTime()) < 10 * 60 * 1000; // 10 minutes
+    });
+    
+    if (!recentActivity && pendingTasks.length > 0) {
+      return { status: 'slow', color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20', icon: Clock, label: '🟡 Queue lente' };
+    }
+    
+    return { status: 'active', color: 'bg-green-500/10 text-green-600 border-green-500/20', icon: Zap, label: '🟢 Queue active' };
+  };
+
+  // Forcer le traitement
+  const handleForceProcessing = async () => {
+    setForceProcessing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-enrichment-queue', {
+        body: { maxItems: 10 }
+      });
+      
+      if (error) throw error;
+      
+      toast.success(`✅ Traitement forcé: ${data.processed} tâches traitées`);
+      loadTasks();
+    } catch (error: any) {
+      console.error('[ENRICHMENT-MONITOR] Error forcing processing:', error);
+      toast.error(`❌ Erreur: ${error.message}`);
+    } finally {
+      setForceProcessing(false);
+    }
+  };
+
   const stats = getStats();
+  const queueStatus = getQueueStatus();
 
   if (loading) {
     return (
@@ -151,15 +207,38 @@ export function EnrichmentProgressMonitor() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Zap className="h-5 w-5" />
-          Progression des Enrichissements
-          {stats.processing > 0 && (
-            <Badge variant="secondary" className="ml-auto">
-              {stats.processing} en cours
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5" />
+            Progression des Enrichissements
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={`${queueStatus.color} border`}>
+              <queueStatus.icon className="h-3 w-3 mr-1" />
+              {queueStatus.label}
             </Badge>
-          )}
-        </CardTitle>
+            {stats.pending > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleForceProcessing}
+                disabled={forceProcessing}
+              >
+                {forceProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Traitement...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    Forcer le traitement
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Stats globales */}

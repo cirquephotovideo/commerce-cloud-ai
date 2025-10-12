@@ -1,190 +1,142 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// Implémentation MD5 simple pour HMAC
+// MD5 Implementation
 function md5(message: Uint8Array): Uint8Array {
-  // Implémentation MD5 de base pour Deno
-  const hexDigits = "0123456789abcdef";
-  
-  function rotateLeft(value: number, shift: number): number {
-    return (value << shift) | (value >>> (32 - shift));
+  const s = new Uint32Array([
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
+    0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+    0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+    0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+    0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
+    0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+    0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+    0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+    0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+    0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
+    0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
+    0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+    0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+    0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
+  ]);
+
+  const r = new Uint8Array([
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+  ]);
+
+  const g = new Uint8Array([
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
+    1, 6,11, 0, 5,10,15, 4, 9,14, 3, 8,13, 2, 7,12,
+    5, 8,11,14, 1, 4, 7,10,13, 0, 3, 6, 9,12,15, 2,
+    0, 7,14, 5,12, 3,10, 1, 8,15, 6,13, 4,11, 2, 9
+  ]);
+
+  const originalLen = message.length;
+  const newLen = originalLen + ((55 - (originalLen % 64)) % 64) + 9;
+  const padded = new Uint8Array(newLen);
+  padded.set(message);
+  padded[originalLen] = 0x80;
+
+  const view = new DataView(padded.buffer);
+  view.setUint32((newLen - 8), originalLen * 8, true);
+
+  let a0 = 0x67452301;
+  let b0 = 0xefcdab89;
+  let c0 = 0x98badcfe;
+  let d0 = 0x10325476;
+
+  for (let offset = 0; offset < newLen; offset += 64) {
+    const chunk = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) {
+      chunk[i] = view.getUint32(offset + i * 4, true);
+    }
+
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, dtemp;
+      if (i < 16) {
+        F = (B & C) | (~B & D);
+        dtemp = i;
+      } else if (i < 32) {
+        F = (D & B) | (~D & C);
+        dtemp = g[i];
+      } else if (i < 48) {
+        F = B ^ C ^ D;
+        dtemp = g[i];
+      } else {
+        F = C ^ (B | ~D);
+        dtemp = g[i];
+      }
+
+      F = (F + A + s[i] + chunk[dtemp]) >>> 0;
+      A = D;
+      D = C;
+      C = B;
+      B = (B + ((F << r[i]) | (F >>> (32 - r[i])))) >>> 0;
+    }
+
+    a0 = (a0 + A) >>> 0;
+    b0 = (b0 + B) >>> 0;
+    c0 = (c0 + C) >>> 0;
+    d0 = (d0 + D) >>> 0;
   }
-  
-  function addUnsigned(x: number, y: number): number {
-    return ((x & 0xFFFFFFFF) + (y & 0xFFFFFFFF)) & 0xFFFFFFFF;
-  }
-  
-  function cmn(q: number, a: number, b: number, x: number, s: number, t: number): number {
-    a = addUnsigned(addUnsigned(a, q), addUnsigned(x, t));
-    return addUnsigned(rotateLeft(a, s), b);
-  }
-  
-  function ff(a: number, b: number, c: number, d: number, x: number, s: number, t: number): number {
-    return cmn((b & c) | (~b & d), a, b, x, s, t);
-  }
-  
-  function gg(a: number, b: number, c: number, d: number, x: number, s: number, t: number): number {
-    return cmn((b & d) | (c & ~d), a, b, x, s, t);
-  }
-  
-  function hh(a: number, b: number, c: number, d: number, x: number, s: number, t: number): number {
-    return cmn(b ^ c ^ d, a, b, x, s, t);
-  }
-  
-  function ii(a: number, b: number, c: number, d: number, x: number, s: number, t: number): number {
-    return cmn(c ^ (b | ~d), a, b, x, s, t);
-  }
-  
-  const msgLen = message.length;
-  const numBlocks = ((msgLen + 8) >>> 6) + 1;
-  const totalLen = numBlocks * 16;
-  const words = new Array(totalLen);
-  
-  for (let i = 0; i < msgLen; i++) {
-    words[i >>> 2] |= message[i] << ((i % 4) * 8);
-  }
-  
-  words[msgLen >>> 2] |= 0x80 << ((msgLen % 4) * 8);
-  words[totalLen - 2] = msgLen * 8;
-  
-  let a = 0x67452301;
-  let b = 0xEFCDAB89;
-  let c = 0x98BADCFE;
-  let d = 0x10325476;
-  
-  for (let i = 0; i < totalLen; i += 16) {
-    const aa = a, bb = b, cc = c, dd = d;
-    
-    a = ff(a, b, c, d, words[i + 0], 7, 0xD76AA478);
-    d = ff(d, a, b, c, words[i + 1], 12, 0xE8C7B756);
-    c = ff(c, d, a, b, words[i + 2], 17, 0x242070DB);
-    b = ff(b, c, d, a, words[i + 3], 22, 0xC1BDCEEE);
-    a = ff(a, b, c, d, words[i + 4], 7, 0xF57C0FAF);
-    d = ff(d, a, b, c, words[i + 5], 12, 0x4787C62A);
-    c = ff(c, d, a, b, words[i + 6], 17, 0xA8304613);
-    b = ff(b, c, d, a, words[i + 7], 22, 0xFD469501);
-    a = ff(a, b, c, d, words[i + 8], 7, 0x698098D8);
-    d = ff(d, a, b, c, words[i + 9], 12, 0x8B44F7AF);
-    c = ff(c, d, a, b, words[i + 10], 17, 0xFFFF5BB1);
-    b = ff(b, c, d, a, words[i + 11], 22, 0x895CD7BE);
-    a = ff(a, b, c, d, words[i + 12], 7, 0x6B901122);
-    d = ff(d, a, b, c, words[i + 13], 12, 0xFD987193);
-    c = ff(c, d, a, b, words[i + 14], 17, 0xA679438E);
-    b = ff(b, c, d, a, words[i + 15], 22, 0x49B40821);
-    
-    a = gg(a, b, c, d, words[i + 1], 5, 0xF61E2562);
-    d = gg(d, a, b, c, words[i + 6], 9, 0xC040B340);
-    c = gg(c, d, a, b, words[i + 11], 14, 0x265E5A51);
-    b = gg(b, c, d, a, words[i + 0], 20, 0xE9B6C7AA);
-    a = gg(a, b, c, d, words[i + 5], 5, 0xD62F105D);
-    d = gg(d, a, b, c, words[i + 10], 9, 0x02441453);
-    c = gg(c, d, a, b, words[i + 15], 14, 0xD8A1E681);
-    b = gg(b, c, d, a, words[i + 4], 20, 0xE7D3FBC8);
-    a = gg(a, b, c, d, words[i + 9], 5, 0x21E1CDE6);
-    d = gg(d, a, b, c, words[i + 14], 9, 0xC33707D6);
-    c = gg(c, d, a, b, words[i + 3], 14, 0xF4D50D87);
-    b = gg(b, c, d, a, words[i + 8], 20, 0x455A14ED);
-    a = gg(a, b, c, d, words[i + 13], 5, 0xA9E3E905);
-    d = gg(d, a, b, c, words[i + 2], 9, 0xFCEFA3F8);
-    c = gg(c, d, a, b, words[i + 7], 14, 0x676F02D9);
-    b = gg(b, c, d, a, words[i + 12], 20, 0x8D2A4C8A);
-    
-    a = hh(a, b, c, d, words[i + 5], 4, 0xFFFA3942);
-    d = hh(d, a, b, c, words[i + 8], 11, 0x8771F681);
-    c = hh(c, d, a, b, words[i + 11], 16, 0x6D9D6122);
-    b = hh(b, c, d, a, words[i + 14], 23, 0xFDE5380C);
-    a = hh(a, b, c, d, words[i + 1], 4, 0xA4BEEA44);
-    d = hh(d, a, b, c, words[i + 4], 11, 0x4BDECFA9);
-    c = hh(c, d, a, b, words[i + 7], 16, 0xF6BB4B60);
-    b = hh(b, c, d, a, words[i + 10], 23, 0xBEBFBC70);
-    a = hh(a, b, c, d, words[i + 13], 4, 0x289B7EC6);
-    d = hh(d, a, b, c, words[i + 0], 11, 0xEAA127FA);
-    c = hh(c, d, a, b, words[i + 3], 16, 0xD4EF3085);
-    b = hh(b, c, d, a, words[i + 6], 23, 0x04881D05);
-    a = hh(a, b, c, d, words[i + 9], 4, 0xD9D4D039);
-    d = hh(d, a, b, c, words[i + 12], 11, 0xE6DB99E5);
-    c = hh(c, d, a, b, words[i + 15], 16, 0x1FA27CF8);
-    b = hh(b, c, d, a, words[i + 2], 23, 0xC4AC5665);
-    
-    a = ii(a, b, c, d, words[i + 0], 6, 0xF4292244);
-    d = ii(d, a, b, c, words[i + 7], 10, 0x432AFF97);
-    c = ii(c, d, a, b, words[i + 14], 15, 0xAB9423A7);
-    b = ii(b, c, d, a, words[i + 5], 21, 0xFC93A039);
-    a = ii(a, b, c, d, words[i + 12], 6, 0x655B59C3);
-    d = ii(d, a, b, c, words[i + 3], 10, 0x8F0CCC92);
-    c = ii(c, d, a, b, words[i + 10], 15, 0xFFEFF47D);
-    b = ii(b, c, d, a, words[i + 1], 21, 0x85845DD1);
-    a = ii(a, b, c, d, words[i + 8], 6, 0x6FA87E4F);
-    d = ii(d, a, b, c, words[i + 15], 10, 0xFE2CE6E0);
-    c = ii(c, d, a, b, words[i + 6], 15, 0xA3014314);
-    b = ii(b, c, d, a, words[i + 13], 21, 0x4E0811A1);
-    a = ii(a, b, c, d, words[i + 4], 6, 0xF7537E82);
-    d = ii(d, a, b, c, words[i + 11], 10, 0xBD3AF235);
-    c = ii(c, d, a, b, words[i + 2], 15, 0x2AD7D2BB);
-    b = ii(b, c, d, a, words[i + 9], 21, 0xEB86D391);
-    
-    a = addUnsigned(a, aa);
-    b = addUnsigned(b, bb);
-    c = addUnsigned(c, cc);
-    d = addUnsigned(d, dd);
-  }
-  
+
   const result = new Uint8Array(16);
-  for (let i = 0; i < 4; i++) {
-    result[i] = (a >>> (i * 8)) & 0xFF;
-    result[i + 4] = (b >>> (i * 8)) & 0xFF;
-    result[i + 8] = (c >>> (i * 8)) & 0xFF;
-    result[i + 12] = (d >>> (i * 8)) & 0xFF;
-  }
-  
+  const resultView = new DataView(result.buffer);
+  resultView.setUint32(0, a0, true);
+  resultView.setUint32(4, b0, true);
+  resultView.setUint32(8, c0, true);
+  resultView.setUint32(12, d0, true);
+
   return result;
 }
 
-// Parser les capabilities IMAP du greeting
-function parseCapabilities(greeting: string): string[] {
-  const capMatch = greeting.match(/CAPABILITY ([^\]]+)\]/i);
-  if (!capMatch) return [];
-  return capMatch[1].split(' ').map(c => c.trim());
-}
-
-// Implémenter HMAC-MD5
 function hmacMd5(key: string, message: string): string {
-  const blockSize = 64;
   const encoder = new TextEncoder();
   const keyBytes = encoder.encode(key);
-  
-  // Si clé trop longue, la hasher
-  let finalKey: Uint8Array = keyBytes;
+  const messageBytes = encoder.encode(message);
+
+  const blockSize = 64;
+  let processedKey: Uint8Array;
+
   if (keyBytes.length > blockSize) {
-    finalKey = new Uint8Array(md5(keyBytes));
+    processedKey = new Uint8Array(blockSize);
+    processedKey.set(md5(keyBytes));
+  } else if (keyBytes.length < blockSize) {
+    processedKey = new Uint8Array(blockSize);
+    processedKey.set(keyBytes);
+  } else {
+    processedKey = keyBytes;
   }
-  
-  // Padding de la clé
-  const paddedKey = new Uint8Array(blockSize);
-  paddedKey.set(finalKey);
-  
-  // HMAC = H(K XOR opad, H(K XOR ipad, message))
-  const ipad = paddedKey.map(b => b ^ 0x36);
-  const opad = paddedKey.map(b => b ^ 0x5c);
-  
-  const ipadMessage = new Uint8Array(ipad.length + encoder.encode(message).length);
-  ipadMessage.set(ipad);
-  ipadMessage.set(encoder.encode(message), ipad.length);
-  const innerHash = md5(ipadMessage);
-  
-  const opadHash = new Uint8Array(opad.length + innerHash.length);
-  opadHash.set(opad);
-  opadHash.set(innerHash, opad.length);
-  const outerHash = md5(opadHash);
-  
-  return Array.from(outerHash)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+
+  const ipad = new Uint8Array(blockSize);
+  const opad = new Uint8Array(blockSize);
+
+  for (let i = 0; i < blockSize; i++) {
+    ipad[i] = processedKey[i] ^ 0x36;
+    opad[i] = processedKey[i] ^ 0x5c;
+  }
+
+  const innerHash = md5(new Uint8Array([...ipad, ...messageBytes]));
+  const outerHash = md5(new Uint8Array([...opad, ...innerHash]));
+
+  return Array.from(outerHash).map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+function parseCapabilities(greeting: string): string[] {
+  const capMatch = greeting.match(/\* CAPABILITY (.+)/i);
+  if (!capMatch) return [];
+  return capMatch[1].trim().split(/\s+/);
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 async function testIMAPConnection(config: {
   host: string;
@@ -193,175 +145,173 @@ async function testIMAPConnection(config: {
   password: string;
   ssl: boolean;
   folder?: string;
-}) {
-  console.log(`[IMAP-TEST] Testing connection to ${config.host}:${config.port}...`);
+}): Promise<{
+  success: boolean;
+  message: string;
+  authMethod: string;
+  folders: string[];
+  messageCount: number;
+  selectedFolder: string;
+}> {
+  // ✅ Phase 6.1: Validate hostname before attempting connection
+  const hostnameRegex = /^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)$/;
+  if (!hostnameRegex.test(config.host)) {
+    throw new Error(`Invalid hostname format: ${config.host}`);
+  }
+  
+  console.log(`[IMAP-TEST] Validating hostname: ${config.host}`);
+  
+  // ✅ Try to resolve DNS (optional, may not work in Deno Deploy)
+  try {
+    const dnsResult = await Deno.resolveDns(config.host, "A");
+    console.log(`[IMAP-TEST] DNS resolution successful:`, dnsResult);
+  } catch (dnsError) {
+    console.warn(`[IMAP-TEST] DNS resolution failed (non-fatal):`, dnsError);
+    // Continue anyway as some environments may block DNS resolution
+  }
+
+  let conn: Deno.Conn;
+  const CONNECTION_TIMEOUT = 10000; // ✅ 10 seconds timeout
   
   try {
-    // Connexion TCP/TLS
-    const conn = config.ssl 
-      ? await Deno.connectTls({ hostname: config.host, port: config.port })
-      : await Deno.connect({ hostname: config.host, port: config.port });
-
-    const decoder = new TextDecoder();
-    const encoder = new TextEncoder();
+    // ✅ Establish connection with timeout (SSL or plain)
+    const connectionPromise = config.ssl
+      ? Deno.connectTls({
+          hostname: config.host,
+          port: config.port,
+        })
+      : Deno.connect({
+          hostname: config.host,
+          port: config.port,
+        });
     
-    // Helper pour lire les réponses IMAP
-    async function readResponse(): Promise<string> {
-      const buffer = new Uint8Array(4096);
-      const n = await conn.read(buffer);
-      if (!n) throw new Error('Connection closed');
-      return decoder.decode(buffer.subarray(0, n));
-    }
-    
-    async function sendCommand(tag: string, cmd: string): Promise<string> {
-      await conn.write(encoder.encode(`${tag} ${cmd}\r\n`));
-      let response = '';
-      let complete = false;
-      
-      while (!complete) {
-        const chunk = await readResponse();
-        response += chunk;
-        // IMAP responses end with "TAG OK" or "TAG BAD" or "TAG NO"
-        if (response.includes(`${tag} OK`) || response.includes(`${tag} BAD`) || response.includes(`${tag} NO`)) {
-          complete = true;
-        }
-      }
-      
-      return response;
-    }
-    
-    // 1. Lire le greeting
-    const greeting = await readResponse();
-    console.log('[IMAP-TEST] Greeting:', greeting.trim());
-    
-    if (!greeting.includes('OK')) {
-      throw new Error('Server did not send OK greeting');
-    }
-    
-    // 2. Parser les capabilities
-    const capabilities = parseCapabilities(greeting);
-    console.log('[IMAP-TEST] Capabilities detected:', capabilities.join(', '));
-    
-    const hasLoginDisabled = capabilities.includes('LOGINDISABLED');
-    const hasCramMd5 = capabilities.some(c => c === 'AUTH=CRAM-MD5');
-    const hasDigestMd5 = capabilities.some(c => c === 'AUTH=DIGEST-MD5');
-    
-    console.log('[IMAP-TEST] Auth methods available:', {
-      loginDisabled: hasLoginDisabled,
-      cramMd5: hasCramMd5,
-      digestMd5: hasDigestMd5
+    // ✅ Add timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), CONNECTION_TIMEOUT);
     });
     
-    // 3. Choisir la méthode d'authentification
-    let authSuccess = false;
-    let authMethod = '';
-    
-    if (hasLoginDisabled && hasCramMd5) {
-      // Utiliser CRAM-MD5
-      console.log('[IMAP-TEST] Using CRAM-MD5 authentication...');
-      authMethod = 'CRAM-MD5';
-      
+    conn = await Promise.race([connectionPromise, timeoutPromise]);
+    console.log('[IMAP-TEST] Connection established successfully');
+  } catch (connError) {
+    console.error('[IMAP-TEST] Connection failed:', connError);
+    const errorMsg = connError instanceof Error ? connError.message : String(connError);
+    throw new Error(`Connection failed: ${errorMsg}. Verify hostname and port are correct.`);
+  }
+
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+
+  async function readResponse(): Promise<string> {
+    const buffer = new Uint8Array(4096);
+    const n = await conn.read(buffer);
+    if (!n) throw new Error('Connection closed');
+    return decoder.decode(buffer.subarray(0, n));
+  }
+
+  async function sendCommand(tag: string, cmd: string): Promise<string> {
+    await conn.write(encoder.encode(`${tag} ${cmd}\r\n`));
+    let response = '';
+    let complete = false;
+
+    while (!complete) {
+      const chunk = await readResponse();
+      response += chunk;
+      if (chunk.includes(`${tag} OK`) || chunk.includes(`${tag} BAD`) || chunk.includes(`${tag} NO`)) {
+        complete = true;
+      }
+    }
+
+    return response;
+  }
+
+  try {
+    const greeting = await readResponse();
+    console.log('[IMAP-TEST] Server greeting:', greeting);
+
+    if (!greeting.includes('OK')) {
+      throw new Error('Invalid IMAP greeting');
+    }
+
+    const capabilities = parseCapabilities(greeting);
+    console.log('[IMAP-TEST] Capabilities:', capabilities);
+
+    let authMethod = 'LOGIN';
+    let authenticated = false;
+
+    if (capabilities.includes('AUTH=CRAM-MD5')) {
       try {
-        await conn.write(encoder.encode('A001 AUTHENTICATE CRAM-MD5\r\n'));
-        
-        // Lire le challenge
-        const challengeResp = await readResponse();
-        console.log('[IMAP-TEST] Challenge received:', challengeResp.trim());
-        
-        if (!challengeResp.startsWith('+')) {
-          throw new Error('Expected challenge from server');
-        }
-        
-        // Extraire et décoder le challenge
-        const challengeB64 = challengeResp.substring(2).trim();
-        const challenge = atob(challengeB64);
-        console.log('[IMAP-TEST] Decoded challenge:', challenge);
-        
-        // Calculer HMAC-MD5
-        const hmac = hmacMd5(config.password, challenge);
-        const response = `${config.email} ${hmac}`;
-        console.log('[IMAP-TEST] HMAC computed, sending response...');
-        
-        // Envoyer la réponse encodée
-        const responseB64 = btoa(response);
-        await conn.write(encoder.encode(`${responseB64}\r\n`));
-        
-        // Lire la réponse d'authentification
-        const authResp = await readResponse();
-        console.log('[IMAP-TEST] Auth response:', authResp.trim());
-        
-        if (authResp.includes('A001 OK')) {
-          authSuccess = true;
-          console.log('[IMAP-TEST] ✅ CRAM-MD5 authentication successful!');
-        } else {
-          throw new Error(`CRAM-MD5 failed: ${authResp.trim()}`);
+        console.log('[IMAP-TEST] Attempting CRAM-MD5 authentication...');
+        await conn.write(encoder.encode(`A001 AUTHENTICATE CRAM-MD5\r\n`));
+        const challengeResponse = await readResponse();
+
+        const challengeMatch = challengeResponse.match(/\+ (.+)/);
+        if (challengeMatch) {
+          const challenge = atob(challengeMatch[1].trim());
+          const hmac = hmacMd5(config.password, challenge);
+          const authString = `${config.email} ${hmac}`;
+          const authBase64 = btoa(authString);
+
+          await conn.write(encoder.encode(`${authBase64}\r\n`));
+          const authResponse = await readResponse();
+
+          if (authResponse.includes('A001 OK')) {
+            authMethod = 'CRAM-MD5';
+            authenticated = true;
+            console.log('[IMAP-TEST] CRAM-MD5 authentication successful');
+          }
         }
       } catch (cramError) {
-        console.error('[IMAP-TEST] CRAM-MD5 error:', cramError);
-        throw new Error(`CRAM-MD5 authentication failed: ${cramError instanceof Error ? cramError.message : String(cramError)}`);
+        console.warn('[IMAP-TEST] CRAM-MD5 authentication failed, falling back to LOGIN:', cramError);
       }
-    } else if (!hasLoginDisabled) {
-      // Utiliser LOGIN classique
-      console.log('[IMAP-TEST] Using standard LOGIN authentication...');
+    }
+
+    if (!authenticated) {
+      console.log('[IMAP-TEST] Using LOGIN authentication...');
+      const loginResponse = await sendCommand(
+        'A002',
+        `LOGIN "${config.email}" "${config.password}"`
+      );
+
+      if (!loginResponse.includes('A002 OK')) {
+        throw new Error('Authentication failed');
+      }
       authMethod = 'LOGIN';
-      const loginResp = await sendCommand('A001', `LOGIN ${config.email} ${config.password}`);
-      console.log('[IMAP-TEST] Login response:', loginResp.trim());
-      
-      if (loginResp.includes('A001 OK')) {
-        authSuccess = true;
-        console.log('[IMAP-TEST] ✅ LOGIN authentication successful!');
-      } else {
-        throw new Error(`LOGIN failed: ${loginResp.trim()}`);
-      }
-    } else {
-      throw new Error('No supported authentication method available. Server requires CRAM-MD5 or DIGEST-MD5.');
+      console.log('[IMAP-TEST] LOGIN authentication successful');
     }
-    
-    if (!authSuccess) {
-      throw new Error('Authentication failed');
+
+    const listResponse = await sendCommand('A003', 'LIST "" "*"');
+    const folders = listResponse.match(/\* LIST \(.+?\) ".+?" "(.+?)"/g)?.map(
+      line => line.match(/"([^"]+)"$/)?.[1] || ''
+    ) || [];
+
+    console.log('[IMAP-TEST] Available folders:', folders);
+
+    const selectedFolder = config.folder || 'INBOX';
+    const selectResponse = await sendCommand('A004', `SELECT "${selectedFolder}"`);
+
+    if (!selectResponse.includes('A004 OK')) {
+      throw new Error(`Failed to select folder: ${selectedFolder}`);
     }
-    
-    // 3. LIST folders
-    const listResp = await sendCommand('A002', 'LIST "" "*"');
-    console.log('[IMAP-TEST] Folders:', listResp.substring(0, 500));
-    
-    const folders = listResp
-      .split('\n')
-      .filter(line => line.includes('* LIST'))
-      .map(line => {
-        const match = line.match(/"([^"]+)"\s*$/);
-        return match ? match[1] : null;
-      })
-      .filter(Boolean);
-    
-    // 4. SELECT folder (test)
-    const folderToTest = config.folder || 'INBOX';
-    const selectResp = await sendCommand('A003', `SELECT ${folderToTest}`);
-    console.log('[IMAP-TEST] Select response:', selectResp.trim());
-    
-    if (!selectResp.includes('A003 OK')) {
-      throw new Error(`Cannot access folder ${folderToTest}`);
-    }
-    
-    // Extract message count
-    const existsMatch = selectResp.match(/\* (\d+) EXISTS/);
-    const messageCount = existsMatch ? parseInt(existsMatch[1]) : 0;
-    
-    // 5. LOGOUT
-    await sendCommand('A004', 'LOGOUT');
+
+    const existsMatch = selectResponse.match(/\* (\d+) EXISTS/);
+    const messageCount = existsMatch ? parseInt(existsMatch[1], 10) : 0;
+
+    console.log(`[IMAP-TEST] Selected folder: ${selectedFolder}, Message count: ${messageCount}`);
+
+    await sendCommand('A005', 'LOGOUT');
     conn.close();
-    
+
     return {
       success: true,
-      message: `✅ Connexion IMAP réussie avec ${authMethod}!`,
-      authMethod: authMethod,
-      folders: folders,
-      messageCount: messageCount,
-      selectedFolder: folderToTest
+      message: 'IMAP connection test successful',
+      authMethod,
+      folders,
+      messageCount,
+      selectedFolder,
     };
-    
-  } catch (error) {
-    console.error('[IMAP-TEST] Error:', error);
+
+  } catch (error: any) {
+    conn.close();
     throw error;
   }
 }
@@ -372,34 +322,40 @@ serve(async (req) => {
   }
 
   try {
-    const { host, port = 993, email, password, ssl = true, folder = 'INBOX' } = await req.json();
-    
-    if (!host || !email || !password) {
-      return new Response(JSON.stringify({
+    const { host, port, email, password, ssl, folder } = await req.json();
+
+    console.log(`[IMAP-TEST] Starting test for ${email}@${host}:${port} (SSL: ${ssl})`);
+
+    const result = await testIMAPConnection({
+      host,
+      port,
+      email,
+      password,
+      ssl,
+      folder,
+    });
+
+    return new Response(
+      JSON.stringify(result),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
+  } catch (error: any) {
+    console.error('[IMAP-TEST] Test failed:', error);
+    return new Response(
+      JSON.stringify({
         success: false,
-        error: 'Missing required parameters: host, email, password'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-    
-    const result = await testIMAPConnection({ host, port, email, password, ssl, folder });
-    
-    return new Response(JSON.stringify(result), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-    
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({
-      success: false,
-      error: errorMsg,
-      message: `❌ Erreur de connexion: ${errorMsg}`
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+        message: `Connection test failed: ${error.message}`,
+        authMethod: 'N/A',
+        folders: [],
+        messageCount: 0,
+        selectedFolder: 'N/A',
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
