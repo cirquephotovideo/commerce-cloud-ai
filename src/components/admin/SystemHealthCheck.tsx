@@ -55,6 +55,74 @@ export const SystemHealthCheck = () => {
     }
   };
 
+  // Fetch enrichment queue status
+  const checkEnrichmentQueue = async () => {
+    const { data } = await supabase
+      .from('enrichment_queue')
+      .select('status')
+      .order('created_at', { ascending: false });
+    
+    return {
+      pending: data?.filter(e => e.status === 'pending').length || 0,
+      processing: data?.filter(e => e.status === 'processing').length || 0,
+      failed: data?.filter(e => e.status === 'failed').length || 0,
+    };
+  };
+
+  // Fetch Amazon credentials expiry
+  const checkAmazonCredentials = async () => {
+    const { data } = await supabase
+      .from('amazon_credentials')
+      .select('secret_expires_at, is_active')
+      .eq('is_active', true)
+      .maybeSingle();
+    
+    if (!data?.secret_expires_at) return null;
+    
+    const daysUntilExpiry = Math.floor(
+      (new Date(data.secret_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    );
+    
+    return {
+      expiresAt: data.secret_expires_at,
+      daysUntilExpiry,
+      status: daysUntilExpiry < 7 ? 'critical' : daysUntilExpiry < 30 ? 'warning' : 'ok'
+    };
+  };
+
+  // Fetch recent errors (24h)
+  const checkRecentErrors = async () => {
+    const { count } = await supabase
+      .from('system_health_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'failing')
+      .gte('tested_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    
+    return count || 0;
+  };
+
+  const updateHealthMetrics = async () => {
+    const [queueStatus, amazonCreds, recentErrors] = await Promise.all([
+      checkEnrichmentQueue(),
+      checkAmazonCredentials(),
+      checkRecentErrors()
+    ]);
+
+    // Update overall health based on metrics
+    const criticalIssues = 
+      (queueStatus.failed > 10 ? 1 : 0) +
+      (amazonCreds?.status === 'critical' ? 1 : 0) +
+      (recentErrors > 20 ? 1 : 0);
+    
+    const warningIssues =
+      (queueStatus.failed > 5 ? 1 : 0) +
+      (amazonCreds?.status === 'warning' ? 1 : 0) +
+      (recentErrors > 10 ? 1 : 0);
+
+    const healthScore = criticalIssues > 0 ? 30 : warningIssues > 0 ? 60 : 95;
+    setOverallHealth(healthScore);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header avec statistiques globales */}
@@ -75,21 +143,21 @@ export const SystemHealthCheck = () => {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Edge Functions</CardTitle>
+            <CardTitle className="text-sm font-medium">Queue Enrichissement</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">44</div>
-            <p className="text-xs text-muted-foreground">Total déployées</p>
+            <div className="text-2xl font-bold">—</div>
+            <p className="text-xs text-muted-foreground">Rafraîchir pour voir</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Tables DB</CardTitle>
+            <CardTitle className="text-sm font-medium">Credentials Amazon</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">62</div>
-            <p className="text-xs text-muted-foreground">Total créées</p>
+            <div className="text-2xl font-bold">—</div>
+            <p className="text-xs text-muted-foreground">Rafraîchir pour voir</p>
           </CardContent>
         </Card>
 
@@ -98,7 +166,14 @@ export const SystemHealthCheck = () => {
             <CardTitle className="text-sm font-medium">Actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button onClick={runAllTests} disabled={isRunningAll} className="w-full">
+            <Button 
+              onClick={() => {
+                runAllTests();
+                updateHealthMetrics();
+              }} 
+              disabled={isRunningAll} 
+              className="w-full"
+            >
               {isRunningAll ? "Tests en cours..." : "🚀 Tout tester"}
             </Button>
           </CardContent>
