@@ -201,30 +201,42 @@ export type Database = {
           client_id: string
           client_secret_encrypted: string
           created_at: string | null
+          days_before_expiry_warning: number | null
           id: string
           is_active: boolean | null
+          last_rotation_at: string | null
           marketplace_id: string
           refresh_token_encrypted: string
+          rotation_warning_sent: boolean | null
+          secret_expires_at: string | null
           updated_at: string | null
         }
         Insert: {
           client_id: string
           client_secret_encrypted: string
           created_at?: string | null
+          days_before_expiry_warning?: number | null
           id?: string
           is_active?: boolean | null
+          last_rotation_at?: string | null
           marketplace_id?: string
           refresh_token_encrypted: string
+          rotation_warning_sent?: boolean | null
+          secret_expires_at?: string | null
           updated_at?: string | null
         }
         Update: {
           client_id?: string
           client_secret_encrypted?: string
           created_at?: string | null
+          days_before_expiry_warning?: number | null
           id?: string
           is_active?: boolean | null
+          last_rotation_at?: string | null
           marketplace_id?: string
           refresh_token_encrypted?: string
+          rotation_warning_sent?: boolean | null
+          secret_expires_at?: string | null
           updated_at?: string | null
         }
         Relationships: []

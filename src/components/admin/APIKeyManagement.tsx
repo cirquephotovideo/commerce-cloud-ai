@@ -16,11 +16,14 @@ export const APIKeyManagement = () => {
   // Amazon state
   const [amazonLoading, setAmazonLoading] = useState(false);
   const [amazonTesting, setAmazonTesting] = useState(false);
+  const [amazonRotating, setAmazonRotating] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
   const [marketplaceId, setMarketplaceId] = useState('A13V1IB3VIYZZH');
   const [showAmazonSecrets, setShowAmazonSecrets] = useState(false);
+  const [secretExpiresAt, setSecretExpiresAt] = useState<string | null>(null);
+  const [lastRotationAt, setLastRotationAt] = useState<string | null>(null);
 
   const fetchAmazonData = async () => {
     try {
@@ -33,6 +36,8 @@ export const APIKeyManagement = () => {
       if (credData) {
         setClientId(credData.client_id || '');
         setMarketplaceId(credData.marketplace_id || '');
+        setSecretExpiresAt(credData.secret_expires_at || null);
+        setLastRotationAt(credData.last_rotation_at || null);
       }
     } catch (error) {
       console.error('Error fetching Amazon data:', error);
@@ -107,6 +112,60 @@ export const APIKeyManagement = () => {
     }
   };
 
+  const handleRotateAmazon = async () => {
+    setAmazonRotating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('rotate-amazon-credentials');
+      
+      if (error) throw error;
+      
+      if (data?.error === 'manual_rotation_required') {
+        toast({
+          title: "⚠️ Rotation manuelle requise",
+          description: data.message,
+        });
+        // Could open a dialog with instructions here
+        return;
+      }
+      
+      if (data?.success) {
+        toast({
+          title: "✅ Rotation réussie",
+          description: `Nouvelles credentials valides jusqu'au ${new Date(data.expires_at).toLocaleDateString('fr-FR')}`,
+        });
+        await fetchAmazonData();
+      }
+    } catch (error) {
+      console.error('Amazon rotation error:', error);
+      toast({
+        title: "❌ Erreur de rotation",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setAmazonRotating(false);
+    }
+  };
+
+  const getDaysUntilExpiry = () => {
+    if (!secretExpiresAt) return null;
+    const expiryDate = new Date(secretExpiresAt);
+    const today = new Date();
+    const diffTime = expiryDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const getExpiryStatus = () => {
+    const daysLeft = getDaysUntilExpiry();
+    if (daysLeft === null) return null;
+    
+    if (daysLeft < 0) return { color: 'destructive', text: 'Expiré', icon: AlertCircle };
+    if (daysLeft <= 30) return { color: 'destructive', text: `Expire dans ${daysLeft} jours`, icon: AlertCircle };
+    if (daysLeft <= 60) return { color: 'default', text: `Expire dans ${daysLeft} jours`, icon: AlertCircle };
+    return { color: 'secondary', text: `Valide ${daysLeft} jours`, icon: CheckCircle };
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -140,12 +199,46 @@ export const APIKeyManagement = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {clientId && (
-              <Alert>
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Amazon Seller API configuré et actif
-                </AlertDescription>
-              </Alert>
+              <div className="space-y-2">
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Amazon Seller API configuré et actif
+                  </AlertDescription>
+                </Alert>
+                
+                {secretExpiresAt && (() => {
+                  const status = getExpiryStatus();
+                  if (!status) return null;
+                  const IconComponent = status.icon;
+                  
+                  return (
+                    <Alert variant={status.color as any}>
+                      <IconComponent className="h-4 w-4" />
+                      <AlertDescription className="flex items-center justify-between">
+                        <span>Client Secret: {status.text}</span>
+                        {getDaysUntilExpiry() !== null && getDaysUntilExpiry()! <= 60 && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleRotateAmazon}
+                            disabled={amazonRotating}
+                          >
+                            <RefreshCw className={`mr-2 h-3 w-3 ${amazonRotating ? 'animate-spin' : ''}`} />
+                            {amazonRotating ? 'Rotation...' : 'Rotation des credentials'}
+                          </Button>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  );
+                })()}
+                
+                {lastRotationAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Dernière rotation: {new Date(lastRotationAt).toLocaleDateString('fr-FR')} à {new Date(lastRotationAt).toLocaleTimeString('fr-FR')}
+                  </p>
+                )}
+              </div>
             )}
 
             <div className="space-y-4">
