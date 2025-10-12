@@ -118,39 +118,39 @@ export function ProductsTable({
   );
 
   return (
-    <div className="rounded-md border">
-      <Table>
+    <div className="rounded-md border overflow-x-auto">
+      <Table className="min-w-[800px]">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-12">
+            <TableHead className="w-8 sm:w-12 sticky left-0 bg-background z-10">
               <Checkbox 
                 checked={selectedProducts.size === products.length && products.length > 0}
                 onCheckedChange={onSelectAll}
               />
             </TableHead>
-            <TableHead className="w-16"></TableHead>
-            <TableHead>
+            <TableHead className="w-12 sm:w-16"></TableHead>
+            <TableHead className="min-w-[150px]">
               <SortButton field="name">Nom</SortButton>
             </TableHead>
-            <TableHead>
+            <TableHead className="min-w-[100px]">
               <SortButton field="ean">EAN</SortButton>
             </TableHead>
-            <TableHead>
+            <TableHead className="min-w-[120px]">
               <SortButton field="supplier">Fournisseur</SortButton>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="text-right min-w-[100px]">
               <SortButton field="purchase_price">Prix Achat</SortButton>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="text-right min-w-[100px]">
               <SortButton field="estimated_price">Prix Vente</SortButton>
             </TableHead>
-            <TableHead className="text-right">
+            <TableHead className="text-right min-w-[80px]">
               <SortButton field="margin">Marge</SortButton>
             </TableHead>
-            <TableHead>
+            <TableHead className="min-w-[120px]">
               <SortButton field="category">Catégorie</SortButton>
             </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead className="text-right min-w-[80px] sticky right-0 bg-background z-10">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -161,7 +161,7 @@ export function ProductsTable({
             
             return (
               <TableRow key={product.id}>
-                <TableCell>
+                <TableCell className="sticky left-0 bg-background z-10">
                   <Checkbox 
                     checked={selectedProducts.has(product.id)}
                     onCheckedChange={() => onToggleSelection(product.id)}
@@ -171,7 +171,7 @@ export function ProductsTable({
                   <img 
                     src={imageUrl} 
                     alt={product.product_name}
-                    className="w-10 h-10 rounded object-cover"
+                    className="w-8 h-8 sm:w-10 sm:h-10 rounded object-cover"
                     onError={(e) => {
                       e.currentTarget.src = '/placeholder.svg';
                     }}
@@ -242,7 +242,7 @@ export function ProductsTable({
                 <TableCell className="text-sm max-w-[150px] truncate">
                   {category || 'N/A'}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-right sticky right-0 bg-background z-10">
                   <Button
                     size="sm"
                     variant="ghost"

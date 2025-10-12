@@ -532,8 +532,8 @@ export default function Dashboard() {
 
   return (
     <>
-      <main className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="lg:col-span-1 space-y-4">
             <SubscriptionStatus />
             <UserAlertsWidget />
@@ -543,21 +543,21 @@ export default function Dashboard() {
             <AIProviderManagement />
             
             <Card>
-              <CardHeader>
-                <CardTitle>Statistiques</CardTitle>
-                <CardDescription>Aperçu de votre activité</CardDescription>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg">Statistiques</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Aperçu de votre activité</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <p className="text-2xl font-bold">{analyses.length}</p>
-                    <p className="text-sm text-muted-foreground">Analyses totales</p>
+                    <p className="text-xl sm:text-2xl font-bold">{analyses.length}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Analyses totales</p>
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">
+                    <p className="text-xl sm:text-2xl font-bold">
                       {analyses.filter(a => a.is_favorite).length}
                     </p>
-                    <p className="text-sm text-muted-foreground">Favoris</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Favoris</p>
                   </div>
                 </div>
               </CardContent>
@@ -567,11 +567,11 @@ export default function Dashboard() {
 
         {/* Search Bar */}
         {hasPermission('ean_search') && (
-          <Card className="mb-6">
-            <CardContent className="pt-6">
-              <div className="flex gap-4">
+          <Card className="mb-4 sm:mb-6">
+            <CardContent className="pt-4 sm:pt-6">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                 <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full sm:w-[200px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
@@ -597,9 +597,9 @@ export default function Dashboard() {
                 </Select>
                 <Input
                   placeholder={
-                    searchType === "name" ? "Rechercher par nom de produit..." :
+                    searchType === "name" ? "Rechercher par nom..." :
                     searchType === "url" ? "Rechercher par URL..." : 
-                    "Rechercher par code EAN ou barcode..."
+                    "Rechercher par EAN..."
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -700,38 +700,42 @@ export default function Dashboard() {
           </>
         )}
 
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Mes Analyses de Produits {searchQuery && `(${filteredAnalyses.length})`}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            Mes Analyses {searchQuery && `(${filteredAnalyses.length})`}
           </h1>
           {analyses.length > 0 && (
-            <div className="flex gap-2 items-center">
-              <div className="flex items-center gap-2 mr-4">
+            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
+              <div className="flex items-center gap-2">
                 <Checkbox
                   id="select-all"
                   checked={selectedIds.size === filteredAnalyses.length && filteredAnalyses.length > 0}
                   onCheckedChange={toggleSelectAll}
                 />
-                <label htmlFor="select-all" className="text-sm cursor-pointer">
-                  Tout sélectionner ({selectedIds.size}/{filteredAnalyses.length})
+                <label htmlFor="select-all" className="text-xs sm:text-sm cursor-pointer whitespace-nowrap">
+                  Tout ({selectedIds.size}/{filteredAnalyses.length})
                 </label>
               </div>
               {selectedIds.size > 0 && (
-                <>
+                <div className="flex gap-2 w-full sm:w-auto">
                   <Button
                     onClick={exportToOdoo}
                     disabled={isExporting}
                     variant="default"
+                    size="sm"
+                    className="flex-1 sm:flex-none"
                   >
                     {isExporting ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Export...
+                        <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                        <span className="hidden sm:inline">Export...</span>
+                        <span className="sm:hidden">...</span>
                       </>
                     ) : (
                       <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Exporter vers Odoo ({selectedIds.size})
+                        <Upload className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="hidden sm:inline">Exporter ({selectedIds.size})</span>
+                        <span className="sm:hidden">Export</span>
                       </>
                     )}
                   </Button>
@@ -739,20 +743,24 @@ export default function Dashboard() {
                     onClick={deleteSelected}
                     disabled={isDeleting}
                     variant="destructive"
+                    size="sm"
+                    className="flex-1 sm:flex-none"
                   >
                     {isDeleting ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Suppression...
+                        <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                        <span className="hidden sm:inline">Suppression...</span>
+                        <span className="sm:hidden">...</span>
                       </>
                     ) : (
                       <>
-                        <Trash className="mr-2 h-4 w-4" />
-                        Supprimer ({selectedIds.size})
+                        <Trash className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="hidden sm:inline">Supprimer ({selectedIds.size})</span>
+                        <span className="sm:hidden">Suppr</span>
                       </>
                     )}
                   </Button>
-                </>
+                </div>
               )}
             </div>
           )}
@@ -767,7 +775,7 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredAnalyses.map((analysis) => {
                   const productName = analysis.analysis_result?.product_name || 
                                       analysis.analysis_result?.name || 
@@ -775,16 +783,17 @@ export default function Dashboard() {
               
               return (
                 <Card key={analysis.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 flex-1">
+                  <CardHeader className="pb-3 sm:pb-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
                         <Checkbox
                           checked={selectedIds.has(analysis.id)}
                           onCheckedChange={() => toggleSelect(analysis.id)}
+                          className="mt-1 shrink-0"
                         />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <CardTitle 
-                            className="text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
+                            className="text-sm sm:text-base md:text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
                             onClick={() => handleShowDetails(analysis)}
                           >
                             {productName}
@@ -796,12 +805,13 @@ export default function Dashboard() {
                         variant="ghost"
                         size="icon"
                         onClick={() => toggleFavorite(analysis.id, analysis.is_favorite)}
+                        className="shrink-0 h-8 w-8 sm:h-10 sm:w-10"
                       >
-                        <Star className={`h-5 w-5 ${analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
+                        <Star className={`h-4 w-4 sm:h-5 sm:w-5 ${analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4">
                     {/* Product Image Preview */}
                     {analysis.image_urls && analysis.image_urls.length > 0 && (
                       <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
@@ -821,13 +831,14 @@ export default function Dashboard() {
                      
                      <div className="space-y-2">
                        {/* Main Actions Row */}
-                       <div className="flex gap-2 flex-wrap">
+                       <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                          <Button 
                            variant="outline" 
                            size="sm"
                            onClick={() => handleOpenDetail(analysis)}
+                           className="text-xs sm:text-sm"
                          >
-                           Voir détails
+                           Détails
                          </Button>
                          <ProductSummaryDialog 
                            analysis={analysis}
@@ -844,14 +855,15 @@ export default function Dashboard() {
                                variant="outline" 
                                size="sm"
                                disabled={enrichingIds.has(analysis.id)}
+                               className="text-xs sm:text-sm"
                              >
                                {enrichingIds.has(analysis.id) ? (
-                                 <Loader2 className="w-4 h-4 animate-spin" />
+                                 <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
                                ) : (
                                  <>
-                                   <Sparkles className="w-4 h-4 mr-1" />
-                                   Enrichir
-                                   <ChevronDown className="w-3 h-3 ml-1" />
+                                   <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                                   <span className="hidden sm:inline">Enrichir</span>
+                                   <ChevronDown className="w-3 h-3 sm:ml-1" />
                                  </>
                                )}
                              </Button>
@@ -878,7 +890,7 @@ export default function Dashboard() {
                          </DropdownMenu>
                        </div>
                       {/* Secondary Actions Row */}
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                         {analysis.image_urls && analysis.image_urls.length > 0 && (
                           <ProductImageGallery images={analysis.image_urls} productName={productName} />
                         )}
@@ -886,7 +898,12 @@ export default function Dashboard() {
                           <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
                         )}
                         <JsonViewer data={analysis.analysis_result} />
-                        <Button variant="outline" size="sm" onClick={() => deleteAnalysis(analysis.id)}>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => deleteAnalysis(analysis.id)}
+                          className="h-8 w-8 p-0"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>

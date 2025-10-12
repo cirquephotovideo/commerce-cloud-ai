@@ -48,32 +48,33 @@ export const PricingSection = () => {
 
   if (loading) {
     return (
-      <section className="py-24 px-4 bg-card/30">
+      <section className="py-12 sm:py-16 md:py-24 px-3 sm:px-4 bg-card/30">
         <div className="flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
         </div>
       </section>
     );
   }
 
   return (
-    <section className="py-24 px-4 bg-card/30 relative overflow-hidden" id="pricing">
+    <section className="py-12 sm:py-16 md:py-24 px-3 sm:px-4 bg-card/30 relative overflow-hidden" id="pricing">
       <div className="absolute inset-0 bg-[var(--gradient-hero)] opacity-30 pointer-events-none" />
       
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center mb-16 animate-fade-in">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent">
+        <div className="text-center mb-8 sm:mb-12 md:mb-16 animate-fade-in">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 bg-gradient-to-r from-primary via-secondary to-primary bg-clip-text text-transparent px-2">
             {t("pricing.title")}
           </h2>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto mb-8">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-6 sm:mb-8 px-4">
             {t("pricing.subtitle")}
           </p>
           
-          <div className="inline-flex items-center gap-2 bg-muted/50 p-1 rounded-lg backdrop-blur-sm">
+          <div className="inline-flex items-center gap-1 sm:gap-2 bg-muted/50 p-1 rounded-lg backdrop-blur-sm">
             <Button
               variant={billingInterval === "monthly" ? "default" : "ghost"}
               size="sm"
               onClick={() => setBillingInterval("monthly")}
+              className="text-xs sm:text-sm"
             >
               {t("pricing.monthly")}
             </Button>
@@ -81,16 +82,17 @@ export const PricingSection = () => {
               variant={billingInterval === "yearly" ? "default" : "ghost"}
               size="sm"
               onClick={() => setBillingInterval("yearly")}
+              className="text-xs sm:text-sm"
             >
               {t("pricing.yearly")}
-              <span className="ml-2 text-xs bg-primary/20 px-2 py-0.5 rounded">
+              <span className="ml-1 sm:ml-2 text-[10px] sm:text-xs bg-primary/20 px-1.5 sm:px-2 py-0.5 rounded">
                 {t("pricing.save")} 20%
               </span>
             </Button>
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8 mb-8 sm:mb-12">
           {plans.map((plan, index) => (
             <div
               key={plan.id}
@@ -107,8 +109,8 @@ export const PricingSection = () => {
           ))}
         </div>
 
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">
+        <div className="text-center px-4">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {t("pricing.trial")} • Sans engagement • Annulation en 1 clic
           </p>
         </div>

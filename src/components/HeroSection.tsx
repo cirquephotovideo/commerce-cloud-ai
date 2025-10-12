@@ -38,22 +38,22 @@ export const HeroSection = () => {
       </div>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-12 sm:py-16 md:py-20 relative z-10">
-        <div className="max-w-4xl mx-auto text-center space-y-6 sm:space-y-8 animate-fade-in">
+      <div className="container mx-auto px-4 py-8 sm:py-12 md:py-16 lg:py-20 relative z-10">
+        <div className="max-w-4xl mx-auto text-center space-y-4 sm:space-y-6 md:space-y-8 animate-fade-in">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm">
             <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
             <span className="text-xs sm:text-sm font-medium text-primary">{t("hero.title")}</span>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-6xl lg:text-7xl font-bold leading-tight px-4">
+          <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight px-2 sm:px-4">
             {t("hero.title")}
           </h1>
 
-          <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl mx-auto px-4">
+          <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-muted-foreground max-w-2xl mx-auto px-2 sm:px-4">
             {t("hero.subtitle")}
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center pt-2 sm:pt-4 px-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center pt-2 sm:pt-4 px-2 sm:px-4">
             <Button 
               size="lg"
               className="text-base sm:text-lg shadow-glow hover:shadow-glow transition-all w-full sm:w-auto"
@@ -74,18 +74,18 @@ export const HeroSection = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 sm:gap-6 md:gap-8 pt-8 sm:pt-12 max-w-2xl mx-auto px-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 lg:gap-8 pt-6 sm:pt-8 md:pt-12 max-w-2xl mx-auto px-2 sm:px-4">
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-primary">{t("hero.metric1")}</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Précision</div>
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-primary">{t("hero.metric1")}</div>
+              <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">Précision</div>
             </div>
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-secondary">{t("hero.metric2")}</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Croissance</div>
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-secondary">{t("hero.metric2")}</div>
+              <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">Croissance</div>
             </div>
             <div className="space-y-1 sm:space-y-2">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-accent">{t("hero.metric3")}</div>
-              <div className="text-xs sm:text-sm text-muted-foreground">Économisé</div>
+              <div className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-accent">{t("hero.metric3")}</div>
+              <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">Économisé</div>
             </div>
           </div>
         </div>

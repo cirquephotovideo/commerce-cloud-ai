@@ -44,26 +44,31 @@ export const Header = () => {
 
   return (
     <header className="border-b glass-card sticky top-0 z-50 bg-gradient-to-r from-purple-500/20 via-purple-600/20 to-purple-700/20 backdrop-blur-md">
-      <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
+      <div className="container mx-auto px-3 sm:px-4 py-2 sm:py-3 md:py-4 flex justify-between items-center">
         <TarifiqueLogo />
         
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-3">
           <ThemeSelector />
           <LanguageSelector />
           
           {user ? (
             <Button 
               variant="ghost" 
-              size="sm" 
+              size={isMobile ? "icon" : "sm"}
               onClick={handleSignOut}
+              className="shrink-0"
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              {!isMobile && t("nav.signOut")}
+              <LogOut className={isMobile ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+              {!isMobile && <span className="hidden md:inline">{t("nav.signOut")}</span>}
             </Button>
           ) : (
-            <Button onClick={() => navigate("/auth")} size="sm">
-              <User className="mr-2 h-4 w-4" />
-              {!isMobile && t("nav.signIn")}
+            <Button 
+              onClick={() => navigate("/auth")} 
+              size={isMobile ? "icon" : "sm"}
+              className="shrink-0"
+            >
+              <User className={isMobile ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+              {!isMobile && <span className="hidden md:inline">{t("nav.signIn")}</span>}
             </Button>
           )}
         </div>
