@@ -316,9 +316,12 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
             
             <video 
               controls 
+              playsInline
+              preload="metadata"
               className="w-full rounded-lg border-2 border-border shadow-lg"
               src={video.video_url}
               poster={video.thumbnail_url || undefined}
+              controlsList="nodownload"
             >
               Votre navigateur ne supporte pas la lecture vidéo.
             </video>
