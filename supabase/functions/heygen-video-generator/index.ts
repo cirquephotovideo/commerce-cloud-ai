@@ -87,6 +87,47 @@ serve(async (req) => {
 
     const HEYGEN_API_KEY = providerConfig.api_key_encrypted;
 
+    // Action: cancel video generation
+    if (action === 'cancel' && analysis_id) {
+      const { video_id: videoIdParam } = await req.json().then(body => body).catch(() => ({}));
+      console.log('[HEYGEN-VIDEO] Cancel request for analysis:', analysis_id, 'video_id:', videoIdParam);
+      
+      let videoQuery = supabase
+        .from('product_videos')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (videoIdParam) {
+        videoQuery = videoQuery.eq('video_id', videoIdParam);
+      } else {
+        videoQuery = videoQuery.eq('analysis_id', analysis_id).order('created_at', { ascending: false });
+      }
+
+      const { data: videoData, error: videoError } = await videoQuery.limit(1).maybeSingle();
+
+      if (videoError || !videoData) {
+        return new Response(
+          JSON.stringify({ error: 'Video not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Update status to cancelled
+      await supabase
+        .from('product_videos')
+        .update({
+          status: 'failed',
+          error_message: 'Annulé par l\'utilisateur',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', videoData.id);
+
+      return new Response(
+        JSON.stringify({ success: true, status: 'cancelled' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Action: list resources (avatars, voices, templates)
     if (action === 'list_resources') {
       try {

@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Video, AlertCircle, ExternalLink, Download } from "lucide-react";
+import { Loader2, Video, AlertCircle, ExternalLink, Download, X, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { VideoHistoryDialog } from "./VideoHistoryDialog";
 
 interface VideoPlayerProps {
   analysisId: string;
@@ -16,6 +17,8 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
   const [video, setVideo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     fetchLatestVideo();
@@ -169,6 +172,34 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     }
   };
 
+  const handleCancel = async () => {
+    if (!video?.video_id) return;
+    
+    setCancelling(true);
+    try {
+      const { error: cancelError } = await supabase.functions.invoke('heygen-video-generator', {
+        body: {
+          action: 'cancel',
+          analysis_id: analysisId,
+          video_id: video.video_id
+        }
+      });
+
+      if (cancelError) {
+        toast.error("❌ Erreur lors de l'annulation");
+        return;
+      }
+
+      toast.success("✅ Génération annulée");
+      await fetchLatestVideo();
+    } catch (err) {
+      console.error('[VideoPlayer] Cancel error:', err);
+      toast.error("❌ Erreur lors de l'annulation");
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const handleForceCheck = async (videoId?: string) => {
     toast.info("🔄 Vérification manuelle du statut...");
     
@@ -238,7 +269,17 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            {getStatusBadge(effectiveStatus)}
+            <div className="flex items-center gap-2">
+              {getStatusBadge(effectiveStatus)}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowHistory(true)}
+              >
+                <History className="w-3 h-3 mr-1" />
+                Historique
+              </Button>
+            </div>
             {hasPlayable && (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={handleDownload}>
@@ -306,9 +347,24 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
               <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                 <div className="h-full bg-primary/60 animate-pulse" style={{ width: '60%' }} />
               </div>
-              <p className="text-xs text-muted-foreground">
-                La génération peut prendre 1 à 3 minutes. Le statut se met à jour automatiquement.
-              </p>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>La génération peut prendre 1 à 3 minutes. Le statut se met à jour automatiquement.</span>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleCancel}
+                  disabled={cancelling}
+                >
+                  {cancelling ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <>
+                      <X className="w-3 h-3 mr-1" />
+                      Annuler
+                    </>
+                  )}
+                </Button>
+              </div>
               
               {/* ✅ AJOUT: Avertissement timeout après 5 minutes */}
               {elapsedTime > 300 && (
@@ -389,6 +445,12 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
         </div>
       );
     })()}
+
+    <VideoHistoryDialog
+      analysisId={analysisId}
+      open={showHistory}
+      onOpenChange={setShowHistory}
+    />
     </>
   );
 
