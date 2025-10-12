@@ -46,15 +46,18 @@ serve(async (req) => {
 
     // Alertes selon les seuils
     let shouldAlert = false;
+    let shouldAttemptRotation = false;
     let alertLevel: 'warning' | 'critical' = 'warning';
     let alertMessage = '';
 
     if (daysUntilExpiry <= 7) {
       shouldAlert = true;
+      shouldAttemptRotation = true;
       alertLevel = 'critical';
       alertMessage = `🚨 URGENT: Amazon Client Secret expire dans ${daysUntilExpiry} jours ! Rotation immédiate requise.`;
     } else if (daysUntilExpiry <= 30) {
       shouldAlert = true;
+      shouldAttemptRotation = true;
       alertLevel = 'warning';
       alertMessage = `⚠️ Amazon Client Secret expire dans ${daysUntilExpiry} jours. Planifier la rotation.`;
     } else if (daysUntilExpiry <= 60) {
@@ -80,12 +83,39 @@ serve(async (req) => {
             severity: alertLevel,
             title: 'Expiration Credentials Amazon',
             message: alertMessage,
-            action_url: '/admin?tab=apikeys',
+            action_url: '/admin?tab=amazon',
             metadata: {
               expires_at: credentials.secret_expires_at,
               days_until_expiry: daysUntilExpiry
             }
           });
+        }
+      }
+
+      // Tenter la rotation automatique si nécessaire
+      if (shouldAttemptRotation) {
+        console.log('[CRON] Attempting automatic rotation...');
+        try {
+          const rotationResponse = await fetch(
+            `${supabaseUrl}/functions/v1/rotate-amazon-credentials`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({ auto: true }),
+            }
+          );
+
+          const rotationData = await rotationResponse.json();
+          
+          if (rotationResponse.ok) {
+            console.log('[CRON] Automatic rotation successful');
+            alertMessage += ' Une rotation automatique a été effectuée avec succès.';
+          }
+        } catch (rotationError) {
+          console.error('[CRON] Error attempting rotation:', rotationError);
         }
       }
 
@@ -96,7 +126,8 @@ serve(async (req) => {
         status: alertLevel === 'critical' ? 'failing' : 'warning',
         test_result: {
           days_until_expiry: daysUntilExpiry,
-          expires_at: credentials.secret_expires_at
+          expires_at: credentials.secret_expires_at,
+          rotation_attempted: shouldAttemptRotation
         },
         error_message: alertLevel === 'critical' ? alertMessage : null
       });

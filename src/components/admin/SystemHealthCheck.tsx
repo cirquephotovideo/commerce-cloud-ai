@@ -6,6 +6,7 @@ import { EdgeFunctionTester } from "./EdgeFunctionTester";
 import { DatabaseHealthChecker } from "./DatabaseHealthChecker";
 import { FeatureIdeaGenerator } from "./FeatureIdeaGenerator";
 import { FixHistoryDashboard } from "./FixHistoryDashboard";
+import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";

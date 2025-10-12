@@ -19,10 +19,14 @@ import { AIPromptsManagement } from "@/components/admin/AIPromptsManagement";
 import AIProviderManagement from "@/components/AIProviderManagement";
 import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
 import { GlobalConfigManager } from "@/components/admin/GlobalConfigManager";
+import { UserAlertsWidget } from "@/components/UserAlertsWidget";
+import { AmazonCredentialsManager } from "@/components/admin/AmazonCredentialsManager";
+import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
 import { Shield, Users, Package, BarChart3, DollarSign, FileText, Mail, Share2, Bell, Key, Info, ShoppingCart, Zap, Brain, Search as SearchIcon, Settings, Sparkles } from "lucide-react";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("analytics");
+  useRealtimeAlerts();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -105,6 +109,14 @@ const AdminDashboard = () => {
                 <Settings className="h-4 w-4" />
                 <span className="hidden sm:inline">Config Globale</span>
               </TabsTrigger>
+              <TabsTrigger value="alerts" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <Bell className="h-4 w-4" />
+                <span className="hidden sm:inline">Alertes</span>
+              </TabsTrigger>
+              <TabsTrigger value="amazon" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                <ShoppingCart className="h-4 w-4" />
+                <span className="hidden sm:inline">Amazon Creds</span>
+              </TabsTrigger>
               <TabsTrigger value="debug" className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Info className="h-4 w-4" />
                 <span className="hidden sm:inline">Debug</span>
@@ -180,6 +192,14 @@ const AdminDashboard = () => {
 
           <TabsContent value="global-config" className="space-y-6">
             <GlobalConfigManager />
+          </TabsContent>
+
+          <TabsContent value="alerts" className="space-y-6">
+            <UserAlertsWidget />
+          </TabsContent>
+
+          <TabsContent value="amazon" className="space-y-6">
+            <AmazonCredentialsManager />
           </TabsContent>
         </Tabs>
       </div>

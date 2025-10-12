@@ -12,6 +12,9 @@ serve(async (req) => {
   }
 
   try {
+    const { auto, force } = await req.json().catch(() => ({ auto: false, force: false }));
+    console.log('[ROTATE-AMAZON] Starting rotation...', { auto, force });
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -30,6 +33,26 @@ serve(async (req) => {
         JSON.stringify({ error: 'No active Amazon credentials found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Si rotation automatique, vérifier si nécessaire (< 30 jours avant expiration)
+    if (auto && !force && credentials.secret_expires_at) {
+      const expiryDate = new Date(credentials.secret_expires_at);
+      const today = new Date();
+      const daysUntilExpiry = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntilExpiry > 30) {
+        console.log(`[ROTATE-AMAZON] Rotation not needed yet (${daysUntilExpiry} days until expiry)`);
+        return new Response(
+          JSON.stringify({ 
+            message: 'Rotation not needed yet',
+            daysUntilExpiry 
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.log(`[ROTATE-AMAZON] Rotation needed (${daysUntilExpiry} days until expiry)`);
     }
 
     console.log('[ROTATE-AMAZON] Starting credential rotation for Client ID:', credentials.client_id);
@@ -135,6 +158,40 @@ serve(async (req) => {
 
     console.log('[ROTATE-AMAZON] Old access tokens invalidated');
 
+    // Step 5: Enregistrer la rotation dans l'historique
+    console.log('[ROTATE-AMAZON] Recording rotation in history...');
+    const { error: historyError } = await supabase
+      .from('amazon_credential_rotations')
+      .insert({
+        credential_id: credentials.id,
+        status: 'success',
+        rotated_by: auto ? 'auto' : 'manual',
+        new_expiry_date: expiresAt.toISOString()
+      });
+
+    if (historyError) {
+      console.error('[ROTATE-AMAZON] Failed to record rotation history:', historyError);
+    }
+
+    // Step 6: Envoyer une alerte aux super admins
+    console.log('[ROTATE-AMAZON] Sending alert to super admins...');
+    const { data: superAdmins } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'super_admin');
+
+    if (superAdmins && superAdmins.length > 0) {
+      for (const admin of superAdmins) {
+        await supabase.from('user_alerts').insert({
+          user_id: admin.user_id,
+          alert_type: 'amazon_rotation',
+          severity: 'info',
+          title: 'Amazon Credentials rotés avec succès',
+          message: `Les credentials Amazon ont été rotés avec succès. Nouvelle date d'expiration: ${expiresAt.toLocaleDateString('fr-FR')}`,
+        });
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -147,6 +204,50 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[ROTATE-AMAZON] Error:', error);
+
+    // Enregistrer l'échec dans l'historique
+    try {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      const { data: activeCredentials } = await supabase
+        .from('amazon_credentials')
+        .select('id')
+        .eq('is_active', true)
+        .single();
+
+      if (activeCredentials) {
+        await supabase.from('amazon_credential_rotations').insert({
+          credential_id: activeCredentials.id,
+          status: 'failed',
+          rotated_by: 'auto',
+          error_message: error instanceof Error ? error.message : 'Unknown error'
+        });
+
+        // Envoyer une alerte critique aux super admins
+        const { data: superAdmins } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', 'super_admin');
+
+        if (superAdmins && superAdmins.length > 0) {
+          for (const admin of superAdmins) {
+            await supabase.from('user_alerts').insert({
+              user_id: admin.user_id,
+              alert_type: 'amazon_rotation_failed',
+              severity: 'critical',
+              title: 'Échec de la rotation Amazon Credentials',
+              message: `La rotation des credentials Amazon a échoué: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            });
+          }
+        }
+      }
+    } catch (insertError) {
+      console.error('[ROTATE-AMAZON] Failed to log rotation failure:', insertError);
+    }
+
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error',

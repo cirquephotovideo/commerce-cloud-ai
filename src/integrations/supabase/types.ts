@@ -196,6 +196,47 @@ export type Database = {
           },
         ]
       }
+      amazon_credential_rotations: {
+        Row: {
+          created_at: string | null
+          credential_id: string | null
+          error_message: string | null
+          id: string
+          new_expiry_date: string | null
+          rotated_by: string
+          rotation_date: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          credential_id?: string | null
+          error_message?: string | null
+          id?: string
+          new_expiry_date?: string | null
+          rotated_by: string
+          rotation_date?: string | null
+          status: string
+        }
+        Update: {
+          created_at?: string | null
+          credential_id?: string | null
+          error_message?: string | null
+          id?: string
+          new_expiry_date?: string | null
+          rotated_by?: string
+          rotation_date?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "amazon_credential_rotations_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "amazon_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       amazon_credentials: {
         Row: {
           client_id: string
