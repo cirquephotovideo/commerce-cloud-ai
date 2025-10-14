@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Copy, Check, ExternalLink, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { MCPLibrary } from "@/lib/mcpLibraries";
+import { MCPToolsTab } from "./MCPToolsTab";
+import { MCPUseCasesTab } from "./MCPUseCasesTab";
 
 interface MCPInstallDialogProps {
   library: MCPLibrary | null;
@@ -111,9 +113,11 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
         </DialogHeader>
 
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="info">Informations</TabsTrigger>
             <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="tools">Fonctionnalités</TabsTrigger>
+            <TabsTrigger value="usecases">Cas d'Usage</TabsTrigger>
             <TabsTrigger value="test">Test</TabsTrigger>
           </TabsList>
 
@@ -200,6 +204,14 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
                   </div>
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="tools" className="space-y-4">
+              <MCPToolsTab library={library} />
+            </TabsContent>
+
+            <TabsContent value="usecases" className="space-y-4">
+              <MCPUseCasesTab library={library} />
             </TabsContent>
 
             <TabsContent value="test" className="space-y-4">

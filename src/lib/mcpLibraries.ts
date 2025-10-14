@@ -1,3 +1,18 @@
+import { prestashopTools, prestashopUseCases } from './prestashopMCPData';
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  example: string;
+}
+
+export interface MCPUseCase {
+  title: string;
+  description: string;
+  steps?: string[];
+  code?: string;
+}
+
 export interface MCPLibrary {
   id: string;
   name: string;
@@ -15,6 +30,14 @@ export interface MCPLibrary {
   installCommand: string;
   setupInstructions: string;
   documentation: string;
+  tools?: {
+    products?: MCPTool[];
+    orders?: MCPTool[];
+    customers?: MCPTool[];
+    database?: MCPTool[];
+    migration?: MCPTool[];
+  };
+  useCases?: MCPUseCase[];
 }
 
 export const MCP_LIBRARIES: MCPLibrary[] = [
@@ -585,19 +608,42 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
   // ========== PIXEEPLAY PACKAGES ==========
   {
     id: 'prestashop-mcp-pixeeplay',
-    name: 'PrestaShop MCP (Pixeeplay)',
+    name: 'PrestaShop MCP Server (Pixeeplay)',
     npmPackage: 'prestashop-mcp-server',
     version: '1.0.0',
-    description: 'Serveur MCP pour l\'API PrestaShop - Gestion complète de boutiques e-commerce',
+    description: 'Serveur MCP pour PrestaShop : Gestion complète des produits, commandes et clients via API REST avec 14 outils (products: get/create/update/delete, orders: get/update, customers: get/create/update/delete). Support pagination et filtrage avancé.',
     icon: '🛒',
     category: 'integration',
-    requiredEnvVars: ['PRESTASHOP_URL', 'PRESTASHOP_API_KEY'],
+    requiredEnvVars: ['PRESTASHOP_API_URL', 'PRESTASHOP_API_KEY'],
     defaultConfig: {
       auth_type: 'api_key'
     },
-    installCommand: 'npm install prestashop-mcp-server',
-    setupInstructions: '1. Aller dans PrestaShop Admin > Paramètres avancés > Webservice\n2. Activer le webservice\n3. Générer une clé API\n4. Configurer les permissions (produits, clients, commandes)\n5. Configurer PRESTASHOP_URL et PRESTASHOP_API_KEY',
-    documentation: 'https://www.npmjs.com/package/prestashop-mcp-server'
+    installCommand: 'npm install -g prestashop-mcp-server',
+    setupInstructions: `📋 Configuration PrestaShop WebService :
+
+1. Admin Panel > Paramètres avancés > Webservice
+2. Activer "Enable PrestaShop's webservice" à "Yes"
+3. Cliquer sur "Add new webservice key"
+4. Générer une clé API et définir les permissions :
+   ✓ Produits (products) : GET, POST, PUT, DELETE
+   ✓ Commandes (orders) : GET, PUT
+   ✓ Clients (customers) : GET, POST, PUT, DELETE
+
+5. Configurer les variables :
+   • PRESTASHOP_API_URL=https://your-store.com
+   • PRESTASHOP_API_KEY=your-generated-key
+
+🔧 Pour n8n/Docker, utiliser les préfixes MCP_ :
+   • MCP_PRESTASHOP_API_URL
+   • MCP_PRESTASHOP_API_KEY
+
+🎯 Outils disponibles (14) :
+   Produits: get_products, get_product, create_product, update_product, delete_product
+   Commandes: get_orders, get_order, update_order
+   Clients: get_customers, get_customer, create_customer, update_customer, delete_customer`,
+    documentation: 'https://www.npmjs.com/package/prestashop-mcp-server',
+    tools: prestashopTools,
+    useCases: prestashopUseCases
   },
   {
     id: 'odoo-mcp-pixeeplay',
