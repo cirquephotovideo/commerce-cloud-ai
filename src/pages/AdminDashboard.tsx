@@ -31,6 +31,7 @@ import { NewsletterManager } from "@/components/admin/marketing/NewsletterManage
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
 import { MCPClientsOverview } from "@/components/admin/MCPClientsOverview";
+import { MCPLibraryMarketplace } from "@/components/admin/MCPLibraryMarketplace";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("monitoring");
@@ -112,6 +113,15 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <MCPClientsOverview />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Marketplace MCP</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MCPLibraryMarketplace />
               </CardContent>
             </Card>
           </div>
