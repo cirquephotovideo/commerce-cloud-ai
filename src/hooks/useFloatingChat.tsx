@@ -81,11 +81,23 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
         return;
       }
 
-      // Call edge function
+      // Get session and access token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !sessionData.session) {
+        toast.error("Votre session a expiré. Veuillez vous reconnecter.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Call edge function with Authorization header
       const { data, error } = await supabase.functions.invoke('product-chat', {
         body: { 
           message,
           productId: productId || context.productId || null
+        },
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
         }
       });
 
@@ -104,9 +116,15 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
       console.error('Chat error:', error);
       
       let errorMessage = "Erreur lors de la communication avec l'IA.";
-      if (error.message?.includes('429')) {
+      
+      // More specific error handling
+      if (error.message?.includes('401') || error.status === 401) {
+        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+      } else if (error.message?.includes('404') || error.status === 404) {
+        errorMessage = "Produit introuvable.";
+      } else if (error.message?.includes('429') || error.status === 429) {
         errorMessage = "Trop de requêtes. Veuillez réessayer dans un instant.";
-      } else if (error.message?.includes('402')) {
+      } else if (error.message?.includes('402') || error.status === 402) {
         errorMessage = "Crédits insuffisants. Veuillez recharger votre compte.";
       }
       

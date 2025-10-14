@@ -14,6 +14,11 @@ serve(async (req) => {
   try {
     const { message, productId } = await req.json();
     
+    console.log('📨 Requête reçue:', { 
+      mode: productId ? `produit (${productId})` : 'général',
+      messageLength: message?.length 
+    });
+    
     if (!message) {
       return new Response(
         JSON.stringify({ error: 'Message requis' }),
@@ -33,18 +38,21 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
     // Get user
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
+      console.error('❌ Erreur authentification:', userError);
       return new Response(
         JSON.stringify({ error: 'Utilisateur non trouvé' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    console.log('✅ Utilisateur authentifié:', user.id);
 
     let systemPrompt = `Tu es un assistant IA expert en e-commerce et gestion de catalogue.
 
@@ -76,7 +84,7 @@ Réponds de manière concise, professionnelle et orientée résultats. Utilise d
         .single();
 
       if (productError) {
-        console.error('Erreur récupération produit:', productError);
+        console.error('❌ Erreur récupération produit:', productError);
         return new Response(
           JSON.stringify({ error: 'Produit non trouvé' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -84,6 +92,12 @@ Réponds de manière concise, professionnelle et orientée résultats. Utilise d
       }
 
       if (product) {
+        console.log('✅ Produit récupéré:', { 
+          id: product.id, 
+          name: product.product_name || product.name,
+          hasSuppliers: product.supplier_products?.length > 0,
+          hasAmazonData: !!product.amazon_product_data?.[0]
+        });
         const analysisResult = product.analysis_result || {};
         const amazonData = product.amazon_product_data?.[0] || null;
         
@@ -131,7 +145,11 @@ FORMAT DE RÉPONSE :
       throw new Error('LOVABLE_API_KEY non configuré');
     }
 
-    console.log('📤 Appel Lovable AI pour:', productId ? `produit ${productId}` : 'chat général');
+    console.log('📤 Appel Lovable AI:', { 
+      mode: productId ? `produit ${productId}` : 'général',
+      systemPromptLength: systemPrompt.length,
+      messageLength: message.length
+    });
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
