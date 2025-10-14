@@ -25,8 +25,12 @@ import { CompetitorsSection } from "./product-detail/sections/CompetitorsSection
 import { StockSection } from "./product-detail/sections/StockSection";
 import { DescriptionSection } from "./product-detail/sections/DescriptionSection";
 import { SpecsSection } from "./product-detail/sections/SpecsSection";
+import { RepairabilitySection } from "./product-detail/sections/RepairabilitySection";
+import { EnvironmentalSection } from "./product-detail/sections/EnvironmentalSection";
+import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
 import { useEnrichment } from "@/hooks/useEnrichment";
+import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -141,6 +145,9 @@ export function ProductDetailModal({
     product.analysis_result?.specifications ||
     product.analysis_result?.dimensions
   );
+  const hasRepairabilityData = Boolean(getRepairabilityData(analysis));
+  const hasEnvironmentalData = Boolean(getEnvironmentalData(analysis));
+  const hasHSCodeData = Boolean(getHSCodeData(analysis));
 
   // Compter les fournisseurs
   const supplierCount = product.supplier_count || 0;
@@ -243,6 +250,57 @@ export function ProductDetailModal({
                       <OverviewSection analysis={analysis} />
                     ) : (
                       <p className="text-muted-foreground">Aucune analyse disponible</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Réparabilité */}
+                <AccordionItem value="repairability" id="section-repairability">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Réparabilité
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasRepairabilityData && analysis ? (
+                      <RepairabilitySection analysis={analysis} />
+                    ) : (
+                      <p className="text-muted-foreground">Aucune donnée de réparabilité disponible</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Impact Environnemental */}
+                <AccordionItem value="environmental" id="section-environmental">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5" />
+                      Impact Environnemental
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasEnvironmentalData && analysis ? (
+                      <EnvironmentalSection analysis={analysis} />
+                    ) : (
+                      <p className="text-muted-foreground">Aucune donnée environnementale disponible</p>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Code Douanier */}
+                <AccordionItem value="hscode" id="section-hscode">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Code Douanier
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {hasHSCodeData && analysis ? (
+                      <HSCodeSection analysis={analysis} />
+                    ) : (
+                      <p className="text-muted-foreground">Aucun code douanier disponible</p>
                     )}
                   </AccordionContent>
                 </AccordionItem>

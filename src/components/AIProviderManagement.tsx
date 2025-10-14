@@ -13,6 +13,7 @@ import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save } fro
 import { useAIProvider, AIProvider } from "@/hooks/useAIProvider";
 import { ProviderSelector } from "./admin/ProviderSelector";
 import { ImportExportButtons } from "./admin/ImportExportButtons";
+import { useOllamaHealth } from "@/hooks/useOllamaHealth";
 
 type ProviderStatus = 'online' | 'offline' | 'degraded';
 
@@ -182,7 +183,41 @@ export default function AIProviderManagement() {
     });
   };
 
+  const { data: ollamaHealthData } = useOllamaHealth();
+
   const getStatusBadge = (provider: AIProvider) => {
+    // Pour Ollama, utiliser les données du hook
+    if (provider === 'ollama_cloud' || provider === 'ollama_local') {
+      const ollamaHealth = ollamaHealthData?.find(h => h.provider === provider);
+      
+      // Vérifier aussi dans ai_provider_configs si une clé API est configurée
+      const hasConfig = providerConfigs.find(c => c.provider === provider && c.api_key_encrypted);
+      
+      if (!ollamaHealth && !hasConfig) {
+        return <Badge variant="secondary">Non configuré</Badge>;
+      }
+      
+      if (ollamaHealth) {
+        const variants: Record<ProviderStatus, "default" | "destructive" | "secondary"> = {
+          online: "default",
+          offline: "destructive",
+          degraded: "secondary"
+        };
+
+        return (
+          <Badge variant={variants[ollamaHealth.status]}>
+            {ollamaHealth.status === 'online' && '🟢'}
+            {ollamaHealth.status === 'offline' && '🔴'}
+            {ollamaHealth.status === 'degraded' && '🟡'}
+            {' '}
+            {ollamaHealth.status}
+            {ollamaHealth.response_time_ms && ` (${ollamaHealth.response_time_ms}ms)`}
+          </Badge>
+        );
+      }
+    }
+
+    // Pour les autres providers, utiliser providerHealth
     const health = providerHealth.find(h => h.provider === provider);
     if (!health) return <Badge variant="secondary">Non configuré</Badge>;
 

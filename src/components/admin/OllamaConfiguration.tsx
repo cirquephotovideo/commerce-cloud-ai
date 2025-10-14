@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Server, TestTube, Settings, Cloud, HardDrive } from "lucide-react";
+import { Server, TestTube, Settings, Cloud, HardDrive, RefreshCw } from "lucide-react";
 import { ImportExportButtons } from "./ImportExportButtons";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -161,13 +161,38 @@ export const OllamaConfiguration = () => {
 
       if (error) throw error;
 
-      toast.success("Configuration sauvegardée");
+      // Appeler automatiquement la synchronisation
+      await syncToProviders();
+
+      toast.success("Configuration sauvegardée et synchronisée");
     } catch (error) {
       console.error("Error saving config:", error);
       const message = error instanceof Error ? error.message : "Erreur inconnue";
       toast.error(`Erreur lors de la sauvegarde: ${message}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const syncToProviders = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Session expirée');
+
+      const { data, error } = await supabase.functions.invoke('sync-ollama-to-providers', {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        console.log('Synchronisation réussie:', data);
+      } else {
+        console.warn('Synchronisation partielle:', data);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      // Ne pas afficher d'erreur à l'utilisateur car c'est un processus automatique
     }
   };
 
@@ -308,6 +333,14 @@ export const OllamaConfiguration = () => {
           >
             <TestTube className="w-4 h-4 mr-2" />
             {isTesting ? "Test en cours..." : "Tester la Connexion"}
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={syncToProviders}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Synchroniser
           </Button>
           
           <Button
