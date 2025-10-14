@@ -57,15 +57,35 @@ export const useAIProvider = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const { error } = await supabase
+      // Vérifier si un enregistrement existe
+      const { data: existing } = await supabase
         .from("user_provider_preferences")
-        .upsert({
-          user_id: session.user.id,
-          primary_provider: newProvider,
-          fallback_enabled: fallbackEnabled,
-        });
+        .select("id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      // UPDATE ou INSERT selon l'existence
+      let result;
+      if (existing) {
+        result = await supabase
+          .from("user_provider_preferences")
+          .update({
+            primary_provider: newProvider,
+            fallback_enabled: fallbackEnabled,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", session.user.id);
+      } else {
+        result = await supabase
+          .from("user_provider_preferences")
+          .insert({
+            user_id: session.user.id,
+            primary_provider: newProvider,
+            fallback_enabled: fallbackEnabled,
+          });
+      }
+
+      if (result.error) throw result.error;
 
       setProvider(newProvider);
       
@@ -90,15 +110,35 @@ export const useAIProvider = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const { error } = await supabase
+      // Vérifier si un enregistrement existe
+      const { data: existing } = await supabase
         .from("user_provider_preferences")
-        .upsert({
-          user_id: session.user.id,
-          primary_provider: provider,
-          fallback_enabled: enabled,
-        });
+        .select("id")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      // UPDATE ou INSERT selon l'existence
+      let result;
+      if (existing) {
+        result = await supabase
+          .from("user_provider_preferences")
+          .update({
+            primary_provider: provider,
+            fallback_enabled: enabled,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", session.user.id);
+      } else {
+        result = await supabase
+          .from("user_provider_preferences")
+          .insert({
+            user_id: session.user.id,
+            primary_provider: provider,
+            fallback_enabled: enabled,
+          });
+      }
+
+      if (result.error) throw result.error;
 
       setFallbackEnabled(enabled);
       toast.success(`Fallback ${enabled ? 'activé' : 'désactivé'}`);
