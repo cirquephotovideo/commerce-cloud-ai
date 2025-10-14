@@ -265,3 +265,6 @@ verify_jwt = false
 [functions.supplier-webhook-receiver]
 verify_jwt = false
 
+[functions.mcp-proxy]
+verify_jwt = true
+

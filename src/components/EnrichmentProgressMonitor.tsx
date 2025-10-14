@@ -210,6 +210,14 @@ export function EnrichmentProgressMonitor() {
   // Calculer le coût total des enrichissements
   const getCostStats = () => {
     const calculateTaskCost = (task: EnrichmentTask) => {
+      // Vérifier si la tâche utilise Ollama (gratuit)
+      const metadata = task as any;
+      if (metadata.metadata?.provider === 'ollama' || 
+          metadata.metadata?.provider === 'ollama_cloud' ||
+          metadata.metadata?.provider === 'ollama_local') {
+        return 0; // Ollama est GRATUIT
+      }
+      
       return task.enrichment_type.reduce((total, type) => {
         return total + (ENRICHMENT_COSTS[type] || ENRICHMENT_COSTS.default);
       }, 0);
@@ -226,12 +234,21 @@ export function EnrichmentProgressMonitor() {
       .filter(t => t.status === 'pending')
       .reduce((sum, task) => sum + calculateTaskCost(task), 0);
 
+    // Compter les tâches Ollama séparément
+    const ollamaTasks = tasks.filter(t => {
+      const metadata = t as any;
+      return metadata.metadata?.provider === 'ollama' || 
+             metadata.metadata?.provider === 'ollama_cloud' ||
+             metadata.metadata?.provider === 'ollama_local';
+    });
+
     return {
       total: totalCost,
       completed: completedCost,
       processing: processingCost,
       pending: pendingCost,
-      failed: totalCost - completedCost - processingCost - pendingCost
+      failed: totalCost - completedCost - processingCost - pendingCost,
+      ollama_count: ollamaTasks.length
     };
   };
 
@@ -508,7 +525,14 @@ export function EnrichmentProgressMonitor() {
           {/* Ligne 2: Stats de coûts */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/20">
-              <div className="text-xl font-bold text-purple-600">{costStats.total.toFixed(2)}€</div>
+              <div className="text-xl font-bold text-purple-600">
+                {costStats.total.toFixed(2)}€
+                {costStats.ollama_count > 0 && (
+                  <span className="text-xs text-green-600 ml-2">
+                    +{costStats.ollama_count} gratuits
+                  </span>
+                )}
+              </div>
               <div className="text-xs text-muted-foreground font-semibold">Coût Total</div>
             </div>
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -650,6 +674,89 @@ export function EnrichmentProgressMonitor() {
             )}
           </div>
         </ScrollArea>
+
+        {/* Section Résultats d'Enrichissement */}
+        {stats.completed > 0 && (
+          <div className="mt-6 space-y-4 pt-6 border-t">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                Résultats des Enrichissements ({stats.completed})
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadTasks}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                Actualiser
+              </Button>
+            </div>
+            
+            <div className="text-sm text-muted-foreground mb-4">
+              Les produits ont été enrichis avec succès. Consultez les fiches produits pour voir les détails.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {tasks
+                .filter(t => t.status === 'completed')
+                .slice(0, 9)
+                .map((task) => {
+                  const Icon = ENRICHMENT_ICONS[task.enrichment_type[0]] || ENRICHMENT_ICONS.default;
+                  
+                  return (
+                    <Card key={task.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                            <Icon className="h-4 w-4 text-green-600" />
+                          </div>
+                          <h4 className="font-semibold truncate text-sm">
+                            Enrichissement terminé
+                          </h4>
+                        </div>
+                        
+                        <div className="space-y-1">
+                          {task.enrichment_type.slice(0, 3).map(type => {
+                            const TypeIcon = ENRICHMENT_ICONS[type] || ENRICHMENT_ICONS.default;
+                            return (
+                              <div key={type} className="flex items-center gap-2 text-xs">
+                                <TypeIcon className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-muted-foreground">{ENRICHMENT_LABELS[type]}</span>
+                                <CheckCircle2 className="h-3 w-3 text-green-600 ml-auto" />
+                              </div>
+                            );
+                          })}
+                          {task.enrichment_type.length > 3 && (
+                            <div className="text-xs text-muted-foreground italic">
+                              +{task.enrichment_type.length - 3} autres...
+                            </div>
+                          )}
+                        </div>
+                        
+                        {task.completed_at && (
+                          <div className="pt-2 border-t text-xs text-muted-foreground">
+                            Terminé {formatDistanceToNow(new Date(task.completed_at), { 
+                              addSuffix: true,
+                              locale: fr 
+                            })}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
+
+            {tasks.filter(t => t.status === 'completed').length > 9 && (
+              <div className="text-center pt-4">
+                <Button variant="outline" onClick={loadTasks}>
+                  Voir tous les résultats ({tasks.filter(t => t.status === 'completed').length})
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

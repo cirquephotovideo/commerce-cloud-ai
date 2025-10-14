@@ -26,6 +26,7 @@ import { AmazonLogs } from "@/components/admin/AmazonLogs";
 import { AmazonProductTester } from "@/components/admin/AmazonProductTester";
 import { RoleDebugger } from "@/components/admin/RoleDebugger";
 import { OllamaConfiguration } from "@/components/admin/OllamaConfiguration";
+import { MCPServerConfiguration } from "@/components/admin/MCPServerConfiguration";
 import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
@@ -144,6 +145,7 @@ const AdminDashboard = () => {
               <GlobalAPIKeysManager />
               <APIKeyManagement />
               <OllamaConfiguration />
+              <MCPServerConfiguration />
             </TabsContent>
 
             <TabsContent value="prompts">
