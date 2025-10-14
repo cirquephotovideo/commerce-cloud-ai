@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Package, Battery, Wifi, Ruler, Weight } from "lucide-react";
 import { EnrichmentStatusIndicator } from "../EnrichmentStatusIndicator";
 import { useEnrichment } from "@/hooks/useEnrichment";
+import { navigateToProduct } from "@/lib/productNavigationEvents";
 
 interface SpecsSectionProps {
   analysis: any;
@@ -19,6 +20,15 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
   
   // Statuts d'enrichissement
   const enrichmentStatus = analysis?.enrichment_status || {};
+
+  // Handler de navigation globale
+  const handleNavigateToEnrichment = (section: 'specifications' | 'cost_analysis' | 'technical_description') => {
+    navigateToProduct({
+      productId: analysis.id,
+      productName: analysis.analysis_result?.name || 'Produit',
+      targetSection: section,
+    });
+  };
 
   // Extraire dimensions, batterie, connectivité depuis analysis_result
   const dimensions = analysis?.analysis_result?.dimensions || 
@@ -38,7 +48,10 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
               <Settings className="h-5 w-5" />
               Spécifications Techniques
             </span>
-            <EnrichmentStatusIndicator status={enrichmentStatus.specifications} />
+            <EnrichmentStatusIndicator 
+              status={enrichmentStatus.specifications}
+              onClick={() => handleNavigateToEnrichment('specifications')}
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -76,7 +89,10 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
               <Package className="h-5 w-5" />
               Analyse des Coûts
             </span>
-            <EnrichmentStatusIndicator status={enrichmentStatus.cost_analysis} />
+            <EnrichmentStatusIndicator 
+              status={enrichmentStatus.cost_analysis}
+              onClick={() => handleNavigateToEnrichment('cost_analysis')}
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -114,7 +130,10 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
               <Settings className="h-5 w-5" />
               Description Technique
             </span>
-            <EnrichmentStatusIndicator status={enrichmentStatus.technical_description} />
+            <EnrichmentStatusIndicator 
+              status={enrichmentStatus.technical_description}
+              onClick={() => handleNavigateToEnrichment('technical_description')}
+            />
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -169,6 +169,51 @@ export default function Dashboard() {
     checkAuth();
   }, [navigate]);
 
+  // Écouter les événements de navigation globale
+  useEffect(() => {
+    const handleProductNavigation = (e: CustomEvent<{ productId: string; productName: string; targetSection?: string }>) => {
+      const { productId, targetSection } = e.detail;
+      
+      // Trouver le produit dans les analyses
+      const product = analyses.find(a => a.id === productId);
+      
+      if (product) {
+        // Ouvrir le modal de détail
+        setSelectedAnalysis(product);
+        setIsModalOpen(true);
+        
+        // Si targetSection est défini, déclencher la navigation interne
+        if (targetSection) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('navigate-to-tab', { 
+              detail: { tabName: targetSection } 
+            }));
+          }, 300); // Délai pour laisser le modal s'ouvrir
+        }
+        
+        // Scroll vers le haut
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        toast({
+          title: "🔍 Navigation",
+          description: `Ouverture du produit : ${product.analysis_result?.name || 'Produit'}`,
+        });
+      } else {
+        toast({
+          title: "❌ Produit introuvable",
+          description: "Ce produit n'existe plus dans votre catalogue.",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    window.addEventListener('navigate-to-product', handleProductNavigation as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigate-to-product', handleProductNavigation as EventListener);
+    };
+  }, [analyses, toast]);
+
   // Auto-categorize new analyses
   useEffect(() => {
     const categorizNewAnalyses = async () => {

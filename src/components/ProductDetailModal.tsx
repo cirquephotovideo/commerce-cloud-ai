@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
@@ -39,6 +39,7 @@ interface ProductDetailModalProps {
   product: any;
   onExport?: (platform: string) => void;
   onEnrich?: () => void;
+  initialTab?: string;
 }
 
 export function ProductDetailModal({ 
@@ -46,11 +47,26 @@ export function ProductDetailModal({
   onOpenChange, 
   product,
   onExport,
-  onEnrich
+  onEnrich,
+  initialTab
 }: ProductDetailModalProps) {
   const [showVideoWizard, setShowVideoWizard] = useState(false);
   const [showProviderSelector, setShowProviderSelector] = useState(false);
+  const [activeAccordion, setActiveAccordion] = useState<string[]>([]);
   const queryClient = useQueryClient();
+
+  // Mapping des sections vers les IDs d'accordion
+  const sectionToAccordionMap: Record<string, string> = {
+    'specifications': 'specifications',
+    'cost_analysis': 'specifications',
+    'technical_description': 'description',
+    'amazon': 'amazon',
+    'video': 'video',
+    'images': 'images',
+    'rsgp': 'rsgp',
+    'overview': 'overview',
+    'description': 'description',
+  };
 
   // Récupérer l'analyse complète
   const { data: analysis } = useQuery({
@@ -99,6 +115,46 @@ export function ProductDetailModal({
     queryClient.invalidateQueries({ queryKey: ['enrichment-queue', analysis?.id] });
     if (onEnrich) onEnrich();
   };
+
+  // Écouter les changements d'onglet depuis l'extérieur
+  useEffect(() => {
+    const handleTabNavigation = (e: CustomEvent) => {
+      const targetSection = e.detail.tabName;
+      const accordionId = sectionToAccordionMap[targetSection] || targetSection;
+      
+      // Ouvrir l'accordion correspondant
+      setActiveAccordion(prev => {
+        if (!prev.includes(accordionId)) {
+          return [...prev, accordionId];
+        }
+        return prev;
+      });
+      
+      // Scroll vers la section après un court délai
+      setTimeout(() => {
+        const section = document.getElementById(`section-${accordionId}`);
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    };
+    
+    window.addEventListener('navigate-to-tab', handleTabNavigation as EventListener);
+    
+    return () => {
+      window.removeEventListener('navigate-to-tab', handleTabNavigation as EventListener);
+    };
+  }, []);
+
+  // Réinitialiser l'accordion à l'ouverture
+  useEffect(() => {
+    if (open && initialTab) {
+      const accordionId = sectionToAccordionMap[initialTab] || initialTab;
+      setActiveAccordion([accordionId]);
+    } else if (!open) {
+      setActiveAccordion([]);
+    }
+  }, [open, initialTab]);
 
   const handleEnrich = (type: string) => {
     const typeMap: Record<string, string[]> = {
@@ -238,7 +294,12 @@ export function ProductDetailModal({
 
             {/* DÉTAILS ÉTENDUS - ACCORDION */}
             <ScrollArea className="h-[60vh] px-4">
-              <Accordion type="multiple" className="space-y-2">
+              <Accordion 
+                type="multiple" 
+                className="space-y-2"
+                value={activeAccordion}
+                onValueChange={setActiveAccordion}
+              >
                 {/* Vue Globale */}
                 <AccordionItem value="overview" id="section-overview">
                   <AccordionTrigger className="text-lg font-semibold">
