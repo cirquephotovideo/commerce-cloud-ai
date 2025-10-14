@@ -237,3 +237,6 @@ verify_jwt = false
 
 [functions.test-pop3-connection]
 verify_jwt = false
+
+[functions.product-chat]
+verify_jwt = true

@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign } from "lucide-react";
+import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import { StockSection } from "./product-detail/sections/StockSection";
 import { DescriptionSection } from "./product-detail/sections/DescriptionSection";
 import { SpecsSection } from "./product-detail/sections/SpecsSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
+import { ProductChatDialog } from "./ProductChatDialog";
 import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface ProductDetailModalProps {
@@ -44,6 +45,7 @@ export function ProductDetailModal({
   onEnrich
 }: ProductDetailModalProps) {
   const [showVideoWizard, setShowVideoWizard] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const queryClient = useQueryClient();
 
   // Récupérer l'analyse complète
@@ -194,9 +196,17 @@ export function ProductDetailModal({
             {/* Actions Rapides */}
             <div className="flex flex-wrap gap-2 px-4">
               <Button
+                onClick={() => setShowChat(true)}
+                variant="default"
+                className="bg-gradient-to-r from-primary to-primary/80"
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                💬 Discuter avec l'IA
+              </Button>
+              <Button
                 onClick={() => reEnrichMutation.mutate({ types: ['amazon', 'ai_analysis'] })}
                 disabled={reEnrichMutation.isPending}
-                variant="default"
+                variant="outline"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Tout Réenrichir
@@ -456,6 +466,16 @@ export function ProductDetailModal({
             handleRefresh();
           }}
           onClose={() => setShowVideoWizard(false)}
+        />
+      )}
+      
+      {/* Product Chat Dialog */}
+      {showChat && (
+        <ProductChatDialog
+          open={showChat}
+          onOpenChange={setShowChat}
+          productId={product.id}
+          productName={product.product_name || product.name}
         />
       )}
     </>
