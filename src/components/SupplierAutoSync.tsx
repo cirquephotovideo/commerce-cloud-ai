@@ -1,48 +1,116 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Clock, Zap } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { RefreshCw, Zap } from "lucide-react";
 
-export const SupplierAutoSync = () => {
-  const [syncing, setSyncing] = useState(false);
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(false);
+interface SupplierAutoSyncProps {
+  supplierId: string;
+}
 
-  const handleManualSync = async () => {
-    setSyncing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('auto-supplier-sync');
-      
+export const SupplierAutoSync = ({ supplierId }: SupplierAutoSyncProps) => {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: config, isLoading } = useQuery({
+    queryKey: ['supplier-config', supplierId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('supplier_configurations')
+        .select('*')
+        .eq('id', supplierId)
+        .single();
+
       if (error) throw error;
+      return data;
+    },
+  });
 
-      const successCount = data.successCount || 0;
-      const warningCount = data.warningCount || 0;
-      const errorCount = data.errorCount || 0;
+  const updateConfig = useMutation({
+    mutationFn: async (updates: any) => {
+      const { error } = await supabase
+        .from('supplier_configurations')
+        .update(updates)
+        .eq('id', supplierId);
 
-      toast.success(
-        `Synchronisation terminée: ${data.suppliers_processed} fournisseurs traités\n` +
-        `✅ ${successCount} succès | ⚠️ ${warningCount} avertissements | ❌ ${errorCount} erreurs`,
-        { duration: 5000 }
-      );
-      
-      // Show detailed results
-      if (data.results && data.results.length > 0) {
-        const warnings = data.results.filter((r: any) => r.status === 'warning');
-        if (warnings.length > 0) {
-          console.log('Sync warnings:', warnings);
-        }
-      }
-    } catch (error: any) {
-      console.error('Sync error:', error);
-      toast.error("Erreur lors de la synchronisation automatique");
-    } finally {
-      setSyncing(false);
-    }
-  };
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['supplier-config', supplierId] });
+      toast({
+        title: "Configuration mise à jour",
+        description: "Les paramètres de synchronisation ont été sauvegardés",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour la configuration",
+        variant: "destructive",
+      });
+      console.error('Error updating config:', error);
+    },
+  });
+
+  const triggerSync = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.functions.invoke('supplier-sync-scheduler', {
+        body: { supplierId },
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Synchronisation lancée",
+        description: "La synchronisation a été démarrée en arrière-plan",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible de lancer la synchronisation",
+        variant: "destructive",
+      });
+      console.error('Error triggering sync:', error);
+    },
+  });
+
+  const autoLink = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase.functions.invoke('auto-link-supplier-products', {
+        body: { userId: user.id, supplierId },
+      });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Auto-liaison terminée",
+        description: "Les produits ont été liés automatiquement par EAN",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Erreur",
+        description: "Impossible d'effectuer l'auto-liaison",
+        variant: "destructive",
+      });
+      console.error('Error auto-linking:', error);
+    },
+  });
+
+  if (isLoading) {
+    return <div>Chargement...</div>;
+  }
 
   return (
     <Card>
@@ -52,84 +120,87 @@ export const SupplierAutoSync = () => {
           Synchronisation Automatique
         </CardTitle>
         <CardDescription>
-          Synchronisez automatiquement tous vos fournisseurs actifs
+          Configurez la synchronisation automatique avec ce fournisseur
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Synchronisation manuelle */}
-        <div className="space-y-2">
-          <h3 className="font-semibold">Synchronisation Manuelle</h3>
-          <p className="text-sm text-muted-foreground">
-            Lancez une synchronisation immédiate de tous vos fournisseurs actifs
-          </p>
-          <Button 
-            onClick={handleManualSync} 
-            disabled={syncing}
-            className="w-full"
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Synchronisation en cours...
-              </>
-            ) : (
-              <>
-                <Zap className="w-4 h-4 mr-2" />
-                Synchroniser Maintenant
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* Synchronisation automatique (planifiée) */}
-        <div className="space-y-4 pt-4 border-t">
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="auto-sync" className="flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Synchronisation Nocturne Automatique
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Active la synchronisation quotidienne à 2h du matin
-              </p>
-            </div>
-            <Switch
-              id="auto-sync"
-              checked={autoSyncEnabled}
-              onCheckedChange={setAutoSyncEnabled}
-            />
+        {/* Auto-sync enabled */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="auto-sync">Synchronisation automatique</Label>
+            <p className="text-sm text-muted-foreground">
+              Synchroniser automatiquement les produits à intervalle régulier
+            </p>
           </div>
-
-          {autoSyncEnabled && (
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">
-                  <Clock className="w-3 h-3 mr-1" />
-                  Planifié quotidiennement à 02:00
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                💡 Pour activer la synchronisation automatique nocturne, configurez un cron job dans votre système:
-              </p>
-              <code className="block p-2 bg-background rounded text-xs">
-                0 2 * * * curl -X POST {window.location.origin}/functions/v1/auto-supplier-sync
-              </code>
-              <p className="text-xs text-muted-foreground">
-                Ou utilisez le planificateur Supabase pg_cron pour déclencher automatiquement.
-              </p>
-            </div>
-          )}
+          <Switch
+            id="auto-sync"
+            checked={config?.auto_sync_enabled || false}
+            onCheckedChange={(checked) => {
+              updateConfig.mutate({ auto_sync_enabled: checked });
+            }}
+          />
         </div>
 
-        {/* Instructions */}
-        <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg space-y-2">
-          <h4 className="font-semibold text-sm">📋 Fonctionnement</h4>
-          <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-            <li>Synchronise uniquement les fournisseurs actifs</li>
-            <li>Ignore les fournisseurs de type "Fichier"</li>
-            <li>Supporte: API, FTP, SFTP, PrestaShop, WooCommerce, Magento, Shopify, Odoo</li>
-            <li>Mise à jour automatique de la date de dernière synchronisation</li>
-          </ul>
+        {/* Sync frequency */}
+        {config?.auto_sync_enabled && (
+          <div className="space-y-2">
+            <Label htmlFor="sync-frequency">Fréquence de synchronisation</Label>
+            <Select
+              value={config?.sync_frequency || 'daily'}
+              onValueChange={(value) => {
+                updateConfig.mutate({ sync_frequency: value });
+              }}
+            >
+              <SelectTrigger id="sync-frequency">
+                <SelectValue placeholder="Choisir la fréquence" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="hourly">Toutes les heures</SelectItem>
+                <SelectItem value="daily">Quotidienne</SelectItem>
+                <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                <SelectItem value="manual">Manuelle uniquement</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Auto-link by EAN */}
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="auto-link">Liaison automatique par EAN</Label>
+            <p className="text-sm text-muted-foreground">
+              Lier automatiquement les produits ayant le même code EAN
+            </p>
+          </div>
+          <Switch
+            id="auto-link"
+            checked={config?.auto_link_by_ean || false}
+            onCheckedChange={(checked) => {
+              updateConfig.mutate({ auto_link_by_ean: checked });
+            }}
+          />
+        </div>
+
+        {/* Manual actions */}
+        <div className="flex gap-2 pt-4 border-t">
+          <Button
+            variant="outline"
+            onClick={() => triggerSync.mutate()}
+            disabled={triggerSync.isPending}
+            className="flex-1"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${triggerSync.isPending ? 'animate-spin' : ''}`} />
+            Synchroniser maintenant
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => autoLink.mutate()}
+            disabled={autoLink.isPending}
+            className="flex-1"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Auto-lier les produits
+          </Button>
         </div>
       </CardContent>
     </Card>
