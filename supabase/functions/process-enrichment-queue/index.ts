@@ -16,11 +16,11 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { maxItems = 10 } = await req.json();
+    const { maxItems = 50, parallel = 5 } = await req.json();
 
-    console.log(`[ENRICHMENT-QUEUE] Starting processing (max ${maxItems} items)`);
+    console.log(`[ENRICHMENT-QUEUE] Starting processing (max ${maxItems} items, ${parallel} parallel)`);
 
-    // Fetch pending tasks
+    // Fetch pending tasks with priority: EAN-based products first
     const { data: tasks, error: tasksError } = await supabase
       .from('enrichment_queue')
       .select('*, supplier_products(*)')
@@ -42,16 +42,28 @@ serve(async (req) => {
 
     let successCount = 0;
     let errorCount = 0;
+    const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes timeout per task
 
-    for (const task of tasks) {
-      try {
-        console.log(`[ENRICHMENT-QUEUE] Processing task ${task.id} for product ${task.supplier_product_id}`);
+    // Process tasks in parallel batches
+    const processTask = async (task: any) => {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Task timeout after 10 minutes')), TIMEOUT_MS)
+      );
 
-        // Update status to processing
-        await supabase
-          .from('enrichment_queue')
-          .update({ status: 'processing', started_at: new Date().toISOString() })
-          .eq('id', task.id);
+      const taskPromise = (async () => {
+        try {
+          console.log(`[ENRICHMENT-QUEUE] Processing task ${task.id} for product ${task.supplier_product_id}`);
+
+          // Update status to processing with timeout timestamp
+          const timeoutAt = new Date(Date.now() + TIMEOUT_MS).toISOString();
+          await supabase
+            .from('enrichment_queue')
+            .update({ 
+              status: 'processing', 
+              started_at: new Date().toISOString(),
+              timeout_at: timeoutAt 
+            })
+            .eq('id', task.id);
 
         const supplierProduct = task.supplier_products;
         if (!supplierProduct) {
@@ -192,24 +204,65 @@ serve(async (req) => {
           },
         });
 
-        successCount++;
-        console.log(`[ENRICHMENT-QUEUE] Task ${task.id} completed successfully`);
+          successCount++;
+          console.log(`[ENRICHMENT-QUEUE] Task ${task.id} completed successfully`);
+          return { success: true, taskId: task.id };
 
-      } catch (error: any) {
-        console.error(`[ENRICHMENT-QUEUE] Error processing task ${task.id}:`, error);
-        
-        // Mark as failed
-        await supabase
-          .from('enrichment_queue')
-          .update({ 
-            status: 'failed', 
-            error_message: error.message,
-            completed_at: new Date().toISOString() 
-          })
-          .eq('id', task.id);
+        } catch (error: any) {
+          console.error(`[ENRICHMENT-QUEUE] Error processing task ${task.id}:`, error);
+          
+          // Check retry count
+          const currentRetryCount = task.retry_count || 0;
+          const maxRetries = task.max_retries || 2;
+          
+          if (currentRetryCount < maxRetries) {
+            // Mark for retry
+            await supabase
+              .from('enrichment_queue')
+              .update({ 
+                status: 'pending',
+                retry_count: currentRetryCount + 1,
+                last_error: error.message,
+                started_at: null,
+                timeout_at: null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', task.id);
+            console.log(`[ENRICHMENT-QUEUE] Task ${task.id} will retry (${currentRetryCount + 1}/${maxRetries})`);
+          } else {
+            // Mark as failed - max retries reached
+            await supabase
+              .from('enrichment_queue')
+              .update({ 
+                status: 'failed', 
+                error_message: error.message,
+                last_error: error.message,
+                completed_at: new Date().toISOString() 
+              })
+              .eq('id', task.id);
+          }
 
-        errorCount++;
-      }
+          errorCount++;
+          return { success: false, taskId: task.id, error: error.message };
+        }
+      })();
+
+      // Race between task and timeout
+      return Promise.race([taskPromise, timeoutPromise]);
+    };
+
+    // Process tasks in parallel batches of N
+    for (let i = 0; i < tasks.length; i += parallel) {
+      const batch = tasks.slice(i, i + parallel);
+      console.log(`[ENRICHMENT-QUEUE] Processing batch ${Math.floor(i / parallel) + 1} (${batch.length} tasks)`);
+      
+      const results = await Promise.allSettled(batch.map(processTask));
+      
+      results.forEach((result, idx) => {
+        if (result.status === 'rejected') {
+          console.error(`[ENRICHMENT-QUEUE] Task ${batch[idx].id} rejected:`, result.reason);
+        }
+      });
     }
 
     console.log(`[ENRICHMENT-QUEUE] Processing complete: ${successCount} succeeded, ${errorCount} failed`);
