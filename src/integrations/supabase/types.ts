@@ -1923,6 +1923,10 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean | null
+          mcp_allowed_tools: Json | null
+          mcp_chat_enabled: boolean | null
+          mcp_version_client: string | null
+          mcp_version_server: string | null
           platform_type: string
           platform_url: string
           supports_import: boolean | null
@@ -1937,6 +1941,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          mcp_allowed_tools?: Json | null
+          mcp_chat_enabled?: boolean | null
+          mcp_version_client?: string | null
+          mcp_version_server?: string | null
           platform_type: string
           platform_url: string
           supports_import?: boolean | null
@@ -1951,6 +1959,10 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          mcp_allowed_tools?: Json | null
+          mcp_chat_enabled?: boolean | null
+          mcp_version_client?: string | null
+          mcp_version_server?: string | null
           platform_type?: string
           platform_url?: string
           supports_import?: boolean | null

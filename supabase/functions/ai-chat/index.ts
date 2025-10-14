@@ -19,9 +19,20 @@ serve(async (req) => {
     const body = await req.json();
     console.log('[AI-CHAT] Request body:', JSON.stringify(body));
     
-    const { message, messages = [] } = body;
+    const { message, messages = [], mcpContext } = body;
     console.log('[AI-CHAT] Message:', message);
     console.log('[AI-CHAT] Messages count:', messages.length);
+    console.log('[AI-CHAT] MCP Context:', mcpContext);
+
+    // Si c'est une requête MCP, ajouter le contexte au system prompt
+    let systemPrompt = `Tu es un assistant IA spécialisé dans l'e-commerce. Tu aides les utilisateurs à analyser des produits, 
+    comprendre les tendances du marché, et optimiser leur stratégie commerciale. Tu as accès à la recherche web pour 
+    fournir des informations à jour. Sois précis, professionnel et orienté business dans tes réponses.`;
+    
+    if (mcpContext?.packageId && mcpContext?.toolName) {
+      systemPrompt += `\n\nTu as également accès à des outils MCP pour interagir avec ${mcpContext.packageId}. 
+      L'utilisateur peut utiliser la commande /mcp <package> <tool> [args] pour appeler ces outils directement.`;
+    }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     console.log('[AI-CHAT] LOVABLE_API_KEY present:', !!LOVABLE_API_KEY);
@@ -34,9 +45,7 @@ serve(async (req) => {
     const conversationHistory = [
       {
         role: 'system',
-        content: `Tu es un assistant IA spécialisé dans l'e-commerce. Tu aides les utilisateurs à analyser des produits, 
-        comprendre les tendances du marché, et optimiser leur stratégie commerciale. Tu as accès à la recherche web pour 
-        fournir des informations à jour. Sois précis, professionnel et orienté business dans tes réponses.`
+        content: systemPrompt
       },
       ...messages,
       { role: 'user', content: message }

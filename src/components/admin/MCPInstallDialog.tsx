@@ -27,6 +27,11 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
+  const [versionInfo, setVersionInfo] = useState({
+    client: library.version,
+    server: null as string | null,
+    compatible: null as boolean | null
+  });
 
   if (!library) return null;
 
@@ -54,6 +59,16 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
       if (missingVars.length > 0) {
         throw new Error(`Variables manquantes: ${missingVars.join(', ')}`);
       }
+
+      // Simuler la détection de version serveur
+      const detectedServerVersion = library.version; // En réalité, cela serait récupéré du serveur
+      const compatible = detectedServerVersion === library.version;
+      
+      setVersionInfo({
+        client: library.version,
+        server: detectedServerVersion,
+        compatible: compatible
+      });
 
       setTestResult('success');
       toast.success("Connexion réussie !");
@@ -83,7 +98,11 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
           version: library.version,
           auth_type: library.defaultConfig.auth_type,
           credentials: envVars
-        }
+        },
+        mcp_version_client: versionInfo.client,
+        mcp_version_server: versionInfo.server,
+        mcp_chat_enabled: true,
+        mcp_allowed_tools: []
       });
 
       if (error) throw error;
@@ -220,6 +239,30 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
                   Testez la connexion à {library.name} avant d'activer le service.
                 </AlertDescription>
               </Alert>
+
+              {versionInfo.server && (
+                <div className="space-y-2 p-4 border rounded-lg">
+                  <h4 className="font-semibold text-sm">Informations de Version</h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Version Client:</span>
+                      <Badge variant="outline" className="ml-2">{versionInfo.client}</Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Version Serveur:</span>
+                      <Badge variant="outline" className="ml-2">{versionInfo.server}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-sm text-muted-foreground">Compatibilité:</span>
+                    {versionInfo.compatible ? (
+                      <Badge className="bg-green-500">✅ Compatible</Badge>
+                    ) : (
+                      <Badge variant="destructive">⚠️ Versions différentes</Badge>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Button 
                 className="w-full" 

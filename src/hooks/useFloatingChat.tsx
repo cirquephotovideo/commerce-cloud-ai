@@ -18,6 +18,10 @@ export function useFloatingChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [context, setContext] = useState<ChatContext>({ type: 'general' });
+  const [mcpContext, setMcpContext] = useState<{
+    packageId?: string;
+    toolName?: string;
+  }>({});
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -52,8 +56,22 @@ export function useFloatingChat() {
     setIsLoading(true);
 
     try {
+      // Detect MCP commands
+      let mcpCommand = null;
+      if (message.startsWith('/mcp ')) {
+        const parts = message.split(' ');
+        if (parts.length >= 3) {
+          // Format: /mcp <package> <tool> [args]
+          mcpCommand = {
+            packageId: parts[1],
+            toolName: parts[2],
+            args: parts.slice(3).join(' ')
+          };
+        }
+      }
+
       // Handle commands
-      if (message.startsWith('/')) {
+      if (message.startsWith('/') && !mcpCommand) {
         const parts = message.split(' ');
         let systemResponse = '';
         
@@ -64,6 +82,7 @@ export function useFloatingChat() {
 /clear - Efface l'historique
 /product [id] - Change de contexte produit
 /general - Retour au mode général
+/mcp <package> <tool> [args] - Appeler un outil MCP
 
 Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${context.productName}` : 'général'}.`;
             break;
@@ -90,11 +109,33 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
         return;
       }
 
+      // If MCP command, call mcp-proxy instead
+      if (mcpCommand) {
+        const { data, error } = await supabase.functions.invoke('mcp-proxy', {
+          body: mcpCommand,
+          headers: {
+            Authorization: `Bearer ${sessionData.session.access_token}`
+          }
+        });
+
+        if (error) throw error;
+
+        const assistantMessage: ChatMessage = {
+          role: 'assistant',
+          content: JSON.stringify(data, null, 2),
+          timestamp: Date.now()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+        setIsLoading(false);
+        return;
+      }
+
       // Call edge function with Authorization header
       const { data, error } = await supabase.functions.invoke('product-chat', {
         body: { 
           message,
-          productId: productId || context.productId || null
+          productId: productId || context.productId || null,
+          mcpContext: mcpContext
         },
         headers: {
           Authorization: `Bearer ${sessionData.session.access_token}`
@@ -204,6 +245,10 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
     }
   };
 
+  const setMCPContextForChat = (packageId: string, toolName: string) => {
+    setMcpContext({ packageId, toolName });
+  };
+
   return {
     messages,
     isLoading,
@@ -212,6 +257,7 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
     clearHistory,
     switchToProduct,
     switchToGeneral,
-    getSuggestions
+    getSuggestions,
+    setMCPContextForChat
   };
 }

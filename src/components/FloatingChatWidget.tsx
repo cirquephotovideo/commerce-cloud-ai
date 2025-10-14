@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, X, Minimize2, Send, Sparkles, Loader2, Bot, User } from "lucide-react";
 import { useFloatingChat } from "@/hooks/useFloatingChat";
+import { useMCPContext } from "@/hooks/useMCPContext";
 import { cn } from "@/lib/utils";
 
 interface FloatingChatWidgetProps {
@@ -28,6 +29,8 @@ export function FloatingChatWidget({ analyses = [], onProductSelect }: FloatingC
     switchToGeneral,
     getSuggestions
   } = useFloatingChat();
+
+  const { mcpPackages, getMCPSuggestions } = useMCPContext();
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -77,7 +80,9 @@ export function FloatingChatWidget({ analyses = [], onProductSelect }: FloatingC
     setInputMessage(suggestion);
   };
 
-  const suggestions = getSuggestions();
+  const baseSuggestions = getSuggestions();
+  const mcpSuggestions = getMCPSuggestions();
+  const suggestions = [...baseSuggestions, ...mcpSuggestions];
 
   return (
     <>
@@ -127,6 +132,22 @@ export function FloatingChatWidget({ analyses = [], onProductSelect }: FloatingC
                 </Button>
               </div>
             </div>
+            
+            {/* MCP Packages Badge */}
+            {mcpPackages.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                <span className="text-xs text-muted-foreground">Outils MCP:</span>
+                {mcpPackages.map(pkg => (
+                  <Badge 
+                    key={pkg.id} 
+                    variant="secondary" 
+                    className="text-xs"
+                  >
+                    {pkg.icon} {pkg.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardHeader>
           
           {/* Messages */}
