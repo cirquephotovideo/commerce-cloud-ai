@@ -1,25 +1,19 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AutoExportRules } from "@/components/AutoExportRules";
+import { ExportScheduler } from "@/components/ExportScheduler";
+import { ExportHistoryDialog } from "@/components/ExportHistoryDialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Package, Calendar, History, TrendingUp, AlertCircle, Upload, Download } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Upload, Download, AlertCircle, TrendingUp } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Loader2 } from "lucide-react";
 
 export default function ImportExportDashboard() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-      }
-    };
-    checkAuth();
-  }, [navigate]);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Stats globales
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -38,55 +32,6 @@ export default function ImportExportDashboard() {
         pendingEnrichments: pendingRes.count || 0,
         errors: errorsRes.count || 0,
       };
-    },
-  });
-
-  // Imports par plateforme
-  const { data: importsByPlatform } = useQuery({
-    queryKey: ['imports-by-platform'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('supplier_import_logs')
-        .select('import_type, products_found')
-        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-
-      if (error) throw error;
-
-      const grouped = data.reduce((acc: any, curr) => {
-        const platform = curr.import_type || 'unknown';
-        if (!acc[platform]) {
-          acc[platform] = { name: platform, total: 0 };
-        }
-        acc[platform].total += curr.products_found || 0;
-        return acc;
-      }, {});
-
-      return Object.values(grouped);
-    },
-  });
-
-  // Exports par plateforme
-  const { data: exportsByPlatform } = useQuery({
-    queryKey: ['exports-by-platform'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('export_history')
-        .select('platform_type, id')
-        .gte('exported_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .eq('status', 'success');
-
-      if (error) throw error;
-
-      const grouped = data.reduce((acc: any, curr) => {
-        const platform = curr.platform_type;
-        if (!acc[platform]) {
-          acc[platform] = { name: platform, value: 0 };
-        }
-        acc[platform].value += 1;
-        return acc;
-      }, {});
-
-      return Object.values(grouped);
     },
   });
 
@@ -130,8 +75,6 @@ export default function ImportExportDashboard() {
     },
   });
 
-  const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
-
   if (statsLoading) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -141,156 +84,150 @@ export default function ImportExportDashboard() {
   }
 
   return (
-    <main className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold mb-8">Dashboard Import/Export</h1>
-
-        {/* Stats globales */}
-        <div className="grid grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-3xl font-bold">{stats?.totalImports || 0}</div>
-                  <p className="text-sm text-muted-foreground">Imports totaux</p>
-                </div>
-                <Upload className="h-8 w-8 text-blue-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-3xl font-bold text-green-500">{stats?.successfulExports || 0}</div>
-                  <p className="text-sm text-muted-foreground">Exports réussis</p>
-                </div>
-                <Download className="h-8 w-8 text-green-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-3xl font-bold text-orange-500">{stats?.pendingEnrichments || 0}</div>
-                  <p className="text-sm text-muted-foreground">En attente</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-orange-500" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-3xl font-bold text-red-500">{stats?.errors || 0}</div>
-                  <p className="text-sm text-muted-foreground">Erreurs</p>
-                </div>
-                <AlertCircle className="h-8 w-8 text-red-500" />
-              </div>
-            </CardContent>
-          </Card>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Package className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold">Import / Export</h1>
+            <p className="text-muted-foreground">
+              Gérez vos imports fournisseurs et exports multi-plateformes
+            </p>
+          </div>
         </div>
+        <Button variant="outline" onClick={() => setShowHistory(true)}>
+          <History className="w-4 h-4 mr-2" />
+          Historique
+        </Button>
+      </div>
 
-        {/* Graphiques */}
-        <div className="grid grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Imports par Plateforme (30j)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={importsByPlatform || []}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="total" fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Exports par Plateforme (30j)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={exportsByPlatform || []}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry) => entry.name}
-                    outerRadius={80}
-                    fill="hsl(var(--primary))"
-                    dataKey="value"
-                  >
-                    {(exportsByPlatform || []).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Activité récente */}
+      {/* Stats globales */}
+      <div className="grid grid-cols-4 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Activité Récente</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Plateforme</TableHead>
-                  <TableHead>Produits</TableHead>
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {recentActivity?.map((activity) => (
-                  <TableRow key={activity.id}>
-                    <TableCell className="text-sm">
-                      {new Date(activity.created_at).toLocaleString('fr-FR')}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={activity.type === 'import' ? 'default' : 'secondary'}>
-                        {activity.type === 'import' ? '📥 Import' : '📤 Export'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{activity.platform}</TableCell>
-                    <TableCell className="font-semibold">{activity.product_count}</TableCell>
-                    <TableCell>
-                      <Badge variant={
-                        activity.status === 'success' ? 'default' :
-                        activity.status === 'failed' ? 'destructive' :
-                        'secondary'
-                      }>
-                        {activity.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {(!recentActivity || recentActivity.length === 0) && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                      Aucune activité récente
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold">{stats?.totalImports || 0}</div>
+                <p className="text-sm text-muted-foreground">Imports totaux</p>
+              </div>
+              <Upload className="h-8 w-8 text-blue-500" />
+            </div>
           </CardContent>
         </Card>
-      </main>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-green-500">{stats?.successfulExports || 0}</div>
+                <p className="text-sm text-muted-foreground">Exports réussis</p>
+              </div>
+              <Download className="h-8 w-8 text-green-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-orange-500">{stats?.pendingEnrichments || 0}</div>
+                <p className="text-sm text-muted-foreground">En attente</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-red-500">{stats?.errors || 0}</div>
+                <p className="text-sm text-muted-foreground">Erreurs</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue="export-rules" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="export-rules">
+            <Package className="w-4 h-4 mr-2" />
+            Règles d'Export
+          </TabsTrigger>
+          <TabsTrigger value="scheduler">
+            <Calendar className="w-4 h-4 mr-2" />
+            Planification
+          </TabsTrigger>
+          <TabsTrigger value="activity">
+            <History className="w-4 h-4 mr-2" />
+            Activité Récente
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="export-rules" className="space-y-4">
+          <AutoExportRules />
+        </TabsContent>
+
+        <TabsContent value="scheduler" className="space-y-4">
+          <ExportScheduler />
+        </TabsContent>
+
+        <TabsContent value="activity" className="space-y-4">
+          <Card>
+            <CardContent className="pt-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Plateforme</TableHead>
+                    <TableHead>Produits</TableHead>
+                    <TableHead>Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentActivity?.map((activity) => (
+                    <TableRow key={activity.id}>
+                      <TableCell className="text-sm">
+                        {new Date(activity.created_at).toLocaleString('fr-FR')}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={activity.type === 'import' ? 'default' : 'secondary'}>
+                          {activity.type === 'import' ? '📥 Import' : '📤 Export'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{activity.platform}</TableCell>
+                      <TableCell className="font-semibold">{activity.product_count}</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          activity.status === 'success' ? 'default' :
+                          activity.status === 'failed' ? 'destructive' :
+                          'secondary'
+                        }>
+                          {activity.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {(!recentActivity || recentActivity.length === 0) && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        Aucune activité récente
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <ExportHistoryDialog 
+        open={showHistory} 
+        onOpenChange={setShowHistory}
+      />
+    </div>
   );
 }

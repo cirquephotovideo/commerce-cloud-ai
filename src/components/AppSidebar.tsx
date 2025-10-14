@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   BarChart3,
+  ArrowLeftRight,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -34,6 +35,7 @@ const mainNavigation = [
 const supplierNavigation = [
   { title: "Fournisseurs", url: "/suppliers", icon: Truck },
   { title: "Produits Importés", url: "/imported-products", icon: Package },
+  { title: "Import/Export", url: "/import-export-dashboard", icon: ArrowLeftRight },
 ];
 
 const marketNavigation = [

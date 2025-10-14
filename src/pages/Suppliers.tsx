@@ -602,10 +602,7 @@ export default function Suppliers() {
         </TabsContent>
 
         <TabsContent value="platforms" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <PlatformSettings />
-            <SupplierAutoSync />
-          </div>
+          <PlatformSettings />
         </TabsContent>
 
         <TabsContent value="imports" className="space-y-4">

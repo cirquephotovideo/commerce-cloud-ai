@@ -27,7 +27,7 @@ export const SupplierAutoSync = ({ supplierId }: SupplierAutoSyncProps) => {
         .single();
 
       if (error) throw error;
-      return data;
+      return data as any; // Type assertion for newly added columns
     },
   });
 

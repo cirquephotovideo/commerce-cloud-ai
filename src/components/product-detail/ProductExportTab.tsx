@@ -1,6 +1,7 @@
 import { ProductExportMenu } from "@/components/ProductExportMenu";
+import { SupplierPriceComparison } from "@/components/SupplierPriceComparison";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Package } from "lucide-react";
+import { Package, TrendingUp } from "lucide-react";
 
 interface ProductExportTabProps {
   analysisId: string;
@@ -10,6 +11,10 @@ interface ProductExportTabProps {
 export const ProductExportTab = ({ analysisId, productName }: ProductExportTabProps) => {
   return (
     <div className="space-y-6">
+      {/* Supplier Price Comparison */}
+      <SupplierPriceComparison analysisId={analysisId} />
+
+      {/* Export Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
