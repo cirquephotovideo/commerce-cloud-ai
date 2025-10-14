@@ -2715,7 +2715,9 @@ export type Database = {
       }
       supplier_configurations: {
         Row: {
+          auto_link_by_ean: boolean | null
           auto_matching_enabled: boolean | null
+          auto_sync_enabled: boolean | null
           column_mapping: Json | null
           connection_config: Json | null
           created_at: string | null
@@ -2737,7 +2739,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          auto_link_by_ean?: boolean | null
           auto_matching_enabled?: boolean | null
+          auto_sync_enabled?: boolean | null
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
@@ -2759,7 +2763,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          auto_link_by_ean?: boolean | null
           auto_matching_enabled?: boolean | null
+          auto_sync_enabled?: boolean | null
           column_mapping?: Json | null
           connection_config?: Json | null
           created_at?: string | null
@@ -3072,6 +3078,44 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "supplier_sync_schedule_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_webhook_logs: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          processed_at: string | null
+          supplier_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          supplier_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          supplier_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_webhook_logs_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supplier_configurations"
