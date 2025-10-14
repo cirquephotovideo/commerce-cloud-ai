@@ -21,6 +21,26 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Fetch current analysis
+    const { data: currentAnalysis, error: fetchError } = await supabase
+      .from('product_analyses')
+      .select('analysis_result, enrichment_status')
+      .eq('id', analysisId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Mark as processing
+    const enrichmentStatus = currentAnalysis.enrichment_status || {};
+    enrichmentStatus.cost_analysis = 'processing';
+    
+    await supabase
+      .from('product_analyses')
+      .update({ enrichment_status: enrichmentStatus })
+      .eq('id', analysisId);
+
+    console.log('[ENRICH-COST] Status set to processing');
+
     const prompt = `Analyse les coûts pour ce produit :
 
 Nom: ${productData?.name || 'Produit'}
@@ -59,23 +79,42 @@ Fournis une analyse détaillée des coûts en JSON:
     });
 
     const aiData = await response.json();
-    const costAnalysis = aiData.choices[0]?.message?.content;
+    const costAnalysisRaw = aiData.choices[0]?.message?.content;
+    
+    console.log('[ENRICH-COST] AI response length:', costAnalysisRaw?.length || 0);
 
-    // Sauvegarder
+    // Try to parse JSON, fallback to raw string
+    let costAnalysis;
+    let parseError = null;
+    try {
+      costAnalysis = JSON.parse(costAnalysisRaw);
+    } catch (e) {
+      console.warn('[ENRICH-COST] Failed to parse JSON, storing as string');
+      costAnalysis = costAnalysisRaw;
+      parseError = e instanceof Error ? e.message : 'JSON parse error';
+    }
+
+    // Merge with existing analysis_result
+    const newAnalysisResult = {
+      ...currentAnalysis.analysis_result,
+      cost_analysis: costAnalysis,
+      ...(parseError && { cost_analysis_parse_error: parseError })
+    };
+
+    // Update status to completed
+    enrichmentStatus.cost_analysis = 'completed';
+
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: supabase.rpc('jsonb_set', {
-          target: 'analysis_result',
-          path: '{cost_analysis}',
-          new_value: costAnalysis
-        })
+        analysis_result: newAnalysisResult,
+        enrichment_status: enrichmentStatus
       })
       .eq('id', analysisId);
 
     if (updateError) throw updateError;
 
-    console.log('[ENRICH-COST] Cost analysis saved');
+    console.log('[ENRICH-COST] Cost analysis saved → completed');
 
     return new Response(
       JSON.stringify({ success: true, costAnalysis }),
@@ -84,6 +123,40 @@ Fournis une analyse détaillée des coûts en JSON:
 
   } catch (error) {
     console.error('[ENRICH-COST] Error:', error);
+    
+    // Mark as failed
+    try {
+      const { analysisId } = await req.json();
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+      
+      const { data: currentAnalysis } = await supabase
+        .from('product_analyses')
+        .select('analysis_result, enrichment_status')
+        .eq('id', analysisId)
+        .single();
+
+      if (currentAnalysis) {
+        const enrichmentStatus = currentAnalysis.enrichment_status || {};
+        enrichmentStatus.cost_analysis = 'failed';
+        
+        await supabase
+          .from('product_analyses')
+          .update({
+            analysis_result: {
+              ...currentAnalysis.analysis_result,
+              cost_analysis_error: error instanceof Error ? error.message : 'Unknown error'
+            },
+            enrichment_status: enrichmentStatus
+          })
+          .eq('id', analysisId);
+      }
+    } catch (e) {
+      console.error('[ENRICH-COST] Failed to mark as failed:', e);
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

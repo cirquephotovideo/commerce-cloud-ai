@@ -16,7 +16,16 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { maxItems = 50, parallel = 5 } = await req.json();
+    // Handle empty body gracefully
+    let maxItems = 50;
+    let parallel = 5;
+    try {
+      const body = await req.json();
+      maxItems = body.maxItems || 50;
+      parallel = body.parallel || 5;
+    } catch (e) {
+      console.log('[ENRICHMENT-QUEUE] No body provided, using defaults');
+    }
 
     console.log(`[ENRICHMENT-QUEUE] Starting processing (max ${maxItems} items, ${parallel} parallel)`);
 
@@ -95,17 +104,23 @@ serve(async (req) => {
 
         console.log(`[ENRICHMENT-QUEUE] Analysis completed, creating product_analyses entry`);
 
+        // Create product_analyses entry with correct schema
+        const insertPayload = {
+          user_id: task.user_id,
+          analysis_result: analysisData || {},
+          product_url: supplierProduct.supplier_url || `about:blank#supplier_product:${task.supplier_product_id}`,
+          ean: supplierProduct.ean,
+          purchase_price: supplierProduct.purchase_price,
+          supplier_product_id: task.supplier_product_id,
+          description_long: supplierProduct.description
+        };
+        
+        console.log('[ENRICHMENT-QUEUE] Insert payload prepared');
+
         // Create product_analyses entry
         const { data: analysis, error: insertError } = await supabase
           .from('product_analyses')
-          .insert({
-            user_id: task.user_id,
-            product_name: supplierProduct.product_name,
-            ean: supplierProduct.ean,
-            purchase_price: supplierProduct.purchase_price,
-            analysis_result: analysisData,
-            source: 'supplier_enrichment',
-          })
+          .insert(insertPayload)
           .select()
           .single();
 
@@ -201,9 +216,10 @@ serve(async (req) => {
                 break;
 
               case 'rsgp':
+                console.log('[ENRICHMENT-QUEUE] Generating RSGP compliance');
                 await supabase.functions.invoke('rsgp-compliance-generator', {
                   body: { 
-                    analysisId: analysis.id,
+                    analysis_id: analysis.id,
                     productData: analysisData,
                   }
                 });

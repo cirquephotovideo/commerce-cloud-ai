@@ -21,6 +21,26 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Fetch current analysis
+    const { data: currentAnalysis, error: fetchError } = await supabase
+      .from('product_analyses')
+      .select('analysis_result, enrichment_status')
+      .eq('id', analysisId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Mark as processing
+    const enrichmentStatus = currentAnalysis.enrichment_status || {};
+    enrichmentStatus.technical_description = 'processing';
+    
+    await supabase
+      .from('product_analyses')
+      .update({ enrichment_status: enrichmentStatus })
+      .eq('id', analysisId);
+
+    console.log('[ENRICH-TECH-DESC] Status set to processing');
+
     const prompt = `Génère une description technique longue et détaillée (500-1000 mots) pour ce produit :
 
 Nom: ${productData?.name || 'Produit'}
@@ -54,22 +74,29 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
 
     const aiData = await response.json();
     const technicalDescription = aiData.choices[0]?.message?.content;
+    
+    console.log('[ENRICH-TECH-DESC] AI response length:', technicalDescription?.length || 0);
 
-    // Sauvegarder
+    // Merge with existing analysis_result
+    const newAnalysisResult = {
+      ...currentAnalysis.analysis_result,
+      technical_description: technicalDescription
+    };
+
+    // Update status to completed
+    enrichmentStatus.technical_description = 'completed';
+
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: supabase.rpc('jsonb_set', {
-          target: 'analysis_result',
-          path: '{technical_description}',
-          new_value: technicalDescription
-        })
+        analysis_result: newAnalysisResult,
+        enrichment_status: enrichmentStatus
       })
       .eq('id', analysisId);
 
     if (updateError) throw updateError;
 
-    console.log('[ENRICH-TECH-DESC] Technical description saved');
+    console.log('[ENRICH-TECH-DESC] Technical description saved → completed');
 
     return new Response(
       JSON.stringify({ success: true, technicalDescription }),
@@ -78,6 +105,40 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
 
   } catch (error) {
     console.error('[ENRICH-TECH-DESC] Error:', error);
+    
+    // Mark as failed
+    try {
+      const { analysisId } = await req.json();
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+      
+      const { data: currentAnalysis } = await supabase
+        .from('product_analyses')
+        .select('analysis_result, enrichment_status')
+        .eq('id', analysisId)
+        .single();
+
+      if (currentAnalysis) {
+        const enrichmentStatus = currentAnalysis.enrichment_status || {};
+        enrichmentStatus.technical_description = 'failed';
+        
+        await supabase
+          .from('product_analyses')
+          .update({
+            analysis_result: {
+              ...currentAnalysis.analysis_result,
+              technical_description_error: error instanceof Error ? error.message : 'Unknown error'
+            },
+            enrichment_status: enrichmentStatus
+          })
+          .eq('id', analysisId);
+      }
+    } catch (e) {
+      console.error('[ENRICH-TECH-DESC] Failed to mark as failed:', e);
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

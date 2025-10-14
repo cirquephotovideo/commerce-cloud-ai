@@ -21,6 +21,26 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Fetch current analysis
+    const { data: currentAnalysis, error: fetchError } = await supabase
+      .from('product_analyses')
+      .select('analysis_result, enrichment_status')
+      .eq('id', analysisId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Mark as processing
+    const enrichmentStatus = currentAnalysis.enrichment_status || {};
+    enrichmentStatus.specifications = 'processing';
+    
+    await supabase
+      .from('product_analyses')
+      .update({ enrichment_status: enrichmentStatus })
+      .eq('id', analysisId);
+
+    console.log('[ENRICH-SPECS] Status set to processing');
+
     // Préparer le prompt pour les spécifications
     const prompt = `Génère des spécifications techniques détaillées pour ce produit :
 
@@ -57,23 +77,42 @@ Fournis les spécifications suivantes en JSON structuré:
     });
 
     const aiData = await response.json();
-    const specifications = aiData.choices[0]?.message?.content;
+    const specificationsRaw = aiData.choices[0]?.message?.content;
+    
+    console.log('[ENRICH-SPECS] AI response length:', specificationsRaw?.length || 0);
 
-    // Sauvegarder dans product_analyses
+    // Try to parse JSON, fallback to raw string
+    let specifications;
+    let parseError = null;
+    try {
+      specifications = JSON.parse(specificationsRaw);
+    } catch (e) {
+      console.warn('[ENRICH-SPECS] Failed to parse JSON, storing as string');
+      specifications = specificationsRaw;
+      parseError = e instanceof Error ? e.message : 'JSON parse error';
+    }
+
+    // Merge with existing analysis_result
+    const newAnalysisResult = {
+      ...currentAnalysis.analysis_result,
+      specifications,
+      ...(parseError && { specifications_parse_error: parseError })
+    };
+
+    // Update status to completed
+    enrichmentStatus.specifications = 'completed';
+
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: supabase.rpc('jsonb_set', {
-          target: 'analysis_result',
-          path: '{specifications}',
-          new_value: specifications
-        })
+        analysis_result: newAnalysisResult,
+        enrichment_status: enrichmentStatus
       })
       .eq('id', analysisId);
 
     if (updateError) throw updateError;
 
-    console.log('[ENRICH-SPECS] Specifications saved successfully');
+    console.log('[ENRICH-SPECS] Specifications saved successfully → completed');
 
     return new Response(
       JSON.stringify({ success: true, specifications }),
@@ -82,6 +121,40 @@ Fournis les spécifications suivantes en JSON structuré:
 
   } catch (error) {
     console.error('[ENRICH-SPECS] Error:', error);
+    
+    // Mark as failed
+    try {
+      const { analysisId } = await req.json();
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+      
+      const { data: currentAnalysis } = await supabase
+        .from('product_analyses')
+        .select('analysis_result, enrichment_status')
+        .eq('id', analysisId)
+        .single();
+
+      if (currentAnalysis) {
+        const enrichmentStatus = currentAnalysis.enrichment_status || {};
+        enrichmentStatus.specifications = 'failed';
+        
+        await supabase
+          .from('product_analyses')
+          .update({
+            analysis_result: {
+              ...currentAnalysis.analysis_result,
+              specifications_error: error instanceof Error ? error.message : 'Unknown error'
+            },
+            enrichment_status: enrichmentStatus
+          })
+          .eq('id', analysisId);
+      }
+    } catch (e) {
+      console.error('[ENRICH-SPECS] Failed to mark as failed:', e);
+    }
+    
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
