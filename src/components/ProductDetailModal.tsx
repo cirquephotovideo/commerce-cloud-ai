@@ -31,6 +31,7 @@ import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
+import { EnrichmentProviderSelector, AIProvider } from "./product-detail/EnrichmentProviderSelector";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -48,6 +49,7 @@ export function ProductDetailModal({
   onEnrich
 }: ProductDetailModalProps) {
   const [showVideoWizard, setShowVideoWizard] = useState(false);
+  const [showProviderSelector, setShowProviderSelector] = useState(false);
   const queryClient = useQueryClient();
 
   // Récupérer l'analyse complète
@@ -201,12 +203,12 @@ export function ProductDetailModal({
             {/* Actions Rapides */}
             <div className="flex flex-wrap gap-2 px-4">
               <Button
-                onClick={() => reEnrichMutation.mutate({ types: ['amazon', 'ai_analysis'] })}
+                onClick={() => setShowProviderSelector(true)}
                 disabled={reEnrichMutation.isPending}
                 variant="outline"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Tout Réenrichir
+                Re-enrichir avec IA
               </Button>
               <Button
                 onClick={handleGenerateImages}
@@ -516,6 +518,26 @@ export function ProductDetailModal({
           onClose={() => setShowVideoWizard(false)}
         />
       )}
+      
+      {/* Provider Selector for Re-enrichment */}
+      <EnrichmentProviderSelector
+        open={showProviderSelector}
+        onOpenChange={setShowProviderSelector}
+        onSelect={(provider: AIProvider) => {
+          const providerMap: Record<AIProvider, string> = {
+            'lovable': 'lovable-ai',
+            'claude': 'claude',
+            'openai': 'openai',
+            'openrouter': 'openrouter',
+            'ollama_cloud': 'ollama_cloud',
+            'ollama_local': 'ollama_local'
+          };
+          reEnrichMutation.mutate({ 
+            provider: providerMap[provider],
+            types: ['amazon', 'ai_analysis', 'images', 'rsgp'] 
+          });
+        }}
+      />
     </>
   );
 }

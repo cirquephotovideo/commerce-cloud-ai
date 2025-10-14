@@ -86,7 +86,28 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
 
   useEffect(() => {
     loadProviderStatuses();
+    // Forcer la synchro Ollama si configuré
+    syncOllamaIfConfigured();
   }, []);
+
+  const syncOllamaIfConfigured = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Vérifier si Ollama est configuré
+    const { data: ollamaConfig } = await supabase
+      .from('ollama_configurations')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (ollamaConfig) {
+      console.log('[ProviderSelector] Forcing Ollama sync...');
+      await supabase.functions.invoke('sync-ollama-to-providers');
+      // Recharger les statuts après la synchro
+      setTimeout(() => loadProviderStatuses(), 1000);
+    }
+  };
 
   const loadProviderStatuses = async () => {
     const { data: { user } } = await supabase.auth.getUser();
