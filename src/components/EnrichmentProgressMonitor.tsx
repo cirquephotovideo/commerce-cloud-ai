@@ -54,6 +54,23 @@ const ENRICHMENT_LABELS: Record<string, string> = {
   'default': 'Enrichissement'
 };
 
+// Coûts estimés par type d'enrichissement (en €)
+const ENRICHMENT_COSTS: Record<string, number> = {
+  'amazon': 0.05,           // Appel API Amazon + parsing
+  'images': 0.08,           // Génération d'images IA
+  'ai_images': 0.08,        // Images IA
+  'image_search': 0.03,     // Recherche d'images
+  'competitor_analysis': 0.10, // Analyse concurrentielle
+  'seo': 0.04,             // Optimisation SEO
+  'taxonomy': 0.02,        // Catégorisation
+  'heygen': 0.25,          // Génération vidéo (coûteux)
+  'specifications': 0.06,  // Spécifications techniques
+  'cost_analysis': 0.07,   // Analyse des coûts
+  'technical_description': 0.05, // Description technique
+  'basic': 0.02,           // Analyse de base
+  'default': 0.03          // Coût par défaut
+};
+
 export function EnrichmentProgressMonitor() {
   const [tasks, setTasks] = useState<EnrichmentTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -190,6 +207,34 @@ export function EnrichmentProgressMonitor() {
     };
   };
 
+  // Calculer le coût total des enrichissements
+  const getCostStats = () => {
+    const calculateTaskCost = (task: EnrichmentTask) => {
+      return task.enrichment_type.reduce((total, type) => {
+        return total + (ENRICHMENT_COSTS[type] || ENRICHMENT_COSTS.default);
+      }, 0);
+    };
+
+    const totalCost = tasks.reduce((sum, task) => sum + calculateTaskCost(task), 0);
+    const completedCost = tasks
+      .filter(t => t.status === 'completed')
+      .reduce((sum, task) => sum + calculateTaskCost(task), 0);
+    const processingCost = tasks
+      .filter(t => t.status === 'processing')
+      .reduce((sum, task) => sum + calculateTaskCost(task), 0);
+    const pendingCost = tasks
+      .filter(t => t.status === 'pending')
+      .reduce((sum, task) => sum + calculateTaskCost(task), 0);
+
+    return {
+      total: totalCost,
+      completed: completedCost,
+      processing: processingCost,
+      pending: pendingCost,
+      failed: totalCost - completedCost - processingCost - pendingCost
+    };
+  };
+
   // Déterminer l'état de la queue
   const getQueueStatus = () => {
     const now = Date.now();
@@ -305,6 +350,7 @@ export function EnrichmentProgressMonitor() {
   };
 
   const stats = getStats();
+  const costStats = getCostStats();
   const queueStatus = getQueueStatus();
 
   if (loading) {
@@ -398,43 +444,85 @@ export function EnrichmentProgressMonitor() {
           </Alert>
         )}
 
-        {/* Progression globale */}
+        {/* Progression globale améliorée */}
         {stats.processing > 0 && (
-          <div className="p-4 bg-blue-500/10 rounded-lg border-2 border-blue-500/30">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-lg">Progression Globale</span>
-              <span className="text-2xl font-bold text-blue-600">
-                {Math.floor((stats.completed / stats.total) * 100)}%
-              </span>
+          <div className="p-5 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border-2 border-blue-500/40 shadow-lg">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-lg flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-blue-600 animate-pulse" />
+                  Progression Globale
+                </span>
+                <span className="text-3xl font-black text-blue-600">
+                  {Math.floor((stats.completed / stats.total) * 100)}%
+                </span>
+              </div>
+              
+              <Progress 
+                value={(stats.completed / stats.total) * 100} 
+                className="h-4"
+              />
+              
+              {/* Temps et coût restant */}
+              <div className="flex items-center justify-between text-sm pt-2 border-t border-blue-500/20">
+                <div className="flex items-center gap-4">
+                  <span className="text-muted-foreground">
+                    <Clock className="h-4 w-4 inline mr-1" />
+                    Temps restant: <span className="font-semibold">~{Math.ceil(stats.processing * 1.5)}min</span>
+                  </span>
+                </div>
+                <span className="text-purple-600 font-bold">
+                  💰 En cours: {costStats.processing.toFixed(2)}€
+                </span>
+              </div>
             </div>
-            <Progress 
-              value={(stats.completed / stats.total) * 100} 
-              className="h-4"
-            />
           </div>
         )}
 
-        {/* Stats globales */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <div className="p-3 rounded-lg bg-muted/50 border">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-xs text-muted-foreground">Total</div>
+        {/* Stats globales avec coûts */}
+        <div className="space-y-4">
+          {/* Ligne 1: Stats de tâches */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="p-3 rounded-lg bg-muted/50 border">
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground">Total</div>
+            </div>
+            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
+              <div className="text-xs text-muted-foreground">En attente</div>
+            </div>
+            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="text-2xl font-bold text-blue-600">{stats.processing}</div>
+              <div className="text-xs text-muted-foreground">En cours</div>
+            </div>
+            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <div className="text-xs text-muted-foreground">Terminés</div>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+              <div className="text-xs text-muted-foreground">Échoués</div>
+            </div>
           </div>
-          <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-            <div className="text-xs text-muted-foreground">En attente</div>
-          </div>
-          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-            <div className="text-2xl font-bold text-blue-600">{stats.processing}</div>
-            <div className="text-xs text-muted-foreground">En cours</div>
-          </div>
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-            <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
-            <div className="text-xs text-muted-foreground">Terminés</div>
-          </div>
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-            <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
-            <div className="text-xs text-muted-foreground">Échoués</div>
+
+          {/* Ligne 2: Stats de coûts */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-4 rounded-lg bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-2 border-purple-500/20">
+              <div className="text-xl font-bold text-purple-600">{costStats.total.toFixed(2)}€</div>
+              <div className="text-xs text-muted-foreground font-semibold">Coût Total</div>
+            </div>
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="text-xl font-bold text-blue-600">{costStats.processing.toFixed(2)}€</div>
+              <div className="text-xs text-muted-foreground">En cours</div>
+            </div>
+            <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="text-xl font-bold text-green-600">{costStats.completed.toFixed(2)}€</div>
+              <div className="text-xs text-muted-foreground">Terminés</div>
+            </div>
+            <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+              <div className="text-xl font-bold text-yellow-600">{costStats.pending.toFixed(2)}€</div>
+              <div className="text-xs text-muted-foreground">En attente</div>
+            </div>
           </div>
         </div>
 
@@ -526,8 +614,8 @@ export function EnrichmentProgressMonitor() {
                           </div>
                         )}
 
-                        {/* Metadata */}
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {/* Metadata avec coût */}
+                        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                           <span>
                             Créé {formatDistanceToNow(new Date(task.created_at), { 
                               addSuffix: true,
@@ -545,6 +633,13 @@ export function EnrichmentProgressMonitor() {
                           <Badge variant="secondary" className="text-xs">
                             {task.priority === 'high' ? 'Haute' : 
                              task.priority === 'low' ? 'Basse' : 'Normale'} priorité
+                          </Badge>
+                          
+                          {/* Coût de la tâche */}
+                          <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 border-purple-500/20">
+                            💰 {task.enrichment_type.reduce((total, type) => 
+                              total + (ENRICHMENT_COSTS[type] || ENRICHMENT_COSTS.default), 0
+                            ).toFixed(2)}€
                           </Badge>
                         </div>
                       </div>
