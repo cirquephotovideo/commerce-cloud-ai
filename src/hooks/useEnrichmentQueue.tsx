@@ -24,7 +24,19 @@ export const useEnrichmentQueue = (analysisId: string) => {
         all: data || []
       };
     },
-    refetchInterval: 3000, // Poll every 3 seconds
+    // Polling adaptatif : rapide si tâches actives, sinon ralenti
+    refetchInterval: (query) => {
+      // Vérifier s'il y a des tâches en attente ou en cours
+      if (!query.state.data) return 10000;
+      
+      const hasPendingOrProcessing = 
+        (query.state.data.pending?.length || 0) > 0 || 
+        (query.state.data.processing?.length || 0) > 0;
+      
+      // Si des tâches sont en cours : 2 secondes
+      // Sinon : 10 secondes (économise les requêtes)
+      return hasPendingOrProcessing ? 2000 : 10000;
+    },
     enabled: !!analysisId
   });
 };
