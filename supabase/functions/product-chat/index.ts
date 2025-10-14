@@ -33,7 +33,7 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -144,9 +144,7 @@ FORMAT DE RÉPONSE :
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
+        ]
       }),
     });
 
@@ -186,8 +184,9 @@ FORMAT DE RÉPONSE :
 
   } catch (error) {
     console.error('❌ Erreur product-chat:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur interne du serveur';
     return new Response(
-      JSON.stringify({ error: error.message || 'Erreur interne du serveur' }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
