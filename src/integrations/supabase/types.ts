@@ -494,6 +494,87 @@ export type Database = {
           },
         ]
       }
+      api_keys: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          key_hash: string
+          key_prefix: string
+          last_used_at: string | null
+          name: string
+          permissions: Json | null
+          rate_limit: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_hash: string
+          key_prefix: string
+          last_used_at?: string | null
+          name: string
+          permissions?: Json | null
+          rate_limit?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_hash?: string
+          key_prefix?: string
+          last_used_at?: string | null
+          name?: string
+          permissions?: Json | null
+          rate_limit?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       auto_export_rules: {
         Row: {
           conditions: Json | null
@@ -618,6 +699,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      bulk_operations: {
+        Row: {
+          changes: Json
+          completed_at: string | null
+          created_at: string | null
+          error_log: Json | null
+          failed_count: number | null
+          id: string
+          operation_type: string
+          processed_count: number | null
+          status: string | null
+          target_ids: string[]
+          user_id: string
+        }
+        Insert: {
+          changes: Json
+          completed_at?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          failed_count?: number | null
+          id?: string
+          operation_type: string
+          processed_count?: number | null
+          status?: string | null
+          target_ids: string[]
+          user_id: string
+        }
+        Update: {
+          changes?: Json
+          completed_at?: string | null
+          created_at?: string | null
+          error_log?: Json | null
+          failed_count?: number | null
+          id?: string
+          operation_type?: string
+          processed_count?: number | null
+          status?: string | null
+          target_ids?: string[]
+          user_id?: string
+        }
+        Relationships: []
       }
       campaign_statistics: {
         Row: {
@@ -1560,6 +1683,51 @@ export type Database = {
           subscribed_at?: string | null
           tags?: Json | null
           unsubscribed_at?: string | null
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: {
+          created_at: string | null
+          email_address: string | null
+          email_enabled: boolean | null
+          export_complete_enabled: boolean | null
+          id: string
+          import_complete_enabled: boolean | null
+          phone_number: string | null
+          price_change_threshold: number | null
+          sms_enabled: boolean | null
+          stock_alert_enabled: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email_address?: string | null
+          email_enabled?: boolean | null
+          export_complete_enabled?: boolean | null
+          id?: string
+          import_complete_enabled?: boolean | null
+          phone_number?: string | null
+          price_change_threshold?: number | null
+          sms_enabled?: boolean | null
+          stock_alert_enabled?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email_address?: string | null
+          email_enabled?: boolean | null
+          export_complete_enabled?: boolean | null
+          id?: string
+          import_complete_enabled?: boolean | null
+          phone_number?: string | null
+          price_change_threshold?: number | null
+          sms_enabled?: boolean | null
+          stock_alert_enabled?: boolean | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -2569,6 +2737,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      saved_filters: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          filter_config: Json
+          id: string
+          is_default: boolean | null
+          name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          filter_config?: Json
+          id?: string
+          is_default?: boolean | null
+          name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          filter_config?: Json
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       social_media_accounts: {
         Row: {

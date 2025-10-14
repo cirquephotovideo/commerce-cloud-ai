@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Package, TrendingUp, Euro, Upload, AlertCircle, Sparkles, Link2 } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Package, Euro, Upload, Link2, BarChart3, Sparkles } from "lucide-react";
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { BulkOperations } from "@/components/BulkOperations";
+import { NotificationSettings } from "@/components/NotificationSettings";
+import { APIKeyManager } from "@/components/APIKeyManager";
+import { AdvancedFilters } from "@/components/AdvancedFilters";
+import { AuditTrail } from "@/components/AuditTrail";
 
 export default function Analytics() {
   // Stats globales
@@ -104,16 +107,15 @@ export default function Analytics() {
   const COLORS = ["hsl(var(--primary))", "hsl(var(--secondary))", "hsl(var(--accent))", "hsl(var(--muted))"];
 
   return (
-    <div className="min-h-screen bg-background p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Analytics & Reporting</h1>
-          <p className="text-muted-foreground">Vue d'ensemble de votre activité produits</p>
-        </div>
+    <div className="container mx-auto p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Analytiques Avancées</h1>
+        <p className="text-muted-foreground">
+          Tableaux de bord détaillés, opérations en masse et intégrations API
+        </p>
       </div>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Produits Totaux</CardTitle>
@@ -167,7 +169,6 @@ export default function Analytics() {
         </Card>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -218,32 +219,40 @@ export default function Analytics() {
         </Card>
       </div>
 
-      {/* Alertes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Alertes & Recommandations</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {stats && stats.supplierProducts - stats.linkedProducts > 0 && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{stats.supplierProducts - stats.linkedProducts} produits non liés</AlertTitle>
-              <AlertDescription className="flex items-center justify-between">
-                <span>Ces produits ne sont pas encore associés à des analyses.</span>
-                <Button variant="link" size="sm">Lier automatiquement</Button>
-              </AlertDescription>
-            </Alert>
-          )}
+      <Tabs defaultValue="dashboard" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-6">
+          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+          <TabsTrigger value="bulk">Opérations Masse</TabsTrigger>
+          <TabsTrigger value="filters">Filtres</TabsTrigger>
+          <TabsTrigger value="api">API</TabsTrigger>
+          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="audit">Audit</TabsTrigger>
+        </TabsList>
 
-          <Alert className="border-green-600 bg-green-50 dark:bg-green-950">
-            <AlertCircle className="h-4 w-4 text-green-600" />
-            <AlertTitle className="text-green-600">Bonne performance !</AlertTitle>
-            <AlertDescription className="text-green-600">
-              Taux de succès d'export de {stats ? Math.round((stats.monthlyExports / stats.totalProducts) * 100) : 0}%
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+        <TabsContent value="dashboard" className="space-y-4">
+          {/* Les graphiques restent ici */}
+        </TabsContent>
+
+        <TabsContent value="bulk">
+          <BulkOperations />
+        </TabsContent>
+
+        <TabsContent value="filters">
+          <AdvancedFilters />
+        </TabsContent>
+
+        <TabsContent value="api">
+          <APIKeyManager />
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <NotificationSettings />
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <AuditTrail />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
