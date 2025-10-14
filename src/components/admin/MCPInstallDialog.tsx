@@ -28,7 +28,7 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
   const [testResult, setTestResult] = useState<'success' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
   const [versionInfo, setVersionInfo] = useState({
-    client: library.version,
+    client: library?.version || '',
     server: null as string | null,
     compatible: null as boolean | null
   });
