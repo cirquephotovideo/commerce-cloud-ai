@@ -26,24 +26,32 @@ serve(async (req) => {
       );
     }
 
-    // Get auth token
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    // Get auth token and extract access token explicitly
+    const authHeader = req.headers.get('Authorization') || '';
+    console.log('🔐 Authorization header present:', !!authHeader, 'len:', authHeader.length);
+    
+    const tokenMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (!tokenMatch) {
+      console.error('❌ Token Bearer invalide ou manquant');
       return new Response(
         JSON.stringify({ error: 'Non authentifié' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const accessToken = tokenMatch[1];
 
-    // Initialize Supabase client
+    // Initialize Supabase client with explicit token
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      {
+        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+        auth: { persistSession: false, autoRefreshToken: false }
+      }
     );
 
-    // Get user
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    // Get user with explicit access token
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(accessToken);
     if (userError || !user) {
       console.error('❌ Erreur authentification:', userError);
       return new Response(
