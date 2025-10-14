@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -191,6 +191,68 @@ export function EnrichmentProgressMonitor() {
     }
   };
 
+  // Supprimer une tâche
+  const deleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('enrichment_queue')
+        .delete()
+        .eq('id', taskId);
+      
+      if (error) throw error;
+      toast.success('✅ Tâche supprimée');
+      loadTasks();
+    } catch (error: any) {
+      toast.error(`❌ Erreur: ${error.message}`);
+    }
+  };
+
+  // Nettoyer toutes les tâches échouées
+  const cleanFailedTasks = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('enrichment_queue')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('status', 'failed');
+      
+      if (error) throw error;
+      toast.success('✅ Tâches échouées supprimées');
+      loadTasks();
+    } catch (error: any) {
+      toast.error(`❌ Erreur: ${error.message}`);
+    }
+  };
+
+  // Réessayer une tâche échouée
+  const retryTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('enrichment_queue')
+        .update({ 
+          status: 'pending', 
+          error_message: null,
+          retry_count: 0,
+          started_at: null,
+          completed_at: null
+        })
+        .eq('id', taskId);
+      
+      if (error) throw error;
+      
+      // Forcer le traitement
+      await supabase.functions.invoke('process-enrichment-queue');
+      
+      toast.success('✅ Tâche remise en queue');
+      loadTasks();
+    } catch (error: any) {
+      toast.error(`❌ Erreur: ${error.message}`);
+    }
+  };
+
   const stats = getStats();
   const queueStatus = getQueueStatus();
 
@@ -217,6 +279,17 @@ export function EnrichmentProgressMonitor() {
               <queueStatus.icon className="h-3 w-3 mr-1" />
               {queueStatus.label}
             </Badge>
+            {stats.failed > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={cleanFailedTasks}
+                className="text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Nettoyer les échecs ({stats.failed})
+              </Button>
+            )}
             {stats.pending > 0 && (
               <Button
                 size="sm"
@@ -317,8 +390,32 @@ export function EnrichmentProgressMonitor() {
 
                         {/* Error message */}
                         {task.error_message && (
-                          <div className="text-xs text-red-600 bg-red-500/10 p-2 rounded border border-red-500/20">
-                            {task.error_message}
+                          <div className="space-y-2">
+                            <div className="text-xs text-red-600 bg-red-500/10 p-2 rounded border border-red-500/20">
+                              {task.error_message.length > 100 
+                                ? task.error_message.substring(0, 100) + '...' 
+                                : task.error_message}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => retryTask(task.id)}
+                                className="text-blue-600 hover:bg-blue-50"
+                              >
+                                <RotateCcw className="h-4 w-4 mr-2" />
+                                Réessayer
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => deleteTask(task.id)}
+                                className="text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Supprimer
+                              </Button>
+                            </div>
                           </div>
                         )}
 

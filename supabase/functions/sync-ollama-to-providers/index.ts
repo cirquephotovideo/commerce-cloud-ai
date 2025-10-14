@@ -61,6 +61,11 @@ serve(async (req) => {
     let availableModels: string[] = [];
     let errorDetails: any = null;
 
+    console.log('[OLLAMA-SYNC] Testing connection:', { 
+      url: ollamaConfig.ollama_url, 
+      isCloudMode 
+    });
+
     try {
       const startTime = Date.now();
       
@@ -74,18 +79,26 @@ serve(async (req) => {
 
       responseTime = Date.now() - startTime;
 
+      console.log('[OLLAMA-SYNC] Test response:', {
+        status: testResponse.status,
+        ok: testResponse.ok,
+        responseTime
+      });
+
       if (testResponse.ok) {
         const data = await testResponse.json();
         availableModels = data.models?.map((m: any) => m.name) || [];
         status = 'online';
+        console.log('[OLLAMA-SYNC] Available models:', availableModels);
       } else {
         errorDetails = {
           status: testResponse.status,
           message: testResponse.statusText
         };
+        console.error('[OLLAMA-SYNC] Connection failed:', errorDetails);
       }
     } catch (error) {
-      console.error('Connection test error:', error);
+      console.error('[OLLAMA-SYNC] Connection test error:', error);
       errorDetails = {
         message: error instanceof Error ? error.message : 'Connection failed'
       };
@@ -93,6 +106,12 @@ serve(async (req) => {
 
     // Mettre à jour ai_provider_health
     const providerName = isCloudMode ? 'ollama_cloud' : 'ollama_local';
+    
+    console.log('[OLLAMA-SYNC] Updating ai_provider_health:', {
+      providerName,
+      status,
+      availableModels
+    });
     
     const { error: healthError } = await supabase
       .from('ai_provider_health')
@@ -106,7 +125,9 @@ serve(async (req) => {
       }, { onConflict: 'provider' });
 
     if (healthError) {
-      console.error('Error updating health:', healthError);
+      console.error('[OLLAMA-SYNC] Error updating health:', healthError);
+    } else {
+      console.log('[OLLAMA-SYNC] Health status updated successfully');
     }
 
     // Mettre à jour ai_provider_configs

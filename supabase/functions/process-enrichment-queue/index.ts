@@ -101,7 +101,7 @@ serve(async (req) => {
           .insert({
             user_id: task.user_id,
             product_name: supplierProduct.product_name,
-            product_ean: supplierProduct.ean,
+            ean: supplierProduct.ean,
             purchase_price: supplierProduct.purchase_price,
             analysis_result: analysisData,
             source: 'supplier_enrichment',
