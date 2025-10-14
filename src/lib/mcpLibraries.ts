@@ -181,6 +181,405 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
     installCommand: 'npm install @pollinations/model-context-protocol',
     setupInstructions: 'Configuration automatique, pas de clé requise',
     documentation: 'https://pollinations.ai/docs'
+  },
+  {
+    id: 'trello-mcp',
+    name: 'Trello MCP',
+    npmPackage: '@modelcontextprotocol/server-trello',
+    version: '0.7.0',
+    description: 'Gestion de boards, cartes et listes Trello',
+    icon: '📌',
+    category: 'productivity',
+    requiredEnvVars: ['TRELLO_API_KEY', 'TRELLO_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://api.trello.com',
+      auth_type: 'api_key'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-trello',
+    setupInstructions: '1. Créer une Power-Up sur Trello\n2. Récupérer API Key et Token',
+    documentation: 'https://developer.atlassian.com/cloud/trello/'
+  },
+  {
+    id: 'asana-mcp',
+    name: 'Asana MCP',
+    npmPackage: '@modelcontextprotocol/server-asana',
+    version: '0.7.0',
+    description: 'Gestion de tâches et projets Asana',
+    icon: '✅',
+    category: 'productivity',
+    requiredEnvVars: ['ASANA_ACCESS_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://app.asana.com/api/1.0',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-asana',
+    setupInstructions: '1. Créer un Personal Access Token sur Asana',
+    documentation: 'https://developers.asana.com'
+  },
+  {
+    id: 'jira-mcp',
+    name: 'Jira MCP',
+    npmPackage: '@modelcontextprotocol/server-jira',
+    version: '0.7.0',
+    description: 'Intégration Atlassian Jira pour gestion de tickets',
+    icon: '🎫',
+    category: 'productivity',
+    requiredEnvVars: ['JIRA_URL', 'JIRA_EMAIL', 'JIRA_API_TOKEN'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-jira',
+    setupInstructions: '1. Créer un API Token Jira\n2. Configurer URL, email et token',
+    documentation: 'https://developer.atlassian.com/cloud/jira/'
+  },
+  {
+    id: 'discord-mcp',
+    name: 'Discord MCP',
+    npmPackage: '@modelcontextprotocol/server-discord',
+    version: '0.7.0',
+    description: 'Bot Discord pour envoi de messages et gestion de serveurs',
+    icon: '🎮',
+    category: 'integration',
+    requiredEnvVars: ['DISCORD_BOT_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://discord.com/api/v10',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-discord',
+    setupInstructions: '1. Créer une application Discord\n2. Créer un bot et récupérer le token',
+    documentation: 'https://discord.com/developers/docs'
+  },
+  {
+    id: 'telegram-mcp',
+    name: 'Telegram MCP',
+    npmPackage: '@modelcontextprotocol/server-telegram',
+    version: '0.7.0',
+    description: 'Bot Telegram pour messagerie automatisée',
+    icon: '✈️',
+    category: 'integration',
+    requiredEnvVars: ['TELEGRAM_BOT_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://api.telegram.org',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-telegram',
+    setupInstructions: '1. Créer un bot via @BotFather\n2. Récupérer le token',
+    documentation: 'https://core.telegram.org/bots'
+  },
+  {
+    id: 'openai-mcp',
+    name: 'OpenAI MCP',
+    npmPackage: '@modelcontextprotocol/server-openai',
+    version: '0.7.0',
+    description: 'Accès aux modèles GPT-4, GPT-4o, DALL-E',
+    icon: '🤖',
+    category: 'integration',
+    requiredEnvVars: ['OPENAI_API_KEY'],
+    defaultConfig: {
+      server_url: 'https://api.openai.com/v1',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-openai',
+    setupInstructions: '1. Créer un compte OpenAI\n2. Générer une API Key',
+    documentation: 'https://platform.openai.com/docs'
+  },
+  {
+    id: 'anthropic-mcp',
+    name: 'Anthropic Claude MCP',
+    npmPackage: '@modelcontextprotocol/server-anthropic',
+    version: '0.7.0',
+    description: 'Accès aux modèles Claude 3 Opus, Sonnet, Haiku',
+    icon: '🧠',
+    category: 'integration',
+    requiredEnvVars: ['ANTHROPIC_API_KEY'],
+    defaultConfig: {
+      server_url: 'https://api.anthropic.com/v1',
+      auth_type: 'api_key'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-anthropic',
+    setupInstructions: '1. Créer un compte Anthropic\n2. Générer une API Key',
+    documentation: 'https://docs.anthropic.com'
+  },
+  {
+    id: 'postgres-mcp',
+    name: 'PostgreSQL MCP',
+    npmPackage: '@modelcontextprotocol/server-postgres',
+    version: '0.7.0',
+    description: 'Connexion et requêtes PostgreSQL',
+    icon: '🐘',
+    category: 'developer',
+    requiredEnvVars: ['POSTGRES_CONNECTION_STRING'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-postgres',
+    setupInstructions: '1. Récupérer la connection string PostgreSQL',
+    documentation: 'https://www.postgresql.org/docs/'
+  },
+  {
+    id: 'mongodb-mcp',
+    name: 'MongoDB MCP',
+    npmPackage: '@modelcontextprotocol/server-mongodb',
+    version: '0.7.0',
+    description: 'Base de données NoSQL MongoDB',
+    icon: '🍃',
+    category: 'developer',
+    requiredEnvVars: ['MONGODB_URI'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-mongodb',
+    setupInstructions: '1. Créer un cluster MongoDB Atlas\n2. Récupérer la connection string',
+    documentation: 'https://www.mongodb.com/docs/'
+  },
+  {
+    id: 'redis-mcp',
+    name: 'Redis MCP',
+    npmPackage: '@modelcontextprotocol/server-redis',
+    version: '0.7.0',
+    description: 'Cache et base de données Redis',
+    icon: '🔴',
+    category: 'developer',
+    requiredEnvVars: ['REDIS_URL'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-redis',
+    setupInstructions: '1. Configurer une instance Redis\n2. Récupérer l\'URL de connexion',
+    documentation: 'https://redis.io/docs/'
+  },
+  {
+    id: 'aws-s3-mcp',
+    name: 'AWS S3 MCP',
+    npmPackage: '@modelcontextprotocol/server-s3',
+    version: '0.7.0',
+    description: 'Stockage de fichiers Amazon S3',
+    icon: '☁️',
+    category: 'developer',
+    requiredEnvVars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION'],
+    defaultConfig: {
+      server_url: 'https://s3.amazonaws.com',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-s3',
+    setupInstructions: '1. Créer un utilisateur IAM AWS\n2. Récupérer Access Key et Secret',
+    documentation: 'https://docs.aws.amazon.com/s3/'
+  },
+  {
+    id: 'dropbox-mcp',
+    name: 'Dropbox MCP',
+    npmPackage: '@modelcontextprotocol/server-dropbox',
+    version: '0.7.0',
+    description: 'Stockage et partage de fichiers Dropbox',
+    icon: '📦',
+    category: 'productivity',
+    requiredEnvVars: ['DROPBOX_ACCESS_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://api.dropboxapi.com/2',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-dropbox',
+    setupInstructions: '1. Créer une app Dropbox\n2. Générer un access token',
+    documentation: 'https://www.dropbox.com/developers'
+  },
+  {
+    id: 'gitlab-mcp',
+    name: 'GitLab MCP',
+    npmPackage: '@modelcontextprotocol/server-gitlab',
+    version: '0.7.0',
+    description: 'Gestion de repositories et CI/CD GitLab',
+    icon: '🦊',
+    category: 'developer',
+    requiredEnvVars: ['GITLAB_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://gitlab.com/api/v4',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-gitlab',
+    setupInstructions: '1. Créer un Personal Access Token sur GitLab',
+    documentation: 'https://docs.gitlab.com/ee/api/'
+  },
+  {
+    id: 'figma-mcp',
+    name: 'Figma MCP',
+    npmPackage: '@modelcontextprotocol/server-figma',
+    version: '0.7.0',
+    description: 'Accès aux designs et prototypes Figma',
+    icon: '🎨',
+    category: 'productivity',
+    requiredEnvVars: ['FIGMA_ACCESS_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://api.figma.com/v1',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-figma',
+    setupInstructions: '1. Générer un Personal Access Token Figma',
+    documentation: 'https://www.figma.com/developers/api'
+  },
+  {
+    id: 'sendgrid-mcp',
+    name: 'SendGrid MCP',
+    npmPackage: '@modelcontextprotocol/server-sendgrid',
+    version: '0.7.0',
+    description: 'Envoi d\'emails transactionnels via SendGrid',
+    icon: '📧',
+    category: 'integration',
+    requiredEnvVars: ['SENDGRID_API_KEY'],
+    defaultConfig: {
+      server_url: 'https://api.sendgrid.com/v3',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-sendgrid',
+    setupInstructions: '1. Créer un compte SendGrid\n2. Générer une API Key',
+    documentation: 'https://docs.sendgrid.com'
+  },
+  {
+    id: 'twilio-mcp',
+    name: 'Twilio MCP',
+    npmPackage: '@modelcontextprotocol/server-twilio',
+    version: '0.7.0',
+    description: 'SMS, appels et WhatsApp via Twilio',
+    icon: '📱',
+    category: 'integration',
+    requiredEnvVars: ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://api.twilio.com',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-twilio',
+    setupInstructions: '1. Créer un compte Twilio\n2. Récupérer Account SID et Auth Token',
+    documentation: 'https://www.twilio.com/docs'
+  },
+  {
+    id: 'sentry-mcp',
+    name: 'Sentry MCP',
+    npmPackage: '@modelcontextprotocol/server-sentry',
+    version: '0.7.0',
+    description: 'Monitoring d\'erreurs et performance',
+    icon: '🐛',
+    category: 'developer',
+    requiredEnvVars: ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG'],
+    defaultConfig: {
+      server_url: 'https://sentry.io/api/0',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-sentry',
+    setupInstructions: '1. Créer un Auth Token sur Sentry',
+    documentation: 'https://docs.sentry.io/api/'
+  },
+  {
+    id: 'airtable-mcp',
+    name: 'Airtable MCP',
+    npmPackage: '@modelcontextprotocol/server-airtable',
+    version: '0.7.0',
+    description: 'Base de données collaborative Airtable',
+    icon: '📊',
+    category: 'productivity',
+    requiredEnvVars: ['AIRTABLE_API_KEY'],
+    defaultConfig: {
+      server_url: 'https://api.airtable.com/v0',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-airtable',
+    setupInstructions: '1. Générer une API Key Airtable',
+    documentation: 'https://airtable.com/developers/web/api'
+  },
+  {
+    id: 'hubspot-mcp',
+    name: 'HubSpot MCP',
+    npmPackage: '@modelcontextprotocol/server-hubspot',
+    version: '0.7.0',
+    description: 'CRM et marketing automation HubSpot',
+    icon: '🎯',
+    category: 'integration',
+    requiredEnvVars: ['HUBSPOT_API_KEY'],
+    defaultConfig: {
+      server_url: 'https://api.hubapi.com',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-hubspot',
+    setupInstructions: '1. Créer une Private App sur HubSpot\n2. Générer une API Key',
+    documentation: 'https://developers.hubspot.com'
+  },
+  {
+    id: 'salesforce-mcp',
+    name: 'Salesforce MCP',
+    npmPackage: '@modelcontextprotocol/server-salesforce',
+    version: '0.7.0',
+    description: 'CRM Salesforce pour gestion clients',
+    icon: '☁️',
+    category: 'integration',
+    requiredEnvVars: ['SALESFORCE_CLIENT_ID', 'SALESFORCE_CLIENT_SECRET', 'SALESFORCE_REFRESH_TOKEN'],
+    defaultConfig: {
+      auth_type: 'oauth'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-salesforce',
+    setupInstructions: '1. Créer une Connected App Salesforce\n2. Configurer OAuth',
+    documentation: 'https://developer.salesforce.com'
+  },
+  {
+    id: 'shopify-mcp',
+    name: 'Shopify MCP',
+    npmPackage: '@modelcontextprotocol/server-shopify',
+    version: '0.7.0',
+    description: 'E-commerce Shopify pour gestion de boutiques',
+    icon: '🛍️',
+    category: 'integration',
+    requiredEnvVars: ['SHOPIFY_STORE_URL', 'SHOPIFY_ACCESS_TOKEN'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-shopify',
+    setupInstructions: '1. Créer une Private App Shopify\n2. Récupérer l\'Access Token',
+    documentation: 'https://shopify.dev/docs'
+  },
+  {
+    id: 'wordpress-mcp',
+    name: 'WordPress MCP',
+    npmPackage: '@modelcontextprotocol/server-wordpress',
+    version: '0.7.0',
+    description: 'Gestion de contenu WordPress',
+    icon: '📝',
+    category: 'integration',
+    requiredEnvVars: ['WORDPRESS_URL', 'WORDPRESS_USERNAME', 'WORDPRESS_APP_PASSWORD'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-wordpress',
+    setupInstructions: '1. Créer un Application Password WordPress',
+    documentation: 'https://developer.wordpress.org/rest-api/'
+  },
+  {
+    id: 'zendesk-mcp',
+    name: 'Zendesk MCP',
+    npmPackage: '@modelcontextprotocol/server-zendesk',
+    version: '0.7.0',
+    description: 'Support client et helpdesk Zendesk',
+    icon: '🎧',
+    category: 'integration',
+    requiredEnvVars: ['ZENDESK_SUBDOMAIN', 'ZENDESK_EMAIL', 'ZENDESK_API_TOKEN'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-zendesk',
+    setupInstructions: '1. Générer un API Token Zendesk',
+    documentation: 'https://developer.zendesk.com/api-reference/'
+  },
+  {
+    id: 'mailchimp-mcp',
+    name: 'Mailchimp MCP',
+    npmPackage: '@modelcontextprotocol/server-mailchimp',
+    version: '0.7.0',
+    description: 'Email marketing et newsletters Mailchimp',
+    icon: '🐵',
+    category: 'integration',
+    requiredEnvVars: ['MAILCHIMP_API_KEY'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install @modelcontextprotocol/server-mailchimp',
+    setupInstructions: '1. Générer une API Key Mailchimp',
+    documentation: 'https://mailchimp.com/developer/'
   }
 ];
 
