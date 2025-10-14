@@ -22,30 +22,86 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const mainNavigation = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Historique", url: "/history", icon: History },
-  { title: "Analyse par lots", url: "/batch-analyzer", icon: Package },
+  { 
+    title: "Dashboard", 
+    url: "/dashboard", 
+    icon: LayoutDashboard,
+    description: "Vue d'ensemble de votre activité et statistiques principales"
+  },
+  { 
+    title: "Historique", 
+    url: "/history", 
+    icon: History,
+    description: "Consultez l'historique de toutes vos analyses de produits"
+  },
+  { 
+    title: "Analyse par lots", 
+    url: "/batch-analyzer", 
+    icon: Package,
+    description: "Analysez plusieurs produits simultanément en batch"
+  },
 ];
 
 const supplierNavigation = [
-  { title: "Fournisseurs", url: "/suppliers", icon: Truck },
-  { title: "Produits Importés", url: "/imported-products", icon: Package },
-  { title: "Import/Export", url: "/import-export-dashboard", icon: ArrowLeftRight },
+  { 
+    title: "Fournisseurs", 
+    url: "/suppliers", 
+    icon: Truck,
+    description: "Gérez vos fournisseurs et leurs catalogues"
+  },
+  { 
+    title: "Produits Importés", 
+    url: "/imported-products", 
+    icon: Package,
+    description: "Visualisez tous les produits importés depuis vos fournisseurs"
+  },
+  { 
+    title: "Import/Export", 
+    url: "/import-export-dashboard", 
+    icon: ArrowLeftRight,
+    description: "Importez et exportez vos données vers différentes plateformes"
+  },
 ];
 
 const marketNavigation = [
-  { title: "Intelligence Marché", url: "/market-intelligence", icon: TrendingUp },
-  { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { 
+    title: "Intelligence Marché", 
+    url: "/market-intelligence", 
+    icon: TrendingUp,
+    description: "Analysez la concurrence et surveillez les prix du marché"
+  },
+  { 
+    title: "Analytics", 
+    url: "/analytics", 
+    icon: BarChart3,
+    description: "Tableaux de bord et métriques détaillées de performance"
+  },
 ];
 
 const configNavigation = [
-  { title: "Tarifs", url: "/pricing", icon: CreditCard },
-  { title: "Contact", url: "/contact", icon: Mail },
+  { 
+    title: "Tarifs", 
+    url: "/pricing", 
+    icon: CreditCard,
+    description: "Consultez les plans tarifaires et gérez votre abonnement"
+  },
+  { 
+    title: "Contact", 
+    url: "/contact", 
+    icon: Mail,
+    description: "Contactez notre équipe support pour toute question"
+  },
 ];
 
 export function AppSidebar() {
@@ -63,25 +119,34 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r">
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Analyse</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavigation.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+    <TooltipProvider delayDuration={300}>
+      <Sidebar collapsible="icon" className="border-r">
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Analyse</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {mainNavigation.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                          <NavLink to={item.url}>
+                            <item.icon />
+                            <span>{item.title}</span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[250px]">
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
         <SidebarGroup>
           <SidebarGroupLabel>Fournisseurs</SidebarGroupLabel>
@@ -89,12 +154,20 @@ export function AppSidebar() {
             <SidebarMenu>
               {supplierNavigation.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <NavLink to={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -107,12 +180,20 @@ export function AppSidebar() {
             <SidebarMenu>
               {marketNavigation.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <NavLink to={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
@@ -125,23 +206,41 @@ export function AppSidebar() {
             <SidebarMenu>
               {configNavigation.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <NavLink to={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <NavLink to={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </SidebarMenuItem>
               ))}
               
               {isSuperAdmin && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/admin")}>
-                    <NavLink to="/admin">
-                      <Settings />
-                      <span>Administration</span>
-                    </NavLink>
-                  </SidebarMenuButton>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive("/admin")}>
+                        <NavLink to="/admin">
+                          <Settings />
+                          <span>Administration</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">Administration</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Panneau d'administration : gestion des utilisateurs, plans, et configuration système
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
                 </SidebarMenuItem>
               )}
             </SidebarMenu>
@@ -153,15 +252,26 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton onClick={handleSignOut}>
-                  <LogOut />
-                  <span>Déconnexion</span>
-                </SidebarMenuButton>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <SidebarMenuButton onClick={handleSignOut}>
+                      <LogOut />
+                      <span>Déconnexion</span>
+                    </SidebarMenuButton>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[250px]">
+                    <p className="font-semibold">Déconnexion</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Se déconnecter de votre compte et retourner à la page de connexion
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
     </Sidebar>
+    </TooltipProvider>
   );
 }
