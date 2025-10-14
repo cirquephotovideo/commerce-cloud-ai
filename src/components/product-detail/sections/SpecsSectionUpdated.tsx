@@ -23,11 +23,18 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
 
   // Handler de navigation globale
   const handleNavigateToEnrichment = (section: 'specifications' | 'cost_analysis' | 'technical_description') => {
-    navigateToProduct({
-      productId: analysis.id,
-      productName: analysis.analysis_result?.name || 'Produit',
-      targetSection: section,
-    });
+    // Dispatch un événement de navigation vers l'accordion
+    window.dispatchEvent(new CustomEvent('navigate-to-tab', { 
+      detail: { tabName: section } 
+    }));
+    
+    // Scroll vers la section dans l'accordion après un court délai
+    setTimeout(() => {
+      const sectionElement = document.querySelector(`[data-section="${section}"]`);
+      if (sectionElement) {
+        sectionElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 200);
   };
 
   // Extraire dimensions, batterie, connectivité depuis analysis_result
@@ -41,7 +48,7 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
   return (
     <div className="space-y-4">
       {/* Spécifications Techniques */}
-      <Card>
+      <Card data-section="specifications">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -82,7 +89,7 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
       </Card>
 
       {/* Analyse des Coûts */}
-      <Card>
+      <Card data-section="cost_analysis">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
@@ -123,7 +130,7 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
       </Card>
 
       {/* Description Technique */}
-      <Card>
+      <Card data-section="technical_description">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">

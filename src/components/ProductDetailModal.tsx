@@ -24,7 +24,7 @@ import { RSGPSection } from "./product-detail/sections/RSGPSection";
 import { CompetitorsSection } from "./product-detail/sections/CompetitorsSection";
 import { StockSection } from "./product-detail/sections/StockSection";
 import { DescriptionSection } from "./product-detail/sections/DescriptionSection";
-import { SpecsSection } from "./product-detail/sections/SpecsSection";
+import { SpecsSection } from "./product-detail/sections/SpecsSectionUpdated";
 import { RepairabilitySection } from "./product-detail/sections/RepairabilitySection";
 import { EnvironmentalSection } from "./product-detail/sections/EnvironmentalSection";
 import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
@@ -57,8 +57,8 @@ export function ProductDetailModal({
 
   // Mapping des sections vers les IDs d'accordion
   const sectionToAccordionMap: Record<string, string> = {
-    'specifications': 'specifications',
-    'cost_analysis': 'specifications',
+    'specifications': 'specs',
+    'cost_analysis': 'specs',
     'technical_description': 'description',
     'amazon': 'amazon',
     'video': 'video',
