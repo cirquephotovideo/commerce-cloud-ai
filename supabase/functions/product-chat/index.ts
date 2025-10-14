@@ -1,11 +1,63 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { detectMCPRequest } from './mcp-detection.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Détection intelligente des requêtes MCP
+interface MCPDetection {
+  needsMCP: boolean;
+  packageId?: string;
+  toolName?: string;
+  args?: any;
+}
+
+function detectMCPRequest(message: string): MCPDetection {
+  const messageLower = message.toLowerCase();
+
+  // Patterns Odoo - détecter les requêtes concernant des produits dans Odoo
+  const odooPatterns = [
+    /(?:liste|lister|affiche|montre|donne).*produits?.*(?:depuis|dans|de|odoo)/i,
+    /produits?.*(?:sony|samsung|apple|lg|philips|bosch|siemens).*odoo/i,
+    /odoo.*produits?.*(?:sony|samsung|apple|lg|philips|bosch|siemens)/i,
+    /recherche.*produits?.*odoo/i,
+    /combien.*produits?.*odoo/i,
+  ];
+
+  if (odooPatterns.some(pattern => pattern.test(messageLower))) {
+    console.log('✅ Détection Odoo positive pour:', message);
+    
+    let toolName = 'list_products';
+    const args: any = { limit: 10 };
+
+    // Extraire la marque/terme de recherche
+    const brandMatch = message.match(/(?:sony|samsung|apple|lg|philips|bosch|siemens|microsoft|hp|dell|lenovo|asus|acer)/gi);
+    if (brandMatch && brandMatch[0]) {
+      toolName = 'search_products';
+      args.search = brandMatch[0];
+      args.brand = brandMatch[0];
+      console.log('🔍 Recherche détectée pour marque:', brandMatch[0]);
+    }
+
+    // Détection de limite
+    const limitMatch = messageLower.match(/(\d+)\s*produits?/);
+    if (limitMatch) {
+      args.limit = parseInt(limitMatch[1]);
+      console.log('📊 Limite détectée:', args.limit);
+    }
+
+    return {
+      needsMCP: true,
+      packageId: 'odoo',
+      toolName,
+      args
+    };
+  }
+
+  return { needsMCP: false };
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -55,13 +107,20 @@ serve(async (req) => {
       }
     );
 
-    let systemPrompt = `Tu es un assistant e-commerce expert qui aide les utilisateurs à analyser leurs produits.
+    let systemPrompt = `Tu es un assistant e-commerce expert qui aide les utilisateurs à analyser leurs produits et à interroger leur système de gestion.
+
+IMPORTANT : Quand l'utilisateur parle de "produits Sony depuis Odoo" ou "produits dans Odoo", il fait référence à :
+- Odoo = leur système ERP/base de données de gestion d'entreprise
+- "Produits Sony dans Odoo" = les produits de la marque Sony qui sont stockés dans leur base de données Odoo
+
+Tu dois comprendre que l'utilisateur veut interroger SA base de données Odoo pour obtenir SES produits de marque Sony.
+
 Sois concis, précis et orienté business. Réponds en français.`;
 
     // Si MCP détecté, enrichir le contexte
     let mcpContext = '';
     if (mcpDetection.needsMCP) {
-      console.log(`🚀 Calling MCP: ${mcpDetection.packageId} - ${mcpDetection.toolName}`);
+      console.log(`🚀 Appel MCP: ${mcpDetection.packageId} - ${mcpDetection.toolName} avec args:`, mcpDetection.args);
       
       try {
         const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-proxy`, {
@@ -79,17 +138,48 @@ Sois concis, précis et orienté business. Réponds en français.`;
 
         if (mcpResponse.ok) {
           const mcpData = await mcpResponse.json();
-          console.log('✅ MCP data fetched:', mcpData);
+          console.log('✅ Données MCP reçues:', { 
+            success: mcpData.success,
+            productsCount: mcpData.data?.length || 0,
+            tool: mcpData.tool
+          });
           
-          if (mcpData.data && Array.isArray(mcpData.data)) {
-            mcpContext = `\n\nDonnées depuis ${mcpDetection.packageId}:\n` + 
-              JSON.stringify(mcpData.data, null, 2);
+          if (mcpData.data && Array.isArray(mcpData.data) && mcpData.data.length > 0) {
+            const productsInfo = mcpData.data.map((p: any) => 
+              `- ${p.name || 'Sans nom'} (Prix: ${p.list_price || 'N/A'}€, Stock: ${p.qty_available || 0}, Réf: ${p.default_code || 'N/A'})`
+            ).join('\n');
+            
+            mcpContext = `\n\n📦 DONNÉES DEPUIS ODOO (${mcpData.data.length} produits trouvés):\n${productsInfo}\n\nRéponds à l'utilisateur en te basant sur ces données réelles extraites de son système Odoo.`;
+            
+            systemPrompt = `Tu es un assistant e-commerce expert connecté au système Odoo de l'utilisateur.
+
+L'utilisateur a demandé des informations sur des produits stockés dans son système Odoo.
+Voici les données extraites de son Odoo:
+
+${mcpContext}
+
+Présente ces résultats de manière claire et professionnelle. Si l'utilisateur a demandé des produits d'une marque spécifique (ex: Sony), précise combien de produits correspondent à sa recherche.
+
+Réponds en français de manière concise et orientée business.`;
+          } else {
+            console.log('⚠️ Aucun produit trouvé dans Odoo');
+            systemPrompt = `Tu es un assistant e-commerce expert connecté au système Odoo de l'utilisateur.
+
+L'utilisateur a demandé des produits dans son système Odoo, mais aucun résultat n'a été trouvé pour sa recherche.
+
+Informe-le poliment qu'aucun produit correspondant n'a été trouvé dans son système Odoo et suggère-lui de :
+1. Vérifier l'orthographe de sa recherche
+2. Essayer avec un autre terme
+3. Vérifier que les produits sont bien enregistrés dans Odoo
+
+Réponds en français de manière concise.`;
           }
         } else {
-          console.error('❌ MCP call failed:', mcpResponse.status);
+          const errorText = await mcpResponse.text();
+          console.error('❌ Échec appel MCP:', mcpResponse.status, errorText);
         }
       } catch (mcpError) {
-        console.error('❌ MCP error:', mcpError);
+        console.error('❌ Erreur MCP:', mcpError);
       }
     }
 
