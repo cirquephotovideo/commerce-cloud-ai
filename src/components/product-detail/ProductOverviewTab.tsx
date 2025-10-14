@@ -25,6 +25,19 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
     return <div className="p-6 text-center text-muted-foreground">Aucune donnée disponible</div>;
   }
 
+  // Navigation handler for accordion sections
+  const handleNavigateToSection = (sectionId: string) => {
+    const element = document.getElementById(`section-${sectionId}`);
+    if (element) {
+      // Open the accordion item
+      element.click();
+      // Scroll into view
+      setTimeout(() => {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  };
+
   const images = getProductImages(analysis) || [];
   const productName = getProductName(analysis) || "Produit sans nom";
   const productPrice = getProductPrice(analysis) || "";
@@ -304,7 +317,11 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                     <div data-taxonomy-badges>
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-xs text-muted-foreground font-medium">Catégories e-commerce</p>
-                        <EnrichmentStatusIndicator status="completed" label="Taxonomie" />
+                        <EnrichmentStatusIndicator 
+                          status="completed" 
+                          label="Taxonomie" 
+                          onClick={() => handleNavigateToSection('overview')}
+                        />
                       </div>
                       <TaxonomyBadges analysisId={analysis.id} />
                     </div>
@@ -338,7 +355,10 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                         <CheckCircle2 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                         ✅ Données Amazon synchronisées
                       </span>
-                      <EnrichmentStatusIndicator status={analysis.enrichment_status?.amazon || 'completed'} />
+                      <EnrichmentStatusIndicator 
+                        status={analysis.enrichment_status?.amazon || 'completed'} 
+                        onClick={() => handleNavigateToSection('amazon')}
+                      />
                     </div>
                   )}
                 </div>
@@ -388,7 +408,10 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                 <VideoIcon className="w-5 w-5" />
                 Vidéo Promotionnelle HeyGen
               </span>
-              <EnrichmentStatusIndicator status={analysis.enrichment_status?.heygen || 'completed'} />
+              <EnrichmentStatusIndicator 
+                status={analysis.enrichment_status?.heygen || 'completed'} 
+                onClick={() => handleNavigateToSection('video')}
+              />
             </CardTitle>
             <CardDescription>
               Vidéo générée avec un avatar IA pour présenter le produit
