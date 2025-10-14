@@ -87,27 +87,61 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
-      // Sauvegarder la configuration dans platform_configurations
-      const { error } = await supabase.from('platform_configurations').insert({
-        user_id: user.id,
-        platform_type: library.id,
-        platform_url: library.defaultConfig.server_url || library.npmPackage,
-        is_active: true,
-        additional_config: {
-          npm_package: library.npmPackage,
-          version: library.version,
-          auth_type: library.defaultConfig.auth_type,
-          credentials: envVars
-        },
-        mcp_version_client: versionInfo.client,
-        mcp_version_server: versionInfo.server,
-        mcp_chat_enabled: true,
-        mcp_allowed_tools: []
-      });
+      // Vérifier les doublons existants
+      const { data: existing, error: checkError } = await supabase
+        .from('platform_configurations')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('platform_type', library.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (checkError) throw checkError;
 
-      toast.success(`${library.name} activé avec succès !`);
+      if (existing) {
+        // Mettre à jour la configuration existante
+        const { error: updateError } = await supabase
+          .from('platform_configurations')
+          .update({
+            platform_url: library.defaultConfig.server_url || library.npmPackage,
+            is_active: true,
+            additional_config: {
+              npm_package: library.npmPackage,
+              version: library.version,
+              auth_type: library.defaultConfig.auth_type,
+              credentials: envVars
+            },
+            mcp_version_client: versionInfo.client,
+            mcp_version_server: versionInfo.server,
+            mcp_chat_enabled: true,
+            mcp_allowed_tools: []
+          })
+          .eq('id', existing.id);
+
+        if (updateError) throw updateError;
+        toast.success(`${library.name} mis à jour avec succès !`);
+      } else {
+        // Créer une nouvelle configuration
+        const { error: insertError } = await supabase.from('platform_configurations').insert({
+          user_id: user.id,
+          platform_type: library.id,
+          platform_url: library.defaultConfig.server_url || library.npmPackage,
+          is_active: true,
+          additional_config: {
+            npm_package: library.npmPackage,
+            version: library.version,
+            auth_type: library.defaultConfig.auth_type,
+            credentials: envVars
+          },
+          mcp_version_client: versionInfo.client,
+          mcp_version_server: versionInfo.server,
+          mcp_chat_enabled: true,
+          mcp_allowed_tools: []
+        });
+
+        if (insertError) throw insertError;
+        toast.success(`${library.name} activé avec succès !`);
+      }
+
       onInstallComplete();
       onOpenChange(false);
       
@@ -115,6 +149,7 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
       setEnvVars({});
       setTestResult(null);
     } catch (error) {
+      console.error('Erreur de sauvegarde MCP:', error);
       toast.error(error instanceof Error ? error.message : "Erreur lors de la sauvegarde");
     } finally {
       setSaving(false);
