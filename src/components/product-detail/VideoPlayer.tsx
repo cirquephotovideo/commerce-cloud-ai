@@ -24,6 +24,18 @@ export const VideoPlayer = ({ analysisId, showCard = true }: VideoPlayerProps) =
     fetchLatestVideo();
   }, [analysisId]);
 
+  // Auto-refresh : polling pour les vidéos en cours de génération
+  useEffect(() => {
+    if (!video || video.status !== 'processing') return;
+
+    const pollInterval = setInterval(async () => {
+      console.log('[VideoPlayer] Polling for video status update...');
+      await fetchLatestVideo();
+    }, 5000); // Check toutes les 5 secondes
+
+    return () => clearInterval(pollInterval);
+  }, [video?.status, analysisId]);
+
   // Auto-récupération pour les vidéos en timeout
   useEffect(() => {
     const autoRecoverIfNeeded = async () => {

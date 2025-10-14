@@ -31,25 +31,9 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
     setLoading(true);
 
     try {
-      // Vérifier que l'utilisateur connecté est super_admin
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Non authentifié");
+      // La validation de rôle est gérée côté serveur par les politiques RLS
+      // Pas de vérification côté client - c'est bypassable et inutile
       
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (roleData?.role !== "super_admin") {
-        toast({
-          title: "Accès refusé",
-          description: "Seuls les super admins peuvent modifier les rôles",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
       // Si le rôle est "user", supprimer l'entrée dans user_roles
       if (selectedRole === "user") {
         const { error } = await supabase
@@ -57,7 +41,19 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
           .delete()
           .eq("user_id", userId);
 
-        if (error) throw error;
+        if (error) {
+          // Si l'erreur est liée aux permissions, afficher un message approprié
+          if (error.message.includes("policy") || error.message.includes("permission")) {
+            toast({
+              title: "Accès refusé",
+              description: "Vous n'avez pas les permissions pour modifier les rôles",
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
+          throw error;
+        }
       } else {
         // Vérifier si l'utilisateur a déjà un rôle
         const { data: existingRole } = await supabase
@@ -73,7 +69,18 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
             .update({ role: selectedRole as any })
             .eq("user_id", userId);
 
-          if (error) throw error;
+          if (error) {
+            if (error.message.includes("policy") || error.message.includes("permission")) {
+              toast({
+                title: "Accès refusé",
+                description: "Vous n'avez pas les permissions pour modifier les rôles",
+                variant: "destructive",
+              });
+              setLoading(false);
+              return;
+            }
+            throw error;
+          }
         } else {
           // Créer un nouveau rôle
           const { error } = await supabase
@@ -83,7 +90,18 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
               role: selectedRole as any
             });
 
-          if (error) throw error;
+          if (error) {
+            if (error.message.includes("policy") || error.message.includes("permission")) {
+              toast({
+                title: "Accès refusé",
+                description: "Vous n'avez pas les permissions pour modifier les rôles",
+                variant: "destructive",
+              });
+              setLoading(false);
+              return;
+            }
+            throw error;
+          }
         }
       }
 

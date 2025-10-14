@@ -3476,6 +3476,13 @@ export type Database = {
             foreignKeyName: "trial_conversions_selected_plan_id_fkey"
             columns: ["selected_plan_id"]
             isOneToOne: false
+            referencedRelation: "public_subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trial_conversions_selected_plan_id_fkey"
+            columns: ["selected_plan_id"]
+            isOneToOne: false
             referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
           },
@@ -3729,6 +3736,13 @@ export type Database = {
             foreignKeyName: "user_subscriptions_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
+            referencedRelation: "public_subscription_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
             referencedRelation: "subscription_plans"
             referencedColumns: ["id"]
           },
@@ -3736,7 +3750,42 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_subscription_plans: {
+        Row: {
+          currency: string | null
+          description: string | null
+          display_order: number | null
+          features: Json | null
+          features_summary: Json | null
+          id: string | null
+          name: string | null
+          price_monthly: number | null
+          price_yearly: number | null
+        }
+        Insert: {
+          currency?: string | null
+          description?: string | null
+          display_order?: number | null
+          features?: Json | null
+          features_summary?: never
+          id?: string | null
+          name?: string | null
+          price_monthly?: number | null
+          price_yearly?: number | null
+        }
+        Update: {
+          currency?: string | null
+          description?: string | null
+          display_order?: number | null
+          features?: Json | null
+          features_summary?: never
+          id?: string | null
+          name?: string | null
+          price_monthly?: number | null
+          price_yearly?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       check_enrichment_timeouts: {
