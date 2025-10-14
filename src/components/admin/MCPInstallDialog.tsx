@@ -80,6 +80,13 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
     }
   };
 
+  // Extraire le platform_type de l'ID de la librairie
+  const extractPlatformType = (libraryId: string): string => {
+    // Extraire le nom de base de la plateforme (ex: "odoo-mcp-pixeeplay" -> "odoo")
+    const match = libraryId.match(/^([a-z]+)/i);
+    return match ? match[1] : libraryId;
+  };
+
   const handleSaveAndActivate = async () => {
     setSaving(true);
 
@@ -87,12 +94,14 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
+      const platformType = extractPlatformType(library.id);
+
       // Vérifier les doublons existants
       const { data: existing, error: checkError } = await supabase
         .from('platform_configurations')
         .select('id')
         .eq('user_id', user.id)
-        .eq('platform_type', library.id)
+        .eq('platform_type', platformType)
         .maybeSingle();
 
       if (checkError) throw checkError;
@@ -123,7 +132,7 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
         // Créer une nouvelle configuration
         const { error: insertError } = await supabase.from('platform_configurations').insert({
           user_id: user.id,
-          platform_type: library.id,
+          platform_type: platformType,
           platform_url: library.defaultConfig.server_url || library.npmPackage,
           is_active: true,
           additional_config: {
