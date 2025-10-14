@@ -21,6 +21,7 @@ import { ProductSummaryDialog } from "@/components/ProductSummaryDialog";
 import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
+import { FloatingChatWidget } from "@/components/FloatingChatWidget";
 import { 
   Select, 
   SelectContent, 
@@ -920,6 +921,15 @@ export default function Dashboard() {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         product={selectedAnalysis}
+      />
+
+      {/* Floating Chat Widget */}
+      <FloatingChatWidget 
+        analyses={filteredAnalyses}
+        onProductSelect={(productId) => {
+          const product = analyses.find(a => a.id === productId);
+          if (product) handleOpenDetail(product);
+        }}
       />
     </>
   );
