@@ -160,6 +160,37 @@ serve(async (req) => {
                 });
                 break;
 
+              case 'specifications':
+                console.log('[ENRICHMENT-QUEUE] Generating specifications');
+                await supabase.functions.invoke('enrich-specifications', {
+                  body: { 
+                    analysisId: analysis.id,
+                    productData: supplierProduct,
+                  }
+                });
+                break;
+
+              case 'cost_analysis':
+                console.log('[ENRICHMENT-QUEUE] Generating cost analysis');
+                await supabase.functions.invoke('enrich-cost-analysis', {
+                  body: { 
+                    analysisId: analysis.id,
+                    productData: supplierProduct,
+                    purchasePrice: supplierProduct?.purchase_price,
+                  }
+                });
+                break;
+
+              case 'technical_description':
+                console.log('[ENRICHMENT-QUEUE] Generating technical description');
+                await supabase.functions.invoke('enrich-technical-description', {
+                  body: { 
+                    analysisId: analysis.id,
+                    productData: supplierProduct,
+                  }
+                });
+                break;
+
               case 'video':
                 await supabase.functions.invoke('heygen-video-generator', {
                   body: { 

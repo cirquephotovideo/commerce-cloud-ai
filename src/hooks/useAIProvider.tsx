@@ -108,11 +108,37 @@ export const useAIProvider = () => {
     }
   };
 
+  const refreshConfig = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const { data, error } = await supabase
+        .from('user_provider_preferences')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error("Error refreshing config:", error);
+        return;
+      }
+
+      if (data) {
+        setProvider(data.primary_provider as AIProvider);
+        setFallbackEnabled(data.fallback_enabled);
+      }
+    } catch (error) {
+      console.error("Error in refreshConfig:", error);
+    }
+  };
+
   return {
     provider,
     fallbackEnabled,
     isLoading,
     updateProvider,
     updateFallback,
+    refreshConfig,
   };
 };

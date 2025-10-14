@@ -32,6 +32,9 @@ const ENRICHMENT_ICONS: Record<string, any> = {
   'seo': FileText,
   'taxonomy': Tag,
   'heygen': Video,
+  'specifications': FileText,
+  'cost_analysis': TrendingUp,
+  'technical_description': FileText,
   'default': Zap
 };
 
@@ -44,6 +47,9 @@ const ENRICHMENT_LABELS: Record<string, string> = {
   'seo': 'Optimisation SEO',
   'taxonomy': 'Catégorisation',
   'heygen': 'Génération Vidéo',
+  'specifications': 'Spécifications',
+  'cost_analysis': 'Analyse Coûts',
+  'technical_description': 'Description Technique',
   'default': 'Enrichissement'
 };
 

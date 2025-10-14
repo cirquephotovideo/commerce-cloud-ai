@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save } from "lucide-react";
+import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save, Loader2 } from "lucide-react";
 import { useAIProvider, AIProvider } from "@/hooks/useAIProvider";
 import { ProviderSelector } from "./admin/ProviderSelector";
 import { ImportExportButtons } from "./admin/ImportExportButtons";
@@ -49,6 +49,7 @@ export default function AIProviderManagement() {
   ]);
   const [userPreferences, setUserPreferences] = useState<any[]>([]);
   const [providerConfigs, setProviderConfigs] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     loadProviderHealth();
@@ -141,31 +142,73 @@ export default function AIProviderManagement() {
       return;
     }
 
-    const { error } = await supabase
-      .from('user_provider_preferences')
-      .upsert({
-        user_id: session.user.id,
-        primary_provider: currentProvider,
-        fallback_order: fallbackOrder,
-        fallback_enabled: fallbackEnabled,
-      }, { onConflict: 'user_id' })
-      .select()
-      .single();
+    setIsSaving(true);
 
-    if (error) {
-      console.error('[FALLBACK] Save error:', error);
+    try {
+      // Vérifier si un enregistrement existe déjà
+      const { data: existing } = await supabase
+        .from('user_provider_preferences')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      let error;
+      
+      if (existing) {
+        // UPDATE
+        const result = await supabase
+          .from('user_provider_preferences')
+          .update({
+            primary_provider: currentProvider,
+            fallback_order: fallbackOrder,
+            fallback_enabled: fallbackEnabled,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', session.user.id);
+        error = result.error;
+      } else {
+        // INSERT
+        const result = await supabase
+          .from('user_provider_preferences')
+          .insert({
+            user_id: session.user.id,
+            primary_provider: currentProvider,
+            fallback_order: fallbackOrder,
+            fallback_enabled: fallbackEnabled,
+          });
+        error = result.error;
+      }
+
+      if (error) {
+        console.error('[FALLBACK] Save error:', error);
+        toast({
+          title: "❌ Erreur",
+          description: `Impossible de sauvegarder: ${error.message}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "✅ Sauvegardé",
+          description: "Ordre de fallback mis à jour avec succès",
+          variant: "default",
+        });
+        
+        // Recharger toutes les données
+        await Promise.all([
+          loadConfig(),
+          loadFallbackOrder(),
+          loadProviderHealth(),
+        ]);
+      }
+    } catch (error: any) {
+      console.error('[FALLBACK] Unexpected error:', error);
       toast({
         title: "❌ Erreur",
-        description: `Impossible de sauvegarder: ${error.message}`,
+        description: `Erreur inattendue: ${error.message}`,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "✅ Sauvegardé",
-        description: "Ordre de fallback mis à jour",
-      });
-      // Recharger pour refléter l'état
-      await Promise.all([loadConfig(), loadFallbackOrder()]);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -444,9 +487,22 @@ export default function AIProviderManagement() {
                 </div>
               </div>
 
-              <Button onClick={saveFallbackOrder} className="w-full">
-                <Save className="h-4 w-4 mr-2" />
-                Sauvegarder l'Ordre
+              <Button 
+                onClick={saveFallbackOrder} 
+                className="w-full gap-2"
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Sauvegarde...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Sauvegarder l'Ordre
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
