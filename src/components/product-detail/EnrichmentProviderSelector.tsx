@@ -136,7 +136,7 @@ export function EnrichmentProviderSelector({ open, onOpenChange, onSelect }: Enr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>🎯 Sélectionnez votre Provider IA pour l'Enrichissement</DialogTitle>
+          <DialogTitle>🎯 Choisir le Provider IA</DialogTitle>
         </DialogHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">

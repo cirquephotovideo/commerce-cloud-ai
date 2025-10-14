@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -324,7 +325,7 @@ export function EnrichmentProgressMonitor() {
             <Zap className="h-5 w-5" />
             Progression des Enrichissements
             {isUpdating && (
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse">
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse text-sm px-2 py-1">
                 <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                 Mise à jour...
               </Badge>
@@ -369,7 +370,50 @@ export function EnrichmentProgressMonitor() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
+        {/* Banner d'alerte proéminent pour les enrichissements en cours */}
+        {stats.processing > 0 && (
+          <Alert className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 animate-pulse">
+            <AlertTitle className="flex items-center gap-3 text-xl font-bold">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <span className="text-blue-600">
+                {stats.processing} enrichissement{stats.processing > 1 ? 's' : ''} en cours...
+              </span>
+            </AlertTitle>
+            <AlertDescription className="text-base mt-2">
+              <div className="flex flex-wrap gap-2">
+                {tasks
+                  .filter(t => t.status === 'processing')
+                  .map(t => t.enrichment_type)
+                  .flat()
+                  .filter((v, i, a) => a.indexOf(v) === i)
+                  .map(type => (
+                    <Badge key={type} variant="secondary" className="text-sm">
+                      {ENRICHMENT_LABELS[type] || type}
+                    </Badge>
+                  ))
+                }
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Progression globale */}
+        {stats.processing > 0 && (
+          <div className="p-4 bg-blue-500/10 rounded-lg border-2 border-blue-500/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-lg">Progression Globale</span>
+              <span className="text-2xl font-bold text-blue-600">
+                {Math.floor((stats.completed / stats.total) * 100)}%
+              </span>
+            </div>
+            <Progress 
+              value={(stats.completed / stats.total) * 100} 
+              className="h-4"
+            />
+          </div>
+        )}
+
         {/* Stats globales */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="p-3 rounded-lg bg-muted/50 border">
@@ -427,10 +471,15 @@ export function EnrichmentProgressMonitor() {
                               ENRICHMENT_LABELS[type] || type
                             ).join(', ')}
                           </div>
-                          <Badge variant="outline" className={`${getStatusColor(task.status)} border flex items-center gap-1`}>
+                          <Badge 
+                            variant="outline" 
+                            className={`${getStatusColor(task.status)} border flex items-center gap-1 ${
+                              task.status === 'processing' ? 'text-base px-3 py-1 animate-pulse font-bold' : ''
+                            }`}
+                          >
                             {getStatusIcon(task.status)}
                             {task.status === 'completed' && 'Terminé'}
-                            {task.status === 'processing' && 'En cours'}
+                            {task.status === 'processing' && '⚡ En cours'}
                             {task.status === 'failed' && 'Échoué'}
                             {task.status === 'pending' && 'En attente'}
                           </Badge>

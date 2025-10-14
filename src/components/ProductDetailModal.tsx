@@ -267,6 +267,15 @@ export function ProductDetailModal({
                 Re-enrichir avec IA
               </Button>
               <Button
+                onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai', types: ['amazon'] })}
+                disabled={reEnrichMutation.isPending}
+                variant="outline"
+                className="bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Enrichir Amazon (Manuel)
+              </Button>
+              <Button
                 onClick={handleGenerateImages}
                 disabled={enrichmentMutation.isPending}
                 variant="outline"
