@@ -132,6 +132,15 @@ export default function AIProviderManagement() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
 
+    if (!currentProvider) {
+      toast({
+        title: "❌ Erreur",
+        description: "Veuillez sélectionner un provider principal",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from('user_provider_preferences')
       .upsert({
@@ -139,12 +148,15 @@ export default function AIProviderManagement() {
         primary_provider: currentProvider,
         fallback_order: fallbackOrder,
         fallback_enabled: fallbackEnabled,
-      });
+      }, { onConflict: 'user_id' })
+      .select()
+      .single();
 
     if (error) {
+      console.error('[FALLBACK] Save error:', error);
       toast({
         title: "❌ Erreur",
-        description: "Impossible de sauvegarder l'ordre de fallback",
+        description: `Impossible de sauvegarder: ${error.message}`,
         variant: "destructive",
       });
     } else {
@@ -152,6 +164,8 @@ export default function AIProviderManagement() {
         title: "✅ Sauvegardé",
         description: "Ordre de fallback mis à jour",
       });
+      // Recharger pour refléter l'état
+      await Promise.all([loadConfig(), loadFallbackOrder()]);
     }
   };
 
@@ -186,12 +200,19 @@ export default function AIProviderManagement() {
   const { data: ollamaHealthData } = useOllamaHealth();
 
   const getStatusBadge = (provider: AIProvider) => {
-    // Pour Ollama, utiliser les données du hook
+    // Lovable AI toujours en ligne
+    if (provider === 'lovable') {
+      return (
+        <Badge variant="default">
+          🟢 Online
+        </Badge>
+      );
+    }
+
+    // Pour Ollama, lire depuis provider='ollama' dans la DB
     if (provider === 'ollama_cloud' || provider === 'ollama_local') {
-      const ollamaHealth = ollamaHealthData?.find(h => h.provider === provider);
-      
-      // Vérifier aussi dans ai_provider_configs si une clé API est configurée
-      const hasConfig = providerConfigs.find(c => c.provider === provider && c.api_key_encrypted);
+      const ollamaHealth = providerHealth.find(h => h.provider === 'ollama' as any);
+      const hasConfig = providerConfigs.find(c => c.provider === 'ollama' as any && c.api_key_encrypted);
       
       if (!ollamaHealth && !hasConfig) {
         return <Badge variant="secondary">Non configuré</Badge>;

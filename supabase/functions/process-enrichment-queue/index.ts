@@ -150,6 +150,7 @@ serve(async (req) => {
                 break;
 
               case 'images':
+              case 'ai_images':
                 await supabase.functions.invoke('generate-image', {
                   body: { 
                     analysisId: analysis.id,

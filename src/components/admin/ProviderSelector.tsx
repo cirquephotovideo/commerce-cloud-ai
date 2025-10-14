@@ -85,9 +85,13 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
   const [providers, setProviders] = useState<ProviderConfig[]>(AVAILABLE_PROVIDERS);
 
   useEffect(() => {
-    loadProviderStatuses();
-    // Forcer la synchro Ollama si configuré
-    syncOllamaIfConfigured();
+    const init = async () => {
+      // Sync Ollama first if configured
+      await syncOllamaIfConfigured();
+      // Then load all statuses
+      await loadProviderStatuses();
+    };
+    init();
   }, []);
 
   const syncOllamaIfConfigured = async () => {
@@ -125,9 +129,12 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
       .or(`user_id.eq.${user.id},user_id.is.null`);
 
     const updatedProviders = AVAILABLE_PROVIDERS.map(provider => {
-      const health = healthData?.find(h => h.provider === provider.id);
-      const userConfig = configData?.find(c => c.provider === provider.id && c.user_id === user.id);
-      const globalConfig = configData?.find(c => c.provider === provider.id && c.user_id === null);
+      // Pour Ollama, lire depuis provider='ollama' dans la DB
+      const providerKey = (provider.id === 'ollama_cloud' || provider.id === 'ollama_local') ? 'ollama' : provider.id;
+      
+      const health = healthData?.find(h => h.provider === providerKey);
+      const userConfig = configData?.find(c => c.provider === providerKey && c.user_id === user.id);
+      const globalConfig = configData?.find(c => c.provider === providerKey && c.user_id === null);
       const config = userConfig || globalConfig;
 
       let status: 'online' | 'offline' | 'not_configured' = 'not_configured';

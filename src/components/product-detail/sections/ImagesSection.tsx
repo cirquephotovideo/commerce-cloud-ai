@@ -70,7 +70,7 @@ export const ImagesSection = ({ analysis, onEnrich }: ImagesSectionProps) => {
                 size="sm" 
                 variant="default" 
                 className="h-6 gap-1 px-2"
-                onClick={() => enrichMutation.mutate({ enrichmentType: ['ai_images'] })}
+                onClick={() => enrichMutation.mutate({ enrichmentType: ['images'] })}
                 disabled={enrichMutation.isPending}
               >
                 {enrichMutation.isPending ? (

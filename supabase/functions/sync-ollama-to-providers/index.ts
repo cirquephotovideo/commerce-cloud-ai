@@ -104,11 +104,14 @@ serve(async (req) => {
       };
     }
 
-    // Mettre à jour ai_provider_health
-    const providerName = isCloudMode ? 'ollama_cloud' : 'ollama_local';
+    // Mettre à jour ai_provider_health avec provider='ollama' uniquement
+    // Stocker le mode (cloud/local) dans error_details
+    const mode = isCloudMode ? 'cloud' : 'local';
+    const enrichedErrorDetails = errorDetails ? { ...errorDetails, mode } : { mode };
     
     console.log('[OLLAMA-SYNC] Updating ai_provider_health:', {
-      providerName,
+      provider: 'ollama',
+      mode,
       status,
       availableModels
     });
@@ -116,27 +119,27 @@ serve(async (req) => {
     const { error: healthError } = await supabase
       .from('ai_provider_health')
       .upsert({
-        provider: providerName,
+        provider: 'ollama',
         status,
         response_time_ms: responseTime,
         available_models: availableModels,
-        error_details: errorDetails,
+        error_details: enrichedErrorDetails,
         last_check: new Date().toISOString(),
       }, { onConflict: 'provider' });
 
     if (healthError) {
       console.error('[OLLAMA-SYNC] Error updating health:', healthError);
     } else {
-      console.log('[OLLAMA-SYNC] Health status updated successfully');
+      console.log('[OLLAMA-SYNC] Health status updated successfully for provider=ollama');
     }
 
-    // Mettre à jour ai_provider_configs
+    // Mettre à jour ai_provider_configs avec provider='ollama'
     if (status === 'online') {
       const { error: configUpdateError } = await supabase
         .from('ai_provider_configs')
         .upsert({
           user_id: user.id,
-          provider: providerName,
+          provider: 'ollama',
           api_key_encrypted: ollamaConfig.api_key_encrypted,
           api_url: ollamaConfig.ollama_url,
           default_model: availableModels[0] || null,
@@ -145,14 +148,17 @@ serve(async (req) => {
         }, { onConflict: 'user_id,provider' });
 
       if (configUpdateError) {
-        console.error('Error updating config:', configUpdateError);
+        console.error('[OLLAMA-SYNC] Error updating config:', configUpdateError);
+      } else {
+        console.log('[OLLAMA-SYNC] Config updated successfully for provider=ollama');
       }
     }
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        provider: providerName,
+        provider: 'ollama',
+        mode: isCloudMode ? 'cloud' : 'local',
         status,
         response_time_ms: responseTime,
         available_models: availableModels

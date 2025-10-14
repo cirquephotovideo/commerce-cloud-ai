@@ -101,14 +101,24 @@ export function EnrichmentProviderSelector({ open, onOpenChange, onSelect }: Enr
 
     // Mettre à jour les providers
     setProviders(prev => prev.map(provider => {
-      const health = healthData?.find(h => h.provider === provider.id);
-      const config = configData?.find(c => c.provider === provider.id);
-      const status = health?.status || 'unconfigured';
+      // Pour Ollama, lire depuis provider='ollama' dans la DB
+      const providerKey = (provider.id === 'ollama_cloud' || provider.id === 'ollama_local') ? 'ollama' : provider.id;
+      
+      const health = healthData?.find(h => h.provider === providerKey);
+      const config = configData?.find(c => c.provider === providerKey);
+      
+      // Lovable AI toujours online
+      let status: 'online' | 'offline' | 'unconfigured' = 'unconfigured';
+      if (provider.id === 'lovable') {
+        status = 'online';
+      } else {
+        status = (health?.status as 'online' | 'offline') || 'unconfigured';
+      }
       
       return {
         ...provider,
-        status: status as 'online' | 'offline' | 'unconfigured',
-        configured: config?.is_active || false,
+        status,
+        configured: provider.id === 'lovable' || config?.is_active || false,
         isUserConfig: !!config
       };
     }));

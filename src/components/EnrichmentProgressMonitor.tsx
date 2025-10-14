@@ -25,6 +25,8 @@ interface EnrichmentTask {
 
 const ENRICHMENT_ICONS: Record<string, any> = {
   'amazon': ShoppingCart,
+  'images': Image,
+  'ai_images': Image,
   'image_search': Image,
   'competitor_analysis': TrendingUp,
   'seo': FileText,
@@ -35,6 +37,8 @@ const ENRICHMENT_ICONS: Record<string, any> = {
 
 const ENRICHMENT_LABELS: Record<string, string> = {
   'amazon': 'Données Amazon',
+  'images': 'Images IA',
+  'ai_images': 'Images IA',
   'image_search': 'Recherche Images',
   'competitor_analysis': 'Analyse Concurrence',
   'seo': 'Optimisation SEO',
@@ -391,9 +395,9 @@ export function EnrichmentProgressMonitor() {
                         {/* Error message */}
                         {task.error_message && (
                           <div className="space-y-2">
-                            <div className="text-xs text-red-600 bg-red-500/10 p-2 rounded border border-red-500/20">
-                              {task.error_message.length > 100 
-                                ? task.error_message.substring(0, 100) + '...' 
+                            <div className="text-xs text-red-600 bg-red-500/10 p-2 rounded border border-red-500/20 break-words">
+                              {task.error_message.length > 150 
+                                ? task.error_message.substring(0, 150) + '...' 
                                 : task.error_message}
                             </div>
                             <div className="flex gap-2">
