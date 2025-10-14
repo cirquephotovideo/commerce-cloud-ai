@@ -78,11 +78,11 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
         platform_type: library.id,
         platform_url: library.defaultConfig.server_url || library.npmPackage,
         is_active: true,
-        api_credentials: {
+        additional_config: {
           npm_package: library.npmPackage,
           version: library.version,
           auth_type: library.defaultConfig.auth_type,
-          ...envVars
+          credentials: envVars
         }
       });
 
