@@ -989,10 +989,14 @@ export type Database = {
           enrichment_type: string[]
           error_message: string | null
           id: string
+          last_error: string | null
+          max_retries: number | null
           priority: string | null
+          retry_count: number | null
           started_at: string | null
           status: string | null
           supplier_product_id: string | null
+          timeout_at: string | null
           updated_at: string | null
           user_id: string
         }
@@ -1003,10 +1007,14 @@ export type Database = {
           enrichment_type: string[]
           error_message?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number | null
           priority?: string | null
+          retry_count?: number | null
           started_at?: string | null
           status?: string | null
           supplier_product_id?: string | null
+          timeout_at?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -1017,10 +1025,14 @@ export type Database = {
           enrichment_type?: string[]
           error_message?: string | null
           id?: string
+          last_error?: string | null
+          max_retries?: number | null
           priority?: string | null
+          retry_count?: number | null
           started_at?: string | null
           status?: string | null
           supplier_product_id?: string | null
+          timeout_at?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -1318,6 +1330,75 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      import_errors: {
+        Row: {
+          created_at: string | null
+          error_details: Json | null
+          error_message: string
+          error_type: string
+          id: string
+          import_job_id: string | null
+          last_retry_at: string | null
+          max_retries: number | null
+          product_reference: string | null
+          resolution_method: string | null
+          resolved_at: string | null
+          retry_count: number | null
+          supplier_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_details?: Json | null
+          error_message: string
+          error_type: string
+          id?: string
+          import_job_id?: string | null
+          last_retry_at?: string | null
+          max_retries?: number | null
+          product_reference?: string | null
+          resolution_method?: string | null
+          resolved_at?: string | null
+          retry_count?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_details?: Json | null
+          error_message?: string
+          error_type?: string
+          id?: string
+          import_job_id?: string | null
+          last_retry_at?: string | null
+          max_retries?: number | null
+          product_reference?: string | null
+          resolution_method?: string | null
+          resolved_at?: string | null
+          retry_count?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_errors_import_job_id_fkey"
+            columns: ["import_job_id"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_errors_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       import_jobs: {
         Row: {
@@ -3413,9 +3494,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_enrichment_timeouts: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_old_amazon_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      get_retryable_import_errors: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          error_type: string
+          id: string
+          import_job_id: string
+          retry_count: number
+          supplier_id: string
+          user_id: string
+        }[]
       }
       has_role: {
         Args: {

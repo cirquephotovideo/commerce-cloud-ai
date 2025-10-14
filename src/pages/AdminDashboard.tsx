@@ -10,6 +10,7 @@ import { APIKeyManagement } from "@/components/admin/APIKeyManagement";
 import { SystemHealthCheck } from "@/components/admin/SystemHealthCheck";
 import { SystemLogs } from "@/components/admin/SystemLogs";
 import { DatabaseHealthChecker } from "@/components/admin/DatabaseHealthChecker";
+import { ImportErrorsManager } from "@/components/admin/ImportErrorsManager";
 import { EmailMarketing } from "@/components/admin/marketing/EmailMarketing";
 import { SocialMediaManager } from "@/components/admin/marketing/SocialMediaManager";
 import { AmazonCredentialsManager } from "@/components/admin/AmazonCredentialsManager";
@@ -74,6 +75,15 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
             
+            <Card>
+              <CardHeader>
+                <CardTitle>Import Errors Management</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ImportErrorsManager />
+              </CardContent>
+            </Card>
+
             <EnrichmentProgressMonitor />
 
             <Card>
