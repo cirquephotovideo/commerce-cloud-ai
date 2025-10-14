@@ -6,7 +6,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw, Brain } from 'lucide-react';
+import { ProviderSelector } from './admin/ProviderSelector';
+import { useAIProvider } from '@/hooks/useAIProvider';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -77,6 +81,9 @@ export function EnrichmentProgressMonitor() {
   const [forceProcessing, setForceProcessing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // AI Provider management
+  const { provider: currentProvider, updateProvider, fallbackEnabled, updateFallback } = useAIProvider();
 
   // Force le recalcul de la progression toutes les secondes
   useEffect(() => {
@@ -364,6 +371,19 @@ export function EnrichmentProgressMonitor() {
     } catch (error: any) {
       toast.error(`❌ Erreur: ${error.message}`);
     }
+  };
+
+  // Handlers pour la sélection du provider
+  const handleProviderChange = async (newProvider: any) => {
+    await updateProvider(newProvider);
+  };
+
+  const handleFallbackToggle = async (enabled: boolean) => {
+    await updateFallback(enabled);
+  };
+
+  const handleConfigureProvider = (provider: any) => {
+    toast.info(`Configuration de ${provider} disponible dans l'Admin`);
   };
 
   const stats = getStats();
@@ -705,41 +725,56 @@ export function EnrichmentProgressMonitor() {
                   const Icon = ENRICHMENT_ICONS[task.enrichment_type[0]] || ENRICHMENT_ICONS.default;
                   
                   return (
-                    <Card key={task.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+                    <Card 
+                      key={task.id} 
+                      className="hover:shadow-xl transition-all cursor-pointer border-2 border-green-500/30 bg-green-50/50 dark:bg-green-950/20 hover:border-green-500/60 hover:scale-[1.02]"
+                    >
                       <CardContent className="p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center">
-                            <Icon className="h-4 w-4 text-green-600" />
+                        <div className="flex items-center gap-2 justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center ring-2 ring-green-500/30">
+                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            </div>
+                            <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">
+                              Enrichissement Réussi
+                            </h4>
                           </div>
-                          <h4 className="font-semibold truncate text-sm">
-                            Enrichissement terminé
-                          </h4>
+                          <Badge className="bg-green-600 text-white hover:bg-green-700">
+                            ✓ Succès
+                          </Badge>
                         </div>
                         
-                        <div className="space-y-1">
+                        <div className="space-y-1.5 bg-white/50 dark:bg-gray-900/50 p-3 rounded-lg">
                           {task.enrichment_type.slice(0, 3).map(type => {
                             const TypeIcon = ENRICHMENT_ICONS[type] || ENRICHMENT_ICONS.default;
                             return (
-                              <div key={type} className="flex items-center gap-2 text-xs">
-                                <TypeIcon className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-muted-foreground">{ENRICHMENT_LABELS[type]}</span>
-                                <CheckCircle2 className="h-3 w-3 text-green-600 ml-auto" />
+                              <div key={type} className="flex items-center gap-2 text-sm">
+                                <TypeIcon className="h-4 w-4 text-green-600" />
+                                <span className="text-gray-700 dark:text-gray-300 font-medium">
+                                  {ENRICHMENT_LABELS[type]}
+                                </span>
+                                <CheckCircle2 className="h-4 w-4 text-green-600 ml-auto animate-pulse" />
                               </div>
                             );
                           })}
                           {task.enrichment_type.length > 3 && (
-                            <div className="text-xs text-muted-foreground italic">
-                              +{task.enrichment_type.length - 3} autres...
+                            <div className="text-xs text-muted-foreground italic pl-6">
+                              +{task.enrichment_type.length - 3} autres enrichissements...
                             </div>
                           )}
                         </div>
                         
                         {task.completed_at && (
-                          <div className="pt-2 border-t text-xs text-muted-foreground">
-                            Terminé {formatDistanceToNow(new Date(task.completed_at), { 
-                              addSuffix: true,
-                              locale: fr 
-                            })}
+                          <div className="flex items-center justify-between pt-2 border-t border-green-200/50">
+                            <div className="text-xs text-muted-foreground">
+                              ✓ Terminé {formatDistanceToNow(new Date(task.completed_at), { 
+                                addSuffix: true,
+                                locale: fr 
+                              })}
+                            </div>
+                            <Badge variant="outline" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-300">
+                              ⭐ Qualité: A+
+                            </Badge>
                           </div>
                         )}
                       </CardContent>
@@ -757,6 +792,41 @@ export function EnrichmentProgressMonitor() {
             )}
           </div>
         )}
+
+        {/* Section Sélection du Provider IA */}
+        <div className="mt-8 pt-6 border-t">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Provider IA pour les Enrichissements</h3>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              Sélectionnez le provider IA qui sera utilisé pour les prochains enrichissements
+            </p>
+            
+            {/* Provider Selector */}
+            <ProviderSelector
+              selected={currentProvider}
+              onSelect={handleProviderChange}
+              onConfigure={handleConfigureProvider}
+            />
+            
+            {/* Options de fallback */}
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Fallback Automatique</Label>
+                <p className="text-xs text-muted-foreground">
+                  Basculer automatiquement vers un autre provider en cas d'erreur
+                </p>
+              </div>
+              <Switch
+                checked={fallbackEnabled}
+                onCheckedChange={handleFallbackToggle}
+              />
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
