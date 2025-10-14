@@ -30,6 +30,7 @@ import { MCPServerConfiguration } from "@/components/admin/MCPServerConfiguratio
 import { NewsletterManager } from "@/components/admin/marketing/NewsletterManager";
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
+import { MCPClientsOverview } from "@/components/admin/MCPClientsOverview";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("monitoring");
@@ -102,6 +103,15 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <UserAlertsWidget />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Clients MCP</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MCPClientsOverview />
               </CardContent>
             </Card>
           </div>
