@@ -240,3 +240,6 @@ verify_jwt = false
 
 [functions.product-chat]
 verify_jwt = true
+
+[functions.build-product-chat-context]
+verify_jwt = true

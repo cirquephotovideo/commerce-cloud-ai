@@ -2085,6 +2085,45 @@ export type Database = {
           },
         ]
       }
+      product_chat_contexts: {
+        Row: {
+          context_text: string
+          created_at: string
+          id: string
+          last_built_at: string
+          last_error: string | null
+          product_id: string
+          status: string
+          updated_at: string
+          user_id: string
+          version: number
+        }
+        Insert: {
+          context_text: string
+          created_at?: string
+          id?: string
+          last_built_at?: string
+          last_error?: string | null
+          product_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          version?: number
+        }
+        Update: {
+          context_text?: string
+          created_at?: string
+          id?: string
+          last_built_at?: string
+          last_error?: string | null
+          product_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          version?: number
+        }
+        Relationships: []
+      }
       product_links: {
         Row: {
           analysis_id: string | null

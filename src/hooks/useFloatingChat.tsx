@@ -147,7 +147,7 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
     toast.success('Historique effacé');
   };
 
-  const switchToProduct = (productId: string, productName: string) => {
+  const switchToProduct = async (productId: string, productName: string) => {
     setContext({ type: 'product', productId, productName });
     
     // Add system message
@@ -157,6 +157,21 @@ Vous êtes actuellement en mode ${context.type === 'product' ? `produit: ${conte
       timestamp: Date.now()
     };
     setMessages(prev => [...prev, systemMessage]);
+
+    // Préchauffer le contexte en arrière-plan (non bloquant)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        supabase.functions.invoke('build-product-chat-context', {
+          body: { productId },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
+        }).catch(err => console.warn('Context preheating failed:', err));
+      }
+    } catch (err) {
+      console.warn('Context preheating skipped:', err);
+    }
   };
 
   const switchToGeneral = () => {

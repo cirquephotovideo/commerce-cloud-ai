@@ -50,100 +50,82 @@ serve(async (req) => {
       }
     );
 
-    // Get user with explicit access token
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(accessToken);
-    if (userError || !user) {
-      console.error('❌ Erreur authentification:', userError);
-      return new Response(
-        JSON.stringify({ error: 'Utilisateur non trouvé' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    console.log('✅ Utilisateur authentifié:', user.id);
+    let systemPrompt = `Tu es un assistant e-commerce expert qui aide les utilisateurs à analyser leurs produits.
+Sois concis, précis et orienté business. Réponds en français.`;
 
-    let systemPrompt = `Tu es un assistant IA expert en e-commerce et gestion de catalogue.
-
-Tu peux aider avec :
-- Des recommandations de produits
-- Des analyses de prix et marges
-- Des optimisations de catalogue
-- Des conseils sur les fournisseurs
-- Des stratégies de tarification
-
-Réponds de manière concise, professionnelle et orientée résultats. Utilise des emojis pour rendre la conversation agréable 😊`;
-
-    // Si productId fourni, récupérer les détails du produit
+    // If productId is provided, try to use pre-computed context
     if (productId) {
-      const { data: product, error: productError } = await supabaseClient
-        .from('product_analyses')
-        .select(`
-          *,
-          supplier_products(
-            id,
-            supplier_id,
-            purchase_price,
-            supplier_configurations(name)
-          ),
-          amazon_product_data(*)
-        `)
-        .eq('id', productId)
-        .eq('user_id', user.id)
-        .single();
+      console.log('📦 Checking for product context:', productId);
+      
+      // Try to fetch pre-computed context (RLS will handle user filtering)
+      const { data: contextData, error: contextError } = await supabaseClient
+        .from('product_chat_contexts')
+        .select('context_text, status, last_built_at')
+        .eq('product_id', productId)
+        .maybeSingle();
 
-      if (productError) {
-        console.error('❌ Erreur récupération produit:', productError);
-        return new Response(
-          JSON.stringify({ error: 'Produit non trouvé' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      if (contextData && contextData.status === 'ready') {
+        console.log('✅ Using pre-computed context');
+        systemPrompt = `Tu es un assistant e-commerce expert. Voici les informations sur le produit concerné:
 
-      if (product) {
-        console.log('✅ Produit récupéré:', { 
-          id: product.id, 
-          name: product.product_name || product.name,
-          hasSuppliers: product.supplier_products?.length > 0,
-          hasAmazonData: !!product.amazon_product_data?.[0]
-        });
-        const analysisResult = product.analysis_result || {};
-        const amazonData = product.amazon_product_data?.[0] || null;
+${contextData.context_text}
+
+Réponds aux questions de l'utilisateur en t'appuyant uniquement sur ces informations. Sois concis, précis et orienté business. Réponds en français.`;
+      } else {
+        console.log('⚠️ No ready context found, will use live fetch fallback');
         
-        systemPrompt = `Tu es un assistant IA expert en e-commerce spécialisé dans l'analyse de produits.
+        // Fallback: fetch product data live (RLS will handle user filtering)
+        const { data: product, error: productError } = await supabaseClient
+          .from('product_analyses')
+          .select(`
+            *,
+            supplier_products!inner(id, supplier_id, purchase_price, stock_quantity),
+            amazon_product_data(*)
+          `)
+          .eq('id', productId)
+          .maybeSingle();
 
-CONTEXTE DU PRODUIT :
-- Nom : ${product.product_name || product.name || 'Non spécifié'}
-- EAN : ${product.ean || 'Non disponible'}
-- Prix d'achat : ${product.purchase_price ? `${product.purchase_price}€` : 'Non disponible'}
-- Prix de vente recommandé : ${analysisResult.price ? `${analysisResult.price}€` : 'Non disponible'}
-- Catégorie : ${analysisResult.category || 'Non spécifiée'}
-- Marque : ${analysisResult.brand || 'Non spécifiée'}
-- Description : ${analysisResult.description || analysisResult.description_short || 'Non disponible'}
+        if (productError) {
+          console.error('❌ Product fetch error:', productError);
+          return new Response(
+            JSON.stringify({ error: 'Erreur lors de la récupération du produit' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
-${product.supplier_products?.length > 0 ? `FOURNISSEURS :
-${product.supplier_products.map((sp: any) => 
-  `- ${sp.supplier_configurations?.name || 'Inconnu'}: ${sp.purchase_price}€`
-).join('\n')}` : 'Aucun fournisseur lié'}
+        if (!product) {
+          console.log('❌ Product not found or not accessible');
+          return new Response(
+            JSON.stringify({ error: 'Produit introuvable ou non accessible' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
-${amazonData ? `DONNÉES AMAZON :
-- Prix Amazon : ${amazonData.buy_box_price ? `${amazonData.buy_box_price}€` : 'Non disponible'}
-- Nombre d'offres : ${amazonData.offer_count_new || 0}
-- Note moyenne : ${amazonData.raw_data?.rating || 'Non disponible'}
-- Rang de ventes : ${amazonData.sales_rank ? JSON.stringify(amazonData.sales_rank) : 'Non disponible'}` : ''}
+        console.log('✅ Using live product data');
+        
+        // Build a simplified context from live data
+        const contextParts: string[] = [];
+        contextParts.push(`EAN: ${product.ean || 'N/A'}`);
+        contextParts.push(`Nom: ${product.product_name || product.name || 'N/A'}`);
+        if (product.purchase_price) contextParts.push(`Prix d'achat: ${product.purchase_price}€`);
+        if (product.analysis_result?.price) contextParts.push(`Prix de vente: ${product.analysis_result.price}€`);
+        if (product.margin_percentage) contextParts.push(`Marge: ${product.margin_percentage}%`);
+        
+        systemPrompt = `Tu es un assistant e-commerce expert. Voici les informations sur le produit:
 
-RÈGLES :
-1. Réponds uniquement aux questions sur CE produit
-2. Sois concis et précis (max 200 mots)
-3. Si le prix est demandé, donne à la fois le prix d'achat et de vente
-4. Compare avec les données Amazon si disponibles
-5. Recommande des actions concrètes (ajuster prix, changer fournisseur, enrichir données)
-6. Utilise des emojis pour rendre la conversation agréable 😊
-7. Structure ta réponse avec des bullet points si nécessaire
+${contextParts.join('\n')}
 
-FORMAT DE RÉPONSE :
-- Court et direct
-- Orienté action business
-- Basé uniquement sur les données fournies`;
+Réponds aux questions en t'appuyant sur ces informations. Sois concis et orienté business. Réponds en français.`;
+
+        // Optionally trigger background context build (not awaited)
+        fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/build-product-chat-context`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ productId }),
+        }).catch(err => console.error('Background context build failed:', err));
       }
     }
 
