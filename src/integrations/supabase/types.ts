@@ -1621,6 +1621,45 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_call_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          latency_ms: number | null
+          package_id: string
+          request_args: Json | null
+          response_data: Json | null
+          success: boolean
+          tool_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          package_id: string
+          request_args?: Json | null
+          response_data?: Json | null
+          success?: boolean
+          tool_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          latency_ms?: number | null
+          package_id?: string
+          request_args?: Json | null
+          response_data?: Json | null
+          success?: boolean
+          tool_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string

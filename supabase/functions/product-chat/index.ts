@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { detectMCPRequest } from './mcp-detection.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,10 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Détecter si la requête nécessite un appel MCP
+    const mcpDetection = detectMCPRequest(message);
+    console.log('🔍 MCP Detection:', mcpDetection);
 
     // Get auth token and extract access token explicitly
     const authHeader = req.headers.get('Authorization') || '';
@@ -52,6 +57,41 @@ serve(async (req) => {
 
     let systemPrompt = `Tu es un assistant e-commerce expert qui aide les utilisateurs à analyser leurs produits.
 Sois concis, précis et orienté business. Réponds en français.`;
+
+    // Si MCP détecté, enrichir le contexte
+    let mcpContext = '';
+    if (mcpDetection.needsMCP) {
+      console.log(`🚀 Calling MCP: ${mcpDetection.packageId} - ${mcpDetection.toolName}`);
+      
+      try {
+        const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-proxy`, {
+          method: 'POST',
+          headers: {
+            'Authorization': req.headers.get('Authorization') || '',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            packageId: mcpDetection.packageId,
+            toolName: mcpDetection.toolName,
+            args: mcpDetection.args
+          }),
+        });
+
+        if (mcpResponse.ok) {
+          const mcpData = await mcpResponse.json();
+          console.log('✅ MCP data fetched:', mcpData);
+          
+          if (mcpData.data && Array.isArray(mcpData.data)) {
+            mcpContext = `\n\nDonnées depuis ${mcpDetection.packageId}:\n` + 
+              JSON.stringify(mcpData.data, null, 2);
+          }
+        } else {
+          console.error('❌ MCP call failed:', mcpResponse.status);
+        }
+      } catch (mcpError) {
+        console.error('❌ MCP error:', mcpError);
+      }
+    }
 
     // If productId is provided, try to use pre-computed context
     if (productId) {
@@ -114,6 +154,7 @@ Réponds aux questions de l'utilisateur en t'appuyant uniquement sur ces informa
         systemPrompt = `Tu es un assistant e-commerce expert. Voici les informations sur le produit:
 
 ${contextParts.join('\n')}
+${mcpContext}
 
 Réponds aux questions en t'appuyant sur ces informations. Sois concis et orienté business. Réponds en français.`;
 

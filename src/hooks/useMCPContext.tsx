@@ -73,16 +73,24 @@ export function useMCPContext() {
     mcpPackages.forEach(pkg => {
       const type = pkg.platform_type.toLowerCase();
       if (type.includes('prestashop')) {
-        suggestions.push(`📦 Lister les produits PrestaShop`);
-        suggestions.push(`🛒 Créer une commande PrestaShop`);
+        suggestions.push(`📦 Liste-moi 10 produits PrestaShop`);
+        suggestions.push(`🔍 Recherche les produits Sony dans PrestaShop`);
+        suggestions.push(`💰 Compare les prix PrestaShop avec mes analyses`);
       } else if (type.includes('odoo')) {
-        suggestions.push(`👥 Lister les clients Odoo`);
-        suggestions.push(`📊 Créer un devis Odoo`);
+        suggestions.push(`📦 Liste-moi 10 produits Sony depuis Odoo`);
+        suggestions.push(`🔍 Recherche tous les produits de la catégorie Électronique dans Odoo`);
+        suggestions.push(`💰 Quel est le prix du produit X dans Odoo?`);
+        suggestions.push(`📊 Combien de produits sont disponibles dans Odoo?`);
       } else if (type.includes('amazon')) {
-        suggestions.push(`🔍 Rechercher sur Amazon`);
-        suggestions.push(`💰 Vérifier les prix Amazon`);
+        suggestions.push(`🔍 Recherche ce produit sur Amazon`);
+        suggestions.push(`💰 Compare le prix avec Amazon`);
       }
     });
+
+    // Ajouter des suggestions génériques si pas de packages
+    if (suggestions.length === 0) {
+      suggestions.push(`💡 Connectez Odoo, PrestaShop ou Amazon pour synchroniser vos produits`);
+    }
 
     return suggestions;
   };

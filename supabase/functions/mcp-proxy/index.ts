@@ -62,7 +62,18 @@ serve(async (req) => {
       throw new Error(`Package ${packageId} non supporté`);
     }
 
-    // Logger l'appel dans audit_logs
+    // Logger l'appel dans mcp_call_logs et audit_logs
+    await supabaseClient.from('mcp_call_logs').insert({
+      user_id: user.id,
+      package_id: packageId,
+      tool_name: toolName,
+      request_args: args,
+      response_data: result,
+      success: result.success,
+      error_message: ('error' in result ? result.error : null) as string | null,
+      latency_ms: ('latency_ms' in result ? result.latency_ms : null) as number | null
+    });
+
     await supabaseClient.from('audit_logs').insert({
       user_id: user.id,
       entity_type: 'mcp_call',
@@ -72,7 +83,7 @@ serve(async (req) => {
         package: packageId,
         tool: toolName,
         args: args,
-        success: true
+        success: result.success
       }
     });
 
@@ -91,14 +102,153 @@ serve(async (req) => {
 
 async function callOdooTool(toolName: string, args: any, credentials: any, serverUrl: string) {
   console.log(`[MCP-ODOO] Calling ${toolName} with args:`, args);
+  const startTime = Date.now();
   
-  // Simuler un appel Odoo (à implémenter avec XML-RPC)
-  return {
-    success: true,
-    tool: toolName,
-    result: `Odoo tool ${toolName} executed successfully`,
-    data: args
-  };
+  try {
+    // Étape 1: Authentification Odoo via XML-RPC
+    const authResponse = await fetch(`${serverUrl}/xmlrpc/2/common`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml' },
+      body: `<?xml version="1.0"?>
+<methodCall>
+  <methodName>authenticate</methodName>
+  <params>
+    <param><value><string>${credentials.ODOO_DB}</string></value></param>
+    <param><value><string>${credentials.ODOO_USERNAME}</string></value></param>
+    <param><value><string>${credentials.ODOO_PASSWORD}</string></value></param>
+    <param><value><struct></struct></value></param>
+  </params>
+</methodCall>`
+    });
+
+    if (!authResponse.ok) {
+      throw new Error(`Odoo authentication failed: ${authResponse.status}`);
+    }
+
+    const authText = await authResponse.text();
+    const uidMatch = authText.match(/<int>(\d+)<\/int>/);
+    if (!uidMatch) {
+      throw new Error('Failed to extract UID from Odoo response');
+    }
+    const uid = uidMatch[1];
+    console.log(`[MCP-ODOO] Authenticated with UID: ${uid}`);
+
+    // Étape 2: Exécuter l'outil demandé
+    let xmlrpcParams = '';
+    let domain = '[]';
+    let fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available'];
+    let limit = 10;
+
+    if (toolName === 'search_products') {
+      const searchTerm = args.search || args.name || '';
+      if (searchTerm) {
+        domain = `[['name', 'ilike', '${searchTerm.replace(/'/g, "\\'")}']`;
+        if (args.brand) {
+          domain += `, ['brand', 'ilike', '${args.brand.replace(/'/g, "\\'")}']`;
+        }
+        domain += ']';
+      }
+      limit = args.limit || 10;
+    } else if (toolName === 'get_product_details') {
+      const productId = args.id || args.product_id;
+      if (!productId) {
+        throw new Error('product_id is required for get_product_details');
+      }
+      domain = `[['id', '=', ${productId}]]`;
+      fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available', 'description', 'description_sale', 'image_1920'];
+      limit = 1;
+    } else if (toolName === 'list_products') {
+      limit = args.limit || 10;
+    }
+
+    xmlrpcParams = `<?xml version="1.0"?>
+<methodCall>
+  <methodName>execute_kw</methodName>
+  <params>
+    <param><value><string>${credentials.ODOO_DB}</string></value></param>
+    <param><value><int>${uid}</int></value></param>
+    <param><value><string>${credentials.ODOO_PASSWORD}</string></value></param>
+    <param><value><string>product.template</string></value></param>
+    <param><value><string>search_read</string></value></param>
+    <param><value><array><data>
+      <value><array><data>${domain}</data></array></value>
+    </data></array></value></param>
+    <param><value><struct>
+      <member><name>fields</name><value><array><data>
+        ${fields.map(f => `<value><string>${f}</string></value>`).join('')}
+      </data></array></value></member>
+      <member><name>limit</name><value><int>${limit}</int></value></member>
+    </struct></value></param>
+  </params>
+</methodCall>`;
+
+    const execResponse = await fetch(`${serverUrl}/xmlrpc/2/object`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml' },
+      body: xmlrpcParams
+    });
+
+    if (!execResponse.ok) {
+      throw new Error(`Odoo execute_kw failed: ${execResponse.status}`);
+    }
+
+    const execText = await execResponse.text();
+    console.log(`[MCP-ODOO] Raw response length: ${execText.length}`);
+
+    // Parser simplifié pour extraire les données des produits
+    const products: any[] = [];
+    const structMatches = execText.matchAll(/<struct>(.*?)<\/struct>/gs);
+    
+    for (const match of structMatches) {
+      const structContent = match[1];
+      const product: any = {};
+      
+      // Extraire les champs du produit
+      const memberMatches = structContent.matchAll(/<member>.*?<name>(.*?)<\/name>.*?<value>(.*?)<\/value>.*?<\/member>/gs);
+      for (const memberMatch of memberMatches) {
+        const key = memberMatch[1];
+        const valueContent = memberMatch[2];
+        
+        // Extraire la valeur selon son type
+        if (valueContent.includes('<string>')) {
+          product[key] = valueContent.match(/<string>(.*?)<\/string>/)?.[1] || '';
+        } else if (valueContent.includes('<int>')) {
+          product[key] = parseInt(valueContent.match(/<int>(.*?)<\/int>/)?.[1] || '0');
+        } else if (valueContent.includes('<double>')) {
+          product[key] = parseFloat(valueContent.match(/<double>(.*?)<\/double>/)?.[1] || '0');
+        } else if (valueContent.includes('<boolean>')) {
+          product[key] = valueContent.includes('<boolean>1</boolean>');
+        }
+      }
+      
+      if (Object.keys(product).length > 0) {
+        products.push(product);
+      }
+    }
+
+    const latency = Date.now() - startTime;
+    console.log(`[MCP-ODOO] Successfully fetched ${products.length} products in ${latency}ms`);
+
+    return {
+      success: true,
+      tool: toolName,
+      result: `Successfully fetched ${products.length} products from Odoo`,
+      data: products,
+      latency_ms: latency
+    };
+
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[MCP-ODOO] Error:`, error);
+    return {
+      success: false,
+      tool: toolName,
+      result: `Failed to execute Odoo tool: ${errorMessage}`,
+      error: errorMessage,
+      latency_ms: latency
+    };
+  }
 }
 
 async function callPrestaShopTool(toolName: string, args: any, credentials: any, serverUrl: string) {
