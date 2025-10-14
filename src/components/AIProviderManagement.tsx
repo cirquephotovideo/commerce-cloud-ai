@@ -136,7 +136,7 @@ export default function AIProviderManagement() {
     if (!currentProvider) {
       toast({
         title: "❌ Erreur",
-        description: "Veuillez sélectionner un provider principal",
+        description: "Sélectionnez un provider principal",
         variant: "destructive",
       });
       return;
@@ -145,18 +145,16 @@ export default function AIProviderManagement() {
     setIsSaving(true);
 
     try {
-      // Vérifier si un enregistrement existe déjà
+      // Vérifier si un enregistrement existe
       const { data: existing } = await supabase
         .from('user_provider_preferences')
         .select('id')
         .eq('user_id', session.user.id)
         .maybeSingle();
 
-      let error;
-      
       if (existing) {
         // UPDATE
-        const result = await supabase
+        const { error } = await supabase
           .from('user_provider_preferences')
           .update({
             primary_provider: currentProvider,
@@ -165,10 +163,11 @@ export default function AIProviderManagement() {
             updated_at: new Date().toISOString(),
           })
           .eq('user_id', session.user.id);
-        error = result.error;
+
+        if (error) throw error;
       } else {
         // INSERT
-        const result = await supabase
+        const { error } = await supabase
           .from('user_provider_preferences')
           .insert({
             user_id: session.user.id,
@@ -176,35 +175,25 @@ export default function AIProviderManagement() {
             fallback_order: fallbackOrder,
             fallback_enabled: fallbackEnabled,
           });
-        error = result.error;
+
+        if (error) throw error;
       }
 
-      if (error) {
-        console.error('[FALLBACK] Save error:', error);
-        toast({
-          title: "❌ Erreur",
-          description: `Impossible de sauvegarder: ${error.message}`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "✅ Sauvegardé",
-          description: "Ordre de fallback mis à jour avec succès",
-          variant: "default",
-        });
-        
-        // Recharger toutes les données
-        await Promise.all([
-          loadConfig(),
-          loadFallbackOrder(),
-          loadProviderHealth(),
-        ]);
-      }
+      toast({
+        title: "✅ Sauvegardé",
+        description: "Ordre de fallback mis à jour",
+      });
+
+      // Recharger
+      await Promise.all([
+        loadConfig(),
+        loadFallbackOrder(),
+        loadProviderHealth(),
+      ]);
     } catch (error: any) {
-      console.error('[FALLBACK] Unexpected error:', error);
       toast({
         title: "❌ Erreur",
-        description: `Erreur inattendue: ${error.message}`,
+        description: error.message || "Impossible de sauvegarder",
         variant: "destructive",
       });
     } finally {

@@ -71,6 +71,8 @@ export default function Dashboard() {
   const [selectedAnalysis, setSelectedAnalysis] = useState<ProductAnalysis | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
+  const [chatFilteredProducts, setChatFilteredProducts] = useState<string[]>([]);
+  const [isChatActive, setIsChatActive] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
@@ -197,28 +199,36 @@ export default function Dashboard() {
   }, [analyses]);
 
   useEffect(() => {
-    // Filtrer les analyses en fonction de la recherche
-    if (!searchQuery.trim()) {
+    // Filtrer les analyses en fonction de la recherche ET du chat
+    if (!searchQuery.trim() && chatFilteredProducts.length === 0) {
       setFilteredAnalyses(analyses);
       return;
     }
 
     const query = searchQuery.toLowerCase();
     const filtered = analyses.filter(analysis => {
-      if (searchType === "url") {
-        return analysis.product_url.toLowerCase().includes(query);
-      } else if (searchType === "ean") {
-        // Recherche par EAN dans analysis_result
-        const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
-        return ean.toLowerCase().includes(query);
-      } else {
-        // Recherche par nom de produit
-        const name = analysis.analysis_result?.name || "";
-        return name.toLowerCase().includes(query);
+      // Filtre par chat si actif
+      if (isChatActive && chatFilteredProducts.length > 0) {
+        if (!chatFilteredProducts.includes(analysis.id)) return false;
       }
+
+      // Filtre par recherche si présent
+      if (searchQuery.trim()) {
+        if (searchType === "url") {
+          return analysis.product_url.toLowerCase().includes(query);
+        } else if (searchType === "ean") {
+          const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
+          return ean.toLowerCase().includes(query);
+        } else {
+          const name = analysis.analysis_result?.name || "";
+          return name.toLowerCase().includes(query);
+        }
+      }
+
+      return true;
     });
     setFilteredAnalyses(filtered);
-  }, [searchQuery, searchType, analyses]);
+  }, [searchQuery, searchType, analyses, chatFilteredProducts, isChatActive]);
 
   const loadAnalyses = async () => {
     try {
@@ -570,42 +580,60 @@ export default function Dashboard() {
         {hasPermission('ean_search') && (
           <Card className="mb-4 sm:mb-6">
             <CardContent className="pt-4 sm:pt-6">
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-                <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="name">
-                      <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4" />
-                        Par Nom du produit
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="url">
-                      <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4" />
-                        Par URL
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="ean">
-                      <div className="flex items-center gap-2">
-                        <Barcode className="w-4 h-4" />
-                        Par EAN/Barcode
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder={
-                    searchType === "name" ? "Rechercher par nom..." :
-                    searchType === "url" ? "Rechercher par URL..." : 
-                    "Rechercher par EAN..."
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1"
-                />
+              <div className="space-y-2">
+                {isChatActive && chatFilteredProducts.length > 0 && (
+                  <Badge className="bg-primary/10 text-primary mb-2">
+                    🤖 Assistant IA Général - {chatFilteredProducts.length} produit(s) suggéré(s)
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="ml-2 h-4 w-4 p-0"
+                      onClick={() => {
+                        setChatFilteredProducts([]);
+                        setIsChatActive(false);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </Badge>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                  <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
+                    <SelectTrigger className="w-full sm:w-[200px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="name">
+                        <div className="flex items-center gap-2">
+                          <Search className="w-4 h-4" />
+                          Par Nom du produit
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="url">
+                        <div className="flex items-center gap-2">
+                          <Search className="w-4 h-4" />
+                          Par URL
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="ean">
+                        <div className="flex items-center gap-2">
+                          <Barcode className="w-4 h-4" />
+                          Par EAN/Barcode
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    placeholder={
+                      searchType === "name" ? "Rechercher par nom..." :
+                      searchType === "url" ? "Rechercher par URL..." : 
+                      "Rechercher par EAN..."
+                    }
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="flex-1"
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -928,7 +956,11 @@ export default function Dashboard() {
         analyses={filteredAnalyses}
         onProductSelect={(productId) => {
           const product = analyses.find(a => a.id === productId);
-          if (product) handleOpenDetail(product);
+          if (product) {
+            handleOpenDetail(product);
+            setChatFilteredProducts([productId]);
+            setIsChatActive(true);
+          }
         }}
       />
     </>

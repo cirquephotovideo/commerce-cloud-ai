@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { TaxonomyBadges } from "@/components/TaxonomyBadges";
+import { EnrichmentStatusIndicator } from "./EnrichmentStatusIndicator";
 import { getProductImages, getProductName, getProductPrice, getProductScore, getProductCategory } from "@/lib/analysisDataExtractors";
 import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info, Zap, Box, Wifi, Battery, Ruler, Weight, Calendar, ShieldCheck, TrendingUp, Sparkles, Loader2, Video as VideoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -279,7 +280,7 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                     )}
                   </div>
                   
-                  {/* Taxonomy Section with Auto-Generate Button */}
+                {/* Taxonomy Section with Auto-Generate Button */}
                   {!hasTaxonomy ? (
                     <Button 
                       variant="outline" 
@@ -301,7 +302,10 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                     </Button>
                   ) : (
                     <div data-taxonomy-badges>
-                      <p className="text-xs text-muted-foreground mb-2 font-medium">Catégories e-commerce</p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-muted-foreground font-medium">Catégories e-commerce</p>
+                        <EnrichmentStatusIndicator status="completed" label="Taxonomie" />
+                      </div>
                       <TaxonomyBadges analysisId={analysis.id} />
                     </div>
                   )}
@@ -329,11 +333,12 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
                       )}
                     </Button>
                   ) : (
-                    <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg">
-                      <CheckCircle2 className="w-5 h-5 text-orange-600 dark:text-orange-400 flex-shrink-0" />
-                      <span className="text-sm text-orange-800 dark:text-orange-300 font-medium">
+                    <div className="flex items-center justify-between gap-2 p-3 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                      <span className="text-sm text-orange-800 dark:text-orange-300 font-medium flex items-center gap-2">
+                        <CheckCircle2 className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                         ✅ Données Amazon synchronisées
                       </span>
+                      <EnrichmentStatusIndicator status={analysis.enrichment_status?.amazon || 'completed'} />
                     </div>
                   )}
                 </div>
@@ -378,9 +383,12 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
       {hasVideo && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <VideoIcon className="w-5 h-5" />
-              Vidéo Promotionnelle HeyGen
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <VideoIcon className="w-5 w-5" />
+                Vidéo Promotionnelle HeyGen
+              </span>
+              <EnrichmentStatusIndicator status={analysis.enrichment_status?.heygen || 'completed'} />
             </CardTitle>
             <CardDescription>
               Vidéo générée avec un avatar IA pour présenter le produit

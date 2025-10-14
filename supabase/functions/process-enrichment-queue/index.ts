@@ -29,6 +29,23 @@ serve(async (req) => {
 
     console.log(`[ENRICHMENT-QUEUE] Starting processing (max ${maxItems} items, ${parallel} parallel)`);
 
+    // Nettoyer les tâches bloquées (> 10 minutes)
+    const { error: cleanupError } = await supabase
+      .from('enrichment_queue')
+      .update({
+        status: 'failed',
+        error_message: 'Timeout: task blocked for > 10 minutes',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('status', 'processing')
+      .lt('started_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+
+    if (cleanupError) {
+      console.error('[CLEANUP] Error cleaning stuck tasks:', cleanupError);
+    } else {
+      console.log('[CLEANUP] Cleaned up stuck tasks');
+    }
+
     // Fetch pending tasks with priority: EAN-based products first
     const { data: tasks, error: tasksError } = await supabase
       .from('enrichment_queue')
