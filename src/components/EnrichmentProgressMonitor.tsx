@@ -57,6 +57,31 @@ export function EnrichmentProgressMonitor() {
   const [tasks, setTasks] = useState<EnrichmentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [forceProcessing, setForceProcessing] = useState(false);
+  const [progressTick, setProgressTick] = useState(0);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Force le recalcul de la progression toutes les secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgressTick(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Polling léger si des tâches sont en processing
+  useEffect(() => {
+    const processingTasks = tasks.filter(t => t.status === 'processing');
+    
+    if (processingTasks.length > 0) {
+      const pollingInterval = setInterval(() => {
+        console.log('[ENRICHMENT-MONITOR] Polling for processing tasks updates');
+        loadTasks();
+      }, 10000); // 10 secondes
+
+      return () => clearInterval(pollingInterval);
+    }
+  }, [tasks]);
 
   useEffect(() => {
     loadTasks();
@@ -73,7 +98,9 @@ export function EnrichmentProgressMonitor() {
         },
         (payload) => {
           console.log('[ENRICHMENT-MONITOR] Realtime update:', payload);
+          setIsUpdating(true);
           loadTasks();
+          setTimeout(() => setIsUpdating(false), 500); // Animation de 500ms
         }
       )
       .subscribe();
@@ -130,11 +157,24 @@ export function EnrichmentProgressMonitor() {
     if (task.status === 'completed') return 100;
     if (task.status === 'failed') return 0;
     if (task.status === 'processing') {
-      // Estimate progress based on time elapsed
-      const startTime = task.started_at ? new Date(task.started_at).getTime() : new Date(task.created_at).getTime();
+      const startTime = task.started_at 
+        ? new Date(task.started_at).getTime() 
+        : new Date(task.created_at).getTime();
       const elapsed = Date.now() - startTime;
-      const estimatedDuration = 30000; // 30 seconds estimate
-      return Math.min(95, Math.floor((elapsed / estimatedDuration) * 100));
+      
+      // Durées estimées selon le type d'enrichissement
+      const estimatedDuration = task.enrichment_type.includes('heygen') ? 120000 : // 2 min pour vidéo
+                               task.enrichment_type.includes('amazon') ? 60000 : // 1 min pour Amazon
+                               task.enrichment_type.includes('images') || task.enrichment_type.includes('ai_images') ? 45000 : // 45s pour images
+                               30000; // 30s par défaut
+      
+      // Progression logarithmique (ralentit à l'approche de 95%)
+      const rawProgress = (elapsed / estimatedDuration) * 100;
+      const smoothProgress = rawProgress < 50 
+        ? rawProgress 
+        : 50 + (45 * Math.log(rawProgress - 49) / Math.log(51));
+      
+      return Math.min(95, Math.floor(smoothProgress));
     }
     return 0;
   };
@@ -283,6 +323,12 @@ export function EnrichmentProgressMonitor() {
           <CardTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5" />
             Progression des Enrichissements
+            {isUpdating && (
+              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse">
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Mise à jour...
+              </Badge>
+            )}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={`${queueStatus.color} border`}>
@@ -365,7 +411,9 @@ export function EnrichmentProgressMonitor() {
                 return (
                   <div 
                     key={task.id}
-                    className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow"
+                    className={`p-4 rounded-lg border bg-card hover:shadow-md transition-shadow ${
+                      task.status === 'processing' ? 'ring-2 ring-blue-500/50 animate-pulse' : ''
+                    }`}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
