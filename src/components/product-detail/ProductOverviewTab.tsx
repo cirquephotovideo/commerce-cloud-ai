@@ -54,6 +54,9 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
 
   // Extract data from analysis
   const description = analysis?.analysis_result?.description?.suggested_description || analysis?.description_long || "";
+  const shortDescription = analysis?.analysis_result?.short_description || 
+                          analysis?.analysis_result?.description?.short ||
+                          (description ? description.split('.').slice(0, 2).join('.') + '.' : '');
   const keyFeatures = analysis?.analysis_result?.key_features || [];
   const pros = analysis?.competitive_pros || [];
   const cons = analysis?.competitive_cons || [];
@@ -260,7 +263,14 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
             {/* Product Info Summary */}
             <div className="space-y-4">
               <div>
-                <h2 className="text-3xl font-bold mb-3">{productName}</h2>
+                <h2 className="text-3xl font-bold mb-2">{productName}</h2>
+                
+                {/* Short Description */}
+                {shortDescription && (
+                  <p className="text-base text-muted-foreground leading-relaxed mb-3 line-clamp-3">
+                    {shortDescription}
+                  </p>
+                )}
                 
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                   <span className="text-4xl font-bold text-primary">{productPrice}</span>

@@ -127,11 +127,32 @@ serve(async (req) => {
       contextParts.push('');
     }
 
+    // Images section
+    const images = product.analysis_result?.images || [];
+    if (images.length > 0) {
+      contextParts.push('=== IMAGES PRODUIT ===');
+      images.forEach((img: string, idx: number) => {
+        contextParts.push(`Image ${idx + 1}: ${img}`);
+      });
+      contextParts.push('');
+    }
+
+    // Short description
+    const shortDesc = product.analysis_result?.short_description || 
+                     product.analysis_result?.description?.short ||
+                     (product.analysis_result?.description?.suggested_description ? 
+                      product.analysis_result.description.suggested_description.split('.')[0] + '.' : '');
+    if (shortDesc) {
+      contextParts.push('=== DESCRIPTION CLIENT ===');
+      contextParts.push(shortDesc);
+      contextParts.push('');
+    }
+
     // Key points from analysis
     if (product.analysis_result) {
       contextParts.push('=== POINTS CLÉS ===');
-      if (product.analysis_result.description) {
-        contextParts.push(`Description: ${product.analysis_result.description.substring(0, 300)}...`);
+      if (product.analysis_result.description?.suggested_description) {
+        contextParts.push(`Description: ${product.analysis_result.description.suggested_description.substring(0, 300)}...`);
       }
       if (product.analysis_result.key_features && Array.isArray(product.analysis_result.key_features)) {
         contextParts.push('Caractéristiques principales:');

@@ -136,7 +136,7 @@ async function callOdooTool(toolName: string, args: any, credentials: any, serve
     // Étape 2: Exécuter l'outil demandé
     let xmlrpcParams = '';
     let domain = '[]';
-    let fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available'];
+    let fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available', 'image_1920'];
     let limit = 10;
 
     if (toolName === 'search_products') {
@@ -155,7 +155,7 @@ async function callOdooTool(toolName: string, args: any, credentials: any, serve
         throw new Error('product_id is required for get_product_details');
       }
       domain = `[['id', '=', ${productId}]]`;
-      fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available', 'description', 'description_sale', 'image_1920'];
+      fields = ['name', 'list_price', 'default_code', 'categ_id', 'qty_available', 'description', 'description_sale', 'image_1920', 'image_1024', 'image_512'];
       limit = 1;
     } else if (toolName === 'list_products') {
       limit = args.limit || 10;
@@ -222,6 +222,21 @@ async function callOdooTool(toolName: string, args: any, credentials: any, serve
       }
       
       if (Object.keys(product).length > 0) {
+        // Convertir l'image base64 en data URL si présente
+        if (product.image_1920) {
+          product.image_url = `data:image/png;base64,${product.image_1920}`;
+          // Nettoyer pour ne pas surcharger la réponse
+          delete product.image_1920;
+        }
+        
+        // Générer l'URL du produit Odoo
+        if (product.name && product.id) {
+          const productSlug = product.name.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+          product.odoo_url = `${serverUrl}/shop/product/${productSlug}-${product.id}`;
+        }
+        
         products.push(product);
       }
     }

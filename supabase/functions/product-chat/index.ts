@@ -32,13 +32,16 @@ function detectMCPRequest(message: string): MCPDetection {
     let toolName = 'list_products';
     const args: any = { limit: 10 };
 
-    // Extraire la marque/terme de recherche
-    const brandMatch = message.match(/(?:sony|samsung|apple|lg|philips|bosch|siemens|microsoft|hp|dell|lenovo|asus|acer)/gi);
+    // Extraire la marque/terme de recherche - regex améliorée pour éviter "moi"
+    const brandMatch = message.match(/produits?\s+(?:de\s+)?(?:la\s+marque\s+)?(sony|samsung|apple|lg|philips|bosch|siemens|microsoft|hp|dell|lenovo|asus|acer|panasonic|canon|nikon)\b/gi);
     if (brandMatch && brandMatch[0]) {
-      toolName = 'search_products';
-      args.search = brandMatch[0];
-      args.brand = brandMatch[0];
-      console.log('🔍 Recherche détectée pour marque:', brandMatch[0]);
+      const extractedBrand = brandMatch[0].match(/(sony|samsung|apple|lg|philips|bosch|siemens|microsoft|hp|dell|lenovo|asus|acer|panasonic|canon|nikon)/gi);
+      if (extractedBrand && extractedBrand[0]) {
+        toolName = 'search_products';
+        args.search = extractedBrand[0];
+        args.brand = extractedBrand[0];
+        console.log('🔍 Recherche détectée pour marque:', extractedBrand[0]);
+      }
     }
 
     // Détection de limite
@@ -145,11 +148,24 @@ Sois concis, précis et orienté business. Réponds en français.`;
           });
           
           if (mcpData.data && Array.isArray(mcpData.data) && mcpData.data.length > 0) {
-            const productsInfo = mcpData.data.map((p: any) => 
-              `- ${p.name || 'Sans nom'} (Prix: ${p.list_price || 'N/A'}€, Stock: ${p.qty_available || 0}, Réf: ${p.default_code || 'N/A'})`
-            ).join('\n');
+            const productsInfo = mcpData.data.map((p: any) => {
+              const parts = [`**${p.name || 'Sans nom'}**`];
+              parts.push(`💰 Prix: ${p.list_price || 'N/A'}€`);
+              parts.push(`📦 Stock: ${p.qty_available || 0} unités`);
+              parts.push(`🔖 Réf: ${p.default_code || 'N/A'}`);
+              
+              if (p.image_url) {
+                parts.push(`![${p.name}](${p.image_url})`);
+              }
+              
+              if (p.odoo_url) {
+                parts.push(`[🔗 Voir fiche Odoo](${p.odoo_url})`);
+              }
+              
+              return parts.join(' | ');
+            }).join('\n\n');
             
-            mcpContext = `\n\n📦 DONNÉES DEPUIS ODOO (${mcpData.data.length} produits trouvés):\n${productsInfo}\n\nRéponds à l'utilisateur en te basant sur ces données réelles extraites de son système Odoo.`;
+            mcpContext = `\n\n📦 **PRODUITS DEPUIS ODOO** (${mcpData.data.length} résultats):\n\n${productsInfo}\n\nPrésente ces données en Markdown avec les images et liens cliquables.`;
             
             systemPrompt = `Tu es un assistant e-commerce expert connecté au système Odoo de l'utilisateur.
 
@@ -158,9 +174,14 @@ Voici les données extraites de son Odoo:
 
 ${mcpContext}
 
-Présente ces résultats de manière claire et professionnelle. Si l'utilisateur a demandé des produits d'une marque spécifique (ex: Sony), précise combien de produits correspondent à sa recherche.
+IMPORTANT - FORMAT DE RÉPONSE:
+- Utilise le format Markdown pour afficher les images: ![Nom du produit](URL_image)
+- Crée des liens cliquables: [Voir sur Odoo](URL_produit)
+- Présente les résultats sous forme de liste numérotée claire
+- Si il y a des images, affiche-les dans ta réponse
+- Mets en avant les informations clés (prix, stock, référence)
 
-Réponds en français de manière concise et orientée business.`;
+Réponds en français de manière professionnelle et structurée.`;
           } else {
             console.log('⚠️ Aucun produit trouvé dans Odoo');
             systemPrompt = `Tu es un assistant e-commerce expert connecté au système Odoo de l'utilisateur.

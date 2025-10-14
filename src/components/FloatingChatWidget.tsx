@@ -8,6 +8,7 @@ import { MessageCircle, X, Minimize2, Send, Sparkles, Loader2, Bot, User } from 
 import { useFloatingChat } from "@/hooks/useFloatingChat";
 import { useMCPContext } from "@/hooks/useMCPContext";
 import { cn } from "@/lib/utils";
+import ReactMarkdown from 'react-markdown';
 
 interface FloatingChatWidgetProps {
   analyses?: any[];
@@ -191,7 +192,43 @@ export function FloatingChatWidget({ analyses = [], onProductSelect }: FloatingC
                           : 'bg-muted'
                       )}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === 'assistant' ? (
+                        <div className="text-sm prose prose-sm max-w-none dark:prose-invert prose-img:rounded-lg prose-img:border prose-img:my-2 prose-a:text-primary prose-a:no-underline hover:prose-a:underline">
+                          <ReactMarkdown
+                            components={{
+                              img: ({ node, ...props }) => (
+                                <img 
+                                  {...props} 
+                                  className="max-w-full rounded-lg my-2 border" 
+                                  alt={props.alt || 'Image produit'} 
+                                  loading="lazy"
+                                />
+                              ),
+                              a: ({ node, ...props }) => (
+                                <a 
+                                  {...props} 
+                                  className="text-primary underline hover:text-primary/80 transition-colors" 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                />
+                              ),
+                              p: ({ node, ...props }) => (
+                                <p {...props} className="mb-2 last:mb-0" />
+                              ),
+                              ul: ({ node, ...props }) => (
+                                <ul {...props} className="list-disc list-inside space-y-1" />
+                              ),
+                              ol: ({ node, ...props }) => (
+                                <ol {...props} className="list-decimal list-inside space-y-1" />
+                              ),
+                            }}
+                          >
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      )}
                       <p className="text-xs opacity-70 mt-1">
                         {new Date(msg.timestamp).toLocaleTimeString('fr-FR', { 
                           hour: '2-digit', 
