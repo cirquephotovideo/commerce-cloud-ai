@@ -14,6 +14,7 @@ import { MCPInstallDialog } from "./MCPInstallDialog";
 export function MCPLibraryMarketplace() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedPublisher, setSelectedPublisher] = useState<string>("all");
   const [selectedLibrary, setSelectedLibrary] = useState<MCPLibrary | null>(null);
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
 
@@ -33,14 +34,25 @@ export function MCPLibraryMarketplace() {
     return installedPlatforms?.some(p => p.platform_type === libraryId);
   };
 
+  const isPixeeplay = (library: MCPLibrary) => {
+    return library.id.includes('pixeeplay') || library.npmPackage.includes('pixeeplay');
+  };
+
+  const getPublisher = (library: MCPLibrary) => {
+    if (isPixeeplay(library)) return 'pixeeplay';
+    if (library.category === 'official' || library.npmPackage.startsWith('@modelcontextprotocol/')) return 'official';
+    return 'community';
+  };
+
   const filteredLibraries = MCP_LIBRARIES.filter(lib => {
     const matchesSearch = lib.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          lib.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          lib.npmPackage.toLowerCase().includes(searchQuery.toLowerCase());
     
     const matchesCategory = selectedCategory === 'all' || lib.category === selectedCategory;
+    const matchesPublisher = selectedPublisher === 'all' || getPublisher(lib) === selectedPublisher;
     
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && matchesPublisher;
   });
 
   const stats = {
@@ -116,15 +128,32 @@ export function MCPLibraryMarketplace() {
             />
           </div>
 
-          <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">Tous</TabsTrigger>
-              <TabsTrigger value="official">Officiel</TabsTrigger>
-              <TabsTrigger value="integration">Intégrations</TabsTrigger>
-              <TabsTrigger value="productivity">Productivité</TabsTrigger>
-              <TabsTrigger value="developer">Développeur</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Catégorie</label>
+              <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
+                <TabsList className="grid w-full grid-cols-5">
+                  <TabsTrigger value="all">Tous</TabsTrigger>
+                  <TabsTrigger value="official">Officiel</TabsTrigger>
+                  <TabsTrigger value="integration">Intégrations</TabsTrigger>
+                  <TabsTrigger value="productivity">Productivité</TabsTrigger>
+                  <TabsTrigger value="developer">Développeur</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Éditeur</label>
+              <Tabs value={selectedPublisher} onValueChange={setSelectedPublisher}>
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="all">Tous</TabsTrigger>
+                  <TabsTrigger value="official">@modelcontextprotocol</TabsTrigger>
+                  <TabsTrigger value="pixeeplay">🏷️ Pixeeplay</TabsTrigger>
+                  <TabsTrigger value="community">Communauté</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -160,6 +189,11 @@ export function MCPLibraryMarketplace() {
                     {getCategoryLabel(library.category)}
                   </Badge>
                   <Badge variant="outline">v{library.version}</Badge>
+                  {isPixeeplay(library) && (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+                      🏷️ Pixeeplay
+                    </Badge>
+                  )}
                 </div>
                 
                 {library.requiredEnvVars.length > 0 && (

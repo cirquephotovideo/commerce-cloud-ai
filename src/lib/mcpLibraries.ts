@@ -580,6 +580,125 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
     installCommand: 'npm install @modelcontextprotocol/server-mailchimp',
     setupInstructions: '1. Générer une API Key Mailchimp',
     documentation: 'https://mailchimp.com/developer/'
+  },
+
+  // ========== PIXEEPLAY PACKAGES ==========
+  {
+    id: 'prestashop-mcp-pixeeplay',
+    name: 'PrestaShop MCP (Pixeeplay)',
+    npmPackage: 'prestashop-mcp-server',
+    version: '1.0.0',
+    description: 'Serveur MCP pour l\'API PrestaShop - Gestion complète de boutiques e-commerce',
+    icon: '🛒',
+    category: 'integration',
+    requiredEnvVars: ['PRESTASHOP_URL', 'PRESTASHOP_API_KEY'],
+    defaultConfig: {
+      auth_type: 'api_key'
+    },
+    installCommand: 'npm install prestashop-mcp-server',
+    setupInstructions: '1. Aller dans PrestaShop Admin > Paramètres avancés > Webservice\n2. Activer le webservice\n3. Générer une clé API\n4. Configurer les permissions (produits, clients, commandes)\n5. Configurer PRESTASHOP_URL et PRESTASHOP_API_KEY',
+    documentation: 'https://www.npmjs.com/package/prestashop-mcp-server'
+  },
+  {
+    id: 'odoo-mcp-pixeeplay',
+    name: 'Odoo MCP Enhanced (Pixeeplay)',
+    npmPackage: 'odoo-mcp-server',
+    version: '1.1.0',
+    description: 'Serveur MCP pour Odoo avec fonctionnalités avancées - ERP complet',
+    icon: '🏢',
+    category: 'integration',
+    requiredEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'],
+    defaultConfig: {
+      server_url: 'https://your-odoo-instance.com',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install odoo-mcp-server',
+    setupInstructions: '1. Récupérer l\'URL de votre instance Odoo\n2. Créer un utilisateur API avec les droits appropriés\n3. Configurer ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD',
+    documentation: 'https://www.npmjs.com/package/odoo-mcp-server'
+  },
+  {
+    id: 'amazon-seller-mcp-pixeeplay',
+    name: 'Amazon Seller MCP (Pixeeplay)',
+    npmPackage: 'amazon-mcp-server',
+    version: '1.0.0',
+    description: 'Serveur MCP pour Amazon Seller API - Gestion marketplace',
+    icon: '📦',
+    category: 'integration',
+    requiredEnvVars: ['AMAZON_ACCESS_KEY', 'AMAZON_SECRET_KEY', 'AMAZON_REGION', 'AMAZON_MARKETPLACE_ID'],
+    defaultConfig: {
+      server_url: 'https://sellingpartnerapi-eu.amazon.com',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install amazon-mcp-server',
+    setupInstructions: '1. S\'inscrire au programme Amazon Seller\n2. Générer Access Key et Secret Key\n3. Récupérer le Marketplace ID (ex: A13V1IB3VIYZZH pour FR)\n4. Configurer la région (eu-west-1, us-east-1, etc.)',
+    documentation: 'https://www.npmjs.com/package/amazon-mcp-server'
+  },
+  {
+    id: 'postgresql-mcp-pixeeplay',
+    name: 'PostgreSQL MCP for LLMs (Pixeeplay)',
+    npmPackage: 'postgresql-mcp-server',
+    version: '1.0.0',
+    description: 'Serveur MCP pour PostgreSQL avec interaction LLM optimisée',
+    icon: '🐘',
+    category: 'developer',
+    requiredEnvVars: ['POSTGRES_CONNECTION_STRING'],
+    defaultConfig: {
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install postgresql-mcp-server',
+    setupInstructions: '1. Récupérer votre connection string PostgreSQL\n2. Format: postgresql://user:password@host:port/database\n3. Configurer POSTGRES_CONNECTION_STRING',
+    documentation: 'https://www.npmjs.com/package/postgresql-mcp-server'
+  },
+  {
+    id: 'hfsql-n8n-mcp-pixeeplay',
+    name: 'HFSQL n8n Migration (Pixeeplay)',
+    npmPackage: 'hfsql-n8n-mcp-server',
+    version: '0.2.0',
+    description: 'Serveur MCP pour migration HFSQL vers n8n',
+    icon: '🔄',
+    category: 'developer',
+    requiredEnvVars: ['HFSQL_HOST', 'HFSQL_PORT', 'HFSQL_USER', 'HFSQL_PASSWORD', 'N8N_WEBHOOK_URL'],
+    defaultConfig: {
+      server_url: 'http://localhost:19876',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install hfsql-n8n-mcp-server',
+    setupInstructions: '1. Configurer votre serveur HFSQL\n2. Créer un webhook dans n8n\n3. Configurer les credentials HFSQL et l\'URL du webhook n8n',
+    documentation: 'https://www.npmjs.com/package/hfsql-n8n-mcp-server'
+  },
+  {
+    id: 'hfsql-n8n-windev-mcp-pixeeplay',
+    name: 'HFSQL WinDev Migration (Pixeeplay)',
+    npmPackage: 'hfsql-n8n-windev-mcp-server',
+    version: '4.0.0',
+    description: 'Serveur MCP pour migration HFSQL + WinDev vers n8n',
+    icon: '🔄',
+    category: 'developer',
+    requiredEnvVars: ['HFSQL_HOST', 'HFSQL_PORT', 'HFSQL_USER', 'HFSQL_PASSWORD', 'N8N_WEBHOOK_URL', 'WINDEV_SERVER_URL'],
+    defaultConfig: {
+      server_url: 'http://localhost:19876',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install hfsql-n8n-windev-mcp-server',
+    setupInstructions: '1. Configurer HFSQL et WinDev Server\n2. Créer un webhook n8n\n3. Configurer toutes les variables d\'environnement',
+    documentation: 'https://www.npmjs.com/package/hfsql-n8n-windev-mcp-server'
+  },
+  {
+    id: 'hfsql-n8n-windev-railway-mcp-pixeeplay',
+    name: 'HFSQL Railway Cloud (Pixeeplay)',
+    npmPackage: 'hfsql-n8n-windev-mcp-server-railway',
+    version: '1.0.0',
+    description: 'Serveur MCP pour migration HFSQL déployé sur Railway',
+    icon: '☁️',
+    category: 'developer',
+    requiredEnvVars: ['HFSQL_HOST', 'HFSQL_PORT', 'HFSQL_USER', 'HFSQL_PASSWORD', 'N8N_WEBHOOK_URL', 'RAILWAY_API_TOKEN'],
+    defaultConfig: {
+      server_url: 'https://your-project.railway.app',
+      auth_type: 'bearer'
+    },
+    installCommand: 'npm install hfsql-n8n-windev-mcp-server-railway',
+    setupInstructions: '1. Déployer sur Railway\n2. Configurer les variables d\'environnement Railway\n3. Récupérer le RAILWAY_API_TOKEN',
+    documentation: 'https://www.npmjs.com/package/hfsql-n8n-windev-mcp-server-railway'
   }
 ];
 
