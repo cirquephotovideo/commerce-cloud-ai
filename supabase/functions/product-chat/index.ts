@@ -129,8 +129,9 @@ Sois concis, précis et orienté business. Réponds en français.`;
         const mcpResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/mcp-proxy`, {
           method: 'POST',
           headers: {
-            'Authorization': req.headers.get('Authorization') || '',
+            'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
+            'apikey': Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ?? '',
           },
           body: JSON.stringify({
             packageId: mcpDetection.packageId,
@@ -197,10 +198,60 @@ Réponds en français de manière concise.`;
           }
         } else {
           const errorText = await mcpResponse.text();
-          console.error('❌ Échec appel MCP:', mcpResponse.status, errorText);
+          const errorStatus = mcpResponse.status;
+          console.error('❌ Échec appel MCP:', errorStatus, errorText);
+          
+          // Gestion intelligente des erreurs
+          if (errorStatus === 401 || errorText.includes('Non authentifié')) {
+            mcpContext = '\n\n⚠️ **Erreur d\'authentification** : Impossible d\'accéder à Odoo.';
+            systemPrompt = `Tu es un assistant e-commerce expert.
+
+L'utilisateur a essayé d'accéder à ses produits Odoo, mais l'authentification a échoué.
+
+Explique-lui clairement qu'il y a un problème d'authentification avec Odoo et qu'il doit :
+1. Vérifier que ses identifiants Odoo sont correctement configurés
+2. Contacter l'administrateur si le problème persiste
+
+Sois professionnel et rassurant. Réponds en français.`;
+          } else if (errorText.includes('non configuré') || errorText.includes('désactivé')) {
+            mcpContext = '\n\n⚠️ **Configuration manquante** : Odoo n\'est pas encore configuré.';
+            systemPrompt = `Tu es un assistant e-commerce expert.
+
+L'utilisateur a essayé d'accéder à ses produits Odoo, mais la connexion MCP n'est pas encore configurée.
+
+Explique-lui qu'il doit d'abord :
+1. Configurer ses identifiants Odoo dans les paramètres de connexion
+2. Activer l'intégration MCP pour Odoo
+3. Réessayer ensuite
+
+Sois pédagogue et encourage-le à configurer Odoo. Réponds en français.`;
+          } else {
+            mcpContext = `\n\n⚠️ **Erreur technique** : ${errorText}`;
+            systemPrompt = `Tu es un assistant e-commerce expert.
+
+Une erreur technique est survenue lors de l'accès à Odoo: ${errorText}
+
+Informe l'utilisateur de manière claire et professionnelle qu'une erreur technique s'est produite.
+Suggère-lui de réessayer dans quelques instants ou de contacter le support si le problème persiste.
+
+Réponds en français avec empathie.`;
+          }
         }
       } catch (mcpError) {
         console.error('❌ Erreur MCP:', mcpError);
+        const errorMessage = mcpError instanceof Error ? mcpError.message : 'Erreur inconnue';
+        
+        mcpContext = `\n\n⚠️ **Erreur de connexion** : ${errorMessage}`;
+        systemPrompt = `Tu es un assistant e-commerce expert.
+
+Une erreur de connexion s'est produite lors de la tentative d'accès à Odoo: ${errorMessage}
+
+Informe l'utilisateur qu'il y a eu un problème de connexion et suggère-lui de :
+1. Vérifier sa connexion internet
+2. Vérifier que le serveur Odoo est accessible
+3. Réessayer dans quelques instants
+
+Réponds en français avec professionnalisme.`;
       }
     }
 
