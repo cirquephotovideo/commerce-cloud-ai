@@ -81,35 +81,63 @@ const AVAILABLE_PROVIDERS: ProviderConfig[] = [
   },
 ];
 
+// Protection anti-double-appel global
+let syncInProgress = false;
+
 export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSelectorProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>(AVAILABLE_PROVIDERS);
 
   useEffect(() => {
+    let mounted = true;
+
     const init = async () => {
+      if (!mounted) return;
       // Sync Ollama first if configured
-      await syncOllamaIfConfigured();
+      await syncOllamaIfConfigured(mounted);
+      if (!mounted) return;
       // Then load all statuses
       await loadProviderStatuses();
     };
+    
     init();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const syncOllamaIfConfigured = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const syncOllamaIfConfigured = async (mounted: boolean) => {
+    if (syncInProgress) {
+      console.log('[ProviderSelector] Sync déjà en cours, skip');
+      return;
+    }
 
-    // Vérifier si Ollama est configuré
-    const { data: ollamaConfig } = await supabase
-      .from('ollama_configurations')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    syncInProgress = true;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !mounted) {
+        syncInProgress = false;
+        return;
+      }
 
-    if (ollamaConfig) {
-      console.log('[ProviderSelector] Forcing Ollama sync...');
-      await supabase.functions.invoke('sync-ollama-to-providers');
-      // Recharger les statuts après la synchro
-      setTimeout(() => loadProviderStatuses(), 1000);
+      // Vérifier si Ollama est configuré
+      const { data: ollamaConfig } = await supabase
+        .from('ollama_configurations')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (ollamaConfig && mounted) {
+        console.log('[ProviderSelector] Forcing Ollama sync...');
+        await supabase.functions.invoke('sync-ollama-to-providers');
+        // Recharger les statuts après la synchro
+        if (mounted) {
+          setTimeout(() => loadProviderStatuses(), 1000);
+        }
+      }
+    } finally {
+      syncInProgress = false;
     }
   };
 
