@@ -545,14 +545,19 @@ serve(async (req) => {
         throw new Error(`Failed to select folder: ${imapFolder}`);
       }
 
-      // Search for recent messages (last 3 days)
-      const threeDaysAgo = new Date();
-      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-      const searchDate = threeDaysAgo.toLocaleDateString('en-GB', { 
+      // Search for recent messages - sinceDays parameter allows extending the window
+      const { sinceDays } = await req.json();
+      const daysToSearch = sinceDays || 3; // Default to 3 days, can be overridden
+      
+      const searchDateObj = new Date();
+      searchDateObj.setDate(searchDateObj.getDate() - daysToSearch);
+      const searchDate = searchDateObj.toLocaleDateString('en-GB', { 
         day: '2-digit', 
         month: 'short', 
         year: 'numeric' 
       }).replace(/ /g, '-');
+      
+      console.log(`[${supplierId}] Searching emails since ${searchDate} (${daysToSearch} days)`);
       
       await sendCommand(`a005 SEARCH SINCE ${searchDate}`);
       const searchResponse = await readResponse();
@@ -759,23 +764,55 @@ serve(async (req) => {
             console.log(`  ✓ ${d.filename} (${d.type.toUpperCase()}) detected by: ${d.detected_by}`);
           });
 
-          // Fetch attachment content (simplified: assume part 2)
-          const partNumber = '2';
+          // Fetch attachment content with fallback across multiple parts
+          let contentMatch: RegExpMatchArray | null = null;
+          let successfulPart: string | null = null;
           
-          await sendCommand(`a${200 + parseInt(msgId)} FETCH ${msgId} BODY[${partNumber}]`);
-          let bodyContent = '';
-          chunk = await readResponse();
-          bodyContent += chunk;
-          
-          while (!chunk.includes(`a${200 + parseInt(msgId)} OK`)) {
+          // Try parts 2, 3, 4, 5 until we find valid Base64 content
+          for (const partNumber of ['2', '3', '4', '5']) {
+            console.log(`[${supplierId}] Email ${msgId}: Trying BODY[${partNumber}]...`);
+            
+            await sendCommand(`a${200 + parseInt(msgId)} FETCH ${msgId} BODY[${partNumber}]`);
+            let bodyContent = '';
             chunk = await readResponse();
             bodyContent += chunk;
-          }
+            
+            while (!chunk.includes(`a${200 + parseInt(msgId)} OK`)) {
+              chunk = await readResponse();
+              bodyContent += chunk;
+            }
 
-          const contentMatch = bodyContent.match(/BODY\[[\d.]+\]\s+(?:\{[\d]+\}\r?\n)?([A-Za-z0-9+/=\s]+)/is);
+            contentMatch = bodyContent.match(/BODY\[[\d.]+\]\s+(?:\{[\d]+\}\r?\n)?([A-Za-z0-9+/=\s]+)/is);
+            
+            if (contentMatch && contentMatch[1].length > 100) {
+              // Valid Base64 found
+              successfulPart = partNumber;
+              console.log(`[${supplierId}] Email ${msgId}: ✅ Found valid content in BODY[${partNumber}]`);
+              break;
+            }
+          }
           
-          if (!contentMatch) {
-            console.log(`[${supplierId}] Email ${msgId}: Could not extract attachment content`);
+          if (!contentMatch || !successfulPart) {
+            console.log(`[${supplierId}] Email ${msgId}: ❌ Could not extract attachment content from any part (tried 2-5)`);
+            
+            // Insert as "ignored" with debug info
+            await supabaseAdmin
+              .from('email_inbox')
+              .insert({
+                ...emailBaseData,
+                attachment_name: attachments[0]?.filename || 'unknown',
+                status: 'ignored',
+                error_message: 'Could not extract attachment content from IMAP (tried BODY[2-5])',
+                processing_logs: [
+                  ...emailBaseData.processing_logs,
+                  {
+                    timestamp: new Date().toISOString(),
+                    message: 'Failed to extract: no valid Base64 content found',
+                    bodystructure_sample: bodyStruct.substring(0, 500)
+                  }
+                ]
+              });
+            
             continue;
           }
 

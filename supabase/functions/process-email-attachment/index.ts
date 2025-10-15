@@ -61,11 +61,12 @@ serve(async (req) => {
       })
       .eq('id', inbox_id);
 
-    // Download file from storage
-    const fileName = inbox.attachment_url.split('/').pop();
+    // Download file from storage using FULL PATH
+    console.log('[PROCESS-ATTACHMENT] Downloading from Storage:', inbox.attachment_url);
+    
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('email-attachments')
-      .download(fileName);
+      .download(inbox.attachment_url); // Use full path, not just filename
 
     if (downloadError) {
       throw downloadError;
