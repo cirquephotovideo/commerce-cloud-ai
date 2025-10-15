@@ -29,7 +29,8 @@ export const RiskAnalysis = ({ initialUrl = "", platform = "auto" }: RiskAnalysi
     try {
       const { data, error } = await supabase.functions.invoke('advanced-product-analyzer', {
         body: {
-          productUrl,
+          productInput: productUrl,
+          inputType: 'url',
           analysisTypes: ['risk'],
           platform,
         }

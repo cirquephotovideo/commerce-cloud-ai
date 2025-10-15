@@ -20,7 +20,17 @@ const edgeFunctions: EdgeFunction[] = [
   // Core Functions
   { name: 'product-analyzer', category: 'core', status: 'untested', testPayload: { url: 'https://www.amazon.fr/dp/B0CX23V2ZK' } },
   { name: 'check-subscription', category: 'core', status: 'untested' },
-  { name: 'advanced-product-analyzer', category: 'core', status: 'untested' },
+  { 
+    name: 'advanced-product-analyzer', 
+    category: 'core', 
+    status: 'untested',
+    testPayload: {
+      productInput: "https://www.amazon.fr/dp/B0CX23V2ZK",
+      inputType: "url",
+      analysisTypes: ["technical", "commercial", "risk"],
+      platform: "amazon"
+    }
+  },
   { name: 'dual-search-engine', category: 'core', status: 'untested', testPayload: { query: 'laptop' } },
   
   // Amazon Functions
