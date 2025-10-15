@@ -623,23 +623,26 @@ serve(async (req) => {
 
           const bodyStruct = bodyStructMatch[1];
           
-          // Look for CSV/XLSX/XLS/ZIP attachments with three comprehensive patterns
-          // Pattern 1: Standard Content-Type detection (handles separated parts)
-          const contentTypePattern = /"(?:application|text)"\s+"(?:x-msexcel|vnd\.ms-excel|vnd\.openxmlformats[^"]+|zip|csv)"[^)]*"(?:filename|name)"\s+"?([^")\s]+)"?/gi;
+          // Look for CSV/XLSX/XLS/ZIP attachments with improved patterns
+          // Pattern 1: Content-Type detection (handles x-msexcel, vnd.ms-excel, etc.)
+          const contentTypePattern = /"(?:application|text)"\s+"(?:x-msexcel|vnd\.ms-excel|msexcel|vnd\.openxmlformats[^"]+|zip|csv|octet-stream)"[^)]*"(?:filename|name)"\s+"?([^")\s]+)"?/gi;
           
-          // Pattern 2: Extension-based detection
-          const extensionPattern = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
+          // Pattern 2: Extension-based detection (most reliable)
+          const extensionPattern = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?/gi;
           
           // Pattern 3: Fallback with "attachment" keyword
-          const attachmentPattern = /"attachment"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
+          const attachmentPattern = /"attachment"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?/gi;
+          
+          // Pattern 4: Catch any filename with xls/xlsx/csv extension
+          const simpleExtPattern = /([A-Za-z0-9_\-]+\.(?:xlsx?|xls|csv|zip))/gi;
           
           const attachmentSet = new Set<string>();
           const detectionDetails: any[] = [];
           let match;
           
-          // Test all patterns
-          [contentTypePattern, extensionPattern, attachmentPattern].forEach((pattern, idx) => {
-            const method = idx === 0 ? 'content-type' : idx === 1 ? 'extension' : 'attachment-keyword';
+          // Test all patterns (including the new simple extension pattern)
+          [contentTypePattern, extensionPattern, attachmentPattern, simpleExtPattern].forEach((pattern, idx) => {
+            const method = idx === 0 ? 'content-type' : idx === 1 ? 'extension' : idx === 2 ? 'attachment-keyword' : 'simple-ext';
             while ((match = pattern.exec(bodyStruct)) !== null) {
               const filename = match[1];
               const ext = filename.split('.').pop()?.toLowerCase();
