@@ -11,7 +11,18 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    const { prompt, testMode } = await req.json();
+
+    if (testMode) {
+      console.log('[GENERATE-IMAGE] Test mode - skipping AI call');
+      return new Response(
+        JSON.stringify({ 
+          image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          testMode: true 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!prompt) {
       return new Response(

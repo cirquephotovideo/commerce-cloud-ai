@@ -32,6 +32,7 @@ import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { useRealtimeAlerts } from "@/hooks/useRealtimeAlerts";
 import { MCPClientsOverview } from "@/components/admin/MCPClientsOverview";
 import { MCPLibraryMarketplace } from "@/components/admin/MCPLibraryMarketplace";
+import { EcommerceOrdersTable } from "@/components/admin/EcommerceOrdersTable";
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState("monitoring");
@@ -47,10 +48,14 @@ const AdminDashboard = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
           <TabsTrigger value="monitoring" className="flex items-center gap-2">
             <LineChart className="h-4 w-4" />
             <span>📊 Monitoring</span>
+          </TabsTrigger>
+          <TabsTrigger value="orders" className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            <span>🛒 Commandes</span>
           </TabsTrigger>
           <TabsTrigger value="configuration" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
@@ -125,6 +130,11 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        {/* 🛒 COMMANDES E-COMMERCE */}
+        <TabsContent value="orders" className="space-y-6">
+          <EcommerceOrdersTable />
         </TabsContent>
 
         {/* 🔐 CONFIGURATION */}

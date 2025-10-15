@@ -20,7 +20,37 @@ serve(async (req) => {
   }
 
   try {
-    const { productName, maxResults = 5 } = await req.json();
+    const { productName, maxResults = 5, testMode } = await req.json();
+
+    if (testMode) {
+      console.log('[SEARCH-IMAGES] Test mode - returning mock images');
+      return new Response(
+        JSON.stringify({ 
+          images: [
+            {
+              url: 'https://via.placeholder.com/400x300/09f/fff?text=Test+Image+1',
+              thumbnail: 'https://via.placeholder.com/150x150/09f/fff?text=Test+1',
+              title: `Test Image 1 - ${productName}`,
+              source: 'test.example.com',
+              width: 400,
+              height: 300
+            },
+            {
+              url: 'https://via.placeholder.com/400x300/f90/fff?text=Test+Image+2',
+              thumbnail: 'https://via.placeholder.com/150x150/f90/fff?text=Test+2',
+              title: `Test Image 2 - ${productName}`,
+              source: 'test.example.com',
+              width: 400,
+              height: 300
+            }
+          ], 
+          source: 'test-mode',
+          count: 2,
+          testMode: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!productName) {
       return new Response(

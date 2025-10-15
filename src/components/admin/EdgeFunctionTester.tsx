@@ -159,9 +159,35 @@ const edgeFunctions: EdgeFunction[] = [
   },
   
   // Utility Functions
-  { name: 'generate-image', category: 'utility', status: 'untested' },
-  { name: 'generate-themed-image', category: 'utility', status: 'untested' },
-  { name: 'search-product-images', category: 'utility', status: 'untested' },
+  { 
+    name: 'generate-image', 
+    category: 'utility', 
+    status: 'untested',
+    testPayload: {
+      prompt: 'A modern laptop on a desk',
+      testMode: true
+    }
+  },
+  { 
+    name: 'generate-themed-image', 
+    category: 'utility', 
+    status: 'untested',
+    testPayload: {
+      prompt: 'Professional product photo of a smartphone',
+      productName: 'iPhone 15 Pro',
+      testMode: true
+    }
+  },
+  { 
+    name: 'search-product-images', 
+    category: 'utility', 
+    status: 'untested',
+    testPayload: {
+      productName: 'MacBook Pro M3',
+      maxResults: 3,
+      testMode: true
+    }
+  },
   { 
     name: 'google-shopping-scraper', 
     category: 'utility', 
@@ -176,7 +202,70 @@ const edgeFunctions: EdgeFunction[] = [
 
 export const EdgeFunctionTester = () => {
   const [functions, setFunctions] = useState<EdgeFunction[]>(edgeFunctions);
+  const [selectedFunctions, setSelectedFunctions] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  const handleSelectAll = () => {
+    if (selectedFunctions.size === functions.length) {
+      setSelectedFunctions(new Set());
+    } else {
+      setSelectedFunctions(new Set(functions.map(f => f.name)));
+    }
+  };
+
+  const handleSelectFunction = (functionName: string) => {
+    setSelectedFunctions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(functionName)) {
+        newSet.delete(functionName);
+      } else {
+        newSet.add(functionName);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedFunctions.size === 0) {
+      toast({
+        title: "⚠️ Aucune sélection",
+        description: "Veuillez sélectionner au moins une fonction",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('system_health_logs')
+        .delete()
+        .eq('test_type', 'edge_function')
+        .in('component_name', Array.from(selectedFunctions));
+      
+      if (error) throw error;
+
+      setFunctions(prev => prev.map(f => 
+        selectedFunctions.has(f.name) 
+          ? { ...f, status: 'untested' as const, error: undefined, latency: undefined }
+          : f
+      ));
+
+      setSelectedFunctions(new Set());
+
+      window.dispatchEvent(new CustomEvent('health-metrics-updated'));
+
+      toast({
+        title: "🗑️ Tests supprimés",
+        description: `${selectedFunctions.size} résultat(s) de test supprimé(s)`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
 
   const testFunction = async (functionName: string) => {
     const startTime = Date.now();
@@ -485,68 +574,94 @@ Make sure to handle edge cases and add proper TypeScript types.`;
   }, {} as Record<string, EdgeFunction[]>);
 
   return (
-    <Accordion type="single" collapsible className="w-full">
-      {Object.entries(groupedFunctions).map(([category, funcs]) => (
-        <AccordionItem key={category} value={category}>
-          <AccordionTrigger className="hover:no-underline">
-            <div className="flex items-center gap-3">
-              <Badge variant={getCategoryBadgeColor(category) as any}>
-                {category.toUpperCase()}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {funcs.length} fonctions
-              </span>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="space-y-2 pt-2">
-              {funcs.map((func) => (
-                <div key={func.name} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                  <div className="flex items-center gap-3 flex-1">
-                    {getStatusIcon(func.status)}
-                    <div className="flex-1">
-                      <div className="font-mono text-sm">{func.name}</div>
-                      {func.testPayload && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Payload: <code className="text-xs">{JSON.stringify(func.testPayload)}</code>
-                        </div>
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        <Button
+          onClick={handleSelectAll}
+          variant="outline"
+          className="flex-1"
+        >
+          {selectedFunctions.size === functions.length ? "❌ Tout désélectionner" : "✅ Tout sélectionner"}
+        </Button>
+        <Button
+          onClick={handleDeleteSelected}
+          variant="destructive"
+          disabled={selectedFunctions.size === 0}
+          className="flex-1"
+        >
+          🗑️ Effacer sélection ({selectedFunctions.size})
+        </Button>
+      </div>
+
+      <Accordion type="single" collapsible className="w-full">
+        {Object.entries(groupedFunctions).map(([category, funcs]) => (
+          <AccordionItem key={category} value={category}>
+            <AccordionTrigger className="hover:no-underline">
+              <div className="flex items-center gap-3">
+                <Badge variant={getCategoryBadgeColor(category) as any}>
+                  {category.toUpperCase()}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  {funcs.length} fonctions
+                </span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 pt-2">
+                {funcs.map((func) => (
+                  <div key={func.name} className="flex items-center justify-between p-3 rounded-lg border bg-card">
+                    <div className="flex items-center gap-3 flex-1">
+                      <input 
+                        type="checkbox"
+                        checked={selectedFunctions.has(func.name)}
+                        onChange={() => handleSelectFunction(func.name)}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      {getStatusIcon(func.status)}
+                      <div className="flex-1">
+                        <div className="font-mono text-sm">{func.name}</div>
+                        {func.testPayload && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Payload: <code className="text-xs">{JSON.stringify(func.testPayload)}</code>
+                          </div>
+                        )}
+                      </div>
+                      {func.latency && (
+                        <Badge variant="outline" className="text-xs">
+                          {func.latency}ms
+                        </Badge>
                       )}
                     </div>
-                    {func.latency && (
-                      <Badge variant="outline" className="text-xs">
-                        {func.latency}ms
-                      </Badge>
-                    )}
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => testFunction(func.name)}
-                      disabled={func.status === 'testing'}
-                    >
-                      <PlayCircle className="h-3 w-3 mr-1" />
-                      Test
-                    </Button>
-
-                    {func.status === 'failing' && func.lovablePrompt && (
+                    <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        variant="destructive"
-                        onClick={() => copyPrompt(func.lovablePrompt!)}
+                        variant="outline"
+                        onClick={() => testFunction(func.name)}
+                        disabled={func.status === 'testing'}
                       >
-                        <Copy className="h-3 w-3 mr-1" />
-                        Fix Prompt
+                        <PlayCircle className="h-3 w-3 mr-1" />
+                        Test
                       </Button>
-                    )}
+
+                      {func.status === 'failing' && func.lovablePrompt && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => copyPrompt(func.lovablePrompt!)}
+                        >
+                          <Copy className="h-3 w-3 mr-1" />
+                          Fix Prompt
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-      ))}
-    </Accordion>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
   );
 };

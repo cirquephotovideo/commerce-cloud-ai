@@ -12,7 +12,24 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, productName } = await req.json();
+    const { prompt, productName, testMode } = await req.json();
+
+    if (testMode) {
+      console.log('[GENERATE-THEMED-IMAGE] Test mode - skipping AI call');
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          imageUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+          productName,
+          testMode: true,
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
     
     if (!prompt) {
       throw new Error('Prompt requis');

@@ -931,6 +931,92 @@ export type Database = {
           },
         ]
       }
+      ecommerce_orders: {
+        Row: {
+          billing_address: Json | null
+          created_at: string | null
+          currency: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          delivered_at: string | null
+          external_order_id: string
+          id: string
+          items_count: number | null
+          notes: string | null
+          order_date: string
+          order_items: Json
+          order_number: string
+          platform: string
+          platform_configuration_id: string | null
+          raw_data: Json | null
+          shipped_at: string | null
+          shipping_address: Json | null
+          status: string
+          total_amount: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          billing_address?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          external_order_id: string
+          id?: string
+          items_count?: number | null
+          notes?: string | null
+          order_date: string
+          order_items?: Json
+          order_number: string
+          platform: string
+          platform_configuration_id?: string | null
+          raw_data?: Json | null
+          shipped_at?: string | null
+          shipping_address?: Json | null
+          status?: string
+          total_amount: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          billing_address?: Json | null
+          created_at?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          delivered_at?: string | null
+          external_order_id?: string
+          id?: string
+          items_count?: number | null
+          notes?: string | null
+          order_date?: string
+          order_items?: Json
+          order_number?: string
+          platform?: string
+          platform_configuration_id?: string | null
+          raw_data?: Json | null
+          shipped_at?: string | null
+          shipping_address?: Json | null
+          status?: string
+          total_amount?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecommerce_orders_platform_configuration_id_fkey"
+            columns: ["platform_configuration_id"]
+            isOneToOne: false
+            referencedRelation: "platform_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaigns: {
         Row: {
           click_count: number | null
