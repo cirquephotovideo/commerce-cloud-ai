@@ -5,18 +5,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download, Package } from "lucide-react";
+import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download, Package, FileCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useState, useMemo } from "react";
 import { EmailDetailModal } from "./EmailDetailModal";
+import { EmailMappingDialog } from "./EmailMappingDialog";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
+  const [mappingEmail, setMappingEmail] = useState<any>(null);
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox', statusFilter],
@@ -351,24 +353,56 @@ export function EmailInboxTable() {
                           </TooltipProvider>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center gap-1 justify-end">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setSelectedEmail(email)}
-                              title="Voir les détails"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleReprocess(email.id)}
-                              disabled={email.status === 'processing'}
-                              title="Retraiter"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
+                          <div className="flex items-center justify-end gap-2">
+                            {email.status === 'pending' && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setMappingEmail(email)}
+                                    >
+                                      <FileCheck className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    Valider le mapping avant traitement
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSelectedEmail(email)}
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Voir les détails</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => handleReprocess(email.id)}
+                                    disabled={email.status === 'processing'}
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Retraiter</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -382,12 +416,25 @@ export function EmailInboxTable() {
       </CardContent>
     </Card>
 
-    <EmailDetailModal
-      email={selectedEmail}
-      open={!!selectedEmail}
-      onOpenChange={(open) => !open && setSelectedEmail(null)}
-      onRefresh={refetch}
-    />
+    {selectedEmail && (
+      <EmailDetailModal
+        email={selectedEmail}
+        open={!!selectedEmail}
+        onOpenChange={(open) => !open && setSelectedEmail(null)}
+        onRefresh={refetch}
+      />
+    )}
+
+    {mappingEmail && (
+      <EmailMappingDialog
+        email={mappingEmail}
+        onClose={() => setMappingEmail(null)}
+        onConfirm={() => {
+          setMappingEmail(null);
+          refetch();
+        }}
+      />
+    )}
     </>
   );
 }
