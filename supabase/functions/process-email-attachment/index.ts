@@ -187,9 +187,33 @@ serve(async (req) => {
       .update({ processing_logs: processingLogs })
       .eq('id', inbox_id);
 
-    // Detect column mapping with AI
-    const sampleRow = rows[0];
-    const columnMappingPrompt = `Analyse cette ligne de fichier fournisseur et identifie les colonnes correspondantes.
+    // Check if supplier has saved column mapping
+    let columnMapping: any = {};
+    
+    const { data: supplierConfig } = await supabase
+      .from('supplier_configurations')
+      .select('column_mapping')
+      .eq('id', inbox.supplier_id)
+      .single();
+
+    if (supplierConfig?.column_mapping) {
+      console.log('[PROCESS-ATTACHMENT] Using saved column mapping:', supplierConfig.column_mapping);
+      columnMapping = supplierConfig.column_mapping;
+      
+      processingLogs.push({
+        timestamp: new Date().toISOString(),
+        message: 'Using saved column mapping',
+        mapping: columnMapping
+      });
+
+      await supabase
+        .from('email_inbox')
+        .update({ processing_logs: processingLogs })
+        .eq('id', inbox_id);
+    } else {
+      // Detect column mapping with AI
+      const sampleRow = rows[0];
+      const columnMappingPrompt = `Analyse cette ligne de fichier fournisseur et identifie les colonnes correspondantes.
 
 Colonnes disponibles: ${Object.keys(sampleRow).join(', ')}
 Exemple de valeurs: ${JSON.stringify(sampleRow, null, 2)}
@@ -204,50 +228,57 @@ Réponds UNIQUEMENT en JSON valide:
   "brand": "nom-colonne-ou-null"
 }`;
 
-    let columnMapping: any = {};
-    
-    console.log('[PROCESS-ATTACHMENT] Starting AI column mapping detection...');
-    
-    try {
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'Tu réponds uniquement en JSON valide.' },
-            { role: 'user', content: columnMappingPrompt }
-          ],
-        }),
-      });
-
-      if (aiResponse.ok) {
-        const aiData = await aiResponse.json();
-        const content = aiData.choices?.[0]?.message?.content || '{}';
-        columnMapping = JSON.parse(content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-        console.log('[PROCESS-ATTACHMENT] Column mapping detected:', columnMapping);
-        
-        processingLogs.push({
-          timestamp: new Date().toISOString(),
-          message: 'Column mapping detected by AI',
-          mapping: columnMapping
+      console.log('[PROCESS-ATTACHMENT] Starting AI column mapping detection...');
+      
+      try {
+        const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: 'Tu réponds uniquement en JSON valide.' },
+              { role: 'user', content: columnMappingPrompt }
+            ],
+          }),
         });
 
-        await supabase
-          .from('email_inbox')
-          .update({ processing_logs: processingLogs })
-          .eq('id', inbox_id);
+        if (aiResponse.ok) {
+          const aiData = await aiResponse.json();
+          const content = aiData.choices?.[0]?.message?.content || '{}';
+          columnMapping = JSON.parse(content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+          console.log('[PROCESS-ATTACHMENT] Column mapping detected:', columnMapping);
+          
+          processingLogs.push({
+            timestamp: new Date().toISOString(),
+            message: 'Column mapping detected by AI',
+            mapping: columnMapping
+          });
+
+          await supabase
+            .from('email_inbox')
+            .update({ processing_logs: processingLogs })
+            .eq('id', inbox_id);
+
+          // Save detected mapping to supplier configuration
+          await supabase
+            .from('supplier_configurations')
+            .update({ column_mapping: columnMapping })
+            .eq('id', inbox.supplier_id);
+
+          console.log('[PROCESS-ATTACHMENT] Column mapping saved to supplier configuration');
+        }
+      } catch (e) {
+        console.error('[PROCESS-ATTACHMENT] Mapping AI failed:', e);
+        processingLogs.push({
+          timestamp: new Date().toISOString(),
+          message: 'AI mapping failed - using manual detection',
+          error: e instanceof Error ? e.message : String(e)
+        });
       }
-    } catch (e) {
-      console.error('[PROCESS-ATTACHMENT] Mapping AI failed:', e);
-      processingLogs.push({
-        timestamp: new Date().toISOString(),
-        message: 'AI mapping failed - using manual detection',
-        error: e instanceof Error ? e.message : String(e)
-      });
     }
 
     // Process each row

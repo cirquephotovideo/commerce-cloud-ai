@@ -124,7 +124,7 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="basic">Configuration</TabsTrigger>
               <TabsTrigger value="connection">
                 Connexion
@@ -141,6 +141,12 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
                   >
                     {mappingQuality}%
                   </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="column-mapping">
+                📋 Colonnes
+                {formData.mapping_config?.product_name && (
+                  <Badge variant="default" className="ml-2 h-5">✓</Badge>
                 )}
               </TabsTrigger>
               <TabsTrigger value="ai-settings">
@@ -253,6 +259,67 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
                   onMappingChange={(mapping) => setFormData({ ...formData, mapping_config: mapping })}
                 />
               )}
+            </TabsContent>
+
+            <TabsContent value="column-mapping" className="mt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Mapping des colonnes (AI détecté)</CardTitle>
+                  <CardDescription>
+                    Configuration du mapping détecté automatiquement lors du premier import
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {formData.mapping_config && Object.keys(formData.mapping_config).length > 0 ? (
+                    <>
+                      <Alert>
+                        <Sparkles className="h-4 w-4" />
+                        <AlertDescription>
+                          Ce mapping a été détecté automatiquement par l'IA lors du traitement d'un email.
+                          Il sera réutilisé pour les prochains imports de ce fournisseur.
+                        </AlertDescription>
+                      </Alert>
+                      
+                      <div className="space-y-2 border rounded-lg p-4">
+                        <div className="font-medium mb-2">Mapping actuel :</div>
+                        {Object.entries(formData.mapping_config).map(([field, column]) => (
+                          <div key={field} className="flex items-center justify-between py-1 border-b last:border-b-0">
+                            <span className="text-sm font-medium capitalize">
+                              {field.replace('_', ' ')}
+                            </span>
+                            <Badge variant="secondary">
+                              {column ? String(column) : 'Non mappé'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (confirm('Réinitialiser le mapping ? L\'IA le redétectera au prochain import.')) {
+                              setFormData({ ...formData, mapping_config: {} });
+                              toast.success('Mapping réinitialisé');
+                            }
+                          }}
+                        >
+                          🔄 Réinitialiser
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Aucun mapping détecté pour l'instant. L'IA détectera automatiquement 
+                        le mapping des colonnes lors du premier traitement d'un email avec une pièce jointe.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="ai-settings" className="mt-4">
