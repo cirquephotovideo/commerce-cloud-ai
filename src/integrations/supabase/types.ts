@@ -1151,6 +1151,53 @@ export type Database = {
           },
         ]
       }
+      email_poll_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          emails_found: number | null
+          emails_processed: number | null
+          error_message: string | null
+          id: string
+          poll_time: string | null
+          status: string
+          supplier_id: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          emails_found?: number | null
+          emails_processed?: number | null
+          error_message?: string | null
+          id?: string
+          poll_time?: string | null
+          status: string
+          supplier_id?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          emails_found?: number | null
+          emails_processed?: number | null
+          error_message?: string | null
+          id?: string
+          poll_time?: string | null
+          status?: string
+          supplier_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_poll_logs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           category: string | null
@@ -3125,6 +3172,38 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      supplier_email_credentials: {
+        Row: {
+          created_at: string | null
+          encrypted_password: string
+          id: string
+          supplier_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          encrypted_password: string
+          id?: string
+          supplier_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          encrypted_password?: string
+          id?: string
+          supplier_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_email_credentials_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: true
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       supplier_import_logs: {
         Row: {

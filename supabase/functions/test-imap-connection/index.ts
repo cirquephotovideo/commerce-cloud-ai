@@ -316,46 +316,149 @@ async function testIMAPConnection(config: {
   }
 }
 
+// Sanitize hostname function
+function sanitizeHostname(hostname: string): { sanitized: string; warnings: string[] } {
+  const warnings: string[] = [];
+  let clean = hostname.trim();
+  
+  // Remove protocol prefixes
+  const protocolPrefixes = ['imap://', 'imaps://', 'http://', 'https://'];
+  for (const prefix of protocolPrefixes) {
+    if (clean.toLowerCase().startsWith(prefix)) {
+      clean = clean.substring(prefix.length);
+      warnings.push(`Préfixe "${prefix}" retiré automatiquement`);
+    }
+  }
+  
+  // Remove trailing slashes
+  clean = clean.replace(/\/+$/, '');
+  
+  // Check for spaces
+  if (clean.includes(' ')) {
+    warnings.push('Votre hostname contient des espaces, vérifiez le copier/coller');
+  }
+  
+  return { sanitized: clean, warnings };
+}
+
+// Enhanced error hints
+function getAuthErrorHints(errorMessage: string, host: string): string[] {
+  const hints: string[] = [];
+  const lowerHost = host.toLowerCase();
+  
+  if (lowerHost.includes('gmail') || lowerHost.includes('google')) {
+    hints.push('Gmail: Activez IMAP dans Paramètres > Voir tous les paramètres > Transfert et POP/IMAP');
+    hints.push('Gmail: Créez un "App Password" sur https://myaccount.google.com/apppasswords');
+    hints.push('Gmail: N\'utilisez PAS votre mot de passe habituel');
+  } else if (lowerHost.includes('outlook') || lowerHost.includes('office365') || lowerHost.includes('live')) {
+    hints.push('Outlook: Créez un App Password sur https://account.microsoft.com/security');
+    hints.push('Outlook: Activez IMAP dans les paramètres de votre compte');
+  }
+  
+  if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+    hints.push('Vérifiez que le port et le hostname sont corrects');
+    hints.push('Vérifiez votre pare-feu / proxy');
+  }
+  
+  return hints;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log('[IMAP-TEST] Starting connection test...');
+
   try {
-    const { host, port, email, password, ssl, folder } = await req.json();
+    let { host, port = 993, email, password, ssl = true, folder = 'INBOX' } = await req.json();
 
-    console.log(`[IMAP-TEST] Starting test for ${email}@${host}:${port} (SSL: ${ssl})`);
+    // Phase 1: Sanitize and validate
+    const { sanitized, warnings } = sanitizeHostname(host);
+    host = sanitized;
 
-    const result = await testIMAPConnection({
-      host,
-      port,
-      email,
-      password,
-      ssl,
-      folder,
-    });
-
-    return new Response(
-      JSON.stringify(result),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
-  } catch (error: any) {
-    console.error('[IMAP-TEST] Test failed:', error);
-    return new Response(
-      JSON.stringify({
+    // Basic validation
+    if (!host || !email || !password) {
+      return new Response(JSON.stringify({
         success: false,
-        message: `Connection test failed: ${error.message}`,
+        error: 'Paramètres manquants (host, email, password requis)',
+        hints: ['Vérifiez que tous les champs sont remplis']
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
+    // Validate hostname format
+    if (host.includes('/') || host.includes('\\')) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Format de hostname invalide (ne doit pas contenir de slashes)',
+        hints: ['Exemple correct: imap.gmail.com', 'Exemple incorrect: imaps://imap.gmail.com/']
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
+    console.log(`[IMAP-TEST] Testing connection to ${host}:${port} (SSL: ${ssl})`);
+    if (warnings.length > 0) {
+      console.log(`[IMAP-TEST] Warnings during sanitization:`, warnings);
+    }
+
+    try {
+      const result = await testIMAPConnection({ host, port, email, password, ssl, folder });
+      
+      const response: any = {
+        ...result
+      };
+      
+      // Add sanitization warnings if any
+      if (warnings.length > 0) {
+        response.warnings = warnings;
+      }
+
+      return new Response(JSON.stringify(response), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    } catch (testError: any) {
+      console.error('[IMAP-TEST] Test failed:', testError);
+      
+      // Enhanced error handling
+      let errorMessage = testError.message || 'Erreur de connexion';
+      const hints = getAuthErrorHints(errorMessage, host);
+      
+      // Detect specific auth errors
+      if (errorMessage.includes('535') || errorMessage.includes('NO LOGIN failed')) {
+        errorMessage = 'Authentification refusée - vérifiez vos identifiants';
+        hints.unshift('Pour Gmail/Outlook: utilisez un App Password, pas votre mot de passe principal');
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        errorMessage = 'Timeout de connexion - vérifiez host/port/pare-feu';
+      }
+      
+      return new Response(JSON.stringify({
+        success: false,
+        error: errorMessage,
+        hints,
+        message: errorMessage,
         authMethod: 'N/A',
         folders: [],
         messageCount: 0,
-        selectedFolder: 'N/A',
-      }),
-      {
-        status: 200,
+        selectedFolder: 'N/A'
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+        status: 200
+      });
+    }
+  } catch (error: any) {
+    console.error('[IMAP-TEST] Fatal error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message || 'Erreur interne'
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500
+    });
   }
 });

@@ -19,6 +19,7 @@ import { SupplierAutoSync } from "@/components/SupplierAutoSync";
 import { FTPMappingWizard } from "@/components/FTPMappingWizard";
 import { EmailInboxTable } from "@/components/EmailInboxTable";
 import { EmailSetupGuide } from "@/components/EmailSetupGuide";
+import { EmailPollMonitoring } from "@/components/EmailPollMonitoring";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -594,7 +595,23 @@ export default function Suppliers() {
         </TabsContent>
 
         <TabsContent value="inbox">
-          <EmailInboxTable />
+          <div className="space-y-4">
+            {/* Poll Monitoring Dashboard */}
+            <Card>
+              <CardHeader>
+                <CardTitle>📊 Monitoring IMAP/POP3</CardTitle>
+                <CardDescription>
+                  Statut des vérifications automatiques des boîtes email
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <EmailPollMonitoring />
+              </CardContent>
+            </Card>
+            
+            {/* Email inbox table */}
+            <EmailInboxTable />
+          </div>
         </TabsContent>
 
         <TabsContent value="email-setup">

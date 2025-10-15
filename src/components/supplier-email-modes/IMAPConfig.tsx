@@ -15,6 +15,23 @@ interface IMAPConfigProps {
 
 export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
   const [testing, setTesting] = useState(false);
+  const [hostWarning, setHostWarning] = useState<string>('');
+
+  // Validation hostname en temps réel
+  const handleHostChange = (value: string) => {
+    onConfigChange({...config, imap_host: value});
+    
+    // Vérifier les préfixes non autorisés
+    const trimmed = value.trim().toLowerCase();
+    if (trimmed.startsWith('imap://') || trimmed.startsWith('imaps://') || 
+        trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      setHostWarning('⚠️ Ne pas inclure de préfixe (imap://, https://, etc.)');
+    } else if (value.includes('/') || value.includes('\\')) {
+      setHostWarning('⚠️ Le hostname ne doit pas contenir de slashes');
+    } else {
+      setHostWarning('');
+    }
+  };
 
   const handleTestConnection = async () => {
     if (!config.imap_host || !config.imap_email || !config.imap_password) {
@@ -28,9 +45,9 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
     try {
       const { data, error } = await supabase.functions.invoke('test-imap-connection', {
         body: {
-          host: config.imap_host,
+          host: config.imap_host?.trim(),
           port: parseInt(config.imap_port) || 993,
-          email: config.imap_email,
+          email: config.imap_email?.trim(),
           password: config.imap_password,
           ssl: config.imap_ssl !== false,
           folder: config.imap_folder || 'INBOX'
@@ -42,11 +59,24 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
       if (error) throw error;
 
       if (data.success) {
-        toast.success(
-          `✅ Connexion réussie! ${data.messageCount} messages dans ${data.selectedFolder}. Dossiers trouvés: ${data.folders.slice(0, 5).join(', ')}${data.folders.length > 5 ? '...' : ''}`
-        );
+        let successMsg = `✅ Connexion réussie! ${data.messageCount} messages dans ${data.selectedFolder}.`;
+        if (data.folders?.length > 0) {
+          successMsg += ` Dossiers: ${data.folders.slice(0, 5).join(', ')}${data.folders.length > 5 ? '...' : ''}`;
+        }
+        if (data.warnings?.length > 0) {
+          successMsg += `\n\n⚠️ ${data.warnings.join('\n')}`;
+        }
+        toast.success(successMsg);
       } else {
-        toast.error(data.error || "Échec de connexion");
+        // Afficher l'erreur avec hints
+        let errorMsg = data.error || "Échec de connexion";
+        if (data.hints?.length > 0) {
+          errorMsg += '\n\n💡 Conseils:\n' + data.hints.map((h: string) => `• ${h}`).join('\n');
+        }
+        if (data.statusCode) {
+          errorMsg += `\n\n🔍 Détails: HTTP ${data.statusCode}`;
+        }
+        toast.error(errorMsg, { duration: 8000 });
       }
     } catch (error: any) {
       toast.dismiss(loadingToast);
@@ -70,10 +100,17 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
           <div>
             <Label>Serveur IMAP</Label>
             <Input 
-              placeholder="imap.gmail.com"
+              placeholder="imap.gmail.com (sans préfixe)"
               value={config.imap_host || ''}
-              onChange={(e) => onConfigChange({...config, imap_host: e.target.value})}
+              onChange={(e) => handleHostChange(e.target.value)}
+              className={hostWarning ? 'border-orange-500' : ''}
             />
+            {hostWarning && (
+              <p className="text-xs text-orange-600 mt-1">{hostWarning}</p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Exemple correct: imap.gmail.com
+            </p>
           </div>
           <div>
             <Label>Port</Label>
@@ -123,8 +160,18 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
         </div>
 
         <Alert>
-          <AlertDescription>
-            💡 <strong>Gmail :</strong> Activez l'accès IMAP et créez un "App Password" dans les paramètres de sécurité.
+          <AlertDescription className="space-y-2">
+            <p>💡 <strong>Gmail :</strong></p>
+            <ul className="text-xs space-y-1 ml-4">
+              <li>• Activez IMAP: Paramètres → Voir tous les paramètres → Transfert et POP/IMAP</li>
+              <li>• Créez un App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener" className="text-primary underline">myaccount.google.com/apppasswords</a></li>
+              <li>• N'utilisez PAS votre mot de passe Gmail habituel</li>
+            </ul>
+            <p className="mt-2">💡 <strong>Outlook :</strong></p>
+            <ul className="text-xs space-y-1 ml-4">
+              <li>• Créez un App Password sur <a href="https://account.microsoft.com/security" target="_blank" rel="noopener" className="text-primary underline">account.microsoft.com/security</a></li>
+              <li>• Serveur: outlook.office365.com, Port: 993</li>
+            </ul>
           </AlertDescription>
         </Alert>
 

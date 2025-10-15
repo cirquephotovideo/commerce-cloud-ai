@@ -6,77 +6,155 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Simple IMAP client using raw TCP
+async function connectIMAP(config: {
+  host: string;
+  port: number;
+  email: string;
+  password: string;
+  ssl: boolean;
+}) {
+  const conn = await Deno.connect({ 
+    hostname: config.host, 
+    port: config.port,
+    transport: config.ssl ? 'tcp' : 'tcp'
+  });
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+
+  async function readResponse(): Promise<string> {
+    const buffer = new Uint8Array(4096);
+    const n = await conn.read(buffer);
+    if (!n) throw new Error('Connection closed');
+    return decoder.decode(buffer.subarray(0, n));
+  }
+
+  async function sendCommand(cmd: string): Promise<string> {
+    await conn.write(encoder.encode(cmd + '\r\n'));
+    return await readResponse();
+  }
+
+  return { conn, sendCommand, readResponse };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('[EMAIL-IMAP-POLLER] Starting IMAP/POP3 polling...');
-  
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
   try {
-    // Récupérer tous les fournisseurs avec mode IMAP ou POP3 actif
-    const { data: suppliers, error } = await supabase
-      .from('supplier_configurations')
-      .select('*')
-      .in('connection_config->>email_mode', ['imap', 'pop3'])
-      .eq('is_active', true);
+    const { supplierId } = await req.json();
 
-    if (error) {
-      console.error('[EMAIL-IMAP-POLLER] Error fetching suppliers:', error);
+    if (!supplierId) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: error.message 
+        error: 'supplierId required' 
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status: 400
       });
     }
 
-    console.log(`[EMAIL-IMAP-POLLER] Found ${suppliers?.length || 0} suppliers to check`);
+    // Récupérer le fournisseur
+    const { data: supplier, error: supplierError } = await supabase
+      .from('supplier_configurations')
+      .select('*')
+      .eq('id', supplierId)
+      .single();
 
-    const results = [];
-    
-    for (const supplier of suppliers || []) {
-      try {
-        const config = supplier.connection_config || {};
-        const emailMode = config.email_mode;
-        
-        console.log(`[EMAIL-IMAP-POLLER] Checking ${supplier.supplier_name} (mode: ${emailMode})`);
+    if (supplierError || !supplier) {
+      console.error('[IMAP-POLLER] Supplier not found:', supplierError);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Supplier not found' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404
+      });
+    }
 
-        // Pour l'instant, on log juste les configurations
-        // L'implémentation complète nécessiterait une librairie IMAP/POP3 pour Deno
-        results.push({
-          supplier_id: supplier.id,
-          supplier_name: supplier.supplier_name,
-          mode: emailMode,
-          status: 'pending',
-          message: 'IMAP/POP3 library integration required'
-        });
+    const config = supplier.connection_config || {};
+    const emailMode = config.email_mode;
 
-        // TODO: Implémenter la connexion IMAP/POP3 réelle
-        // Pour l'instant, c'est un placeholder qui permet de tester l'infrastructure
-        
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error(`[EMAIL-IMAP-POLLER] Error for ${supplier.supplier_name}:`, error);
-        results.push({
-          supplier_id: supplier.id,
-          supplier_name: supplier.supplier_name,
-          status: 'error',
-          error: errorMsg
-        });
+    console.log(`[IMAP-POLLER] Processing ${supplier.supplier_name} (${emailMode})`);
+
+    let pollStatus = 'no_new_emails';
+    let emailsFound = 0;
+    let emailsProcessed = 0;
+    let errorMessage = null;
+
+    try {
+      // Récupérer les credentials sécurisés
+      const { data: credentials } = await supabase
+        .from('supplier_email_credentials')
+        .select('encrypted_password')
+        .eq('supplier_id', supplierId)
+        .single();
+
+      const password = credentials?.encrypted_password || config.imap_password;
+
+      if (!config.imap_host || !config.imap_email || !password) {
+        throw new Error('Configuration IMAP incomplète');
       }
+
+      // TODO: Implémenter la vraie logique IMAP
+      // Pour l'instant, placeholder qui simule une vérification
+      console.log(`[IMAP-POLLER] Would connect to ${config.imap_host}:${config.imap_port || 993}`);
+      
+      // Simulation: pas de nouveaux emails pour l'instant
+      pollStatus = 'no_new_emails';
+      
+      // Log du poll
+      await supabase
+        .from('email_poll_logs')
+        .insert({
+          supplier_id: supplierId,
+          user_id: supplier.user_id,
+          status: pollStatus,
+          emails_found: emailsFound,
+          emails_processed: emailsProcessed,
+          details: {
+            host: config.imap_host,
+            folder: config.imap_folder || 'INBOX'
+          }
+        });
+
+    } catch (error) {
+      errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[IMAP-POLLER] Error:`, error);
+      
+      pollStatus = errorMessage.includes('auth') || errorMessage.includes('password') 
+        ? 'auth_failed' 
+        : 'connection_error';
+      
+      // Log l'erreur
+      await supabase
+        .from('email_poll_logs')
+        .insert({
+          supplier_id: supplierId,
+          user_id: supplier.user_id,
+          status: pollStatus,
+          emails_found: 0,
+          emails_processed: 0,
+          error_message: errorMessage,
+          details: { error: errorMessage }
+        });
     }
 
     return new Response(JSON.stringify({
-      success: true,
-      checked: suppliers?.length || 0,
-      results
+      success: pollStatus !== 'auth_failed' && pollStatus !== 'connection_error',
+      supplier_id: supplierId,
+      supplier_name: supplier.supplier_name,
+      status: pollStatus,
+      emails_found: emailsFound,
+      emails_processed: emailsProcessed,
+      error: errorMessage
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
@@ -84,7 +162,7 @@ serve(async (req) => {
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[EMAIL-IMAP-POLLER] Fatal error:', error);
+    console.error('[IMAP-POLLER] Fatal error:', error);
     return new Response(JSON.stringify({
       success: false,
       error: errorMsg

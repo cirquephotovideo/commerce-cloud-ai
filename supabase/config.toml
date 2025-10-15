@@ -219,6 +219,12 @@ verify_jwt = true
 [functions.email-inbox-processor]
 verify_jwt = false
 
+[functions.email-imap-scheduler]
+verify_jwt = false
+
+[functions.email-imap-scheduler.schedule]
+schedule = "*/15 * * * *"  # Every 15 minutes
+
 [functions.email-imap-poller]
 verify_jwt = false
 
