@@ -624,39 +624,86 @@ serve(async (req) => {
           const bodyStruct = bodyStructMatch[1];
           
           // Look for CSV/XLSX/XLS/ZIP attachments with improved patterns
-          // Pattern 1: Content-Type detection (handles x-msexcel, vnd.ms-excel, etc.)
-          const contentTypePattern = /"(?:application|text)"\s+"(?:x-msexcel|vnd\.ms-excel|msexcel|vnd\.openxmlformats[^"]+|zip|csv|octet-stream)"[^)]*"(?:filename|name)"\s+"?([^")\s]+)"?/gi;
+          // CRITICAL FIX: Match IMAP BODYSTRUCTURE format with parentheses
           
-          // Pattern 2: Extension-based detection (most reliable)
-          const extensionPattern = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?/gi;
+          // Pattern 1: Content-Type with IMAP parentheses format
+          // Matches: ("application" "x-msexcel" ("name" "Tarifs FVS.xls") ...)
+          const contentTypePattern = /\("(application|text)"\s+"(x-msexcel|vnd\.ms-excel|msexcel|vnd\.openxmlformats[^"]+|zip|csv|octet-stream)"[^)]*\("(filename|name)"\s+"?([^")\s]+)"?\)/gi;
           
-          // Pattern 3: Fallback with "attachment" keyword
-          const attachmentPattern = /"attachment"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?/gi;
+          // Pattern 2: Extension-based (most reliable)
+          // Matches: ("filename" "document.xlsx") or ("name" "file.xls")
+          const extensionPattern = /\("(filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?\)/gi;
           
-          // Pattern 4: Catch any filename with xls/xlsx/csv extension
-          const simpleExtPattern = /([A-Za-z0-9_\-]+\.(?:xlsx?|xls|csv|zip))/gi;
+          // Pattern 3: Attachment keyword with parentheses
+          // Matches: ("attachment" ... ("filename" "data.csv") ...)
+          const attachmentPattern = /\("attachment"[^)]*\("(filename|name)"\s+"?([^")\s]+\.(csv|xlsx?|xls|zip))"?\)/gi;
+          
+          // Pattern 4: Simple fallback - any filename with valid extension
+          const simpleExtPattern = /([A-Za-z0-9_\-\s]+\.(?:xlsx?|xls|csv|zip))/gi;
           
           const attachmentSet = new Set<string>();
           const detectionDetails: any[] = [];
           let match;
           
-          // Test all patterns (including the new simple extension pattern)
-          [contentTypePattern, extensionPattern, attachmentPattern, simpleExtPattern].forEach((pattern, idx) => {
-            const method = idx === 0 ? 'content-type' : idx === 1 ? 'extension' : idx === 2 ? 'attachment-keyword' : 'simple-ext';
-            while ((match = pattern.exec(bodyStruct)) !== null) {
-              const filename = match[1];
-              const ext = filename.split('.').pop()?.toLowerCase();
-              if (['csv', 'xlsx', 'xls', 'zip'].includes(ext || '')) {
-                const key = JSON.stringify({ filename, type: ext });
-                if (!attachmentSet.has(key)) {
-                  attachmentSet.add(key);
-                  detectionDetails.push({ filename, type: ext, detected_by: method });
-                }
+          // Test Pattern 1 (content-type with parentheses)
+          contentTypePattern.lastIndex = 0;
+          while ((match = contentTypePattern.exec(bodyStruct)) !== null) {
+            const filename = match[4];
+            const ext = filename.split('.').pop()?.toLowerCase();
+            if (['csv', 'xlsx', 'xls', 'zip'].includes(ext || '')) {
+              const key = JSON.stringify({ filename, type: ext });
+              if (!attachmentSet.has(key)) {
+                attachmentSet.add(key);
+                detectionDetails.push({ filename, type: ext, detected_by: 'content-type' });
               }
             }
-          });
+          }
+          
+          // Test Pattern 2 (extension-based)
+          extensionPattern.lastIndex = 0;
+          while ((match = extensionPattern.exec(bodyStruct)) !== null) {
+            const filename = match[2];
+            const ext = match[3].toLowerCase();
+            const key = JSON.stringify({ filename, type: ext });
+            if (!attachmentSet.has(key)) {
+              attachmentSet.add(key);
+              detectionDetails.push({ filename, type: ext, detected_by: 'extension' });
+            }
+          }
+          
+          // Test Pattern 3 (attachment keyword)
+          attachmentPattern.lastIndex = 0;
+          while ((match = attachmentPattern.exec(bodyStruct)) !== null) {
+            const filename = match[2];
+            const ext = match[3].toLowerCase();
+            const key = JSON.stringify({ filename, type: ext });
+            if (!attachmentSet.has(key)) {
+              attachmentSet.add(key);
+              detectionDetails.push({ filename, type: ext, detected_by: 'attachment-keyword' });
+            }
+          }
+          
+          // Test Pattern 4 (simple extension fallback)
+          simpleExtPattern.lastIndex = 0;
+          while ((match = simpleExtPattern.exec(bodyStruct)) !== null) {
+            const filename = match[1];
+            const ext = filename.split('.').pop()?.toLowerCase();
+            if (['csv', 'xlsx', 'xls', 'zip'].includes(ext || '')) {
+              const key = JSON.stringify({ filename, type: ext });
+              if (!attachmentSet.has(key)) {
+                attachmentSet.add(key);
+                detectionDetails.push({ filename, type: ext, detected_by: 'simple-ext' });
+              }
+            }
+          }
           
           const attachments = Array.from(attachmentSet).map(str => JSON.parse(str));
+          
+          // Enhanced logging for debugging
+          console.log(`[${supplierId}] Detection results:`, {
+            total_attachments: attachments.length,
+            details: detectionDetails
+          });
           
           // Prepare email base data for insertion
           const emailBaseData = {
@@ -677,8 +724,16 @@ serve(async (req) => {
           };
 
           if (attachments.length === 0) {
-            console.log(`[${supplierId}] Email ${msgId}: No CSV/XLSX/XLS/ZIP attachments found`);
-            console.log(`[${supplierId}] BODYSTRUCTURE sample:`, bodyStruct.substring(0, 800));
+            console.log(`[${supplierId}] ⚠️ Email ${msgId}: NO ATTACHMENTS DETECTED`);
+            console.log(`[${supplierId}] BODYSTRUCTURE (first 800 chars):`, bodyStruct.substring(0, 800));
+            
+            // Manual pattern testing for debugging
+            console.log(`[${supplierId}] Pattern testing:`, {
+              contentType: contentTypePattern.test(bodyStruct),
+              extension: extensionPattern.test(bodyStruct),
+              attachment: attachmentPattern.test(bodyStruct),
+              simpleExt: simpleExtPattern.test(bodyStruct)
+            });
             
             // Insert email with status "ignored"
             await supabaseAdmin.from('email_inbox').insert({

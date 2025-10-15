@@ -5,12 +5,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download } from "lucide-react";
+import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download, Package } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { EmailDetailModal } from "./EmailDetailModal";
 
 export function EmailInboxTable() {
@@ -40,6 +40,27 @@ export function EmailInboxTable() {
     refetchInterval: 30000,
     refetchIntervalInBackground: false,
   });
+
+  // Group emails by supplier
+  const emailsBySupplier = useMemo(() => {
+    if (!emailInbox) return {};
+    
+    const grouped = emailInbox.reduce((acc, email) => {
+      const supplierName = email.detected_supplier_name || 'Fournisseur inconnu';
+      if (!acc[supplierName]) {
+        acc[supplierName] = [];
+      }
+      acc[supplierName].push(email);
+      return acc;
+    }, {} as Record<string, typeof emailInbox>);
+
+    // Sort each group by date (most recent first)
+    Object.values(grouped).forEach(emails => {
+      emails.sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+    });
+
+    return grouped;
+  }, [emailInbox]);
 
   const handleManualRefresh = () => {
     refetch();
@@ -203,137 +224,160 @@ export function EmailInboxTable() {
             )}
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Reçu le</TableHead>
-                <TableHead>Expéditeur</TableHead>
-                <TableHead>Fournisseur</TableHead>
-                <TableHead>Fichier</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Produits</TableHead>
-                <TableHead>Statut</TableHead>
-                <TableHead>Logs</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {emailInbox.map((email) => (
-                <TableRow key={email.id}>
-                  <TableCell className="text-sm">
-                    {formatDistanceToNow(new Date(email.received_at), { 
-                      addSuffix: true, 
-                      locale: fr 
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{email.from_name || 'Sans nom'}</div>
-                      <div className="text-xs text-muted-foreground">{email.from_email}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span>{email.detected_supplier_name}</span>
-                      {email.detection_confidence && (
-                        <Badge variant="outline" className="text-xs">
-                          {Math.round(email.detection_confidence)}%
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{email.attachment_name || 'N/A'}</span>
-                    </div>
-                    {email.attachment_size_kb && (
-                      <div className="text-xs text-muted-foreground">
-                        {email.attachment_size_kb} KB
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={
-                      ['csv', 'xlsx', 'xls'].includes(email.attachment_type || '') ? 'default' :
-                      email.attachment_type === 'zip' ? 'secondary' :
-                      'outline'
-                    }>
-                      {email.attachment_type?.toUpperCase() || 'N/A'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 flex-wrap">
-                      {email.products_updated > 0 && (
-                        <Badge variant="default" className="text-xs">
-                          ✓ {email.products_updated}
-                        </Badge>
-                      )}
-                      {email.products_created > 0 && (
-                        <Badge variant="secondary" className="text-xs">
-                          + {email.products_created}
-                        </Badge>
-                      )}
-                      {email.products_found > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          {email.products_found} trouvés
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(email.status)}
-                  </TableCell>
-                  <TableCell>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Eye className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-md max-h-96 overflow-y-auto">
-                          <div className="space-y-1 text-xs">
-                            {(!email.processing_logs || !Array.isArray(email.processing_logs) || email.processing_logs.length === 0) ? (
-                              <div className="text-muted-foreground">Aucun log disponible</div>
-                            ) : (
-                              (email.processing_logs as any[]).map((log: any, i: number) => (
-                                <div key={i} className="flex gap-2 border-b pb-1">
-                                  <span className="text-muted-foreground shrink-0">
-                                    {new Date(log.timestamp).toLocaleTimeString('fr-FR')}
-                                  </span>
-                                  <span>{log.message}</span>
-                                </div>
-                              ))
+          <div className="space-y-6">
+            {Object.entries(emailsBySupplier).map(([supplierName, emails]) => (
+              <div key={supplierName} className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Package className="h-5 w-5" />
+                    {supplierName}
+                    <Badge variant="outline">{emails.length} email(s)</Badge>
+                  </h3>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span>✅ {emails.filter(e => e.status === 'completed').length} traités</span>
+                    <span>⏳ {emails.filter(e => e.status === 'pending').length} en attente</span>
+                    <span>❌ {emails.filter(e => e.status === 'failed').length} erreurs</span>
+                  </div>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reçu le</TableHead>
+                      <TableHead>Expéditeur</TableHead>
+                      <TableHead>Fichier</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Actions effectuées</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Logs</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {emails.map((email) => (
+                      <TableRow key={email.id}>
+                        <TableCell className="text-sm">
+                          {formatDistanceToNow(new Date(email.received_at), { 
+                            addSuffix: true, 
+                            locale: fr 
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{email.from_name || 'Sans nom'}</div>
+                            <div className="text-xs text-muted-foreground">{email.from_email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{email.attachment_name || 'N/A'}</span>
+                          </div>
+                          {email.attachment_size_kb && (
+                            <div className="text-xs text-muted-foreground">
+                              {email.attachment_size_kb} KB
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={
+                            ['csv', 'xlsx', 'xls'].includes(email.attachment_type || '') ? 'default' :
+                            email.attachment_type === 'zip' ? 'secondary' :
+                            'outline'
+                          }>
+                            {email.attachment_type?.toUpperCase() || 'N/A'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {email.products_created > 0 && (
+                              <Badge variant="default" className="text-xs">
+                                ✅ {email.products_created} créés
+                              </Badge>
+                            )}
+                            {email.products_updated > 0 && (
+                              <Badge variant="secondary" className="text-xs">
+                                🔄 {email.products_updated} màj
+                              </Badge>
+                            )}
+                            {email.status === 'completed' && !email.products_created && !email.products_updated && (
+                              <Badge variant="outline" className="text-xs">
+                                ✓ Traité
+                              </Badge>
+                            )}
+                            {email.status === 'failed' && (
+                              <Badge variant="destructive" className="text-xs">
+                                ❌ Échec
+                              </Badge>
+                            )}
+                            {email.status === 'pending' && (
+                              <Badge variant="outline" className="text-xs">
+                                ⏳ En attente
+                              </Badge>
+                            )}
+                            {email.status === 'processing' && (
+                              <Badge variant="default" className="text-xs animate-pulse">
+                                ⚙️ En cours
+                              </Badge>
                             )}
                           </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSelectedEmail(email)}
-                        title="Voir les détails"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleReprocess(email.id)}
-                        disabled={email.status === 'processing'}
-                        title="Retraiter"
-                      >
-                        <RefreshCw className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(email.status)}
+                        </TableCell>
+                        <TableCell>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Eye className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer" />
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-md max-h-96 overflow-y-auto">
+                                <div className="space-y-1 text-xs">
+                                  {(!email.processing_logs || !Array.isArray(email.processing_logs) || email.processing_logs.length === 0) ? (
+                                    <div className="text-muted-foreground">Aucun log disponible</div>
+                                  ) : (
+                                    (email.processing_logs as any[]).map((log: any, i: number) => (
+                                      <div key={i} className="flex gap-2 border-b pb-1">
+                                        <span className="text-muted-foreground shrink-0">
+                                          {new Date(log.timestamp).toLocaleTimeString('fr-FR')}
+                                        </span>
+                                        <span>{log.message}</span>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setSelectedEmail(email)}
+                              title="Voir les détails"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleReprocess(email.id)}
+                              disabled={email.status === 'processing'}
+                              title="Retraiter"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
