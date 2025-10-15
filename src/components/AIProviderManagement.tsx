@@ -360,41 +360,64 @@ export default function AIProviderManagement() {
         />
       </div>
 
-      <Card>
+      <Card className="border-primary/50 bg-primary/5">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5" />
-            Gestion des Providers IA
+            <Brain className="h-5 w-5 text-primary" />
+            Provider IA Principal
           </CardTitle>
           <CardDescription>
-            Configuration et monitoring des providers d'intelligence artificielle
+            Actuellement utilisé pour toutes les requêtes IA
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="p-4 rounded-lg bg-muted">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-medium">Provider actif:</span>
-              <span className="text-lg font-bold">{providerNames[currentProvider]}</span>
+        <CardContent>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-background border-2 border-primary">
+            <div className="flex items-center gap-4">
+              <div className="text-4xl">
+                {(() => {
+                  const providerIcons: Record<AIProvider, string> = {
+                    'lovable': '🚀',
+                    'claude': '🤖',
+                    'openai': '🔥',
+                    'openrouter': '🌐',
+                    'ollama_cloud': '☁️',
+                    'ollama_local': '💻',
+                  };
+                  return providerIcons[currentProvider];
+                })()}
+              </div>
+              <div>
+                <div className="font-bold text-xl">{providerNames[currentProvider]}</div>
+                <div className="text-sm text-muted-foreground">Provider actif</div>
+              </div>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="font-medium">Status:</span>
+            <div className="text-right">
               {getStatusBadge(currentProvider)}
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="selector">
-            🎯 Sélection
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="selector" className="flex flex-col gap-1 p-3">
+            <div className="flex items-center gap-2">
+              🎯 <span className="font-semibold">Sélection</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Choisir le provider principal</span>
           </TabsTrigger>
-          <TabsTrigger value="fallback">
-            🔄 Fallback
+          <TabsTrigger value="fallback" className="flex flex-col gap-1 p-3">
+            <div className="flex items-center gap-2">
+              🔄 <span className="font-semibold">Fallback</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Ordre de secours</span>
           </TabsTrigger>
-          <TabsTrigger value="monitoring">
-            <Activity className="h-4 w-4 mr-2" />
-            Monitoring
+          <TabsTrigger value="monitoring" className="flex flex-col gap-1 p-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              <span className="font-semibold">Monitoring</span>
+            </div>
+            <span className="text-xs text-muted-foreground">Statistiques et logs</span>
           </TabsTrigger>
         </TabsList>
 

@@ -182,44 +182,67 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {providers.map((provider) => (
           <Card
             key={provider.id}
             className={cn(
-              "cursor-pointer transition-all hover:shadow-lg hover:scale-105",
-              selected === provider.id && "ring-2 ring-primary shadow-lg"
+              "cursor-pointer transition-all duration-300 ease-in-out hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1",
+              "relative overflow-hidden",
+              selected === provider.id && "ring-2 ring-primary shadow-xl bg-primary/5 scale-[1.02]",
+              !provider.configured && "opacity-60 hover:opacity-100"
             )}
             onClick={() => provider.configured && onSelect(provider.id)}
           >
-            <CardContent className="p-4 text-center space-y-2">
-              <div className="text-3xl">{provider.icon}</div>
-              <h3 className="font-bold text-sm">{provider.name}</h3>
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {provider.description}
-              </p>
-              <Badge variant={getStatusVariant(provider.status)} className="text-xs">
-                {getStatusLabel(provider.status)}
-              </Badge>
-              {provider.configured && (provider as any).isUserConfig !== undefined && (
-                <Badge variant={(provider as any).isUserConfig ? "default" : "outline"} className="text-xs">
-                  {(provider as any).isUserConfig ? "🔐 Perso" : "🔓 Global"}
+            <CardContent className="p-6 space-y-4">
+              {/* Badge de sélection en haut à droite */}
+              {selected === provider.id && (
+                <div className="absolute top-2 right-2">
+                  <Badge variant="default" className="gap-1">
+                    <CheckCircle className="h-3 w-3" />
+                    Sélectionné
+                  </Badge>
+                </div>
+              )}
+
+              {/* Icône centrée et grande */}
+              <div className="flex justify-center">
+                <div className="text-5xl">{provider.icon}</div>
+              </div>
+
+              {/* Nom et description */}
+              <div className="text-center space-y-1">
+                <h3 className="font-bold text-lg">{provider.name}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {provider.description}
+                </p>
+              </div>
+
+              {/* Badges en ligne horizontale */}
+              <div className="flex flex-wrap justify-center gap-2">
+                <Badge variant={getStatusVariant(provider.status)}>
+                  {getStatusLabel(provider.status)}
                 </Badge>
-              )}
-              {selected === provider.id && provider.configured && (
-                <CheckCircle className="h-4 w-4 mx-auto text-primary" />
-              )}
+                
+                {provider.configured && (provider as any).isUserConfig !== undefined && (
+                  <Badge variant={(provider as any).isUserConfig ? "default" : "outline"}>
+                    {(provider as any).isUserConfig ? "🔐 Perso" : "🔓 Global"}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Bouton de configuration */}
               {!provider.configured && (
                 <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full mt-2"
+                  variant="outline"
+                  size="default"
+                  className="w-full"
                   onClick={(e) => {
                     e.stopPropagation();
                     onConfigure(provider.id);
                   }}
                 >
-                  <Settings className="h-3 w-3 mr-1" />
+                  <Settings className="h-4 w-4 mr-2" />
                   Configurer
                 </Button>
               )}
