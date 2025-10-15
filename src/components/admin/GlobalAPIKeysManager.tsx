@@ -299,7 +299,9 @@ export const GlobalAPIKeysManager = () => {
             )}
           </CardTitle>
           <CardDescription>
-            API pour les paiements et abonnements (STRIPE_SECRET_KEY)
+            API pour les paiements et abonnements. Deux clés sont nécessaires :
+            <br />• <strong>STRIPE_SECRET_KEY</strong> (côté serveur, à tester ci-dessous)
+            <br />• <strong>STRIPE_PUBLISHABLE_KEY</strong> (côté client, publique, pas besoin de test)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
