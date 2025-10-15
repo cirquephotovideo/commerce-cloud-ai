@@ -13,85 +13,110 @@ interface ProviderTestResult {
   models?: string[];
 }
 
-async function testClaudeProvider(apiKey: string): Promise<ProviderTestResult> {
+async function testClaudeProvider(apiKey: string, desiredModel?: string): Promise<ProviderTestResult> {
   const startTime = Date.now();
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
-      }),
-    });
+  
+  // Build list of models to try, in order
+  const candidates = desiredModel 
+    ? [desiredModel, 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229']
+    : ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+  
+  const attemptErrors: string[] = [];
+  let chosenModel: string | undefined;
+  let latency = 0;
 
-    const latency = Date.now() - startTime;
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `API Error: ${response.status}`;
-      
-      // Parse detailed error message from Anthropic
-      try {
-        const errorData = JSON.parse(errorText);
-        if (errorData.error?.message) {
-          errorMessage = `${response.status} - ${errorData.error.message}`;
-        }
-      } catch {
-        // If parsing fails, use the raw text
-        if (errorText) {
-          errorMessage = `${response.status} - ${errorText.substring(0, 200)}`;
-        }
-      }
-      
-      // Specific message for 401
-      if (response.status === 401) {
-        errorMessage = "Clé API invalide ou non autorisée";
-      }
-      
-      console.error(`[testClaudeProvider] Failed:`, errorMessage);
-      return { success: false, latency, error: errorMessage };
-    }
-
-    // Try to fetch available models dynamically
-    let models = ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+  // Try each model until one works
+  for (const model of candidates) {
+    const t0 = Date.now();
     
     try {
-      const modelsResponse = await fetch('https://api.anthropic.com/v1/models', {
-        method: 'GET',
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
         headers: {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          model,
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Test' }],
+        }),
       });
-      
-      if (modelsResponse.ok) {
-        const modelsData = await modelsResponse.json();
-        if (modelsData.data && Array.isArray(modelsData.data)) {
-          models = modelsData.data.map((m: any) => m.id).filter((id: string) => id.includes('claude'));
-        }
-      }
-    } catch (err) {
-      console.log('[testClaudeProvider] Could not fetch models list, using defaults:', err);
-    }
 
-    return {
-      success: true,
-      latency,
-      models,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      latency: Date.now() - startTime,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+      latency = Date.now() - t0;
+
+      if (response.ok) {
+        chosenModel = model;
+        console.info(`[testClaudeProvider] Success with model: ${model}`);
+        break;
+      }
+
+      const errorText = await response.text();
+      
+      // Handle 401 immediately - no point trying other models
+      if (response.status === 401) {
+        console.error('[testClaudeProvider] 401 Unauthorized. Body:', errorText?.substring(0, 400));
+        let models = ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+        return { success: false, latency, error: 'Clé API invalide ou non autorisée', models };
+      }
+
+      // Parse error message
+      let errorMsg = `API Error: ${response.status}`;
+      try {
+        const errorData = errorText ? JSON.parse(errorText) : null;
+        if (errorData?.error?.message) {
+          errorMsg = `${response.status} - ${errorData.error.type || 'error'}: ${errorData.error.message}`;
+        }
+      } catch {}
+      
+      if (errorText) {
+        console.error(`[testClaudeProvider] Error body (${model}):`, errorText.substring(0, 400));
+      }
+      
+      attemptErrors.push(`${model}: ${errorMsg}`);
+    } catch (err) {
+      latency = Date.now() - t0;
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[testClaudeProvider] Exception for ${model}:`, msg);
+      attemptErrors.push(`${model}: ${msg}`);
+    }
   }
+
+  // Fetch available models
+  let models = ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+  
+  try {
+    const modelsResponse = await fetch('https://api.anthropic.com/v1/models', {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+    });
+    
+    if (modelsResponse.ok) {
+      const modelsData = await modelsResponse.json();
+      if (modelsData.data && Array.isArray(modelsData.data)) {
+        models = modelsData.data.map((m: any) => m.id).filter((id: string) => id.toLowerCase().includes('claude'));
+      }
+    }
+  } catch (err) {
+    console.log('[testClaudeProvider] Could not fetch models list, using defaults:', err);
+  }
+
+  if (!chosenModel) {
+    const error = attemptErrors.length 
+      ? attemptErrors.slice(0, 2).join(' | ') 
+      : 'Test échoué (modèle ou format non acceptés)';
+    return { success: false, latency, error, models };
+  }
+
+  return {
+    success: true,
+    latency,
+    models,
+  };
 }
 
 async function testOpenAIProvider(apiKey: string): Promise<ProviderTestResult> {
@@ -248,7 +273,7 @@ serve(async (req) => {
     
     switch (provider) {
       case 'claude':
-        testResult = await testClaudeProvider(api_key);
+        testResult = await testClaudeProvider(api_key, model);
         break;
       case 'openai':
         testResult = await testOpenAIProvider(api_key);
@@ -270,31 +295,35 @@ serve(async (req) => {
       error: testResult.error
     });
 
+    // If test_only, always return 200 with success/error/models in body
+    if (test_only) {
+      console.log(`[SAVE-PROVIDER-CONFIG] Test-only mode, skipping save`);
+      return new Response(
+        JSON.stringify({ 
+          success: testResult.success,
+          latency: testResult.latency,
+          models: testResult.models,
+          error: testResult.error
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // For save mode, fail if test didn't succeed
     if (!testResult.success) {
       console.error(`[SAVE-PROVIDER-CONFIG] Provider ${provider} test failed:`, testResult.error);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: testResult.error || 'Provider test failed',
-          latency: testResult.latency 
+          latency: testResult.latency,
+          models: testResult.models
         }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
-
-    // If test_only, don't save
-    if (test_only) {
-      console.log(`[SAVE-PROVIDER-CONFIG] Test-only mode, skipping save`);
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          latency: testResult.latency,
-          models: testResult.models 
-        }),
-        {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );

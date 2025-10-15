@@ -54,26 +54,28 @@ export const ProviderConfigDialog = ({ provider, open, onOpenChange, onSuccess }
         }
       });
 
-      if (error) {
+      // Network error (no data at all)
+      if (error && !data) {
         setTestResult({
           success: false,
-          error: error.message || 'Erreur lors du test'
+          error: error.message || 'Erreur réseau'
         });
-        toast.error(`❌ ${error.message || 'Erreur lors du test'}`);
+        toast.error(`❌ ${error.message || 'Erreur réseau'}`);
         return;
       }
 
+      // Edge function always returns 200 in test_only mode with success/error/models in body
       setTestResult({
-        success: data.success,
-        latency: data.latency,
-        models: data.models,
-        error: data.error
+        success: !!data?.success,
+        latency: data?.latency,
+        models: data?.models,
+        error: data?.error
       });
 
-      if (data.success) {
+      if (data?.success) {
         toast.success(`✅ Connexion réussie (${data.latency}ms)`);
       } else {
-        toast.error(`❌ ${data.error || 'Test échoué'}`);
+        toast.error(`❌ ${data?.error || 'Test échoué'}`);
       }
     } catch (err) {
       console.error('[ProviderConfigDialog] Test error:', err);
@@ -177,18 +179,26 @@ export const ProviderConfigDialog = ({ provider, open, onOpenChange, onSuccess }
                     </p>
                   )}
                   {testResult.success && testResult.models && testResult.models.length > 0 && (
-                    <div className="text-sm text-green-700 space-y-1">
+                    <div className="text-sm text-green-700 space-y-2">
                       <p className="font-medium">Modèles disponibles :</p>
-                      <p>{testResult.models.join(', ')}</p>
+                      <p className="text-xs">{testResult.models.join(', ')}</p>
                       {provider === 'claude' && (
-                        <a 
-                          href="https://docs.anthropic.com/en/docs/about-claude/models" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-green-600 hover:text-green-800 underline block mt-1"
-                        >
-                          Voir les tarifs →
-                        </a>
+                        <div className="mt-2 p-2 bg-green-100 rounded border border-green-200">
+                          <p className="font-medium text-xs mb-1">Coûts indicatifs :</p>
+                          <ul className="text-xs space-y-0.5">
+                            <li>• <strong>Haiku</strong> : économique, rapide</li>
+                            <li>• <strong>Sonnet</strong> : équilibré qualité/prix</li>
+                            <li>• <strong>Opus</strong> : premium, coût élevé</li>
+                          </ul>
+                          <a 
+                            href="https://docs.anthropic.com/en/docs/about-claude/models" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-green-600 hover:text-green-800 underline block mt-1.5 text-xs"
+                          >
+                            Voir les tarifs détaillés →
+                          </a>
+                        </div>
                       )}
                     </div>
                   )}
