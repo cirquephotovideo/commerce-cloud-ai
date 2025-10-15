@@ -92,6 +92,57 @@ function safeParseAIResponse(content: string, analysisType: string): any {
   }
 }
 
+// Helper function to call AI analysis with proper error handling
+async function callAIAnalysis(
+  promptContent: string, 
+  analysisType: string, 
+  lovableApiKey: string
+): Promise<any> {
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [{ role: 'user', content: promptContent }],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`[ADVANCED-ANALYZER] ${analysisType} API error:`, {
+        status: response.status,
+        statusText: response.statusText
+      });
+      return {
+        error: `AI API error: ${response.status} ${response.statusText}`,
+        type: analysisType
+      };
+    }
+
+    const data = await response.json();
+    
+    if (!data.choices || !data.choices[0]) {
+      console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure:`, data);
+      return {
+        error: 'Invalid AI response structure',
+        raw_response: JSON.stringify(data).substring(0, 200),
+        type: analysisType
+      };
+    }
+
+    return safeParseAIResponse(data.choices[0].message.content, analysisType);
+  } catch (error) {
+    console.error(`[ADVANCED-ANALYZER] ${analysisType} analysis error:`, error);
+    return {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      type: analysisType
+    };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -283,24 +334,7 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         }
       }`;
 
-      const techResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: technicalPrompt }],
-        }),
-      });
-
-      const techData = await techResponse.json();
-      const technicalResult = safeParseAIResponse(
-        techData.choices[0].message.content,
-        'technical'
-      );
-      results.technical = technicalResult;
+      results.technical = await callAIAnalysis(technicalPrompt, 'technical', LOVABLE_API_KEY!);
       console.log('Technical analysis completed');
     }
 
@@ -321,23 +355,7 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "return_prediction": { "rate": 0.0, "main_causes": [], "sav_cost_estimate": 0 }
       }`;
 
-      const commResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: commercialPrompt }],
-        }),
-      });
-
-      const commData = await commResponse.json();
-      results.commercial = safeParseAIResponse(
-        commData.choices[0].message.content, 
-        'commercial'
-      );
+      results.commercial = await callAIAnalysis(commercialPrompt, 'commercial', LOVABLE_API_KEY!);
       console.log('Commercial analysis completed');
     }
 
@@ -363,23 +381,7 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "seasonality": { "peak_periods": [], "low_periods": [] }
       }`;
 
-      const marketResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: marketPrompt }],
-        }),
-      });
-
-      const marketData = await marketResponse.json();
-      results.market = safeParseAIResponse(
-        marketData.choices[0].message.content, 
-        'market'
-      );
+      results.market = await callAIAnalysis(marketPrompt, 'market', LOVABLE_API_KEY!);
       console.log('Market analysis completed');
     }
 
@@ -401,23 +403,7 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "risk_level": "low"
       }`;
 
-      const riskResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: riskPrompt }],
-        }),
-      });
-
-      const riskData = await riskResponse.json();
-      results.risk = safeParseAIResponse(
-        riskData.choices[0].message.content, 
-        'risk'
-      );
+      results.risk = await callAIAnalysis(riskPrompt, 'risk', LOVABLE_API_KEY!);
       console.log('Risk analysis completed');
     }
 

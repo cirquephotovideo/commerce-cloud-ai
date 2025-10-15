@@ -18,7 +18,15 @@ interface EdgeFunction {
 
 const edgeFunctions: EdgeFunction[] = [
   // Core Functions
-  { name: 'product-analyzer', category: 'core', status: 'untested', testPayload: { url: 'https://www.amazon.fr/dp/B0CX23V2ZK' } },
+  { 
+    name: 'product-analyzer', 
+    category: 'core', 
+    status: 'untested',
+    testPayload: {
+      productInput: "https://www.amazon.fr/dp/B0CX23V2ZK",
+      includeImages: true
+    }
+  },
   { name: 'check-subscription', category: 'core', status: 'untested' },
   { 
     name: 'advanced-product-analyzer', 
@@ -31,7 +39,16 @@ const edgeFunctions: EdgeFunction[] = [
       platform: "amazon"
     }
   },
-  { name: 'dual-search-engine', category: 'core', status: 'untested', testPayload: { query: 'laptop' } },
+  { 
+    name: 'dual-search-engine', 
+    category: 'core', 
+    status: 'untested',
+    testPayload: { 
+      productName: 'MacBook Air M2',
+      competitorSiteIds: [],
+      maxResults: 5
+    }
+  },
   
   // Amazon Functions
   { name: 'amazon-product-search', category: 'amazon', status: 'untested', testPayload: { keywords: 'laptop' } },

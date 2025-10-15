@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface SearchRequest {
   productName?: string;
+  query?: string;
   competitorSiteIds?: string[];
   maxResults?: number;
 }
@@ -80,13 +81,20 @@ serve(async (req) => {
       });
     }
 
-    const { productName, competitorSiteIds = [], maxResults = 10 } = requestBody;
+    const { 
+      productName: rawProductName,
+      query,
+      competitorSiteIds = [], 
+      maxResults = 10 
+    } = requestBody;
 
-    // Validation
-    if (!productName || productName.trim() === '') {
-      console.error('[DUAL-ENGINE] Missing productName');
+    // Support both productName and query
+    const productName = (rawProductName || query || '').trim();
+
+    if (!productName || typeof productName !== 'string') {
+      console.error('[DUAL-ENGINE] Validation failed: productName or query is required');
       return new Response(JSON.stringify({ 
-        error: 'productName is required and must be non-empty',
+        error: 'productName or query is required and must be a non-empty string',
         code: 'MISSING_PRODUCT_NAME'
       } as SearchError), {
         status: 400,
@@ -97,6 +105,9 @@ serve(async (req) => {
     console.log('[DUAL-ENGINE] Request validated:', { 
       productName, 
       siteCount: competitorSiteIds.length,
+      maxResults,
+      hasQuery: !!query,
+      hasProductName: !!rawProductName,
       timestamp: new Date().toISOString()
     });
 

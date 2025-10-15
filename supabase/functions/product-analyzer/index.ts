@@ -208,21 +208,29 @@ serve(async (req) => {
     let additionalData: any = {};
     let includeImages = true;
 
-    if (typeof body === 'string') {
-      productInput = body;
-    } else if (body.productInput) {
-      productInput = body.productInput;
-      additionalData = body.additionalData || {};
-      includeImages = body.includeImages !== false;
-    } else if (body.name) {
-      // Backward compatibility with old format
-      productInput = body.name;
-      additionalData = body;
-    } else {
-      throw new Error('Missing productInput, name, or structured data');
-    }
+  if (typeof body === 'string') {
+    productInput = body;
+  } else if (body.url) {
+    productInput = body.url;
+    includeImages = true;
+  } else if (body.productInput) {
+    productInput = body.productInput;
+    additionalData = body.additionalData || {};
+    includeImages = body.includeImages !== false;
+  } else if (body.name) {
+    productInput = body.name;
+    additionalData = body;
+  } else {
+    throw new Error('Missing productInput, name, url, or structured data');
+  }
 
-    console.log('Analyzing product:', productInput);
+  console.log('[PRODUCT-ANALYZER] Request validated:', {
+    productInput,
+    inputType: detectInputType(productInput),
+    includeImages,
+    hasAdditionalData: Object.keys(additionalData).length > 0,
+    timestamp: new Date().toISOString()
+  });
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
