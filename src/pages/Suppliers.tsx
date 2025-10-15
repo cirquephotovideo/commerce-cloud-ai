@@ -20,6 +20,7 @@ import { FTPMappingWizard } from "@/components/FTPMappingWizard";
 import { EmailInboxTable } from "@/components/EmailInboxTable";
 import { EmailSetupGuide } from "@/components/EmailSetupGuide";
 import { EmailPollMonitoring } from "@/components/EmailPollMonitoring";
+import { UserAlerts } from "@/components/market/UserAlerts";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -680,6 +681,10 @@ export default function Suppliers() {
             {/* Email inbox table */}
             <EmailInboxTable />
           </div>
+        </TabsContent>
+
+        <TabsContent value="alerts">
+          <UserAlerts />
         </TabsContent>
 
         <TabsContent value="email-setup">

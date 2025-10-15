@@ -88,11 +88,41 @@ export const UserAlerts = () => {
                     </Badge>
                     <span className="text-sm font-medium">{alert.alert_type}</span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {JSON.stringify(alert.alert_data, null, 2)}
-                  </div>
+                  
+                  {/* Format alert message based on type */}
+                  {alert.alert_type === 'supplier_price_change' && alert.alert_data ? (
+                    <div className="space-y-1">
+                      <div className="font-medium text-sm">
+                        {alert.alert_data.product_name || alert.alert_data.supplier_reference}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Fournisseur: {alert.alert_data.supplier_name}
+                      </div>
+                      <div className="flex items-center gap-4 text-sm mt-2">
+                        <span className="text-red-600">
+                          Prix avant: {alert.alert_data.old_price?.toFixed(2)}€
+                        </span>
+                        <span className="text-green-600">
+                          Prix actuel: {alert.alert_data.new_price?.toFixed(2)}€
+                        </span>
+                        <Badge variant={alert.alert_data.variation_pct > 0 ? "destructive" : "default"}>
+                          {alert.alert_data.variation_pct > 0 ? '+' : ''}{alert.alert_data.variation_pct?.toFixed(1)}%
+                        </Badge>
+                      </div>
+                      {alert.alert_data.ean && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          EAN: {alert.alert_data.ean}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      {JSON.stringify(alert.alert_data, null, 2)}
+                    </div>
+                  )}
+                  
                   <div className="text-xs text-muted-foreground mt-2">
-                    {new Date(alert.created_at).toLocaleString()}
+                    {new Date(alert.created_at).toLocaleString('fr-FR')}
                   </div>
                 </div>
                 <div className="flex gap-2">

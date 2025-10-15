@@ -472,15 +472,50 @@ Réponds UNIQUEMENT en JSON valide:
               })
               .eq('id', matchedAnalysis.id);
 
-            // Log price variation if significant
-            if (oldPrice > 0 && Math.abs(newPrice - oldPrice) / oldPrice > 0.05) {
+            // Log price variation and create alert if significant (>= 5%)
+            if (oldPrice > 0 && Math.abs(newPrice - oldPrice) / oldPrice >= 0.05) {
               const variationPct = ((newPrice - oldPrice) / oldPrice * 100).toFixed(2);
+              const variationAmount = (newPrice - oldPrice).toFixed(2);
+              
               console.log('[PROCESS-ATTACHMENT] Price updated in product_analyses:', {
                 analysis_id: matchedAnalysis.id,
                 old_price: oldPrice,
                 new_price: newPrice,
                 variation_pct: variationPct
               });
+
+              // Get supplier name for alert
+              const { data: supplierConfig } = await supabase
+                .from('supplier_configurations')
+                .select('supplier_name')
+                .eq('id', inbox.supplier_id)
+                .single();
+
+              // Create user alert for significant price change
+              const { error: alertError } = await supabase
+                .from('user_alerts')
+                .insert({
+                  user_id: user_id,
+                  alert_type: 'supplier_price_change',
+                  priority: Math.abs(parseFloat(variationPct)) > 15 ? 'high' : 'medium',
+                  alert_data: {
+                    product_name: normalizedRow.product_name,
+                    supplier_name: supplierConfig?.supplier_name || 'Fournisseur inconnu',
+                    supplier_reference: normalizedRow.supplier_reference,
+                    old_price: oldPrice,
+                    new_price: newPrice,
+                    variation_pct: parseFloat(variationPct),
+                    variation_amount: parseFloat(variationAmount),
+                    ean: normalizedRow.ean
+                  },
+                  is_read: false
+                });
+
+              if (alertError) {
+                console.error('[PROCESS-ATTACHMENT] Failed to create alert:', alertError);
+              } else {
+                console.log('[PROCESS-ATTACHMENT] Created price alert for user');
+              }
             }
           }
         } else if (inbox.supplier_id) {
