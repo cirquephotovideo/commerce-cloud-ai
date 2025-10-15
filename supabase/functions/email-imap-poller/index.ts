@@ -718,7 +718,7 @@ serve(async (req) => {
             from_name: fromEmail.match(/^(.+?)\s*</)?.[1] || fromEmail.split('@')[0],
             subject: subject,
             received_at: new Date().toISOString(),
-            detection_method: 'imap_polling',
+            detection_method: 'email',
             detected_supplier_name: supplierName,
             detection_confidence: 100,
             processing_logs: [{
