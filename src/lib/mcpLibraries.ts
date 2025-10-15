@@ -1,4 +1,5 @@
 import { prestashopTools, prestashopUseCases } from './prestashopMCPData';
+import { odooTools, odooUseCases } from './odooMCPData';
 
 export interface MCPTool {
   name: string;
@@ -650,7 +651,7 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
     name: 'Odoo MCP Enhanced (Pixeeplay)',
     npmPackage: 'odoo-mcp-server',
     version: '1.1.0',
-    description: 'Serveur MCP pour Odoo avec fonctionnalités avancées - ERP complet',
+    description: 'Serveur MCP pour Odoo - ERP complet (Ventes, Inventaire, Comptabilité, CRM, Production) - 25+ outils disponibles',
     icon: '🏢',
     category: 'integration',
     requiredEnvVars: ['ODOO_URL', 'ODOO_DB', 'ODOO_USERNAME', 'ODOO_PASSWORD'],
@@ -659,8 +660,48 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
       auth_type: 'bearer'
     },
     installCommand: 'npm install odoo-mcp-server',
-    setupInstructions: '1. Récupérer l\'URL de votre instance Odoo\n2. Créer un utilisateur API avec les droits appropriés\n3. Configurer ODOO_URL, ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD',
-    documentation: 'https://www.npmjs.com/package/odoo-mcp-server'
+    setupInstructions: `=== Configuration Odoo ===
+1. Récupérer l'URL de votre instance Odoo (ex: https://mycompany.odoo.com)
+2. Créer un utilisateur API avec droits appropriés :
+   • Accès Administration → Utilisateurs
+   • Créer un utilisateur technique "API MCP"
+   • Activer les droits : Ventes, Inventaire, Comptabilité, CRM
+3. Récupérer le nom de la base de données (visible dans l'URL)
+4. Configurer les variables d'environnement :
+   • ODOO_URL : URL complète de l'instance
+   • ODOO_DB : Nom de la base de données
+   • ODOO_USERNAME : Email de l'utilisateur API
+   • ODOO_PASSWORD : Mot de passe de l'utilisateur API
+
+=== Modes d'utilisation ===
+
+🖥️ Mode A : Claude Desktop (local)
+   1. Installer globalement : npm install -g odoo-mcp-server
+   2. Configurer claude_desktop_config.json :
+      • macOS : ~/Library/Application Support/Claude/
+      • Windows : %APPDATA%/Claude/
+   3. Redémarrer Claude Desktop
+   4. Commandes naturelles : "Affiche les commandes" → Claude appelle get_sales_orders
+
+🎯 Mode B : Tarifique Chat (intégré)
+   1. Activer "MCP Chat Enabled" dans Platform Settings
+   2. Ouvrir le chat flottant (icône en bas à droite)
+   3. Utiliser /odoo ou des questions naturelles
+   4. Exemples :
+      • /odoo list products limit:10
+      • "Quels sont les derniers produits Odoo ?"
+      • "Affiche le stock du produit ID 123"
+
+🎯 Outils disponibles (25) :
+   Produits: get_products, get_product, create_product, update_product, delete_product, search_products_by_category
+   Ventes: get_sales_orders, get_order, create_order, update_order_status, invoice_order
+   Inventaire: get_stock_levels, update_stock, create_stock_move, get_warehouses
+   Comptabilité: get_invoices, create_invoice, get_payments, get_account_moves
+   CRM: get_leads, create_lead, update_lead, get_opportunities
+   Production: get_bom, create_manufacturing_order, get_work_orders`,
+    documentation: 'https://www.npmjs.com/package/odoo-mcp-server',
+    tools: odooTools,
+    useCases: odooUseCases
   },
   {
     id: 'amazon-seller-mcp-pixeeplay',
