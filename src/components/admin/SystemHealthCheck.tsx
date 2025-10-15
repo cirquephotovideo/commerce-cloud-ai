@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Activity, Sparkles, History as HistoryIcon } from "lucide-react";
@@ -12,9 +12,23 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
+interface QueueStatus {
+  pending: number;
+  processing: number;
+  failed: number;
+}
+
+interface AmazonCredsStatus {
+  expiresAt: string;
+  daysUntilExpiry: number;
+  status: 'ok' | 'warning' | 'critical';
+}
+
 export const SystemHealthCheck = () => {
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [overallHealth, setOverallHealth] = useState<number | null>(null);
+  const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
+  const [amazonCredsStatus, setAmazonCredsStatus] = useState<AmazonCredsStatus | null>(null);
   const { toast } = useToast();
 
   const runAllTests = async () => {
@@ -71,7 +85,7 @@ export const SystemHealthCheck = () => {
   };
 
   // Fetch Amazon credentials expiry
-  const checkAmazonCredentials = async () => {
+  const checkAmazonCredentials = async (): Promise<AmazonCredsStatus | null> => {
     const { data } = await supabase
       .from('amazon_credentials')
       .select('secret_expires_at, is_active')
@@ -84,10 +98,15 @@ export const SystemHealthCheck = () => {
       (new Date(data.secret_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
     );
     
+    const status: 'ok' | 'warning' | 'critical' = 
+      daysUntilExpiry < 7 ? 'critical' : 
+      daysUntilExpiry < 30 ? 'warning' : 
+      'ok';
+    
     return {
       expiresAt: data.secret_expires_at,
       daysUntilExpiry,
-      status: daysUntilExpiry < 7 ? 'critical' : daysUntilExpiry < 30 ? 'warning' : 'ok'
+      status
     };
   };
 
@@ -103,26 +122,35 @@ export const SystemHealthCheck = () => {
   };
 
   const updateHealthMetrics = async () => {
-    const [queueStatus, amazonCreds, recentErrors] = await Promise.all([
+    const [queueData, amazonCreds, recentErrors] = await Promise.all([
       checkEnrichmentQueue(),
       checkAmazonCredentials(),
       checkRecentErrors()
     ]);
 
+    // Update states
+    setQueueStatus(queueData);
+    setAmazonCredsStatus(amazonCreds);
+
     // Update overall health based on metrics
     const criticalIssues = 
-      (queueStatus.failed > 10 ? 1 : 0) +
+      (queueData.failed > 10 ? 1 : 0) +
       (amazonCreds?.status === 'critical' ? 1 : 0) +
       (recentErrors > 20 ? 1 : 0);
     
     const warningIssues =
-      (queueStatus.failed > 5 ? 1 : 0) +
+      (queueData.failed > 5 ? 1 : 0) +
       (amazonCreds?.status === 'warning' ? 1 : 0) +
       (recentErrors > 10 ? 1 : 0);
 
     const healthScore = criticalIssues > 0 ? 30 : warningIssues > 0 ? 60 : 95;
     setOverallHealth(healthScore);
   };
+
+  // Load health metrics on mount
+  useEffect(() => {
+    updateHealthMetrics();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -147,8 +175,24 @@ export const SystemHealthCheck = () => {
             <CardTitle className="text-sm font-medium">Queue Enrichissement</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Rafraîchir pour voir</p>
+            <div className="text-2xl font-bold">
+              {queueStatus ? `${queueStatus.pending + queueStatus.processing}` : "—"}
+            </div>
+            <div className="flex gap-2 mt-2">
+              {queueStatus && queueStatus.failed > 0 && (
+                <Badge variant="destructive" className="text-xs">
+                  {queueStatus.failed} échecs
+                </Badge>
+              )}
+              {queueStatus && queueStatus.processing > 0 && (
+                <Badge variant="default" className="text-xs">
+                  {queueStatus.processing} en cours
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {queueStatus ? `${queueStatus.pending} en attente` : "Chargement..."}
+            </p>
           </CardContent>
         </Card>
 
@@ -157,8 +201,24 @@ export const SystemHealthCheck = () => {
             <CardTitle className="text-sm font-medium">Credentials Amazon</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">—</div>
-            <p className="text-xs text-muted-foreground">Rafraîchir pour voir</p>
+            <div className="text-2xl font-bold">
+              {amazonCredsStatus ? `${amazonCredsStatus.daysUntilExpiry}j` : "—"}
+            </div>
+            {amazonCredsStatus && (
+              <Badge 
+                variant={
+                  amazonCredsStatus.status === 'critical' ? "destructive" :
+                  amazonCredsStatus.status === 'warning' ? "default" : "secondary"
+                }
+                className="mt-2"
+              >
+                {amazonCredsStatus.status === 'critical' ? "🚨 Critique" :
+                 amazonCredsStatus.status === 'warning' ? "⚠️ Attention" : "✅ OK"}
+              </Badge>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              {amazonCredsStatus ? "avant expiration" : "Chargement..."}
+            </p>
           </CardContent>
         </Card>
 
