@@ -191,10 +191,16 @@ export function EmailInboxTable() {
         {!emailInbox || emailInbox.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Aucun email reçu pour le moment</p>
-            <p className="text-sm mt-2">
-              Configurez un fournisseur de type "Email" pour commencer à recevoir des tarifs automatiquement
+            <p>
+              {statusFilter === 'all' 
+                ? "Aucun email reçu. Cliquez sur 'Vérifier maintenant' pour récupérer les emails." 
+                : `Aucun email avec le statut "${statusFilter === 'pending' ? 'en attente' : statusFilter === 'processing' ? 'en traitement' : statusFilter === 'completed' ? 'terminé' : statusFilter === 'failed' ? 'erreur' : 'ignoré'}"`}
             </p>
+            {statusFilter === 'all' && (
+              <p className="text-sm mt-2">
+                Configurez un fournisseur de type "Email" pour commencer à recevoir des tarifs automatiquement
+              </p>
+            )}
           </div>
         ) : (
           <Table>
