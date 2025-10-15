@@ -67,19 +67,35 @@ export default function Suppliers() {
 
   // Manual email poll handler
   const handleManualEmailPoll = async () => {
-    try {
-      toast.info("Récupération des emails en cours...");
-      
-      const { data, error } = await supabase.functions.invoke('email-imap-scheduler');
-      
-      if (error) throw error;
-      
-      const polled = data?.polled || 0;
-      toast.success(`✅ ${polled} fournisseur(s) vérifié(s)`);
-    } catch (error) {
-      console.error('Email poll error:', error);
-      toast.error("Erreur lors de la vérification des emails");
+    toast.info("🔄 Vérification des emails en cours...");
+    
+    const { data, error } = await supabase.functions.invoke('email-imap-scheduler');
+    
+    if (error) {
+      toast.error(`❌ Erreur : ${error.message}`);
+      console.error('Scheduler error:', error);
+      return;
     }
+    
+    const results = data?.results || [];
+    const successCount = results.filter((r: any) => r.status === 'success').length;
+    const errorCount = results.filter((r: any) => r.status === 'error').length;
+    const totalPolled = data?.polled || 0;
+    
+    console.log('Scheduler results:', results);
+    
+    if (successCount > 0) {
+      toast.success(`✅ ${successCount} fournisseur(s) vérifié(s), ${errorCount} erreur(s)`);
+    } else if (errorCount > 0) {
+      toast.error(`❌ ${errorCount} erreur(s) lors de la vérification`);
+    } else {
+      toast.info(`ℹ️ ${totalPolled} fournisseur(s) vérifié(s), aucun nouvel email`);
+    }
+    
+    // Rafraîchir après 2 secondes
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
   };
 
   // Mapping des types de fournisseurs

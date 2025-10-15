@@ -19,12 +19,20 @@ serve(async (req) => {
   );
 
   try {
-    // Récupérer tous les fournisseurs avec mode IMAP actif
+    // Récupérer tous les fournisseurs avec mode IMAP/POP3 actif
     const { data: suppliers, error } = await supabase
       .from('supplier_configurations')
       .select('*')
       .eq('is_active', true)
-      .or('connection_config->>email_mode.eq.imap,connection_config->>email_mode.eq.pop3');
+      .eq('supplier_type', 'email')
+      .not('connection_config->email_mode', 'is', null);
+    
+    console.log('[SCHEDULER] Suppliers found:', suppliers?.map(s => ({
+      id: s.id,
+      name: s.supplier_name,
+      email_mode: s.connection_config?.email_mode,
+      imap_host: s.connection_config?.imap_host
+    })));
 
     if (error) {
       console.error('[SCHEDULER] Error fetching suppliers:', error);
