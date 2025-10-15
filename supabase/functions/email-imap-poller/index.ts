@@ -337,6 +337,22 @@ serve(async (req) => {
 
     console.log(`[${supplierId}] Starting poll for ${supplierName}`);
 
+    // 🔥 LOG SYSTÉMATIQUE AU DÉMARRAGE
+    await supabaseAdmin.from('email_poll_logs').insert({
+      user_id: userId,
+      supplier_id: supplierId,
+      status: 'started',
+      emails_found: 0,
+      emails_processed: 0,
+      details: {
+        sinceDays: daysToSearch,
+        supplier_name: supplierName,
+        imap_host: imapHost,
+        imap_folder: imapFolder,
+        started_at: new Date().toISOString()
+      }
+    });
+
     // Detect and decrypt password if encrypted
     const isEncrypted = imapPassword && imapPassword.length > 50 && /^[A-Za-z0-9+/=]+$/.test(imapPassword);
     
@@ -763,12 +779,16 @@ serve(async (req) => {
             console.log(`  ✓ ${d.filename} (${d.type.toUpperCase()}) detected by: ${d.detected_by}`);
           });
 
-          // Fetch attachment content with fallback across multiple parts
+          // 🔥 EXTRACTION ROBUSTE avec fallback BLIND + détection par magic bytes
           let contentMatch: RegExpMatchArray | null = null;
           let successfulPart: string | null = null;
+          let detectedType: string | null = null;
+          let detectedFilename: string | null = null;
           
-          // Try parts 2, 3, 4, 5 until we find valid Base64 content
-          for (const partNumber of ['2', '3', '4', '5']) {
+          // Try extended parts list for blind extraction
+          const partsToTry = ['1.2', '2', '1.3', '2.1', '3', '4', '5'];
+          
+          for (const partNumber of partsToTry) {
             console.log(`[${supplierId}] Email ${msgId}: Trying BODY[${partNumber}]...`);
             
             await sendCommand(`a${200 + parseInt(msgId)} FETCH ${msgId} BODY[${partNumber}]`);
@@ -784,33 +804,100 @@ serve(async (req) => {
             contentMatch = bodyContent.match(/BODY\[[\d.]+\]\s+(?:\{[\d]+\}\r?\n)?([A-Za-z0-9+/=\s]+)/is);
             
             if (contentMatch && contentMatch[1].length > 100) {
-              // Valid Base64 found
               successfulPart = partNumber;
               console.log(`[${supplierId}] Email ${msgId}: ✅ Found valid content in BODY[${partNumber}]`);
+              
+              // 🔥 DÉTECTION PAR MAGIC BYTES
+              const base64Sample = contentMatch[1].replace(/[\r\n\s]/g, '');
+              try {
+                const sampleBytes = Uint8Array.from(atob(base64Sample.substring(0, 200)), c => c.charCodeAt(0));
+                
+                // ZIP/XLSX (PK\x03\x04)
+                if (sampleBytes[0] === 0x50 && sampleBytes[1] === 0x4B && sampleBytes[2] === 0x03 && sampleBytes[3] === 0x04) {
+                  detectedType = 'xlsx'; // Most likely XLSX (ZIP-based)
+                  console.log(`[${supplierId}] 🧬 Magic bytes: XLSX/ZIP detected`);
+                }
+                // XLS (D0 CF 11 E0 - OLE)
+                else if (sampleBytes[0] === 0xD0 && sampleBytes[1] === 0xCF && sampleBytes[2] === 0x11 && sampleBytes[3] === 0xE0) {
+                  detectedType = 'xls';
+                  console.log(`[${supplierId}] 🧬 Magic bytes: XLS (OLE) detected`);
+                }
+                // CSV (text with , or ;)
+                else {
+                  const textSample = new TextDecoder().decode(sampleBytes.slice(0, 100));
+                  if (textSample.includes(',') || textSample.includes(';')) {
+                    detectedType = 'csv';
+                    console.log(`[${supplierId}] 🧬 Magic bytes: CSV detected`);
+                  }
+                }
+                
+                // Generate filename if not detected
+                if (!detectedFilename && detectedType) {
+                  const timestamp = new Date().getTime();
+                  detectedFilename = `${supplierName.replace(/\s+/g, '_')}-${timestamp}.${detectedType}`;
+                  console.log(`[${supplierId}] Generated filename: ${detectedFilename}`);
+                }
+              } catch (magicError) {
+                console.warn(`[${supplierId}] Magic bytes detection failed:`, magicError);
+              }
+              
               break;
             }
           }
           
           if (!contentMatch || !successfulPart) {
-            console.log(`[${supplierId}] Email ${msgId}: ❌ Could not extract attachment content from any part (tried 2-5)`);
+            console.log(`[${supplierId}] Email ${msgId}: ❌ Could not extract attachment - SAVING RAW .eml`);
             
-            // Insert as "ignored" with debug info
-            await supabaseAdmin
-              .from('email_inbox')
-              .insert({
-                ...emailBaseData,
-                attachment_name: attachments[0]?.filename || 'unknown',
-                status: 'ignored',
-                error_message: 'Could not extract attachment content from IMAP (tried BODY[2-5])',
-                processing_logs: [
-                  ...emailBaseData.processing_logs,
-                  {
-                    timestamp: new Date().toISOString(),
-                    message: 'Failed to extract: no valid Base64 content found',
-                    bodystructure_sample: bodyStruct.substring(0, 500)
-                  }
-                ]
-              });
+            // 🔥 FALLBACK: Sauvegarder l'email complet (.eml) pour debug
+            try {
+              await sendCommand(`a${900 + parseInt(msgId)} FETCH ${msgId} BODY[]`);
+              let rawEmail = '';
+              chunk = await readResponse();
+              rawEmail += chunk;
+              
+              while (!chunk.includes(`a${900 + parseInt(msgId)} OK`)) {
+                chunk = await readResponse();
+                rawEmail += chunk;
+              }
+              
+              const rawMatch = rawEmail.match(/BODY\[\]\s+(?:\{[\d]+\}\r?\n)?([\s\S]+?)(?=\r?\na\d+ OK)/);
+              if (rawMatch && rawMatch[1]) {
+                const emlContent = new TextEncoder().encode(rawMatch[1]);
+                const emlPath = `raw/${userId}/${supplierId}/${msgId}-${new Date().getTime()}.eml`;
+                
+                const { data: emlUpload, error: emlError } = await supabaseAdmin
+                  .storage
+                  .from('email-attachments')
+                  .upload(emlPath, emlContent, {
+                    contentType: 'message/rfc822',
+                    upsert: false
+                  });
+                
+                if (!emlError && emlUpload) {
+                  console.log(`[${supplierId}] ✅ Saved raw .eml: ${emlUpload.path}`);
+                  
+                  // Insert as "ignored" with .eml link
+                  await supabaseAdmin.from('email_inbox').insert({
+                    ...emailBaseData,
+                    attachment_name: attachments[0]?.filename || 'unknown',
+                    attachment_url: emlUpload.path,
+                    status: 'ignored',
+                    error_message: 'No exploitable attachment - raw .eml saved for debug',
+                    processing_logs: [
+                      ...emailBaseData.processing_logs,
+                      {
+                        timestamp: new Date().toISOString(),
+                        message: 'Raw .eml saved',
+                        raw_eml_url: emlUpload.path,
+                        bodystructure_sample: bodyStruct.substring(0, 500)
+                      }
+                    ]
+                  });
+                }
+              }
+            } catch (emlError) {
+              console.error(`[${supplierId}] Failed to save .eml:`, emlError);
+            }
             
             continue;
           }
@@ -818,8 +905,9 @@ serve(async (req) => {
           const base64Content = contentMatch[1].replace(/[\r\n\s]/g, '');
           const attachmentBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
 
-          const fileName = attachments[0].filename;
-          const fileType = attachments[0].type;
+          // 🔥 Use detected filename/type if BODYSTRUCTURE failed
+          const fileName = attachments[0]?.filename || detectedFilename || `${supplierName}-${new Date().getTime()}.bin`;
+          const fileType = attachments[0]?.type || detectedType || 'bin';
 
           console.log(`[${supplierId}] Email ${msgId}: Decoded ${fileName}, size: ${attachmentBuffer.length} bytes`);
 
@@ -956,6 +1044,23 @@ serve(async (req) => {
 
     } catch (error) {
       conn.close();
+      
+      // 🔥 LOG ERREUR DE CONNEXION IMAP
+      console.error(`[${supplierId}] IMAP Error:`, error);
+      
+      await supabaseAdmin.from('email_poll_logs').insert({
+        user_id: userId,
+        supplier_id: supplierId,
+        status: 'connection_error',
+        emails_found: 0,
+        emails_processed: 0,
+        error_message: error instanceof Error ? error.message : String(error),
+        details: {
+          error_type: error instanceof Error ? error.name : 'Unknown',
+          stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined
+        }
+      });
+      
       throw error;
     }
 
@@ -969,6 +1074,41 @@ serve(async (req) => {
                        errorMessage.includes('password');
     
     const errorStatus = isAuthError ? 'auth_failed' : 'connection_error';
+    
+    // 🔥 LOG ERREUR GLOBALE si pas déjà loggué
+    try {
+      const body = await req.json();
+      const { supplierId } = body;
+      
+      if (supplierId) {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+        
+        const { data: supplier } = await supabaseAdmin
+          .from('supplier_configurations')
+          .select('user_id')
+          .eq('id', supplierId)
+          .single();
+        
+        if (supplier) {
+          await supabaseAdmin.from('email_poll_logs').insert({
+            user_id: supplier.user_id,
+            supplier_id: supplierId,
+            status: errorStatus,
+            emails_found: 0,
+            emails_processed: 0,
+            error_message: errorMessage,
+            details: {
+              error_type: error instanceof Error ? error.name : 'Unknown'
+            }
+          });
+        }
+      }
+    } catch (logError) {
+      console.error('[IMAP-POLLER] Failed to log error:', logError);
+    }
 
     return new Response(
       JSON.stringify({
