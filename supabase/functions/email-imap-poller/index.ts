@@ -293,7 +293,7 @@ serve(async (req) => {
   }
 
   try {
-    const { supplierId } = await req.json();
+    const { supplierId, sinceDays } = await req.json();
 
     if (!supplierId) {
       return new Response(
@@ -301,6 +301,8 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+
+    const daysToSearch = sinceDays || 3; // Default to 3 days
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -546,9 +548,6 @@ serve(async (req) => {
       }
 
       // Search for recent messages - sinceDays parameter allows extending the window
-      const { sinceDays } = await req.json();
-      const daysToSearch = sinceDays || 3; // Default to 3 days, can be overridden
-      
       const searchDateObj = new Date();
       searchDateObj.setDate(searchDateObj.getDate() - daysToSearch);
       const searchDate = searchDateObj.toLocaleDateString('en-GB', { 
