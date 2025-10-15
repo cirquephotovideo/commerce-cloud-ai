@@ -2,9 +2,11 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { Settings, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Settings, CheckCircle2 } from "lucide-react";
+import { ProviderConfigDialog } from "./ProviderConfigDialog";
+import { cn } from "@/lib/utils";
 
 export type AIProvider = 'lovable' | 'claude' | 'openai' | 'openrouter' | 'ollama_cloud' | 'ollama_local';
 
@@ -84,8 +86,10 @@ const AVAILABLE_PROVIDERS: ProviderConfig[] = [
 // Protection anti-double-appel global
 let syncInProgress = false;
 
-export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSelectorProps) {
+export const ProviderSelector = ({ selected, onSelect, onConfigure }: ProviderSelectorProps) => {
   const [providers, setProviders] = useState<ProviderConfig[]>(AVAILABLE_PROVIDERS);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configDialogProvider, setConfigDialogProvider] = useState<AIProvider | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -144,6 +148,16 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
   const loadProviderStatuses = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Force refresh health status
+    console.log('[ProviderSelector] Refreshing health status...');
+    try {
+      await supabase.functions.invoke('sync-ollama-to-providers');
+      // Wait for DB to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (err) {
+      console.error('[ProviderSelector] Failed to sync providers:', err);
+    }
 
     // Load provider health statuses
     const { data: healthData } = await supabase
@@ -208,6 +222,21 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
     }
   };
 
+  const handleConfigureClick = (providerId: AIProvider) => {
+    // Only allow configuration for providers that need API keys
+    if (providerId !== 'lovable' && providerId !== 'ollama_cloud' && providerId !== 'ollama_local') {
+      setConfigDialogProvider(providerId);
+      setConfigDialogOpen(true);
+    }
+  };
+
+  const handleConfigSuccess = async () => {
+    await loadProviderStatuses();
+    if (onConfigure && configDialogProvider) {
+      onConfigure(configDialogProvider);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -227,7 +256,7 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
               {selected === provider.id && (
                 <div className="absolute top-2 right-2">
                   <Badge variant="default" className="gap-1">
-                    <CheckCircle className="h-3 w-3" />
+                    <CheckCircle2 className="h-3 w-3" />
                     Sélectionné
                   </Badge>
                 </div>
@@ -267,7 +296,7 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
                   className="w-full"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onConfigure(provider.id);
+                    handleConfigureClick(provider.id);
                   }}
                 >
                   <Settings className="h-4 w-4 mr-2" />
@@ -278,6 +307,16 @@ export function ProviderSelector({ selected, onSelect, onConfigure }: ProviderSe
           </Card>
         ))}
       </div>
+      
+      {configDialogProvider && configDialogProvider !== 'lovable' && 
+       configDialogProvider !== 'ollama_cloud' && configDialogProvider !== 'ollama_local' && (
+        <ProviderConfigDialog
+          provider={configDialogProvider}
+          open={configDialogOpen}
+          onOpenChange={setConfigDialogOpen}
+          onSuccess={handleConfigSuccess}
+        />
+      )}
     </div>
   );
-}
+};

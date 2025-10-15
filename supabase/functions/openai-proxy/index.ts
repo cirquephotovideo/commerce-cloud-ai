@@ -7,19 +7,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to log AI requests
+async function logAIRequest(
+  supabase: any,
+  userId: string,
+  provider: string,
+  model: string,
+  success: boolean,
+  latencyMs: number,
+  errorMessage?: string
+) {
+  try {
+    await supabase.from('ai_request_logs').insert({
+      user_id: userId,
+      provider,
+      model,
+      success,
+      latency_ms: latencyMs,
+      error_message: errorMessage,
+    });
+  } catch (err) {
+    console.error('[AI-LOG] Failed to log request:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   const startTime = Date.now();
+  
+  // Declare variables in outer scope for error logging
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  let model = 'gpt-5-mini';
 
   try {
     console.log('[OPENAI-PROXY] Function started');
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -80,7 +106,9 @@ serve(async (req) => {
       });
     }
 
-    const { model = 'gpt-5-mini', messages, max_completion_tokens, testMode } = await req.json();
+    const requestBody = await req.json();
+    model = requestBody.model || 'gpt-5-mini';
+    const { messages, max_completion_tokens, testMode } = requestBody;
     
     // Mode test
     if (testMode) {
@@ -106,21 +134,21 @@ serve(async (req) => {
     // Newer models (GPT-5+) use max_completion_tokens and don't support temperature
     const isNewerModel = model.startsWith('gpt-5') || model.startsWith('o3') || model.startsWith('o4');
     
-    const requestBody: any = {
+    const apiRequestBody: any = {
       model,
       messages,
     };
 
     if (isNewerModel) {
       if (max_completion_tokens) {
-        requestBody.max_completion_tokens = max_completion_tokens;
+        apiRequestBody.max_completion_tokens = max_completion_tokens;
       }
     } else {
       // Legacy models support max_tokens and temperature
       if (max_completion_tokens) {
-        requestBody.max_tokens = max_completion_tokens;
+        apiRequestBody.max_tokens = max_completion_tokens;
       }
-      requestBody.temperature = 0.7;
+      apiRequestBody.temperature = 0.7;
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -129,7 +157,7 @@ serve(async (req) => {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(apiRequestBody),
     });
 
     if (!response.ok) {
@@ -140,6 +168,10 @@ serve(async (req) => {
 
     const data = await response.json();
     const latency = Date.now() - startTime;
+    
+    // Log successful request
+    await logAIRequest(supabase, user.id, 'openai', model, true, latency);
+    
     console.log('[OPENAI-PROXY] Success', {
       latency_ms: latency,
       usage: data.usage,
@@ -151,8 +183,20 @@ serve(async (req) => {
     });
   } catch (error) {
     const latency = Date.now() - startTime;
+    
+    // Log failed request
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await logAIRequest(supabase, user.id, 'openai', model || 'unknown', false, latency, errorMessage);
+      }
+    } catch (logError) {
+      console.error('[OPENAI-PROXY] Failed to log error:', logError);
+    }
+    
     console.error('[OPENAI-PROXY] Error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
       latency_ms: latency
     });
     return new Response(JSON.stringify({ 

@@ -6,19 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to log AI requests
+async function logAIRequest(
+  supabase: any,
+  userId: string,
+  provider: string,
+  model: string,
+  success: boolean,
+  latencyMs: number,
+  errorMessage?: string
+) {
+  try {
+    await supabase.from('ai_request_logs').insert({
+      user_id: userId,
+      provider,
+      model,
+      success,
+      latency_ms: latencyMs,
+      error_message: errorMessage,
+    });
+  } catch (err) {
+    console.error('[AI-LOG] Failed to log request:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   const startTime = Date.now();
+  
+  // Declare variables in outer scope for error logging
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  let model = 'claude-sonnet-4-20250514';
 
   try {
     console.log('[CLAUDE-PROXY] Function started');
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -79,7 +105,9 @@ serve(async (req) => {
       });
     }
 
-    const { model = 'claude-sonnet-4-20250514', messages, max_tokens = 4096, testMode } = await req.json();
+    const requestBody = await req.json();
+    model = requestBody.model || 'claude-sonnet-4-20250514';
+    const { messages, max_tokens = 4096, testMode } = requestBody;
     
     // Mode test : retourner mock
     if (testMode) {
@@ -124,6 +152,10 @@ serve(async (req) => {
 
     const data = await response.json();
     const latency = Date.now() - startTime;
+    
+    // Log successful request
+    await logAIRequest(supabase, user.id, 'claude', model, true, latency);
+    
     console.log('[CLAUDE-PROXY] Success', {
       latency_ms: latency,
       usage: data.usage
@@ -134,8 +166,20 @@ serve(async (req) => {
     });
   } catch (error) {
     const latency = Date.now() - startTime;
+    
+    // Log failed request
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await logAIRequest(supabase, user.id, 'claude', model || 'unknown', false, latency, errorMessage);
+      }
+    } catch (logError) {
+      console.error('[CLAUDE-PROXY] Failed to log error:', logError);
+    }
+    
     console.error('[CLAUDE-PROXY] Error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
       latency_ms: latency
     });
     return new Response(JSON.stringify({ 
