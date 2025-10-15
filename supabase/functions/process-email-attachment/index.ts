@@ -388,6 +388,14 @@ Réponds UNIQUEMENT en JSON valide:
         }
 
         if (matchedAnalysis && inbox.supplier_id) {
+          // Check if product_link already exists
+          const { data: existingLink } = await supabase
+            .from('product_links')
+            .select('id')
+            .eq('analysis_id', matchedAnalysis.id)
+            .eq('supplier_product_id', normalizedRow.supplier_reference)
+            .maybeSingle();
+
           // Update or create supplier_price_variants
           const { data: variant, error: upsertError } = await supabase
             .from('supplier_price_variants')
@@ -411,10 +419,34 @@ Réponds UNIQUEMENT en JSON valide:
           if (!upsertError && variant) {
             updatedVariantIds.push(variant.id);
             productsUpdated++;
+
+            // Update product_analyses with new purchase price
+            const oldPrice = (matchedAnalysis.analysis_result as any)?.purchase_price || 0;
+            const newPrice = normalizedRow.purchase_price;
+
+            await supabase
+              .from('product_analyses')
+              .update({
+                purchase_price: newPrice,
+                purchase_currency: 'EUR',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', matchedAnalysis.id);
+
+            // Log price variation if significant
+            if (oldPrice > 0 && Math.abs(newPrice - oldPrice) / oldPrice > 0.05) {
+              const variationPct = ((newPrice - oldPrice) / oldPrice * 100).toFixed(2);
+              console.log('[PROCESS-ATTACHMENT] Price updated in product_analyses:', {
+                analysis_id: matchedAnalysis.id,
+                old_price: oldPrice,
+                new_price: newPrice,
+                variation_pct: variationPct
+              });
+            }
           }
         } else if (inbox.supplier_id) {
           // Create new supplier_product
-          const { error: insertError } = await supabase
+          const { data: newSupplierProduct, error: insertError } = await supabase
             .from('supplier_products')
             .insert({
               user_id: user_id,
@@ -425,10 +457,41 @@ Réponds UNIQUEMENT en JSON valide:
               purchase_price: normalizedRow.purchase_price,
               stock_quantity: normalizedRow.stock_quantity,
               additional_data: { brand: normalizedRow.brand },
-            });
+              needs_enrichment: true,
+            })
+            .select('id')
+            .single();
 
-          if (!insertError) {
+          if (!insertError && newSupplierProduct) {
             productsCreated++;
+
+            // Try to auto-link to existing product_analyses if EAN match exists
+            if (normalizedRow.ean) {
+              const { data: eanAnalysis } = await supabase
+                .from('product_analyses')
+                .select('id')
+                .eq('user_id', user_id)
+                .eq('ean', normalizedRow.ean)
+                .maybeSingle();
+
+              if (eanAnalysis) {
+                // Create product_link
+                await supabase
+                  .from('product_links')
+                  .insert({
+                    supplier_product_id: newSupplierProduct.id,
+                    analysis_id: eanAnalysis.id,
+                    link_type: 'ean',
+                    confidence_score: 100,
+                    created_by: user_id
+                  });
+
+                console.log('[PROCESS-ATTACHMENT] Auto-linked new supplier_product to analysis via EAN:', {
+                  supplier_product_id: newSupplierProduct.id,
+                  analysis_id: eanAnalysis.id
+                });
+              }
+            }
           }
         }
       } catch (rowError) {
