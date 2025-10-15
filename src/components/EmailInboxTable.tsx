@@ -5,16 +5,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { FileText, RefreshCw, Mail, Eye } from "lucide-react";
+import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { EmailDetailModal } from "./EmailDetailModal";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedEmail, setSelectedEmail] = useState<any>(null);
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox', statusFilter],
@@ -77,32 +79,69 @@ export function EmailInboxTable() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
+  // Stats
+  const stats = {
+    total: emailInbox?.length || 0,
+    completed: emailInbox?.filter(e => e.status === 'completed').length || 0,
+    pending: emailInbox?.filter(e => e.status === 'pending').length || 0,
+    failed: emailInbox?.filter(e => e.status === 'failed').length || 0
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Emails reçus
-            </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground mt-1">
-              Dernière actualisation : {formatDistanceToNow(lastUpdate, { locale: fr, addSuffix: true })}
-              · Auto-refresh toutes les 30s
-            </CardDescription>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="h-5 w-5" />
+                Emails reçus
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                Dernière actualisation : {formatDistanceToNow(lastUpdate, { locale: fr, addSuffix: true })}
+                · Auto-refresh toutes les 30s
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManualRefresh}
+              disabled={isRefetching}
+            >
+              <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
+              Actualiser
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleManualRefresh}
-            disabled={isRefetching}
-          >
-            <RefreshCw className={cn("h-4 w-4 mr-2", isRefetching && "animate-spin")} />
-            Actualiser
-          </Button>
-        </div>
-      </CardHeader>
+        </CardHeader>
       <CardContent>
+        {/* Statistics */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground">Emails totaux</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+              <p className="text-xs text-muted-foreground">Traités</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-orange-600">{stats.pending}</div>
+              <p className="text-xs text-muted-foreground">En attente</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4">
+              <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+              <p className="text-xs text-muted-foreground">Erreurs</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Status Filters */}
         <div className="flex gap-2 mb-4 flex-wrap">
           <Button 
@@ -265,14 +304,25 @@ export function EmailInboxTable() {
                     </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleReprocess(email.id)}
-                      disabled={email.status === 'processing'}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1 justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedEmail(email)}
+                        title="Voir les détails"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleReprocess(email.id)}
+                        disabled={email.status === 'processing'}
+                        title="Retraiter"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -281,5 +331,13 @@ export function EmailInboxTable() {
         )}
       </CardContent>
     </Card>
+
+    <EmailDetailModal
+      email={selectedEmail}
+      open={!!selectedEmail}
+      onOpenChange={(open) => !open && setSelectedEmail(null)}
+      onRefresh={refetch}
+    />
+    </>
   );
 }

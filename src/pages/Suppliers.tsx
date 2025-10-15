@@ -65,6 +65,23 @@ export default function Suppliers() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
 
+  // Manual email poll handler
+  const handleManualEmailPoll = async () => {
+    try {
+      toast.info("Récupération des emails en cours...");
+      
+      const { data, error } = await supabase.functions.invoke('email-imap-scheduler');
+      
+      if (error) throw error;
+      
+      const polled = data?.polled || 0;
+      toast.success(`✅ ${polled} fournisseur(s) vérifié(s)`);
+    } catch (error) {
+      console.error('Email poll error:', error);
+      toast.error("Erreur lors de la vérification des emails");
+    }
+  };
+
   // Mapping des types de fournisseurs
   const supplierTypeLabels: Record<string, string> = {
     file: "📁 Fichier CSV/XLSX",
@@ -283,7 +300,27 @@ export default function Suppliers() {
     if (!supplierToDelete) return;
 
     try {
-      // Supprimer d'abord les produits associés
+      // 1. Get all supplier products
+      const { data: supplierProducts } = await supabase
+        .from('supplier_products')
+        .select('id')
+        .eq('supplier_id', supplierToDelete);
+      
+      if (supplierProducts && supplierProducts.length > 0) {
+        // 2. Delete product_links first
+        await supabase
+          .from('product_links')
+          .delete()
+          .in('supplier_product_id', supplierProducts.map(p => p.id));
+      }
+
+      // 3. Delete email inbox entries
+      await supabase
+        .from('email_inbox')
+        .delete()
+        .eq('supplier_id', supplierToDelete);
+
+      // 4. Delete supplier products
       const { error: productsError } = await supabase
         .from('supplier_products')
         .delete()
@@ -291,7 +328,7 @@ export default function Suppliers() {
 
       if (productsError) throw productsError;
 
-      // Supprimer le fournisseur
+      // 5. Delete supplier configuration
       const { error: supplierError } = await supabase
         .from('supplier_configurations')
         .delete()
@@ -609,6 +646,21 @@ export default function Suppliers() {
               </CardContent>
             </Card>
             
+            {/* Manual email check button */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Actions manuelles</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleManualEmailPoll} className="w-full">
+                  <Mail className="h-4 w-4 mr-2" />
+                  🔄 Vérifier les emails maintenant
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* Email inbox table */}
             <EmailInboxTable />
           </div>

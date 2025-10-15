@@ -38,7 +38,7 @@ serve(async (req) => {
 
     console.log(`[RE-ENRICH] User authenticated: ${user.id}`);
 
-    const { productId, enrichmentTypes, provider } = await req.json();
+    const { productId, enrichmentTypes, provider, model } = await req.json();
 
     if (!productId) {
       console.error('[RE-ENRICH] No product ID provided');
@@ -149,7 +149,11 @@ serve(async (req) => {
         analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',
-        status: 'pending'
+        status: 'pending',
+        metadata: {
+          provider: provider || 'lovable-ai',
+          model: model || 'google/gemini-2.5-flash'
+        }
       })
       .select()
       .single();
@@ -185,7 +189,8 @@ serve(async (req) => {
                 description: productData.description
               },
               enrichmentOptions: enrichmentsToRun,
-              provider: provider || 'lovable-ai'
+              provider: provider || 'lovable-ai',
+              model: model || 'google/gemini-2.5-flash'
             }
           }
         );

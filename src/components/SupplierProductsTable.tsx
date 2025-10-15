@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { SupplierProductDetail } from "./SupplierProductDetail";
 import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
+import { BulkSupplierProductEditor } from "./BulkSupplierProductEditor";
 
 export function SupplierProductsTable() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -18,6 +19,7 @@ export function SupplierProductsTable() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [showEnrichmentDialog, setShowEnrichmentDialog] = useState(false);
+  const [showBulkEditor, setShowBulkEditor] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -344,7 +346,14 @@ export function SupplierProductsTable() {
                 disabled={selectedProductIds.size > 500}
               >
                 <Sparkles className="h-4 w-4" />
-                Enrichir la sélection
+                Enrichir
+              </Button>
+              <Button
+                onClick={() => setShowBulkEditor(true)}
+                variant="outline"
+                className="gap-2"
+              >
+                Modifier en masse
               </Button>
               <Button
                 variant="ghost"
@@ -369,6 +378,13 @@ export function SupplierProductsTable() {
       <BatchEnrichmentDialog
         open={showEnrichmentDialog}
         onOpenChange={setShowEnrichmentDialog}
+        selectedProducts={selectedProductIds}
+        onComplete={handleEnrichmentComplete}
+      />
+
+      <BulkSupplierProductEditor
+        open={showBulkEditor}
+        onOpenChange={setShowBulkEditor}
         selectedProducts={selectedProductIds}
         onComplete={handleEnrichmentComplete}
       />

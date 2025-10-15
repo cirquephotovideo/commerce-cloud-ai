@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Loader2, Sparkles, Image, Video, FileCheck, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAIProvider } from "@/hooks/useAIProvider";
 
 interface BatchEnrichmentDialogProps {
   open: boolean;
@@ -29,6 +31,8 @@ export function BatchEnrichmentDialog({
   });
   const [priority, setPriority] = useState<"low" | "normal" | "high">("normal");
   const [isProcessing, setIsProcessing] = useState(false);
+  const { provider, updateProvider } = useAIProvider();
+  const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-flash');
 
   const selectedCount = selectedProducts.size;
   const selectedOptionsCount = Object.values(enrichmentOptions).filter(Boolean).length;
@@ -60,6 +64,10 @@ export function BatchEnrichmentDialog({
         enrichment_type: enrichmentTypes,
         priority,
         status: "pending" as const,
+        metadata: {
+          provider,
+          model: selectedModel
+        }
       }));
 
       const { error: insertError } = await supabase.from("enrichment_queue").insert(tasks);
@@ -111,6 +119,44 @@ export function BatchEnrichmentDialog({
 
         {!isProcessing ? (
           <div className="space-y-6">
+            {/* Sélecteur d'IA */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium">Provider IA</h3>
+              <div className="space-y-3">
+                <div>
+                  <Label>Provider</Label>
+                  <Select value={provider} onValueChange={updateProvider}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lovable">Lovable AI (Recommandé)</SelectItem>
+                      <SelectItem value="openai">OpenAI</SelectItem>
+                      <SelectItem value="claude">Anthropic Claude</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {provider === 'lovable' && (
+                  <div>
+                    <Label>Modèle</Label>
+                    <Select value={selectedModel} onValueChange={setSelectedModel}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro (Plus précis)</SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (Équilibré)</SelectItem>
+                        <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Rapide)</SelectItem>
+                        <SelectItem value="openai/gpt-5">GPT-5 (Premium)</SelectItem>
+                        <SelectItem value="openai/gpt-5-mini">GPT-5 Mini (Économique)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Options d'enrichissement */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium">Options d'enrichissement</h3>
