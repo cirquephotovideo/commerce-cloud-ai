@@ -127,6 +127,141 @@ function hmacMd5(key: string, message: string): string {
   return Array.from(outerHash).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Helper to convert MD5 result to hex string
+function md5Hex(data: string): string {
+  const encoder = new TextEncoder();
+  const bytes = md5(encoder.encode(data));
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// DIGEST-MD5 authentication
+async function authenticateDigestMd5(
+  conn: Deno.Conn,
+  encoder: TextEncoder,
+  decoder: TextDecoder,
+  username: string,
+  password: string,
+  host: string
+): Promise<{ success: boolean; response: string; details: any }> {
+  
+  console.log(`[DIGEST-MD5] Starting authentication with username: ${username}`);
+  
+  await conn.write(encoder.encode('A001 AUTHENTICATE DIGEST-MD5\r\n'));
+  
+  // Read challenge
+  const buffer = new Uint8Array(4096);
+  const n = await conn.read(buffer);
+  if (!n) throw new Error('Connection closed');
+  const challengeResponse = decoder.decode(buffer.subarray(0, n));
+  
+  const challengeMatch = challengeResponse.match(/\+ (.+)/);
+  if (!challengeMatch) {
+    return { success: false, response: challengeResponse, details: { error: 'No challenge received' } };
+  }
+  
+  const challengeB64 = challengeMatch[1].trim();
+  const challengeStr = atob(challengeB64);
+  console.log(`[DIGEST-MD5] Challenge decoded: ${challengeStr.substring(0, 100)}...`);
+  
+  // Parse challenge into key-value pairs
+  const challengeParams: Record<string, string> = {};
+  const paramRegex = /(\w+)=(?:"([^"]+)"|([^,]+))/g;
+  let match;
+  while ((match = paramRegex.exec(challengeStr)) !== null) {
+    challengeParams[match[1]] = match[2] || match[3];
+  }
+  
+  const realm = challengeParams.realm || host;
+  const nonce = challengeParams.nonce;
+  const qop = challengeParams.qop || 'auth';
+  const charset = challengeParams.charset || 'utf-8';
+  const algorithm = challengeParams.algorithm || 'md5';
+  
+  if (!nonce) {
+    return { success: false, response: challengeResponse, details: { error: 'No nonce in challenge' } };
+  }
+  
+  console.log(`[DIGEST-MD5] Parsed: realm=${realm}, nonce=${nonce.substring(0, 20)}..., qop=${qop}`);
+  
+  // Generate cnonce (random 16-byte hex)
+  const cnonceBytes = new Uint8Array(16);
+  crypto.getRandomValues(cnonceBytes);
+  const cnonce = Array.from(cnonceBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  const nc = '00000001';
+  const digestUri = `imap/${host}`;
+  
+  // Calculate HA1 and HA2
+  let HA1 = md5Hex(`${username}:${realm}:${password}`);
+  if (algorithm === 'md5-sess') {
+    HA1 = md5Hex(HA1 + `:${nonce}:${cnonce}`);
+  }
+  
+  const HA2 = md5Hex(`AUTHENTICATE:${digestUri}`);
+  const response = md5Hex(`${HA1}:${nonce}:${nc}:${cnonce}:${qop}:${HA2}`);
+  
+  console.log(`[DIGEST-MD5] Calculated response: ${response.substring(0, 20)}...`);
+  
+  // Build response string
+  const responseParts = [
+    `username="${username}"`,
+    `realm="${realm}"`,
+    `nonce="${nonce}"`,
+    `cnonce="${cnonce}"`,
+    `nc=${nc}`,
+    `qop=${qop}`,
+    `digest-uri="${digestUri}"`,
+    `response=${response}`,
+  ];
+  
+  if (charset) {
+    responseParts.push(`charset=${charset}`);
+  }
+  
+  const responseStr = responseParts.join(',');
+  const responseB64 = btoa(responseStr);
+  
+  await conn.write(encoder.encode(`${responseB64}\r\n`));
+  
+  // Read auth response
+  const n2 = await conn.read(buffer);
+  if (!n2) throw new Error('Connection closed');
+  const authResponse = decoder.decode(buffer.subarray(0, n2));
+  
+  console.log(`[DIGEST-MD5] Server response: ${authResponse.substring(0, 100)}...`);
+  
+  // Server may send rspauth verification
+  if (authResponse.includes('+ ')) {
+    console.log(`[DIGEST-MD5] Sending final confirmation`);
+    await conn.write(encoder.encode('\r\n'));
+    const n3 = await conn.read(buffer);
+    if (!n3) throw new Error('Connection closed');
+    const finalResponse = decoder.decode(buffer.subarray(0, n3));
+    
+    return {
+      success: finalResponse.includes('A001 OK'),
+      response: finalResponse,
+      details: {
+        realm,
+        nonce: nonce.substring(0, 20) + '...',
+        cnonce: cnonce.substring(0, 20) + '...',
+        response_preview: response.substring(0, 20) + '...'
+      }
+    };
+  }
+  
+  return {
+    success: authResponse.includes('A001 OK'),
+    response: authResponse,
+    details: {
+      realm,
+      nonce: nonce.substring(0, 20) + '...',
+      cnonce: cnonce.substring(0, 20) + '...',
+      response_preview: response.substring(0, 20) + '...'
+    }
+  };
+}
+
 function parseCapabilities(greeting: string): string[] {
   const capMatch = greeting.match(/\* CAPABILITY (.+)/i);
   if (!capMatch) return [];
@@ -154,6 +289,8 @@ async function testIMAPConnection(config: {
   folders: string[];
   messageCount: number;
   selectedFolder: string;
+  capabilities: string[];
+  auth_attempts: any[];
 }> {
   // Validate hostname before attempting connection
   const hostnameRegex = /^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)$/;
@@ -242,15 +379,24 @@ async function testIMAPConnection(config: {
     let authMethod = 'LOGIN';
     let authenticated = false;
     let usedUsername = '';
+    let authAttempts: any[] = [];
+    
+    const cramAvailable = allCapabilities.includes('AUTH=CRAM-MD5');
+    const digestAvailable = allCapabilities.includes('AUTH=DIGEST-MD5');
+    const loginDisabled = allCapabilities.includes('LOGINDISABLED');
 
-    // Try CRAM-MD5 first if available with fallback (username > email > local-part)
-    if (allCapabilities.includes('AUTH=CRAM-MD5')) {
-      const authVariants = [
-        config.username || null,        // Explicit username if provided
-        config.email,                    // Full email
-        config.email.split('@')[0]       // Local part before @
-      ].filter(Boolean) as string[];
-      
+    // Build username variants
+    const authVariants = [
+      config.username || null,        // Explicit username if provided
+      config.email,                    // Full email
+      config.email.split('@')[0]       // Local part before @
+    ].filter(Boolean) as string[];
+    
+    console.log(`[IMAP-TEST] Auth methods: CRAM=${cramAvailable}, DIGEST=${digestAvailable}, LOGIN=${!loginDisabled}`);
+    console.log(`[IMAP-TEST] Testing ${authVariants.length} username variants`);
+
+    // Try CRAM-MD5 first if available
+    if (cramAvailable) {
       console.log(`[IMAP-TEST] Attempting CRAM-MD5 with ${authVariants.length} username variants`);
       
       for (const variant of authVariants) {
@@ -267,6 +413,14 @@ async function testIMAPConnection(config: {
 
             await conn.write(encoder.encode(`${authBase64}\r\n`));
             const authResponse = await readResponse();
+            
+            authAttempts.push({
+              method: 'CRAM-MD5',
+              username: variant,
+              challenge,
+              hmac_preview: hmac.substring(0, 20),
+              response: authResponse.substring(0, 100)
+            });
 
             if (authResponse.includes('A001 OK')) {
               authMethod = 'CRAM-MD5';
@@ -280,15 +434,63 @@ async function testIMAPConnection(config: {
           }
         } catch (cramError) {
           console.warn(`[IMAP-TEST] CRAM-MD5 error with ${variant}:`, cramError);
+          authAttempts.push({
+            method: 'CRAM-MD5',
+            username: variant,
+            error: cramError instanceof Error ? cramError.message : String(cramError)
+          });
+        }
+      }
+    }
+    
+    // Try DIGEST-MD5 if CRAM-MD5 failed and DIGEST is available
+    if (!authenticated && digestAvailable) {
+      console.log(`[IMAP-TEST] Attempting DIGEST-MD5 with ${authVariants.length} username variants`);
+      
+      for (const variant of authVariants) {
+        try {
+          console.log(`[IMAP-TEST] Testing DIGEST-MD5 with: ${variant}`);
+          const digestResult = await authenticateDigestMd5(
+            conn,
+            encoder,
+            decoder,
+            variant,
+            config.password,
+            config.host
+          );
+          
+          authAttempts.push({
+            method: 'DIGEST-MD5',
+            username: variant,
+            ...digestResult.details,
+            response: digestResult.response.substring(0, 100)
+          });
+          
+          if (digestResult.success) {
+            authMethod = 'DIGEST-MD5';
+            authenticated = true;
+            usedUsername = variant;
+            console.log(`[IMAP-TEST] ✅ DIGEST-MD5 successful with username: ${variant}`);
+            break;
+          } else {
+            console.warn(`[IMAP-TEST] DIGEST-MD5 failed with username: ${variant}`);
+          }
+        } catch (digestError) {
+          console.warn(`[IMAP-TEST] DIGEST-MD5 error with ${variant}:`, digestError);
+          authAttempts.push({
+            method: 'DIGEST-MD5',
+            username: variant,
+            error: digestError instanceof Error ? digestError.message : String(digestError)
+          });
         }
       }
     }
 
-    // Fallback to LOGIN only if LOGINDISABLED is not present
+    // Fallback to LOGIN only if not authenticated and LOGIN is not disabled
     if (!authenticated) {
-      if (allCapabilities.includes('LOGINDISABLED')) {
+      if (loginDisabled) {
         const supportedMethods = allCapabilities.filter(c => c.startsWith('AUTH=')).join(', ');
-        throw new Error(`LOGIN authentication is disabled. Server supports: ${supportedMethods}. CRAM-MD5 failed with all username variants.`);
+        throw new Error(`LOGIN authentication is disabled. Server supports: ${supportedMethods}. All auth methods failed (attempts: ${authAttempts.length}).`);
       }
       
       console.log('[IMAP-TEST] Using LOGIN authentication...');
@@ -338,6 +540,8 @@ async function testIMAPConnection(config: {
       folders,
       messageCount,
       selectedFolder,
+      capabilities: allCapabilities,
+      auth_attempts: authAttempts
     };
 
   } catch (error: any) {

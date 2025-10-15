@@ -71,17 +71,32 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
         if (data.warnings?.length > 0) {
           successMsg += `\n\n⚠️ ${data.warnings.join('\n')}`;
         }
+        if (data.authMethod === 'DIGEST-MD5') {
+          successMsg += `\n\n💡 Ce serveur utilise DIGEST-MD5. Authentification réussie avec le username: ${data.username}`;
+        }
         toast.success(successMsg, { duration: 6000 });
       } else {
         // Afficher l'erreur avec hints
         let errorMsg = data.error || "Échec de connexion";
+        
+        // Si DIGEST-MD5 est disponible mais a échoué, suggérer l'usage de imap_username
+        if (data.capabilities?.includes('AUTH=DIGEST-MD5') && 
+            data.capabilities?.includes('LOGINDISABLED') &&
+            data.error?.includes('All auth methods failed')) {
+          errorMsg += '\n\n💡 Ce serveur exige DIGEST-MD5 ou un identifiant IMAP spécifique.';
+          errorMsg += '\nEssayez de renseigner le champ "Nom d\'utilisateur IMAP" (si différent de l\'email).';
+        }
+        
         if (data.hints?.length > 0) {
           errorMsg += '\n\n💡 Conseils:\n' + data.hints.map((h: string) => `• ${h}`).join('\n');
         }
         if (data.statusCode) {
           errorMsg += `\n\n🔍 Détails: HTTP ${data.statusCode}`;
         }
-        toast.error(errorMsg, { duration: 8000 });
+        if (data.auth_attempts?.length > 0) {
+          errorMsg += `\n\n🔍 Tentatives d'auth: ${data.auth_attempts.length}`;
+        }
+        toast.error(errorMsg, { duration: 10000 });
       }
     } catch (error: any) {
       toast.dismiss(loadingToast);

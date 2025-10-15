@@ -1,9 +1,9 @@
-// IMAP Email Poller - Version 2.1.1 (Native MD5/HMAC-MD5 Implementation - DEPLOYMENT FORCED)
-// Last updated: 2025-10-15 16:16:00 UTC
+// IMAP Email Poller - Version 2.2.0 (DIGEST-MD5 Support Added)
+// Last updated: 2025-10-15 16:30:00 UTC
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-console.log('[IMAP-POLLER] Starting Version 2.1.1 with native MD5/HMAC-MD5');
+console.log('[IMAP-POLLER] Starting Version 2.2.0 with CRAM-MD5 and DIGEST-MD5 support');
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,6 +138,129 @@ function hmacMd5(key: string, message: string): string {
   return Array.from(outerHash).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Helper to convert MD5 result to hex string
+function md5Hex(data: string): string {
+  const encoder = new TextEncoder();
+  const bytes = md5(encoder.encode(data));
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// DIGEST-MD5 authentication
+async function authenticateDigestMd5(
+  sendCommand: (cmd: string) => Promise<void>,
+  readResponse: () => Promise<string>,
+  username: string,
+  password: string,
+  host: string
+): Promise<{ success: boolean; response: string; details: any }> {
+  
+  console.log(`[DIGEST-MD5] Starting authentication with username: ${username}`);
+  
+  await sendCommand('a002 AUTHENTICATE DIGEST-MD5');
+  const challengeResponse = await readResponse();
+  
+  const challengeMatch = challengeResponse.match(/\+ (.+)/);
+  if (!challengeMatch) {
+    return { success: false, response: challengeResponse, details: { error: 'No challenge received' } };
+  }
+  
+  const challengeB64 = challengeMatch[1].trim();
+  const challengeStr = atob(challengeB64);
+  console.log(`[DIGEST-MD5] Challenge decoded: ${challengeStr.substring(0, 100)}...`);
+  
+  // Parse challenge into key-value pairs
+  const challengeParams: Record<string, string> = {};
+  const paramRegex = /(\w+)=(?:"([^"]+)"|([^,]+))/g;
+  let match;
+  while ((match = paramRegex.exec(challengeStr)) !== null) {
+    challengeParams[match[1]] = match[2] || match[3];
+  }
+  
+  const realm = challengeParams.realm || host;
+  const nonce = challengeParams.nonce;
+  const qop = challengeParams.qop || 'auth';
+  const charset = challengeParams.charset || 'utf-8';
+  const algorithm = challengeParams.algorithm || 'md5';
+  
+  if (!nonce) {
+    return { success: false, response: challengeResponse, details: { error: 'No nonce in challenge' } };
+  }
+  
+  console.log(`[DIGEST-MD5] Parsed: realm=${realm}, nonce=${nonce.substring(0, 20)}..., qop=${qop}`);
+  
+  // Generate cnonce (random 16-byte hex)
+  const cnonceBytes = new Uint8Array(16);
+  crypto.getRandomValues(cnonceBytes);
+  const cnonce = Array.from(cnonceBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  const nc = '00000001';
+  const digestUri = `imap/${host}`;
+  
+  // Calculate HA1 and HA2
+  let HA1 = md5Hex(`${username}:${realm}:${password}`);
+  if (algorithm === 'md5-sess') {
+    HA1 = md5Hex(HA1 + `:${nonce}:${cnonce}`);
+  }
+  
+  const HA2 = md5Hex(`AUTHENTICATE:${digestUri}`);
+  const response = md5Hex(`${HA1}:${nonce}:${nc}:${cnonce}:${qop}:${HA2}`);
+  
+  console.log(`[DIGEST-MD5] Calculated response: ${response.substring(0, 20)}...`);
+  
+  // Build response string
+  const responseParts = [
+    `username="${username}"`,
+    `realm="${realm}"`,
+    `nonce="${nonce}"`,
+    `cnonce="${cnonce}"`,
+    `nc=${nc}`,
+    `qop=${qop}`,
+    `digest-uri="${digestUri}"`,
+    `response=${response}`,
+  ];
+  
+  if (charset) {
+    responseParts.push(`charset=${charset}`);
+  }
+  
+  const responseStr = responseParts.join(',');
+  const responseB64 = btoa(responseStr);
+  
+  await sendCommand(responseB64);
+  const authResponse = await readResponse();
+  
+  console.log(`[DIGEST-MD5] Server response: ${authResponse.substring(0, 100)}...`);
+  
+  // Server may send rspauth verification
+  if (authResponse.includes('+ ')) {
+    console.log(`[DIGEST-MD5] Sending final confirmation`);
+    await sendCommand('');
+    const finalResponse = await readResponse();
+    
+    return {
+      success: finalResponse.includes('a002 OK'),
+      response: finalResponse,
+      details: {
+        realm,
+        nonce: nonce.substring(0, 20) + '...',
+        cnonce: cnonce.substring(0, 20) + '...',
+        response_preview: response.substring(0, 20) + '...'
+      }
+    };
+  }
+  
+  return {
+    success: authResponse.includes('a002 OK'),
+    response: authResponse,
+    details: {
+      realm,
+      nonce: nonce.substring(0, 20) + '...',
+      cnonce: cnonce.substring(0, 20) + '...',
+      response_preview: response.substring(0, 20) + '...'
+    }
+  };
+}
+
 // Utility to connect to IMAP
 async function connectIMAP(host: string, port: number, useTLS: boolean) {
   const conn = useTLS 
@@ -247,22 +370,28 @@ serve(async (req) => {
       await sendCommand('a001 CAPABILITY');
       const capabilityResponse = await readResponse();
 
-      // Authenticate with CRAM-MD5 with fallback username variants
+      // Authentication with CRAM-MD5 and DIGEST-MD5 support
       let authResponse = '';
       let usedUsername = '';
+      let authMethod = '';
       let authAttempts: any[] = [];
       const loginDisabled = capabilityResponse.includes('LOGINDISABLED');
+      const cramAvailable = capabilityResponse.includes('AUTH=CRAM-MD5');
+      const digestAvailable = capabilityResponse.includes('AUTH=DIGEST-MD5');
       
-      if (capabilityResponse.includes('AUTH=CRAM-MD5')) {
-        // Try 3 variants: username > email > local-part
-        const authVariants = [
-          imapUsername || null,          // Explicit username if provided
-          imapEmail,                     // Full email
-          imapEmail.split('@')[0]        // Local part before @
-        ].filter(Boolean) as string[];
-        
+      // Build username variants
+      const authVariants = [
+        imapUsername || null,          // Explicit username if provided
+        imapEmail,                     // Full email
+        imapEmail.split('@')[0]        // Local part before @
+      ].filter(Boolean) as string[];
+      
+      console.log(`[${supplierId}] Auth methods available: CRAM=${cramAvailable}, DIGEST=${digestAvailable}, LOGIN=${!loginDisabled}`);
+      console.log(`[${supplierId}] Username variants to test:`, authVariants);
+      
+      // Try CRAM-MD5 first if available
+      if (cramAvailable) {
         console.log(`[${supplierId}] Attempting CRAM-MD5 with ${authVariants.length} username variants`);
-        console.log(`[${supplierId}] Variants to test:`, authVariants);
         
         for (const variant of authVariants) {
           try {
@@ -286,6 +415,7 @@ serve(async (req) => {
               authResponse = await readResponse();
               
               authAttempts.push({
+                method: 'CRAM-MD5',
                 username: variant,
                 challenge: challenge,
                 hmac_preview: hmacHex.substring(0, 20),
@@ -294,49 +424,87 @@ serve(async (req) => {
               
               if (authResponse.includes('a002 OK')) {
                 usedUsername = variant;
+                authMethod = 'CRAM-MD5';
                 console.log(`[${supplierId}] ✅ CRAM-MD5 succeeded with username: ${variant}`);
                 break;
               } else {
                 console.log(`[${supplierId}] ❌ CRAM-MD5 failed with username: ${variant}`);
-                console.log(`[${supplierId}] Server response: ${authResponse.substring(0, 200)}`);
               }
             }
           } catch (cramError) {
             console.warn(`[${supplierId}] CRAM-MD5 error with ${variant}:`, cramError);
             authAttempts.push({
+              method: 'CRAM-MD5',
               username: variant,
               error: cramError instanceof Error ? cramError.message : String(cramError)
             });
           }
         }
+      }
+      
+      // Try DIGEST-MD5 if CRAM-MD5 failed and DIGEST is available
+      if (!authResponse.includes('OK') && digestAvailable) {
+        console.log(`[${supplierId}] Attempting DIGEST-MD5 with ${authVariants.length} username variants`);
         
-        if (!authResponse.includes('a002 OK')) {
-          console.log(`[${supplierId}] All CRAM-MD5 attempts failed`);
-          
-          if (loginDisabled) {
-            // Do NOT try LOGIN if server has LOGINDISABLED
-            console.log(`[${supplierId}] LOGIN is disabled on server, cannot fallback`);
+        for (const variant of authVariants) {
+          try {
+            console.log(`[${supplierId}] Testing DIGEST-MD5 with: ${variant}`);
+            const digestResult = await authenticateDigestMd5(
+              sendCommand,
+              readResponse,
+              variant,
+              imapPassword,
+              imapHost
+            );
             
-            // Log detailed auth failure
-            await supabaseAdmin.from('email_poll_logs').insert({
-              user_id: userId,
-              supplier_id: supplierId,
-              status: 'auth_failed',
-              emails_found: 0,
-              emails_processed: 0,
-              details: { 
-                capabilities: capabilityResponse,
-                auth_attempts: authAttempts,
-                error: 'CRAM-MD5 authentication failed with all username variants. LOGIN is disabled by server.'
-              }
+            authAttempts.push({
+              method: 'DIGEST-MD5',
+              username: variant,
+              ...digestResult.details,
+              response: digestResult.response.substring(0, 100)
             });
             
-            throw new Error('Authentication failed: CRAM-MD5 failed with all variants and LOGIN is disabled');
+            if (digestResult.success) {
+              authResponse = digestResult.response;
+              usedUsername = variant;
+              authMethod = 'DIGEST-MD5';
+              console.log(`[${supplierId}] ✅ DIGEST-MD5 succeeded with username: ${variant}`);
+              break;
+            } else {
+              console.log(`[${supplierId}] ❌ DIGEST-MD5 failed with username: ${variant}`);
+            }
+          } catch (digestError) {
+            console.warn(`[${supplierId}] DIGEST-MD5 error with ${variant}:`, digestError);
+            authAttempts.push({
+              method: 'DIGEST-MD5',
+              username: variant,
+              error: digestError instanceof Error ? digestError.message : String(digestError)
+            });
           }
         }
       }
+      
+      // If all methods failed and LOGIN is disabled, log and throw
+      if (!authResponse.includes('OK') && loginDisabled) {
+        console.log(`[${supplierId}] All auth methods failed and LOGIN is disabled`);
+        
+        await supabaseAdmin.from('email_poll_logs').insert({
+          user_id: userId,
+          supplier_id: supplierId,
+          status: 'auth_failed',
+          emails_found: 0,
+          emails_processed: 0,
+          details: { 
+            capabilities: capabilityResponse,
+            auth_attempts: authAttempts,
+            error: `Authentication failed with all methods (CRAM-MD5: ${cramAvailable}, DIGEST-MD5: ${digestAvailable}). LOGIN is disabled by server.`
+          }
+        });
+        
+        throw new Error('Authentication failed: All methods exhausted and LOGIN is disabled');
+      }
 
-      // Fallback to LOGIN ONLY if CRAM-MD5 not available or failed AND LOGIN is not disabled
+      // Fallback to LOGIN ONLY if all other methods failed AND LOGIN is not disabled
       if (!authResponse.includes('OK') && !loginDisabled) {
         console.log(`[${supplierId}] Attempting LOGIN authentication`);
         await sendCommand(`a003 LOGIN ${imapEmail} ${imapPassword}`);
@@ -367,7 +535,7 @@ serve(async (req) => {
         throw new Error('Authentication failed: All methods exhausted');
       }
 
-      console.log(`[${supplierId}] ✅ Authentication successful (user: ${usedUsername})`);
+      console.log(`[${supplierId}] ✅ Authentication successful via ${authMethod || 'LOGIN'} (user: ${usedUsername})`);
 
       // Select mailbox
       await sendCommand(`a004 SELECT "${imapFolder}"`);
