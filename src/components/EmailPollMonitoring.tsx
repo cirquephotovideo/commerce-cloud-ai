@@ -1,17 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock, TrendingUp, Eye, AlertCircle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock, TrendingUp, Eye, AlertCircle, Activity, Mail } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function EmailPollMonitoring() {
   const [selectedLog, setSelectedLog] = useState<any>(null);
+  const [liveProgress, setLiveProgress] = useState<{
+    step: string;
+    progress: number;
+    emailsScanned: number;
+    totalEmails: number;
+    elapsedTime: number;
+    errors: string[];
+  } | null>(null);
   
   const { data: pollLogs, refetch } = useQuery({
     queryKey: ['email-poll-logs'],
@@ -63,6 +72,72 @@ export function EmailPollMonitoring() {
     refetchInterval: 60000,
   });
 
+  // Realtime progress monitoring via imap_session_logs
+  useEffect(() => {
+    const channel = supabase
+      .channel('imap-progress')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'imap_session_logs',
+        },
+        (payload) => {
+          const session = payload.new;
+          const commands = session.commands_sent || [];
+          const lastCommand = commands[commands.length - 1] || '';
+          
+          let step = 'Initialisation';
+          let progress = 10;
+          
+          if (lastCommand.includes('AUTHENTICATE') || lastCommand.includes('LOGIN')) {
+            step = 'Authentification en cours';
+            progress = 30;
+          } else if (lastCommand.includes('SELECT')) {
+            step = 'Sélection de la boîte';
+            progress = 50;
+          } else if (lastCommand.includes('SEARCH')) {
+            step = 'Recherche d\'emails';
+            progress = 60;
+          } else if (lastCommand.includes('FETCH')) {
+            step = 'Téléchargement des pièces jointes';
+            const fetchCount = commands.filter(c => c.includes('FETCH')).length;
+            progress = 70 + Math.min(fetchCount * 2, 20);
+          } else if (lastCommand.includes('STORE')) {
+            step = 'Marquage des emails comme lus';
+            progress = 95;
+          } else if (lastCommand.includes('LOGOUT')) {
+            step = 'Terminé';
+            progress = 100;
+          }
+
+          const sessionStart = new Date(session.session_start).getTime();
+          const sessionEnd = session.session_end ? new Date(session.session_end).getTime() : Date.now();
+          const elapsedMs = sessionEnd - sessionStart;
+
+          setLiveProgress({
+            step,
+            progress,
+            emailsScanned: commands.filter(c => c.includes('FETCH') && c.includes('BODY')).length,
+            totalEmails: 0,
+            elapsedTime: Math.floor(elapsedMs / 1000),
+            errors: session.error_message ? [session.error_message] : [],
+          });
+
+          // Clear progress after completion
+          if (progress === 100) {
+            setTimeout(() => setLiveProgress(null), 5000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const handleManualPoll = async () => {
     const loadingToast = toast.loading("Déclenchement de la vérification...");
     
@@ -102,11 +177,52 @@ export function EmailPollMonitoring() {
   return (
     <>
       <div className="space-y-4">
+        {/* Live Progress Card */}
+        {liveProgress && (
+          <Card className="border-primary bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 animate-pulse text-primary" />
+                Polling IMAP en cours - {liveProgress.step}
+              </CardTitle>
+              <CardDescription>
+                {liveProgress.emailsScanned} email(s) scanné(s) • {liveProgress.elapsedTime}s écoulé
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-medium">
+                  <span>Progression</span>
+                  <span>{liveProgress.progress}%</span>
+                </div>
+                <Progress value={liveProgress.progress} className="h-2" />
+              </div>
+              
+              {liveProgress.errors.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Erreurs détectées :
+                  </p>
+                  {liveProgress.errors.map((error, i) => (
+                    <div key={i} className="text-sm bg-destructive/10 text-destructive p-3 rounded-md">
+                      {error}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Emails traités (7j)</CardTitle>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                Emails traités (7j)
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.totalEmails || 0}</div>

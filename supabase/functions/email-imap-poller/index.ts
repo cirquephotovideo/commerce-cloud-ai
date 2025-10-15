@@ -113,12 +113,14 @@ serve(async (req) => {
         throw new Error('Configuration IMAP incomplète');
       }
 
-      // Connexion IMAP réelle
+      // Connexion IMAP réelle avec logs détaillés
+      console.log('[IMAP] 1/7 - Connexion TLS au serveur IMAP...');
       console.log(`[IMAP-POLLER] Connecting to ${config.imap_host}:${config.imap_port || 993}`);
       
       const sessionId = crypto.randomUUID();
       const sessionCommands: string[] = [];
       const sessionResponses: string[] = [];
+      const sessionStart = new Date();
       
       let conn: Deno.TlsConn | Deno.Conn;
       
@@ -134,6 +136,7 @@ serve(async (req) => {
           port: config.imap_port || 143,
         });
       }
+      console.log('[IMAP] ✓ Connexion établie');
 
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
@@ -158,18 +161,21 @@ serve(async (req) => {
       }
 
       // Lire le greeting
+      console.log('[IMAP] 2/7 - Lecture du greeting serveur...');
       const greeting = await readResponse();
       console.log(`[IMAP-POLLER] Connected: ${greeting.substring(0, 50)}`);
       
       if (!greeting.includes('OK')) {
         throw new Error('Serveur IMAP n\'a pas renvoyé OK');
       }
+      console.log('[IMAP] ✓ Greeting reçu');
 
       // Obtenir les capabilities
       const capResp = await sendCommand('CAPABILITY', 'A00');
       const capabilities = capResp.toUpperCase();
       
       // Authentification (CRAM-MD5 si disponible, sinon LOGIN)
+      console.log('[IMAP] 3/7 - Authentification CRAM-MD5/LOGIN...');
       let authSuccess = false;
       
       if (capabilities.includes('AUTH=CRAM-MD5')) {
@@ -202,6 +208,7 @@ serve(async (req) => {
             if (authResp.includes('A01 OK')) {
               authSuccess = true;
               console.log('[IMAP-POLLER] CRAM-MD5 auth successful');
+              console.log('[IMAP] ✓ Authentification réussie (CRAM-MD5)');
             }
           }
         } catch (e) {
@@ -215,17 +222,21 @@ serve(async (req) => {
           throw new Error('Authentification échouée');
         }
         console.log('[IMAP-POLLER] LOGIN auth successful');
+        console.log('[IMAP] ✓ Authentification réussie (LOGIN)');
       }
 
       // Sélectionner le dossier
+      console.log('[IMAP] 4/7 - Sélection de la boîte INBOX...');
       const folder = config.imap_folder || 'INBOX';
       const selectResp = await sendCommand(`SELECT ${folder}`, 'A03');
       
       if (!selectResp.includes('A03 OK')) {
         throw new Error(`Impossible de sélectionner ${folder}`);
       }
+      console.log(`[IMAP] ✓ Boîte ${folder} sélectionnée`);
 
       // Chercher les emails non lus
+      console.log('[IMAP] 5/7 - Recherche des emails non lus...');
       const searchResp = await sendCommand('SEARCH UNSEEN', 'A04');
       const unreadIds: string[] = [];
       
@@ -236,9 +247,15 @@ serve(async (req) => {
       
       emailsFound = unreadIds.length;
       console.log(`[IMAP-POLLER] Found ${emailsFound} unread emails`);
+      console.log(`[IMAP] ✓ ${emailsFound} email(s) non lu(s) trouvé(s)`);
 
       // Traiter chaque email
+      if (emailsFound > 0) {
+        console.log('[IMAP] 6/7 - Téléchargement des pièces jointes...');
+      }
+      
       for (const id of unreadIds) {
+        console.log(`[IMAP] Traitement de l'email ${id}/${unreadIds.length}...`);
         try {
           // Récupérer les headers
           const headerResp = await sendCommand(`FETCH ${id} (BODY[HEADER.FIELDS (FROM SUBJECT DATE)])`, `A05${id}`);
@@ -302,10 +319,12 @@ serve(async (req) => {
           }
 
           // Marquer comme lu
+          console.log('[IMAP] 7/7 - Marquage comme lu...');
           await sendCommand(`STORE ${id} +FLAGS (\\Seen)`, `A08${id}`);
           
           emailsProcessed++;
           console.log(`[IMAP-POLLER] Email ${id} traité avec succès`);
+          console.log(`[IMAP] ✓ Email ${id} traité (${emailsProcessed}/${emailsFound})`);
         } catch (emailError) {
           console.error(`[IMAP-POLLER] Error processing email ${id}:`, emailError);
         }
@@ -314,13 +333,17 @@ serve(async (req) => {
       // Déconnexion
       await sendCommand('LOGOUT', 'A99');
       conn.close();
+      
+      console.log('[IMAP] ✓ Déconnexion réussie');
+      console.log(`[IMAP] Polling terminé: ${emailsProcessed}/${emailsFound} emails traités`);
 
       // Sauvegarder les logs de session
+      const sessionEnd = new Date();
       await supabase.from('imap_session_logs').insert({
         supplier_id: supplierId,
         user_id: supplier.user_id,
-        session_start: new Date().toISOString(),
-        session_end: new Date().toISOString(),
+        session_start: sessionStart.toISOString(),
+        session_end: sessionEnd.toISOString(),
         commands_sent: sessionCommands,
         server_responses: sessionResponses,
         status: 'success'
