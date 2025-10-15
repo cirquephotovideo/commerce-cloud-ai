@@ -7,11 +7,16 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Loader2, Eye, EyeOff, TestTube } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 
 interface APIKeyStatus {
   service: string;
   isValid: boolean | null;
   error?: string;
+  statusCode?: number;
+  rawMessage?: string;
+  hints?: string[];
+  tested?: Array<{ source: string; valid: boolean; statusCode?: number; error?: string }>;
   lastChecked?: Date;
 }
 
@@ -26,6 +31,7 @@ export const GlobalAPIKeysManager = () => {
   const [stripeKey, setStripeKey] = useState("");
   const [resendKey, setResendKey] = useState("");
   const [serperKey, setSerperKey] = useState("");
+  const [useSerperSaved, setUseSerperSaved] = useState(false);
   
   const [keyStatuses, setKeyStatuses] = useState<Record<string, APIKeyStatus>>({});
 
@@ -65,17 +71,37 @@ export const GlobalAPIKeysManager = () => {
     }
   };
 
-  const testAPIKey = async (service: string, key?: string, cx?: string, url?: string) => {
+  const testAPIKey = async (service: string, key?: string, cx?: string, url?: string, useSaved?: boolean) => {
     try {
       setTesting(service);
+      
+      // Trim values before testing
+      const trimmedKey = key?.trim();
+      const trimmedCx = cx?.trim();
+      const trimmedUrl = url?.trim();
+      
+      // Client-side validation for Serper
+      if (service === 'Serper' && trimmedKey) {
+        const serperKeyPattern = /^[A-Fa-f0-9]{64}$/;
+        if (!serperKeyPattern.test(trimmedKey)) {
+          toast({
+            title: "❌ Format invalide",
+            description: "La clé Serper doit contenir 64 caractères hexadécimaux.",
+            variant: "destructive",
+          });
+          setTesting(null);
+          return;
+        }
+      }
       
       const { data, error } = await supabase.functions.invoke('manage-api-keys', {
         body: {
           action: 'test',
           service,
-          key,
-          cx,
-          url
+          key: trimmedKey,
+          cx: trimmedCx,
+          url: trimmedUrl,
+          useSaved
         }
       });
 
@@ -87,6 +113,10 @@ export const GlobalAPIKeysManager = () => {
           service,
           isValid: data.valid,
           error: data.error,
+          statusCode: data.statusCode,
+          rawMessage: data.rawMessage,
+          hints: data.hints,
+          tested: data.tested,
           lastChecked: new Date()
         }
       }));
@@ -113,25 +143,62 @@ export const GlobalAPIKeysManager = () => {
     if (!status) return null;
 
     return (
-      <div className="flex items-center gap-2 mt-2">
-        {status.isValid === true && (
-          <>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span className="text-sm text-green-600">Configurée et valide</span>
-          </>
-        )}
-        {status.isValid === false && (
-          <>
-            <XCircle className="h-4 w-4 text-destructive" />
-            <span className="text-sm text-destructive">
-              {status.error || "Clé invalide"}
+      <div className="space-y-2 mt-2">
+        <div className="flex items-center gap-2">
+          {status.isValid === true && (
+            <>
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-green-600">Configurée et valide</span>
+            </>
+          )}
+          {status.isValid === false && (
+            <>
+              <XCircle className="h-4 w-4 text-destructive" />
+              <span className="text-sm text-destructive">
+                {status.error || "Clé invalide"}
+              </span>
+            </>
+          )}
+          {status.lastChecked && (
+            <span className="text-xs text-muted-foreground ml-auto">
+              Testé: {status.lastChecked.toLocaleTimeString('fr-FR')}
             </span>
-          </>
+          )}
+        </div>
+        
+        {/* Detailed diagnostics */}
+        {status.isValid === false && (status.statusCode || status.rawMessage) && (
+          <div className="text-xs text-muted-foreground pl-6">
+            Détails: HTTP {status.statusCode} — {status.rawMessage}
+          </div>
         )}
-        {status.lastChecked && (
-          <span className="text-xs text-muted-foreground ml-auto">
-            Testé: {status.lastChecked.toLocaleTimeString('fr-FR')}
-          </span>
+        
+        {/* Hints */}
+        {status.hints && status.hints.length > 0 && (
+          <ul className="text-xs text-muted-foreground pl-6 list-disc list-inside">
+            {status.hints.map((hint, i) => (
+              <li key={i}>{hint}</li>
+            ))}
+          </ul>
+        )}
+        
+        {/* Comparative results */}
+        {status.tested && status.tested.length > 1 && (
+          <div className="pl-6 space-y-1 text-xs">
+            {status.tested.map((test, i) => (
+              <div key={i} className="flex items-center gap-2">
+                {test.valid ? (
+                  <CheckCircle2 className="h-3 w-3 text-green-500" />
+                ) : (
+                  <XCircle className="h-3 w-3 text-destructive" />
+                )}
+                <span className={test.valid ? "text-green-600" : "text-destructive"}>
+                  {test.source === 'typed' ? 'Clé saisie' : 'Clé sauvegardée'}: 
+                  {test.valid ? ' valide' : ` invalide (${test.error || `HTTP ${test.statusCode}`})`}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );
@@ -255,6 +322,7 @@ export const GlobalAPIKeysManager = () => {
           </CardTitle>
           <CardDescription>
             API alternative pour les recherches Google (SERPER_API_KEY)
+            <br />Format: 64 caractères hexadécimaux
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -265,12 +333,24 @@ export const GlobalAPIKeysManager = () => {
               type={showSecrets ? "text" : "password"}
               value={serperKey}
               onChange={(e) => setSerperKey(e.target.value)}
-              placeholder="Votre clé Serper"
+              placeholder="Votre clé Serper (64 caractères hex)"
             />
           </div>
+          
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="use-serper-saved"
+              checked={useSerperSaved}
+              onCheckedChange={setUseSerperSaved}
+            />
+            <Label htmlFor="use-serper-saved" className="text-sm cursor-pointer">
+              Tester aussi la clé sauvegardée (secret backend)
+            </Label>
+          </div>
+          
           <Button
-            onClick={() => testAPIKey('Serper', serperKey)}
-            disabled={!serperKey || testing === 'Serper'}
+            onClick={() => testAPIKey('Serper', serperKey, undefined, undefined, useSerperSaved)}
+            disabled={(!serperKey && !useSerperSaved) || testing === 'Serper'}
             className="w-full"
           >
             {testing === 'Serper' ? (
