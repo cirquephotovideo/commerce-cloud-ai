@@ -50,8 +50,9 @@ async function testSerper(apiKey: string): Promise<{ valid: boolean; error?: str
       const errorText = await response.text();
       console.error('[SERPER-TEST] Error response:', errorText);
       
-      // Serper returns 401 for invalid keys
-      if (response.status === 401) {
+      // Serper returns 401 or 403 for invalid/unauthorized keys
+      if (response.status === 401 || response.status === 403) {
+        console.log('[SERPER-TEST] Authentication failed with status:', response.status);
         return { valid: false, error: 'Clé API invalide ou non autorisée' };
       }
       
