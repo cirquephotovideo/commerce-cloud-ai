@@ -10,15 +10,33 @@ import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { EmailDetailModal } from "./EmailDetailModal";
 import { EmailMappingDialog } from "./EmailMappingDialog";
+import { ImportProgressDialog } from "./ImportProgressDialog";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
   const [mappingEmail, setMappingEmail] = useState<any>(null);
+  const [importProgress, setImportProgress] = useState<{
+    open: boolean;
+    total: number;
+    processed: number;
+    success: number;
+    skipped: number;
+    errors: number;
+    current_operation: string;
+  }>({
+    open: false,
+    total: 0,
+    processed: 0,
+    success: 0,
+    skipped: 0,
+    errors: 0,
+    current_operation: ''
+  });
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox', statusFilter],
@@ -69,9 +87,69 @@ export function EmailInboxTable() {
     toast.info("Actualisation en cours...");
   };
 
+  // Setup realtime subscription for import progress
+  useEffect(() => {
+    const channel = supabase
+      .channel('import-progress')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'email_inbox',
+          filter: `status=eq.processing`
+        },
+        (payload) => {
+          const inbox = payload.new as any;
+          const logs = inbox.processing_logs || [];
+          const latestLog = logs[logs.length - 1];
+          
+          if (latestLog?.type === 'progress') {
+            setImportProgress({
+              open: true,
+              total: latestLog.total || 0,
+              processed: latestLog.processed || 0,
+              success: latestLog.success || 0,
+              skipped: latestLog.skipped || 0,
+              errors: latestLog.errors || 0,
+              current_operation: latestLog.operation || 'Traitement en cours...'
+            });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'email_inbox',
+          filter: `status=eq.completed`
+        },
+        () => {
+          setImportProgress(prev => ({ ...prev, open: false }));
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [refetch]);
+
   const handleReprocess = async (inboxId: string) => {
     try {
       toast.info("Retraitement en cours...");
+      
+      setImportProgress({
+        open: true,
+        total: 0,
+        processed: 0,
+        success: 0,
+        skipped: 0,
+        errors: 0,
+        current_operation: 'Initialisation...'
+      });
       
       const { error } = await supabase.functions.invoke('process-email-attachment', {
         body: {
@@ -83,10 +161,10 @@ export function EmailInboxTable() {
       if (error) throw error;
       
       toast.success("Retraitement lancé");
-      refetch();
     } catch (error: any) {
       console.error('Reprocess error:', error);
       toast.error("Erreur lors du retraitement");
+      setImportProgress(prev => ({ ...prev, open: false }));
     }
   };
 
@@ -435,6 +513,11 @@ export function EmailInboxTable() {
         }}
       />
     )}
+
+    <ImportProgressDialog
+      open={importProgress.open}
+      progress={importProgress}
+    />
     </>
   );
 }

@@ -183,9 +183,24 @@ serve(async (req) => {
       columns: Object.keys(rows[0] || {}).length
     });
 
+    // Update progress - file parsed
+    processingLogs.push({
+      timestamp: new Date().toISOString(),
+      type: 'progress',
+      operation: 'Fichier chargé',
+      processed: 0,
+      total: rows.length,
+      success: 0,
+      skipped: 0,
+      errors: 0
+    });
+
     await supabase
       .from('email_inbox')
-      .update({ processing_logs: processingLogs })
+      .update({ 
+        status: 'processing',
+        processing_logs: processingLogs 
+      })
       .eq('id', inbox_id);
 
     // Check if custom mapping provided or if supplier has saved column mapping
@@ -298,13 +313,36 @@ Réponds UNIQUEMENT en JSON valide:
       }
     }
 
+    // Helper to update progress
+    const updateProgress = async (operation: string, processed: number, total: number, success: number, skipped: number, errors: number) => {
+      processingLogs.push({
+        timestamp: new Date().toISOString(),
+        type: 'progress',
+        operation,
+        processed,
+        total,
+        success,
+        skipped,
+        errors
+      });
+      
+      await supabase
+        .from('email_inbox')
+        .update({ processing_logs: processingLogs })
+        .eq('id', inbox_id);
+    };
+
     // Process each row
     let productsCreated = 0;
     let productsUpdated = 0;
     let productsFound = 0;
+    let productsSkipped = 0;
+    let productsErrors = 0;
     const updatedVariantIds: string[] = []; // Track variant IDs for price alerts
 
-    for (const row of rows.slice(0, 100)) { // Limit to 100 for performance
+    const rowsToProcess = rows.slice(0, 100); // Limit to 100 for performance
+    for (let i = 0; i < rowsToProcess.length; i++) {
+      const row = rowsToProcess[i];
       try {
         const normalizedRow = {
           product_name: row[columnMapping.product_name] || '',
@@ -316,6 +354,7 @@ Réponds UNIQUEMENT en JSON valide:
         };
 
         if (!normalizedRow.product_name && !normalizedRow.ean && !normalizedRow.supplier_reference) {
+          productsSkipped++;
           continue;
         }
 
@@ -496,6 +535,19 @@ Réponds UNIQUEMENT en JSON valide:
         }
       } catch (rowError) {
         console.error('[PROCESS-ATTACHMENT] Row processing error:', rowError);
+        productsErrors++;
+      }
+
+      // Update progress every 5 rows or on last row
+      if ((i + 1) % 5 === 0 || i === rowsToProcess.length - 1) {
+        await updateProgress(
+          `Traitement des produits (${i + 1}/${rowsToProcess.length})`,
+          i + 1,
+          rowsToProcess.length,
+          productsCreated + productsUpdated,
+          productsSkipped,
+          productsErrors
+        );
       }
     }
 
