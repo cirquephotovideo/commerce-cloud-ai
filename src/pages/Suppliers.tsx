@@ -21,6 +21,7 @@ import { EmailInboxTable } from "@/components/EmailInboxTable";
 import { EmailSetupGuide } from "@/components/EmailSetupGuide";
 import { EmailPollMonitoring } from "@/components/EmailPollMonitoring";
 import { UserAlerts } from "@/components/market/UserAlerts";
+import { SupplierProductLinksTab } from "@/components/SupplierProductLinksTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -646,6 +647,10 @@ export default function Suppliers() {
 
         <TabsContent value="products">
           <SupplierProductsTable />
+        </TabsContent>
+
+        <TabsContent value="linked">
+          <SupplierProductLinksTab />
         </TabsContent>
 
         <TabsContent value="inbox">
