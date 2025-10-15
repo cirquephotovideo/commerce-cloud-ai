@@ -48,6 +48,7 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
           host: config.imap_host?.trim(),
           port: parseInt(config.imap_port) || 993,
           email: config.imap_email?.trim(),
+          username: config.imap_username?.trim() || undefined,
           password: config.imap_password,
           ssl: config.imap_ssl !== false,
           folder: config.imap_folder || 'INBOX'
@@ -59,14 +60,18 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
       if (error) throw error;
 
       if (data.success) {
-        let successMsg = `✅ Connexion réussie! ${data.messageCount} messages dans ${data.selectedFolder}.`;
+        let successMsg = `✅ Connexion réussie via ${data.authMethod}!`;
+        if (data.username) {
+          successMsg += ` (utilisateur: ${data.username})`;
+        }
+        successMsg += `\n📧 ${data.messageCount} messages dans ${data.selectedFolder}`;
         if (data.folders?.length > 0) {
-          successMsg += ` Dossiers: ${data.folders.slice(0, 5).join(', ')}${data.folders.length > 5 ? '...' : ''}`;
+          successMsg += `\n📁 Dossiers: ${data.folders.slice(0, 5).join(', ')}${data.folders.length > 5 ? '...' : ''}`;
         }
         if (data.warnings?.length > 0) {
           successMsg += `\n\n⚠️ ${data.warnings.join('\n')}`;
         }
-        toast.success(successMsg);
+        toast.success(successMsg, { duration: 6000 });
       } else {
         // Afficher l'erreur avec hints
         let errorMsg = data.error || "Échec de connexion";
@@ -131,6 +136,18 @@ export function IMAPConfig({ config, onConfigChange }: IMAPConfigProps) {
             value={config.imap_email || ''}
             onChange={(e) => onConfigChange({...config, imap_email: e.target.value})}
           />
+        </div>
+
+        <div>
+          <Label>Nom d'utilisateur IMAP (optionnel)</Label>
+          <Input 
+            placeholder="Laissez vide sauf si requis par le serveur"
+            value={config.imap_username || ''}
+            onChange={(e) => onConfigChange({...config, imap_username: e.target.value})}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Certains serveurs IMAP nécessitent un username différent de l'email. Laissez vide si ce n'est pas votre cas.
+          </p>
         </div>
 
         <div>

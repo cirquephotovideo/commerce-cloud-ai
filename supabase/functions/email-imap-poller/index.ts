@@ -93,6 +93,7 @@ serve(async (req) => {
     const imapPort = config.imap_port || 993;
     const imapSsl = config.imap_ssl !== false;
     const imapEmail = config.imap_email;
+    const imapUsername = config.imap_username; // Optional: explicit username for CRAM-MD5
     const imapFolder = config.imap_folder || 'INBOX';
     let imapPassword = config.imap_password;
 
@@ -133,45 +134,80 @@ serve(async (req) => {
       await sendCommand('a001 CAPABILITY');
       const capabilityResponse = await readResponse();
 
-      // Authenticate with CRAM-MD5 (using HMAC-MD5)
+      // Authenticate with CRAM-MD5 (using HMAC-MD5) with fallback
       let authResponse = '';
+      let usedUsername = '';
       
       if (capabilityResponse.includes('AUTH=CRAM-MD5')) {
-        console.log(`[${supplierId}] Attempting CRAM-MD5`, {
-          email: imapEmail,
-          password_length: imapPassword.length,
-          is_encrypted: isEncrypted
-        });
+        // Try 3 variants: username > email > local-part
+        const authVariants = [
+          imapUsername || null,  // Explicit username if provided
+          imapEmail,             // Full email
+          imapEmail.split('@')[0] // Local part before @
+        ].filter(Boolean);
         
-        await sendCommand('a002 AUTHENTICATE CRAM-MD5');
-        const challengeResponse = await readResponse();
+        console.log(`[${supplierId}] Attempting CRAM-MD5 with ${authVariants.length} username variants`);
         
-        const challengeMatch = challengeResponse.match(/\+ (.+)/);
-        if (challengeMatch) {
-          const challenge = atob(challengeMatch[1]);
-          const hmacHex = await hmacMd5(imapPassword, challenge);
-          const response = btoa(`${imapEmail} ${hmacHex}`);
-          
-          await sendCommand(response);
-          authResponse = await readResponse();
-          
-          if (!authResponse.includes('a002 OK')) {
-            console.log(`[${supplierId}] CRAM-MD5 failed, trying LOGIN`);
+        for (const variant of authVariants) {
+          try {
+            await sendCommand('a002 AUTHENTICATE CRAM-MD5');
+            const challengeResponse = await readResponse();
+            
+            const challengeMatch = challengeResponse.match(/\+ (.+)/);
+            if (challengeMatch) {
+              const challenge = atob(challengeMatch[1]);
+              const hmacHex = await hmacMd5(imapPassword, challenge);
+              const response = btoa(`${variant} ${hmacHex}`);
+              
+              await sendCommand(response);
+              authResponse = await readResponse();
+              
+              if (authResponse.includes('a002 OK')) {
+                usedUsername = variant;
+                console.log(`[${supplierId}] ✅ CRAM-MD5 succeeded with username: ${variant}`);
+                break;
+              } else {
+                console.log(`[${supplierId}] CRAM-MD5 failed with username: ${variant}`);
+              }
+            }
+          } catch (cramError) {
+            console.warn(`[${supplierId}] CRAM-MD5 error with ${variant}:`, cramError);
           }
+        }
+        
+        if (!authResponse.includes('a002 OK')) {
+          console.log(`[${supplierId}] All CRAM-MD5 attempts failed, falling back to LOGIN`);
         }
       }
 
       // Fallback to LOGIN if CRAM-MD5 not available or failed
       if (!authResponse.includes('OK')) {
+        console.log(`[${supplierId}] Attempting LOGIN authentication`);
         await sendCommand(`a003 LOGIN ${imapEmail} ${imapPassword}`);
         authResponse = await readResponse();
         
         if (!authResponse.includes('a003 OK')) {
+          // Log detailed auth failure
+          await supabaseAdmin.from('email_poll_logs').insert({
+            user_id: userId,
+            supplier_id: supplierId,
+            status: 'auth_failed',
+            emails_found: 0,
+            emails_processed: 0,
+            details: { 
+              capabilities: capabilityResponse,
+              attempted_user: imapEmail,
+              server_response: authResponse,
+              error: 'Authentication failed with all methods'
+            }
+          });
+          
           throw new Error('Authentication failed');
         }
+        usedUsername = imapEmail;
       }
 
-      console.log(`[${supplierId}] Authentication successful`);
+      console.log(`[${supplierId}] ✅ Authentication successful (user: ${usedUsername})`);
 
       // Select mailbox
       await sendCommand(`a004 SELECT "${imapFolder}"`);

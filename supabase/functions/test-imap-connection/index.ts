@@ -142,6 +142,7 @@ async function testIMAPConnection(config: {
   host: string;
   port: number;
   email: string;
+  username?: string;
   password: string;
   ssl: boolean;
   folder?: string;
@@ -149,11 +150,12 @@ async function testIMAPConnection(config: {
   success: boolean;
   message: string;
   authMethod: string;
+  username: string;
   folders: string[];
   messageCount: number;
   selectedFolder: string;
 }> {
-  // ✅ Phase 6.1: Validate hostname before attempting connection
+  // Validate hostname before attempting connection
   const hostnameRegex = /^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)$/;
   if (!hostnameRegex.test(config.host)) {
     throw new Error(`Invalid hostname format: ${config.host}`);
@@ -161,7 +163,7 @@ async function testIMAPConnection(config: {
   
   console.log(`[IMAP-TEST] Validating hostname: ${config.host}`);
   
-  // ✅ Try to resolve DNS (optional, may not work in Deno Deploy)
+  // Try to resolve DNS (optional, may not work in Deno Deploy)
   try {
     const dnsResult = await Deno.resolveDns(config.host, "A");
     console.log(`[IMAP-TEST] DNS resolution successful:`, dnsResult);
@@ -171,10 +173,10 @@ async function testIMAPConnection(config: {
   }
 
   let conn: Deno.Conn;
-  const CONNECTION_TIMEOUT = 10000; // ✅ 10 seconds timeout
+  const CONNECTION_TIMEOUT = 10000; // 10 seconds timeout
   
   try {
-    // ✅ Establish connection with timeout (SSL or plain)
+    // Establish connection with timeout (SSL or plain)
     const connectionPromise = config.ssl
       ? Deno.connectTls({
           hostname: config.host,
@@ -185,7 +187,7 @@ async function testIMAPConnection(config: {
           port: config.port,
         });
     
-    // ✅ Add timeout
+    // Add timeout
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), CONNECTION_TIMEOUT);
     });
@@ -239,34 +241,46 @@ async function testIMAPConnection(config: {
 
     let authMethod = 'LOGIN';
     let authenticated = false;
+    let usedUsername = '';
 
-    // Try CRAM-MD5 first if available (most secure)
+    // Try CRAM-MD5 first if available with fallback (username > email > local-part)
     if (allCapabilities.includes('AUTH=CRAM-MD5')) {
-      try {
-        console.log('[IMAP-TEST] Attempting CRAM-MD5 authentication...');
-        await conn.write(encoder.encode(`A001 AUTHENTICATE CRAM-MD5\r\n`));
-        const challengeResponse = await readResponse();
+      const authVariants = [
+        config.username || null,        // Explicit username if provided
+        config.email,                    // Full email
+        config.email.split('@')[0]       // Local part before @
+      ].filter(Boolean) as string[];
+      
+      console.log(`[IMAP-TEST] Attempting CRAM-MD5 with ${authVariants.length} username variants`);
+      
+      for (const variant of authVariants) {
+        try {
+          await conn.write(encoder.encode(`A001 AUTHENTICATE CRAM-MD5\r\n`));
+          const challengeResponse = await readResponse();
 
-        const challengeMatch = challengeResponse.match(/\+ (.+)/);
-        if (challengeMatch) {
-          const challenge = atob(challengeMatch[1].trim());
-          const hmac = hmacMd5(config.password, challenge);
-          const authString = `${config.email} ${hmac}`;
-          const authBase64 = btoa(authString);
+          const challengeMatch = challengeResponse.match(/\+ (.+)/);
+          if (challengeMatch) {
+            const challenge = atob(challengeMatch[1].trim());
+            const hmac = hmacMd5(config.password, challenge);
+            const authString = `${variant} ${hmac}`;
+            const authBase64 = btoa(authString);
 
-          await conn.write(encoder.encode(`${authBase64}\r\n`));
-          const authResponse = await readResponse();
+            await conn.write(encoder.encode(`${authBase64}\r\n`));
+            const authResponse = await readResponse();
 
-          if (authResponse.includes('A001 OK')) {
-            authMethod = 'CRAM-MD5';
-            authenticated = true;
-            console.log('[IMAP-TEST] CRAM-MD5 authentication successful');
-          } else {
-            console.warn('[IMAP-TEST] CRAM-MD5 server rejected:', authResponse);
+            if (authResponse.includes('A001 OK')) {
+              authMethod = 'CRAM-MD5';
+              authenticated = true;
+              usedUsername = variant;
+              console.log(`[IMAP-TEST] ✅ CRAM-MD5 successful with username: ${variant}`);
+              break;
+            } else {
+              console.warn(`[IMAP-TEST] CRAM-MD5 failed with username: ${variant}`);
+            }
           }
+        } catch (cramError) {
+          console.warn(`[IMAP-TEST] CRAM-MD5 error with ${variant}:`, cramError);
         }
-      } catch (cramError) {
-        console.warn('[IMAP-TEST] CRAM-MD5 authentication failed, falling back to LOGIN:', cramError);
       }
     }
 
@@ -288,6 +302,7 @@ async function testIMAPConnection(config: {
         throw new Error(`Authentication failed: ${loginResponse}`);
       }
       authMethod = 'LOGIN';
+      usedUsername = config.email;
       console.log('[IMAP-TEST] LOGIN authentication successful');
     }
 
@@ -317,6 +332,7 @@ async function testIMAPConnection(config: {
       success: true,
       message: 'IMAP connection test successful',
       authMethod,
+      username: usedUsername,
       folders,
       messageCount,
       selectedFolder,
@@ -383,7 +399,7 @@ serve(async (req) => {
   console.log('[IMAP-TEST] Starting connection test...');
 
   try {
-    let { host, port = 993, email, password, ssl = true, folder = 'INBOX' } = await req.json();
+    let { host, port = 993, email, username, password, ssl = true, folder = 'INBOX' } = await req.json();
 
     // Phase 1: Sanitize and validate
     const { sanitized, warnings } = sanitizeHostname(host);
@@ -419,7 +435,7 @@ serve(async (req) => {
     }
 
     try {
-      const result = await testIMAPConnection({ host, port, email, password, ssl, folder });
+      const result = await testIMAPConnection({ host, port, email, username, password, ssl, folder });
       
       const response: any = {
         ...result
@@ -455,6 +471,7 @@ serve(async (req) => {
         hints,
         message: errorMessage,
         authMethod: 'N/A',
+        username: '',
         folders: [],
         messageCount: 0,
         selectedFolder: 'N/A'
