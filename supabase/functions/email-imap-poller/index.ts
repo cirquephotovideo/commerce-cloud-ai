@@ -623,30 +623,83 @@ serve(async (req) => {
 
           const bodyStruct = bodyStructMatch[1];
           
-          // Look for CSV/XLSX/XLS/ZIP attachments with dual pattern detection
-          const pattern1 = /"(?:attachment|inline)"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
-          const pattern2 = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?[^)]*"(?:attachment|inline)"/gi;
+          // Look for CSV/XLSX/XLS/ZIP attachments with three comprehensive patterns
+          // Pattern 1: Standard Content-Type detection (handles separated parts)
+          const contentTypePattern = /"(?:application|text)"\s+"(?:x-msexcel|vnd\.ms-excel|vnd\.openxmlformats[^"]+|zip|csv)"[^)]*"(?:filename|name)"\s+"?([^")\s]+)"?/gi;
           
-          const attachmentSet = new Set();
+          // Pattern 2: Extension-based detection
+          const extensionPattern = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
+          
+          // Pattern 3: Fallback with "attachment" keyword
+          const attachmentPattern = /"attachment"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
+          
+          const attachmentSet = new Set<string>();
+          const detectionDetails: any[] = [];
           let match;
           
-          while ((match = pattern1.exec(bodyStruct)) !== null) {
-            attachmentSet.add(JSON.stringify({ filename: match[1], type: match[2].toLowerCase() }));
-          }
+          // Test all patterns
+          [contentTypePattern, extensionPattern, attachmentPattern].forEach((pattern, idx) => {
+            const method = idx === 0 ? 'content-type' : idx === 1 ? 'extension' : 'attachment-keyword';
+            while ((match = pattern.exec(bodyStruct)) !== null) {
+              const filename = match[1];
+              const ext = filename.split('.').pop()?.toLowerCase();
+              if (['csv', 'xlsx', 'xls', 'zip'].includes(ext || '')) {
+                const key = JSON.stringify({ filename, type: ext });
+                if (!attachmentSet.has(key)) {
+                  attachmentSet.add(key);
+                  detectionDetails.push({ filename, type: ext, detected_by: method });
+                }
+              }
+            }
+          });
           
-          while ((match = pattern2.exec(bodyStruct)) !== null) {
-            attachmentSet.add(JSON.stringify({ filename: match[1], type: match[2].toLowerCase() }));
-          }
+          const attachments = Array.from(attachmentSet).map(str => JSON.parse(str));
           
-          const attachments = Array.from(attachmentSet).map((str: unknown) => JSON.parse(str as string));
+          // Prepare email base data for insertion
+          const emailBaseData = {
+            user_id: userId,
+            supplier_id: supplierId,
+            from_email: fromEmail,
+            from_name: fromEmail.match(/^(.+?)\s*</)?.[1] || fromEmail.split('@')[0],
+            subject: subject,
+            received_at: new Date().toISOString(),
+            detection_method: 'imap_polling',
+            detected_supplier_name: supplierName,
+            detection_confidence: 100,
+            processing_logs: [{
+              timestamp: new Date().toISOString(),
+              message: `Email received from ${fromEmail}`,
+              subject: subject
+            }]
+          };
 
           if (attachments.length === 0) {
             console.log(`[${supplierId}] Email ${msgId}: No CSV/XLSX/XLS/ZIP attachments found`);
-            console.log(`[${supplierId}] BODYSTRUCTURE preview:`, bodyStruct.substring(0, 500));
+            console.log(`[${supplierId}] BODYSTRUCTURE sample:`, bodyStruct.substring(0, 800));
+            
+            // Insert email with status "ignored"
+            await supabaseAdmin.from('email_inbox').insert({
+              ...emailBaseData,
+              status: 'ignored',
+              error_message: 'No CSV/XLSX/XLS/ZIP attachment found',
+              processing_logs: [
+                ...emailBaseData.processing_logs,
+                { 
+                  timestamp: new Date().toISOString(), 
+                  message: 'No processable attachment - marked as ignored',
+                  bodystructure_sample: bodyStruct.substring(0, 500)
+                }
+              ]
+            });
+            
+            console.log(`[${supplierId}] Email ${msgId} stored as "ignored" (no valid attachment)`);
             continue;
           }
 
-          console.log(`[${supplierId}] Email ${msgId}: Found ${attachments.length} attachment(s):`, attachments.map(a => a.filename));
+          console.log(`[${supplierId}] Email ${msgId}: Found ${attachments.length} attachment(s):`);
+          detectionDetails.forEach(d => {
+            console.log(`  ✓ ${d.filename} (${d.type.toUpperCase()}) detected by: ${d.detected_by}`);
+          });
 
           // Fetch attachment content (simplified: assume part 2)
           const partNumber = '2';
@@ -702,21 +755,27 @@ serve(async (req) => {
 
           console.log(`[${supplierId}] Uploaded to Storage:`, uploadData.path);
 
-          // Insert into email_inbox
+          // Insert into email_inbox with detailed logs
+          const detectedBy = detectionDetails.find(d => d.filename === fileName)?.detected_by || 'unknown';
+          
           const { data: inboxData, error: inboxError } = await supabaseAdmin
             .from('email_inbox')
             .insert({
-              user_id: userId,
-              supplier_id: supplierId,
-              from_email: fromEmail,
-              subject: subject,
+              ...emailBaseData,
               attachment_name: fileName,
               attachment_type: fileType,
               attachment_url: uploadData.path,
               attachment_size_kb: Math.round(attachmentBuffer.length / 1024),
               status: 'pending',
-              detection_method: 'imap_poll',
-              detected_supplier_name: supplierName
+              processing_logs: [
+                ...emailBaseData.processing_logs,
+                {
+                  timestamp: new Date().toISOString(),
+                  message: `Attachment downloaded: ${fileName} (${fileType.toUpperCase()})`,
+                  detection_method: detectedBy,
+                  size_kb: Math.round(attachmentBuffer.length / 1024)
+                }
+              ]
             })
             .select()
             .single();

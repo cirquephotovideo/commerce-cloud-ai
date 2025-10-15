@@ -15,7 +15,11 @@ serve(async (req) => {
 
   try {
     const { inbox_id, user_id } = await req.json();
-    console.log('[PROCESS-ATTACHMENT] Starting for inbox:', inbox_id);
+    console.log('[PROCESS-ATTACHMENT] Starting:', {
+      inbox_id,
+      user_id,
+      timestamp: new Date().toISOString()
+    });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -24,13 +28,7 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
-    // Update status to processing
-    await supabase
-      .from('email_inbox')
-      .update({ status: 'processing', processing_logs: [{ timestamp: new Date().toISOString(), message: 'Starting processing' }] })
-      .eq('id', inbox_id);
-
-    // Fetch inbox entry
+    // Fetch inbox entry first to get existing logs
     const { data: inbox, error: inboxError } = await supabase
       .from('email_inbox')
       .select('*')
@@ -40,6 +38,28 @@ serve(async (req) => {
     if (inboxError || !inbox) {
       throw new Error('Inbox entry not found');
     }
+
+    console.log('[PROCESS-ATTACHMENT] Email details:', {
+      attachment_name: inbox.attachment_name,
+      attachment_type: inbox.attachment_type,
+      attachment_size_kb: inbox.attachment_size_kb,
+      from: inbox.from_email
+    });
+
+    // Update status to processing
+    const processingLogs = [...(inbox.processing_logs || []), {
+      timestamp: new Date().toISOString(),
+      message: 'Processing started',
+      attachment: inbox.attachment_name
+    }];
+
+    await supabase
+      .from('email_inbox')
+      .update({ 
+        status: 'processing',
+        processing_logs: processingLogs
+      })
+      .eq('id', inbox_id);
 
     // Download file from storage
     const fileName = inbox.attachment_url.split('/').pop();
@@ -52,7 +72,10 @@ serve(async (req) => {
     }
 
     const fileBuffer = await fileData.arrayBuffer();
-    console.log('[PROCESS-ATTACHMENT] Downloaded file, size:', fileBuffer.byteLength);
+    console.log('[PROCESS-ATTACHMENT] File downloaded:', {
+      size_bytes: fileBuffer.byteLength,
+      size_mb: (fileBuffer.byteLength / 1024 / 1024).toFixed(2)
+    });
 
     // === ZIP DECOMPRESSION LOGIC ===
     let processBuffer = fileBuffer;
@@ -60,7 +83,17 @@ serve(async (req) => {
     let originalArchive: string | null = null;
 
     if (inbox.attachment_name?.endsWith('.zip')) {
-      console.log('[PROCESS-ATTACHMENT] ZIP detected, decompressing...');
+      console.log('[PROCESS-ATTACHMENT] ZIP file detected - starting decompression');
+      
+      await supabase
+        .from('email_inbox')
+        .update({
+          processing_logs: [...processingLogs, {
+            timestamp: new Date().toISOString(),
+            message: 'ZIP archive detected - decompressing...'
+          }]
+        })
+        .eq('id', inbox_id);
       
       try {
         const zipReader = new ZipReader(new BlobReader(new Blob([fileBuffer])));
@@ -74,7 +107,7 @@ serve(async (req) => {
         );
         
         if (!targetEntry || !targetEntry.getData) {
-          throw new Error('Invalid entry found in ZIP archive');
+          throw new Error('No CSV/XLSX/XLS file found in ZIP archive');
         }
         
         console.log(`[PROCESS-ATTACHMENT] Extracting: ${targetEntry.filename}`);
@@ -89,7 +122,18 @@ serve(async (req) => {
         
         await zipReader.close();
         
-        console.log(`[PROCESS-ATTACHMENT] Extracted ${processFileName}, size: ${processBuffer.byteLength} bytes`);
+        console.log('[PROCESS-ATTACHMENT] Extracted file:', {
+          original: inbox.attachment_name,
+          extracted: processFileName,
+          size_bytes: processBuffer.byteLength,
+          size_mb: (processBuffer.byteLength / 1024 / 1024).toFixed(2)
+        });
+        
+        processingLogs.push({
+          timestamp: new Date().toISOString(),
+          message: `Extracted ${processFileName} from ZIP`,
+          size_mb: (processBuffer.byteLength / 1024 / 1024).toFixed(2)
+        });
         
       } catch (zipError: any) {
         console.error('[PROCESS-ATTACHMENT] ZIP extraction failed:', zipError);
@@ -119,10 +163,28 @@ serve(async (req) => {
       throw new Error(`Unsupported file type: ${processFileName}`);
     }
 
-    console.log('[PROCESS-ATTACHMENT] Successfully parsed', rows.length, 'rows from', processFileName);
+    console.log('[PROCESS-ATTACHMENT] File parsed successfully:', {
+      format: processFileName.endsWith('.csv') ? 'CSV' : 'Excel',
+      rows_found: rows.length,
+      columns: Object.keys(rows[0] || {}).length,
+      sample_columns: Object.keys(rows[0] || {}).slice(0, 5)
+    });
+    
     if (originalArchive) {
       console.log('[PROCESS-ATTACHMENT] Original archive:', originalArchive);
     }
+
+    processingLogs.push({
+      timestamp: new Date().toISOString(),
+      message: `Parsed ${rows.length} rows from ${processFileName}`,
+      format: processFileName.endsWith('.csv') ? 'CSV' : 'Excel',
+      columns: Object.keys(rows[0] || {}).length
+    });
+
+    await supabase
+      .from('email_inbox')
+      .update({ processing_logs: processingLogs })
+      .eq('id', inbox_id);
 
     // Detect column mapping with AI
     const sampleRow = rows[0];
@@ -142,6 +204,8 @@ Réponds UNIQUEMENT en JSON valide:
 }`;
 
     let columnMapping: any = {};
+    
+    console.log('[PROCESS-ATTACHMENT] Starting AI column mapping detection...');
     
     try {
       const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -163,10 +227,26 @@ Réponds UNIQUEMENT en JSON valide:
         const aiData = await aiResponse.json();
         const content = aiData.choices?.[0]?.message?.content || '{}';
         columnMapping = JSON.parse(content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-        console.log('[PROCESS-ATTACHMENT] Column mapping:', columnMapping);
+        console.log('[PROCESS-ATTACHMENT] Column mapping detected:', columnMapping);
+        
+        processingLogs.push({
+          timestamp: new Date().toISOString(),
+          message: 'Column mapping detected by AI',
+          mapping: columnMapping
+        });
+
+        await supabase
+          .from('email_inbox')
+          .update({ processing_logs: processingLogs })
+          .eq('id', inbox_id);
       }
     } catch (e) {
       console.error('[PROCESS-ATTACHMENT] Mapping AI failed:', e);
+      processingLogs.push({
+        timestamp: new Date().toISOString(),
+        message: 'AI mapping failed - using manual detection',
+        error: e instanceof Error ? e.message : String(e)
+      });
     }
 
     // Process each row
@@ -308,6 +388,16 @@ Réponds UNIQUEMENT en JSON valide:
     }
 
     // Update inbox entry with results
+    processingLogs.push({
+      timestamp: new Date().toISOString(),
+      message: 'Processing completed successfully',
+      summary: {
+        products_found: productsFound,
+        products_updated: productsUpdated,
+        products_created: productsCreated
+      }
+    });
+
     await supabase
       .from('email_inbox')
       .update({
@@ -316,6 +406,7 @@ Réponds UNIQUEMENT en JSON valide:
         products_found: productsFound,
         products_updated: productsUpdated,
         products_created: productsCreated,
+        processing_logs: processingLogs
       })
       .eq('id', inbox_id);
 

@@ -4,30 +4,38 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, RefreshCw, Mail } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { FileText, RefreshCw, Mail, Eye } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
-    queryKey: ['email-inbox'],
+    queryKey: ['email-inbox', statusFilter],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('email_inbox')
         .select('*, supplier_configurations(supplier_name)')
         .order('received_at', { ascending: false })
         .limit(50);
       
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) throw error;
       setLastUpdate(new Date());
       return data;
     },
-    refetchInterval: 30000, // 30 secondes
+    refetchInterval: 30000,
     refetchIntervalInBackground: false,
   });
 
@@ -95,6 +103,52 @@ export function EmailInboxTable() {
         </div>
       </CardHeader>
       <CardContent>
+        {/* Status Filters */}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          <Button 
+            variant={statusFilter === 'all' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('all')}
+          >
+            Tous
+          </Button>
+          <Button 
+            variant={statusFilter === 'pending' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('pending')}
+          >
+            En attente
+          </Button>
+          <Button 
+            variant={statusFilter === 'processing' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('processing')}
+          >
+            En traitement
+          </Button>
+          <Button 
+            variant={statusFilter === 'completed' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('completed')}
+          >
+            Terminé
+          </Button>
+          <Button 
+            variant={statusFilter === 'failed' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('failed')}
+          >
+            Erreur
+          </Button>
+          <Button 
+            variant={statusFilter === 'ignored' ? 'default' : 'outline'} 
+            size="sm" 
+            onClick={() => setStatusFilter('ignored')}
+          >
+            Ignoré
+          </Button>
+        </div>
+
         {!emailInbox || emailInbox.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -109,10 +163,12 @@ export function EmailInboxTable() {
               <TableRow>
                 <TableHead>Reçu le</TableHead>
                 <TableHead>Expéditeur</TableHead>
-                <TableHead>Fournisseur détecté</TableHead>
+                <TableHead>Fournisseur</TableHead>
                 <TableHead>Fichier</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Produits</TableHead>
                 <TableHead>Statut</TableHead>
+                <TableHead>Logs</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -144,7 +200,7 @@ export function EmailInboxTable() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{email.attachment_name}</span>
+                      <span className="text-sm">{email.attachment_name || 'N/A'}</span>
                     </div>
                     {email.attachment_size_kb && (
                       <div className="text-xs text-muted-foreground">
@@ -153,7 +209,16 @@ export function EmailInboxTable() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <Badge variant={
+                      ['csv', 'xlsx', 'xls'].includes(email.attachment_type || '') ? 'default' :
+                      email.attachment_type === 'zip' ? 'secondary' :
+                      'outline'
+                    }>
+                      {email.attachment_type?.toUpperCase() || 'N/A'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1 flex-wrap">
                       {email.products_updated > 0 && (
                         <Badge variant="default" className="text-xs">
                           ✓ {email.products_updated}
@@ -173,6 +238,31 @@ export function EmailInboxTable() {
                   </TableCell>
                   <TableCell>
                     {getStatusBadge(email.status)}
+                  </TableCell>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <Eye className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-md max-h-96 overflow-y-auto">
+                          <div className="space-y-1 text-xs">
+                            {(!email.processing_logs || !Array.isArray(email.processing_logs) || email.processing_logs.length === 0) ? (
+                              <div className="text-muted-foreground">Aucun log disponible</div>
+                            ) : (
+                              (email.processing_logs as any[]).map((log: any, i: number) => (
+                                <div key={i} className="flex gap-2 border-b pb-1">
+                                  <span className="text-muted-foreground shrink-0">
+                                    {new Date(log.timestamp).toLocaleTimeString('fr-FR')}
+                                  </span>
+                                  <span>{log.message}</span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
