@@ -1,41 +1,54 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Simple IMAP client using raw TCP
-async function connectIMAP(config: {
-  host: string;
-  port: number;
-  email: string;
-  password: string;
-  ssl: boolean;
-}) {
-  const conn = await Deno.connect({ 
-    hostname: config.host, 
-    port: config.port,
-    transport: config.ssl ? 'tcp' : 'tcp'
-  });
+// HMAC-MD5 utility for CRAM-MD5 authentication
+async function hmacMd5(key: string, message: string): Promise<string> {
+  const keyData = new TextEncoder().encode(key);
+  const messageData = new TextEncoder().encode(message);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'MD5' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// Utility to connect to IMAP
+async function connectIMAP(host: string, port: number, useTLS: boolean) {
+  const conn = useTLS 
+    ? await Deno.connectTls({ hostname: host, port })
+    : await Deno.connect({ hostname: host, port });
 
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
+  async function sendCommand(command: string): Promise<void> {
+    console.log(`[IMAP] → ${command.substring(0, 100)}...`);
+    await conn.write(encoder.encode(command + '\r\n'));
+  }
+
   async function readResponse(): Promise<string> {
-    const buffer = new Uint8Array(4096);
+    const buffer = new Uint8Array(16384);
     const n = await conn.read(buffer);
-    if (!n) throw new Error('Connection closed');
-    return decoder.decode(buffer.subarray(0, n));
+    if (!n) return '';
+    const response = decoder.decode(buffer.subarray(0, n));
+    console.log(`[IMAP] ← ${response.substring(0, 500)}...`);
+    return response;
   }
 
-  async function sendCommand(cmd: string): Promise<string> {
-    await conn.write(encoder.encode(cmd + '\r\n'));
-    return await readResponse();
-  }
-
-  return { conn, sendCommand, readResponse };
+  return { conn, sendCommand, readResponse, encoder, decoder };
 }
 
 serve(async (req) => {
@@ -43,388 +56,397 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  );
-
   try {
     const { supplierId } = await req.json();
 
     if (!supplierId) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'supplierId required' 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'supplierId required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
     }
 
-    // Récupérer le fournisseur
-    const { data: supplier, error: supplierError } = await supabase
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // Fetch supplier
+    const { data: supplier, error: supplierError } = await supabaseAdmin
       .from('supplier_configurations')
       .select('*')
       .eq('id', supplierId)
       .single();
 
     if (supplierError || !supplier) {
-      console.error('[IMAP-POLLER] Supplier not found:', supplierError);
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Supplier not found' 
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 404
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: 'Supplier not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
     }
 
     const config = supplier.connection_config || {};
-    const emailMode = config.email_mode;
+    const userId = supplier.user_id;
+    const supplierName = supplier.supplier_name;
+    
+    const imapHost = config.imap_host;
+    const imapPort = config.imap_port || 993;
+    const imapSsl = config.imap_ssl !== false;
+    const imapEmail = config.imap_email;
+    const imapFolder = config.imap_folder || 'INBOX';
+    let imapPassword = config.imap_password;
 
-    console.log(`[IMAP-POLLER] Processing ${supplier.supplier_name} (${emailMode})`);
+    console.log(`[${supplierId}] Starting poll for ${supplierName}`);
 
-    let pollStatus = 'no_new_emails';
-    let emailsFound = 0;
-    let emailsProcessed = 0;
-    let errorMessage = null;
+    // Detect and decrypt password if encrypted
+    const isEncrypted = imapPassword && imapPassword.length > 50 && /^[A-Za-z0-9+/=]+$/.test(imapPassword);
+    
+    if (isEncrypted) {
+      console.log(`[${supplierId}] Decrypting password...`);
+      const { data: decrypted, error: decryptError } = await supabaseAdmin.rpc(
+        'decrypt_email_password',
+        { encrypted_password: imapPassword }
+      );
+      
+      if (decryptError || !decrypted) {
+        throw new Error(`Password decryption failed: ${decryptError?.message}`);
+      }
+      
+      imapPassword = decrypted;
+    }
+
+    if (!imapHost || !imapEmail || !imapPassword) {
+      throw new Error('Incomplete IMAP configuration');
+    }
+
+    // Connect to IMAP
+    const { conn, sendCommand, readResponse } = await connectIMAP(imapHost, imapPort, imapSsl);
 
     try {
-      // Récupérer et gérer le mot de passe (chiffré ou clair)
-      let imapPassword = config.imap_password;
-
-      // Détecter si le mot de passe est chiffré (base64 long = chiffré)
-      const isEncrypted = imapPassword && imapPassword.length > 50 && /^[A-Za-z0-9+/=]+$/.test(imapPassword);
-
-      if (isEncrypted) {
-        console.log('[IMAP-POLLER] Déchiffrement du mot de passe...');
-        const { data: decryptedPassword, error: decryptError } = await supabase.rpc(
-          'decrypt_email_password',
-          { encrypted_password: imapPassword }
-        );
-        
-        if (decryptError || !decryptedPassword) {
-          throw new Error(`Échec du déchiffrement: ${decryptError?.message}`);
-        }
-        
-        imapPassword = decryptedPassword;
-      } else {
-        console.log('[IMAP-POLLER] Mot de passe en clair détecté');
-      }
-
-      if (!config.imap_host || !config.imap_email || !imapPassword) {
-        throw new Error('Configuration IMAP incomplète');
-      }
-
-      // Connexion IMAP réelle avec logs détaillés
-      console.log('[IMAP] 1/7 - Connexion TLS au serveur IMAP...');
-      console.log(`[IMAP-POLLER] Connecting to ${config.imap_host}:${config.imap_port || 993}`);
-      
-      const sessionId = crypto.randomUUID();
-      const sessionCommands: string[] = [];
-      const sessionResponses: string[] = [];
-      const sessionStart = new Date();
-      
-      let conn: Deno.TlsConn | Deno.Conn;
-      
-      // Connexion TLS
-      if (config.imap_ssl !== false) {
-        conn = await Deno.connectTls({
-          hostname: config.imap_host,
-          port: config.imap_port || 993,
-        });
-      } else {
-        conn = await Deno.connect({
-          hostname: config.imap_host,
-          port: config.imap_port || 143,
-        });
-      }
-      console.log('[IMAP] ✓ Connexion établie');
-
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-
-      async function readResponse(): Promise<string> {
-        const buffer = new Uint8Array(8192);
-        let response = '';
-        
-        const n = await conn.read(buffer);
-        if (!n) throw new Error('Connection closed');
-        
-        response = decoder.decode(buffer.subarray(0, n));
-        sessionResponses.push(response);
-        return response;
-      }
-
-      async function sendCommand(cmd: string, tag: string): Promise<string> {
-        const fullCmd = `${tag} ${cmd}\r\n`;
-        sessionCommands.push(fullCmd.trim());
-        await conn.write(encoder.encode(fullCmd));
-        return await readResponse();
-      }
-
-      // Lire le greeting
-      console.log('[IMAP] 2/7 - Lecture du greeting serveur...');
-      const greeting = await readResponse();
-      console.log(`[IMAP-POLLER] Connected: ${greeting.substring(0, 50)}`);
-      
+      // Read greeting
+      let greeting = await readResponse();
       if (!greeting.includes('OK')) {
-        throw new Error('Serveur IMAP n\'a pas renvoyé OK');
+        throw new Error('IMAP greeting did not contain OK');
       }
-      console.log('[IMAP] ✓ Greeting reçu');
 
-      // Obtenir les capabilities
-      const capResp = await sendCommand('CAPABILITY', 'A00');
-      const capabilities = capResp.toUpperCase();
+      // Get capabilities
+      await sendCommand('a001 CAPABILITY');
+      const capabilityResponse = await readResponse();
+
+      // Authenticate with CRAM-MD5 (using HMAC-MD5)
+      let authResponse = '';
       
-      // Authentification (CRAM-MD5 si disponible, sinon LOGIN)
-      console.log('[IMAP] 3/7 - Authentification CRAM-MD5/LOGIN...');
-      let authSuccess = false;
-      
-      if (capabilities.includes('AUTH=CRAM-MD5')) {
-        console.log('[IMAP-POLLER] Tentative CRAM-MD5', {
-          email: config.imap_email,
-          password_length: imapPassword?.length || 0,
-          is_encrypted: isEncrypted,
+      if (capabilityResponse.includes('AUTH=CRAM-MD5')) {
+        console.log(`[${supplierId}] Attempting CRAM-MD5`, {
+          email: imapEmail,
+          password_length: imapPassword.length,
+          is_encrypted: isEncrypted
         });
-        console.log('[IMAP-POLLER] Attempting CRAM-MD5');
-        try {
-          await conn.write(encoder.encode('A01 AUTHENTICATE CRAM-MD5\r\n'));
-          const challengeResp = await readResponse();
+        
+        await sendCommand('a002 AUTHENTICATE CRAM-MD5');
+        const challengeResponse = await readResponse();
+        
+        const challengeMatch = challengeResponse.match(/\+ (.+)/);
+        if (challengeMatch) {
+          const challenge = atob(challengeMatch[1]);
+          const hmacHex = await hmacMd5(imapPassword, challenge);
+          const response = btoa(`${imapEmail} ${hmacHex}`);
           
-          if (challengeResp.startsWith('+')) {
-            const challengeB64 = challengeResp.substring(2).trim();
-            const challenge = atob(challengeB64);
-            
-            // HMAC-MD5 simpliste (production devrait utiliser crypto.subtle)
-            const hmac = await crypto.subtle.importKey(
-              'raw',
-              encoder.encode(imapPassword),
-              { name: 'HMAC', hash: 'SHA-256' },
-              false,
-              ['sign']
-            );
-            const signature = await crypto.subtle.sign('HMAC', hmac, encoder.encode(challenge));
-            const hmacHex = Array.from(new Uint8Array(signature))
-              .map(b => b.toString(16).padStart(2, '0'))
-              .join('');
-            
-            const response = btoa(`${config.imap_email} ${hmacHex}`);
-            await conn.write(encoder.encode(response + '\r\n'));
-            const authResp = await readResponse();
-            
-            if (authResp.includes('A01 OK')) {
-              authSuccess = true;
-              console.log('[IMAP-POLLER] CRAM-MD5 auth successful');
-              console.log('[IMAP] ✓ Authentification réussie (CRAM-MD5)');
-            }
+          await sendCommand(response);
+          authResponse = await readResponse();
+          
+          if (!authResponse.includes('a002 OK')) {
+            console.log(`[${supplierId}] CRAM-MD5 failed, trying LOGIN`);
           }
-        } catch (e) {
-          console.log('[IMAP-POLLER] CRAM-MD5 failed, trying LOGIN');
         }
       }
-      
-      if (!authSuccess) {
-        const loginResp = await sendCommand(`LOGIN ${config.imap_email} ${imapPassword}`, 'A02');
-        if (!loginResp.includes('A02 OK')) {
-          throw new Error('Authentification échouée');
+
+      // Fallback to LOGIN if CRAM-MD5 not available or failed
+      if (!authResponse.includes('OK')) {
+        await sendCommand(`a003 LOGIN ${imapEmail} ${imapPassword}`);
+        authResponse = await readResponse();
+        
+        if (!authResponse.includes('a003 OK')) {
+          throw new Error('Authentication failed');
         }
-        console.log('[IMAP-POLLER] LOGIN auth successful');
-        console.log('[IMAP] ✓ Authentification réussie (LOGIN)');
       }
 
-      // Sélectionner le dossier
-      console.log('[IMAP] 4/7 - Sélection de la boîte INBOX...');
-      const folder = config.imap_folder || 'INBOX';
-      const selectResp = await sendCommand(`SELECT ${folder}`, 'A03');
-      
-      if (!selectResp.includes('A03 OK')) {
-        throw new Error(`Impossible de sélectionner ${folder}`);
-      }
-      console.log(`[IMAP] ✓ Boîte ${folder} sélectionnée`);
+      console.log(`[${supplierId}] Authentication successful`);
 
-      // Chercher les emails non lus
-      console.log('[IMAP] 5/7 - Recherche des emails non lus...');
-      const searchResp = await sendCommand('SEARCH UNSEEN', 'A04');
-      const unreadIds: string[] = [];
+      // Select mailbox
+      await sendCommand(`a004 SELECT "${imapFolder}"`);
+      const selectResponse = await readResponse();
       
-      const searchMatch = searchResp.match(/\* SEARCH (.+)/);
-      if (searchMatch) {
-        unreadIds.push(...searchMatch[1].trim().split(' ').filter(id => id));
+      if (!selectResponse.includes('OK')) {
+        throw new Error(`Failed to select folder: ${imapFolder}`);
       }
-      
-      emailsFound = unreadIds.length;
-      console.log(`[IMAP-POLLER] Found ${emailsFound} unread emails`);
-      console.log(`[IMAP] ✓ ${emailsFound} email(s) non lu(s) trouvé(s)`);
 
-      // Traiter chaque email
-      if (emailsFound > 0) {
-        console.log('[IMAP] 6/7 - Téléchargement des pièces jointes...');
+      // Search for recent messages (last 3 days)
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const searchDate = threeDaysAgo.toLocaleDateString('en-GB', { 
+        day: '2-digit', 
+        month: 'short', 
+        year: 'numeric' 
+      }).replace(/ /g, '-');
+      
+      await sendCommand(`a005 SEARCH SINCE ${searchDate}`);
+      const searchResponse = await readResponse();
+      
+      const searchMatch = searchResponse.match(/\* SEARCH (.+)/);
+      if (!searchMatch || !searchMatch[1].trim()) {
+        console.log(`[${supplierId}] No emails found since ${searchDate}`);
+        
+        await supabaseAdmin.from('email_poll_logs').insert({
+          user_id: userId,
+          supplier_id: supplierId,
+          status: 'no_new_emails',
+          emails_found: 0,
+          emails_processed: 0,
+          details: { message: `No emails since ${searchDate}` }
+        });
+        
+        conn.close();
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            supplier: supplierName,
+            emails: 0,
+            message: `No emails found since ${searchDate}`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let messageIds = searchMatch[1].trim().split(' ').map(id => id.trim()).filter(id => id);
+      
+      // Limit to latest 25 emails
+      if (messageIds.length > 25) {
+        console.log(`[${supplierId}] Limiting to latest 25 emails (found ${messageIds.length})`);
+        messageIds = messageIds.slice(-25);
       }
       
-      for (const id of unreadIds) {
-        console.log(`[IMAP] Traitement de l'email ${id}/${unreadIds.length}...`);
+      console.log(`[${supplierId}] Found ${messageIds.length} emails to process`);
+
+      let processedCount = 0;
+      const processedEmails = [];
+
+      for (const msgId of messageIds) {
         try {
-          // Récupérer les headers
-          const headerResp = await sendCommand(`FETCH ${id} (BODY[HEADER.FIELDS (FROM SUBJECT DATE)])`, `A05${id}`);
+          // Fetch headers and BODYSTRUCTURE
+          await sendCommand(`a${100 + parseInt(msgId)} FETCH ${msgId} (BODY[HEADER.FIELDS (FROM SUBJECT)] BODYSTRUCTURE)`);
+          let fullResponse = '';
+          let chunk = await readResponse();
+          fullResponse += chunk;
           
-          // Récupérer la structure pour détecter les pièces jointes
-          const structResp = await sendCommand(`FETCH ${id} BODYSTRUCTURE`, `A06${id}`);
+          while (!chunk.includes(`a${100 + parseInt(msgId)} OK`)) {
+            chunk = await readResponse();
+            fullResponse += chunk;
+          }
           
-          // Parser pour trouver les CSV/XLSX
-          const hasCsv = structResp.includes('text/csv') || structResp.includes('application/vnd.ms-excel') || 
-                         structResp.includes('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+          const fromMatch = fullResponse.match(/From: (.+)/i);
+          const subjectMatch = fullResponse.match(/Subject: (.+)/i);
           
-          if (!hasCsv) {
-            console.log(`[IMAP-POLLER] Email ${id}: pas de fichier CSV/XLSX, ignoré`);
+          const fromEmail = fromMatch ? fromMatch[1].trim() : imapEmail;
+          const subject = subjectMatch ? subjectMatch[1].trim() : 'Import IMAP automatique';
+
+          const bodyStructMatch = fullResponse.match(/BODYSTRUCTURE \((.+)\)/s);
+          if (!bodyStructMatch) {
+            console.log(`[${supplierId}] Email ${msgId}: No BODYSTRUCTURE found`);
             continue;
           }
 
-          // Pour simplifier, on récupère toute la pièce jointe (partie 2 généralement)
-          const bodyResp = await sendCommand(`FETCH ${id} BODY[2]`, `A07${id}`);
+          const bodyStruct = bodyStructMatch[1];
           
-          // Extraire le contenu (très simplifié, production devrait parser MIME correctement)
-          const attachmentMatch = bodyResp.match(/BODY\[2\] \{(\d+)\}\r\n([\s\S]+)/);
-          if (!attachmentMatch) {
-            console.log(`[IMAP-POLLER] Email ${id}: impossible d'extraire la pièce jointe`);
+          // Look for CSV/XLSX attachments
+          const attachmentRegex = /"(?:attachment|inline)"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls))"?/gi;
+          const attachments = [];
+          let match;
+          
+          while ((match = attachmentRegex.exec(bodyStruct)) !== null) {
+            attachments.push({
+              filename: match[1],
+              type: match[2].toLowerCase()
+            });
+          }
+
+          if (attachments.length === 0) {
+            console.log(`[${supplierId}] Email ${msgId}: No CSV/XLSX attachments found`);
             continue;
           }
 
-          const attachmentContent = attachmentMatch[2];
-          const blob = new Blob([attachmentContent]);
+          console.log(`[${supplierId}] Email ${msgId}: Found ${attachments.length} attachment(s):`, attachments.map(a => a.filename));
+
+          // Fetch attachment content (simplified: assume part 2)
+          const partNumber = '2';
           
-          // Upload vers Storage
-          const fileName = `supplier_${supplierId}_${Date.now()}.csv`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
+          await sendCommand(`a${200 + parseInt(msgId)} FETCH ${msgId} BODY[${partNumber}]`);
+          let bodyContent = '';
+          chunk = await readResponse();
+          bodyContent += chunk;
+          
+          while (!chunk.includes(`a${200 + parseInt(msgId)} OK`)) {
+            chunk = await readResponse();
+            bodyContent += chunk;
+          }
+
+          const contentMatch = bodyContent.match(/BODY\[[\d.]+\]\s+(?:\{[\d]+\}\r?\n)?([A-Za-z0-9+/=\s]+)/is);
+          
+          if (!contentMatch) {
+            console.log(`[${supplierId}] Email ${msgId}: Could not extract attachment content`);
+            continue;
+          }
+
+          const base64Content = contentMatch[1].replace(/[\r\n\s]/g, '');
+          const attachmentBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
+
+          const fileName = attachments[0].filename;
+          const fileType = attachments[0].type === 'csv' ? 'csv' : 'xlsx';
+
+          console.log(`[${supplierId}] Email ${msgId}: Decoded ${fileName}, size: ${attachmentBuffer.length} bytes`);
+
+          // Upload to Storage
+          const timestamp = new Date().getTime();
+          const storagePath = `${userId}/${supplierId}/${timestamp}-${fileName}`;
+          
+          const { data: uploadData, error: uploadError } = await supabaseAdmin
+            .storage
             .from('email-attachments')
-            .upload(fileName, blob, {
-              contentType: 'text/csv',
+            .upload(storagePath, attachmentBuffer, {
+              contentType: fileType === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
               upsert: false
             });
 
           if (uploadError) {
-            console.error(`[IMAP-POLLER] Upload error:`, uploadError);
+            console.error(`[${supplierId}] Upload error for email ${msgId}:`, uploadError);
             continue;
           }
 
-          // Insérer dans email_inbox
-          const { error: inboxError } = await supabase
+          console.log(`[${supplierId}] Uploaded to Storage:`, uploadData.path);
+
+          // Insert into email_inbox
+          const { data: inboxData, error: inboxError } = await supabaseAdmin
             .from('email_inbox')
             .insert({
-              user_id: supplier.user_id,
+              user_id: userId,
               supplier_id: supplierId,
-              from_email: config.imap_email,
-              subject: `Import automatique via IMAP`,
-              detection_method: 'imap_polling',
-              attachment_url: uploadData.path,
+              from_email: fromEmail,
+              subject: subject,
               attachment_name: fileName,
-              status: 'pending'
-            });
+              attachment_type: fileType,
+              attachment_url: uploadData.path,
+              attachment_size_kb: Math.round(attachmentBuffer.length / 1024),
+              status: 'pending',
+              detection_method: 'imap_poll',
+              detected_supplier_name: supplierName
+            })
+            .select()
+            .single();
 
           if (inboxError) {
-            console.error(`[IMAP-POLLER] Insert inbox error:`, inboxError);
+            console.error(`[${supplierId}] Inbox insert error:`, inboxError);
             continue;
           }
 
-          // Marquer comme lu
-          console.log('[IMAP] 7/7 - Marquage comme lu...');
-          await sendCommand(`STORE ${id} +FLAGS (\\Seen)`, `A08${id}`);
-          
-          emailsProcessed++;
-          console.log(`[IMAP-POLLER] Email ${id} traité avec succès`);
-          console.log(`[IMAP] ✓ Email ${id} traité (${emailsProcessed}/${emailsFound})`);
+          console.log(`[${supplierId}] Created inbox entry:`, inboxData.id);
+
+          // Trigger process-email-attachment immediately
+          try {
+            const processResponse = await fetch(
+              `${Deno.env.get('SUPABASE_URL')}/functions/v1/process-email-attachment`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  inbox_id: inboxData.id,
+                  user_id: userId
+                })
+              }
+            );
+            
+            if (processResponse.ok) {
+              console.log(`[${supplierId}] Triggered processing for inbox ${inboxData.id}`);
+            } else {
+              console.error(`[${supplierId}] Failed to trigger processing:`, await processResponse.text());
+            }
+          } catch (processError) {
+            console.error(`[${supplierId}] Error triggering processing:`, processError);
+          }
+
+          // Mark as seen
+          await sendCommand(`a${300 + parseInt(msgId)} STORE ${msgId} +FLAGS (\\Seen)`);
+          await readResponse();
+
+          processedCount++;
+          processedEmails.push({
+            id: msgId,
+            from: fromEmail,
+            subject: subject,
+            attachment: fileName,
+            inbox_id: inboxData.id
+          });
+
         } catch (emailError) {
-          console.error(`[IMAP-POLLER] Error processing email ${id}:`, emailError);
+          console.error(`[${supplierId}] Error processing email ${msgId}:`, emailError);
         }
       }
 
-      // Déconnexion
-      await sendCommand('LOGOUT', 'A99');
+      // Logout
+      await sendCommand('a999 LOGOUT');
+      await readResponse();
       conn.close();
-      
-      console.log('[IMAP] ✓ Déconnexion réussie');
-      console.log(`[IMAP] Polling terminé: ${emailsProcessed}/${emailsFound} emails traités`);
 
-      // Sauvegarder les logs de session
-      const sessionEnd = new Date();
-      await supabase.from('imap_session_logs').insert({
+      console.log(`[${supplierId}] Polling completed: ${processedCount}/${messageIds.length} emails processed`);
+
+      // Log successful poll
+      await supabaseAdmin.from('email_poll_logs').insert({
+        user_id: userId,
         supplier_id: supplierId,
-        user_id: supplier.user_id,
-        session_start: sessionStart.toISOString(),
-        session_end: sessionEnd.toISOString(),
-        commands_sent: sessionCommands,
-        server_responses: sessionResponses,
-        status: 'success'
+        status: processedCount > 0 ? 'emails_found' : 'no_new_emails',
+        emails_found: messageIds.length,
+        emails_processed: processedCount,
+        details: { processed_emails: processedEmails }
       });
 
-      pollStatus = emailsFound > 0 ? 'emails_found' : 'no_new_emails';
-      
-      // Log du poll
-      await supabase
-        .from('email_poll_logs')
-        .insert({
-          supplier_id: supplierId,
-          user_id: supplier.user_id,
-          status: pollStatus,
-          emails_found: emailsFound,
-          emails_processed: emailsProcessed,
-          details: {
-            host: config.imap_host,
-            folder: config.imap_folder || 'INBOX'
-          }
-        });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          supplier: supplierName,
+          status: processedCount > 0 ? 'emails_found' : 'no_new_emails',
+          emails_found: messageIds.length,
+          emails_processed: processedCount,
+          processed_emails: processedEmails
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
 
     } catch (error) {
-      errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[IMAP-POLLER] Erreur détaillée:', {
-        supplier: supplier.supplier_name,
-        host: config.imap_host,
-        port: config.imap_port,
-        ssl: config.imap_ssl,
-        error_message: errorMessage,
-        error_stack: error instanceof Error ? error.stack : undefined,
-      });
-      
-      pollStatus = errorMessage.includes('auth') || errorMessage.includes('password') 
-        ? 'auth_failed' 
-        : 'connection_error';
-      
-      // Log l'erreur
-      await supabase
-        .from('email_poll_logs')
-        .insert({
-          supplier_id: supplierId,
-          user_id: supplier.user_id,
-          status: pollStatus,
-          emails_found: 0,
-          emails_processed: 0,
-          error_message: errorMessage,
-          details: { error: errorMessage }
-        });
+      conn.close();
+      throw error;
     }
 
-    return new Response(JSON.stringify({
-      success: pollStatus !== 'auth_failed' && pollStatus !== 'connection_error',
-      supplier_id: supplierId,
-      supplier_name: supplier.supplier_name,
-      status: pollStatus,
-      emails_found: emailsFound,
-      emails_processed: emailsProcessed,
-      error: errorMessage
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200
-    });
-
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('[IMAP-POLLER] Fatal error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: errorMsg
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
+    console.error('[IMAP-POLLER] Error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const isAuthError = errorMessage.includes('auth') || 
+                       errorMessage.includes('credential') || 
+                       errorMessage.includes('login') ||
+                       errorMessage.includes('password');
+    
+    const errorStatus = isAuthError ? 'auth_failed' : 'connection_error';
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: errorMessage,
+        status: errorStatus
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 });

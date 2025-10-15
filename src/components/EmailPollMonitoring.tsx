@@ -318,13 +318,43 @@ export function EmailPollMonitoring() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setSelectedLog(log)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedLog(log)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const testToast = toast.loading("Test de connexion IMAP...");
+                              try {
+                                const { error } = await supabase.functions.invoke('test-imap-connection', {
+                                  body: {
+                                    host: log.supplier_configurations?.connection_config?.imap_host,
+                                    port: log.supplier_configurations?.connection_config?.imap_port || 993,
+                                    email: log.supplier_configurations?.connection_config?.imap_email,
+                                    password: log.supplier_configurations?.connection_config?.imap_password,
+                                    ssl: log.supplier_configurations?.connection_config?.imap_ssl !== false,
+                                    folder: log.supplier_configurations?.connection_config?.imap_folder || 'INBOX'
+                                  }
+                                });
+                                
+                                toast.dismiss(testToast);
+                                if (error) throw error;
+                                toast.success("✅ Connexion IMAP réussie!");
+                              } catch (error: any) {
+                                toast.dismiss(testToast);
+                                toast.error(`❌ Échec: ${error.message}`);
+                              }
+                            }}
+                          >
+                            Tester
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
