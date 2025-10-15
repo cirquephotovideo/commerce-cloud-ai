@@ -284,18 +284,20 @@ async function testIMAPConnection(config: {
       }
     }
 
-    // Fallback to LOGIN
+    // Fallback to LOGIN only if LOGINDISABLED is not present
     if (!authenticated) {
+      if (allCapabilities.includes('LOGINDISABLED')) {
+        const supportedMethods = allCapabilities.filter(c => c.startsWith('AUTH=')).join(', ');
+        throw new Error(`LOGIN authentication is disabled. Server supports: ${supportedMethods}. CRAM-MD5 failed with all username variants.`);
+      }
+      
       console.log('[IMAP-TEST] Using LOGIN authentication...');
       const loginResponse = await sendCommand(
         'A002',
         `LOGIN "${config.email}" "${config.password}"`
       );
 
-      if (loginResponse.includes('LOGINDISABLED') || loginResponse.includes('NO LOGIN')) {
-        const supportedMethods = allCapabilities.filter(c => c.startsWith('AUTH=')).join(', ');
-        throw new Error(`LOGIN authentication is disabled. Server supports: ${supportedMethods}. You may need to enable "Less secure apps" or use app-specific passwords.`);
-      } else if (!loginResponse.includes('A002 OK')) {
+      if (!loginResponse.includes('A002 OK')) {
         if (loginResponse.includes('535') || loginResponse.includes('authentication failed')) {
           throw new Error('Authentication failed: Invalid username or password');
         }

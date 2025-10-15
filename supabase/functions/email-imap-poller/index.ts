@@ -6,23 +6,132 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// HMAC-MD5 utility for CRAM-MD5 authentication
-async function hmacMd5(key: string, message: string): Promise<string> {
-  const keyData = new TextEncoder().encode(key);
-  const messageData = new TextEncoder().encode(message);
-  
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'MD5' },
-    false,
-    ['sign']
-  );
-  
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-  return Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+// MD5 Implementation (native Deno, no crypto.subtle.importKey needed)
+function md5(message: Uint8Array): Uint8Array {
+  const s = new Uint32Array([
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
+    0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+    0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+    0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+    0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
+    0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+    0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+    0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+    0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+    0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
+    0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
+    0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+    0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+    0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
+  ]);
+
+  const r = new Uint8Array([
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+  ]);
+
+  const g = new Uint8Array([
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
+    1, 6,11, 0, 5,10,15, 4, 9,14, 3, 8,13, 2, 7,12,
+    5, 8,11,14, 1, 4, 7,10,13, 0, 3, 6, 9,12,15, 2,
+    0, 7,14, 5,12, 3,10, 1, 8,15, 6,13, 4,11, 2, 9
+  ]);
+
+  const originalLen = message.length;
+  const newLen = originalLen + ((55 - (originalLen % 64)) % 64) + 9;
+  const padded = new Uint8Array(newLen);
+  padded.set(message);
+  padded[originalLen] = 0x80;
+
+  const view = new DataView(padded.buffer);
+  view.setUint32((newLen - 8), originalLen * 8, true);
+
+  let a0 = 0x67452301;
+  let b0 = 0xefcdab89;
+  let c0 = 0x98badcfe;
+  let d0 = 0x10325476;
+
+  for (let offset = 0; offset < newLen; offset += 64) {
+    const chunk = new Uint32Array(16);
+    for (let i = 0; i < 16; i++) {
+      chunk[i] = view.getUint32(offset + i * 4, true);
+    }
+
+    let A = a0, B = b0, C = c0, D = d0;
+    for (let i = 0; i < 64; i++) {
+      let F, dtemp;
+      if (i < 16) {
+        F = (B & C) | (~B & D);
+        dtemp = i;
+      } else if (i < 32) {
+        F = (D & B) | (~D & C);
+        dtemp = g[i];
+      } else if (i < 48) {
+        F = B ^ C ^ D;
+        dtemp = g[i];
+      } else {
+        F = C ^ (B | ~D);
+        dtemp = g[i];
+      }
+
+      F = (F + A + s[i] + chunk[dtemp]) >>> 0;
+      A = D;
+      D = C;
+      C = B;
+      B = (B + ((F << r[i]) | (F >>> (32 - r[i])))) >>> 0;
+    }
+
+    a0 = (a0 + A) >>> 0;
+    b0 = (b0 + B) >>> 0;
+    c0 = (c0 + C) >>> 0;
+    d0 = (d0 + D) >>> 0;
+  }
+
+  const result = new Uint8Array(16);
+  const resultView = new DataView(result.buffer);
+  resultView.setUint32(0, a0, true);
+  resultView.setUint32(4, b0, true);
+  resultView.setUint32(8, c0, true);
+  resultView.setUint32(12, d0, true);
+
+  return result;
+}
+
+// HMAC-MD5 for CRAM-MD5 authentication
+function hmacMd5(key: string, message: string): string {
+  const encoder = new TextEncoder();
+  const keyBytes = encoder.encode(key);
+  const messageBytes = encoder.encode(message);
+
+  const blockSize = 64;
+  let processedKey: Uint8Array;
+
+  if (keyBytes.length > blockSize) {
+    processedKey = new Uint8Array(blockSize);
+    processedKey.set(md5(keyBytes));
+  } else if (keyBytes.length < blockSize) {
+    processedKey = new Uint8Array(blockSize);
+    processedKey.set(keyBytes);
+  } else {
+    processedKey = keyBytes;
+  }
+
+  const ipad = new Uint8Array(blockSize);
+  const opad = new Uint8Array(blockSize);
+
+  for (let i = 0; i < blockSize; i++) {
+    ipad[i] = processedKey[i] ^ 0x36;
+    opad[i] = processedKey[i] ^ 0x5c;
+  }
+
+  const innerHash = md5(new Uint8Array([...ipad, ...messageBytes]));
+  const outerHash = md5(new Uint8Array([...opad, ...innerHash]));
+
+  return Array.from(outerHash).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Utility to connect to IMAP
@@ -134,54 +243,97 @@ serve(async (req) => {
       await sendCommand('a001 CAPABILITY');
       const capabilityResponse = await readResponse();
 
-      // Authenticate with CRAM-MD5 (using HMAC-MD5) with fallback
+      // Authenticate with CRAM-MD5 with fallback username variants
       let authResponse = '';
       let usedUsername = '';
+      let authAttempts: any[] = [];
+      const loginDisabled = capabilityResponse.includes('LOGINDISABLED');
       
       if (capabilityResponse.includes('AUTH=CRAM-MD5')) {
         // Try 3 variants: username > email > local-part
         const authVariants = [
-          imapUsername || null,  // Explicit username if provided
-          imapEmail,             // Full email
-          imapEmail.split('@')[0] // Local part before @
-        ].filter(Boolean);
+          imapUsername || null,          // Explicit username if provided
+          imapEmail,                     // Full email
+          imapEmail.split('@')[0]        // Local part before @
+        ].filter(Boolean) as string[];
         
         console.log(`[${supplierId}] Attempting CRAM-MD5 with ${authVariants.length} username variants`);
+        console.log(`[${supplierId}] Variants to test:`, authVariants);
         
         for (const variant of authVariants) {
           try {
+            console.log(`[${supplierId}] Testing CRAM-MD5 with: ${variant}`);
             await sendCommand('a002 AUTHENTICATE CRAM-MD5');
             const challengeResponse = await readResponse();
             
             const challengeMatch = challengeResponse.match(/\+ (.+)/);
             if (challengeMatch) {
-              const challenge = atob(challengeMatch[1]);
-              const hmacHex = await hmacMd5(imapPassword, challenge);
-              const response = btoa(`${variant} ${hmacHex}`);
+              const challengeB64 = challengeMatch[1].trim();
+              const challenge = atob(challengeB64);
+              console.log(`[${supplierId}] Challenge received (decoded): ${challenge}`);
+              
+              const hmacHex = hmacMd5(imapPassword, challenge);
+              console.log(`[${supplierId}] HMAC-MD5 calculated: ${hmacHex.substring(0, 20)}...`);
+              
+              const authString = `${variant} ${hmacHex}`;
+              const response = btoa(authString);
               
               await sendCommand(response);
               authResponse = await readResponse();
+              
+              authAttempts.push({
+                username: variant,
+                challenge: challenge,
+                hmac_preview: hmacHex.substring(0, 20),
+                response: authResponse.substring(0, 100)
+              });
               
               if (authResponse.includes('a002 OK')) {
                 usedUsername = variant;
                 console.log(`[${supplierId}] ✅ CRAM-MD5 succeeded with username: ${variant}`);
                 break;
               } else {
-                console.log(`[${supplierId}] CRAM-MD5 failed with username: ${variant}`);
+                console.log(`[${supplierId}] ❌ CRAM-MD5 failed with username: ${variant}`);
+                console.log(`[${supplierId}] Server response: ${authResponse.substring(0, 200)}`);
               }
             }
           } catch (cramError) {
             console.warn(`[${supplierId}] CRAM-MD5 error with ${variant}:`, cramError);
+            authAttempts.push({
+              username: variant,
+              error: cramError instanceof Error ? cramError.message : String(cramError)
+            });
           }
         }
         
         if (!authResponse.includes('a002 OK')) {
-          console.log(`[${supplierId}] All CRAM-MD5 attempts failed, falling back to LOGIN`);
+          console.log(`[${supplierId}] All CRAM-MD5 attempts failed`);
+          
+          if (loginDisabled) {
+            // Do NOT try LOGIN if server has LOGINDISABLED
+            console.log(`[${supplierId}] LOGIN is disabled on server, cannot fallback`);
+            
+            // Log detailed auth failure
+            await supabaseAdmin.from('email_poll_logs').insert({
+              user_id: userId,
+              supplier_id: supplierId,
+              status: 'auth_failed',
+              emails_found: 0,
+              emails_processed: 0,
+              details: { 
+                capabilities: capabilityResponse,
+                auth_attempts: authAttempts,
+                error: 'CRAM-MD5 authentication failed with all username variants. LOGIN is disabled by server.'
+              }
+            });
+            
+            throw new Error('Authentication failed: CRAM-MD5 failed with all variants and LOGIN is disabled');
+          }
         }
       }
 
-      // Fallback to LOGIN if CRAM-MD5 not available or failed
-      if (!authResponse.includes('OK')) {
+      // Fallback to LOGIN ONLY if CRAM-MD5 not available or failed AND LOGIN is not disabled
+      if (!authResponse.includes('OK') && !loginDisabled) {
         console.log(`[${supplierId}] Attempting LOGIN authentication`);
         await sendCommand(`a003 LOGIN ${imapEmail} ${imapPassword}`);
         authResponse = await readResponse();
@@ -196,15 +348,19 @@ serve(async (req) => {
             emails_processed: 0,
             details: { 
               capabilities: capabilityResponse,
+              auth_attempts: authAttempts,
               attempted_user: imapEmail,
               server_response: authResponse,
               error: 'Authentication failed with all methods'
             }
           });
           
-          throw new Error('Authentication failed');
+          throw new Error('Authentication failed with all methods');
         }
         usedUsername = imapEmail;
+      } else if (!authResponse.includes('OK')) {
+        // Neither CRAM-MD5 nor LOGIN succeeded
+        throw new Error('Authentication failed: All methods exhausted');
       }
 
       console.log(`[${supplierId}] ✅ Authentication successful (user: ${usedUsername})`);
