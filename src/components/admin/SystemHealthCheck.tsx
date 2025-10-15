@@ -122,34 +122,91 @@ export const SystemHealthCheck = () => {
   };
 
   const updateHealthMetrics = async () => {
-    const [queueData, amazonCreds, recentErrors] = await Promise.all([
+    const [queueData, amazonCreds, recentErrors, healthLogs] = await Promise.all([
       checkEnrichmentQueue(),
       checkAmazonCredentials(),
-      checkRecentErrors()
+      checkRecentErrors(),
+      // Récupérer les logs de santé récents (24h)
+      supabase
+        .from('system_health_logs')
+        .select('status, component_name')
+        .eq('test_type', 'edge_function')
+        .gte('tested_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order('tested_at', { ascending: false })
     ]);
 
     // Update states
     setQueueStatus(queueData);
     setAmazonCredsStatus(amazonCreds);
 
-    // Update overall health based on metrics
-    const criticalIssues = 
-      (queueData.failed > 10 ? 1 : 0) +
-      (amazonCreds?.status === 'critical' ? 1 : 0) +
-      (recentErrors > 20 ? 1 : 0);
-    
-    const warningIssues =
-      (queueData.failed > 5 ? 1 : 0) +
-      (amazonCreds?.status === 'warning' ? 1 : 0) +
-      (recentErrors > 10 ? 1 : 0);
+    // Calculer le score réel depuis les logs
+    if (healthLogs.data && healthLogs.data.length > 0) {
+      // Grouper par component_name et prendre le status le plus récent
+      const latestStatuses = healthLogs.data.reduce((acc: any, log: any) => {
+        if (!acc[log.component_name]) {
+          acc[log.component_name] = log.status;
+        }
+        return acc;
+      }, {});
 
-    const healthScore = criticalIssues > 0 ? 30 : warningIssues > 0 ? 60 : 95;
-    setOverallHealth(healthScore);
+      const operational = Object.values(latestStatuses).filter(s => s === 'operational').length;
+      const total = Object.keys(latestStatuses).length;
+      const healthScore = total > 0 ? Math.round((operational / total) * 100) : 0;
+      
+      setOverallHealth(healthScore);
+      console.log(`[HEALTH] Calculated score: ${operational}/${total} = ${healthScore}%`);
+    } else {
+      // Fallback si aucun log récent
+      const criticalIssues = 
+        (queueData.failed > 10 ? 1 : 0) +
+        (amazonCreds?.status === 'critical' ? 1 : 0) +
+        (recentErrors > 20 ? 1 : 0);
+      
+      const warningIssues =
+        (queueData.failed > 5 ? 1 : 0) +
+        (amazonCreds?.status === 'warning' ? 1 : 0) +
+        (recentErrors > 10 ? 1 : 0);
+
+      const healthScore = criticalIssues > 0 ? 30 : warningIssues > 0 ? 60 : 95;
+      setOverallHealth(healthScore);
+    }
+  };
+
+  const clearAllTests = async () => {
+    try {
+      const { error } = await supabase
+        .from('system_health_logs')
+        .delete()
+        .eq('test_type', 'edge_function');
+      
+      if (error) throw error;
+      
+      await updateHealthMetrics();
+      
+      toast({
+        title: "🗑️ Tests effacés",
+        description: "Tous les résultats de tests ont été supprimés",
+      });
+    } catch (error: any) {
+      toast({
+        title: "❌ Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   // Load health metrics on mount
   useEffect(() => {
     updateHealthMetrics();
+    
+    // Écouter les événements de mise à jour
+    const handleUpdate = () => updateHealthMetrics();
+    window.addEventListener('health-metrics-updated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('health-metrics-updated', handleUpdate);
+    };
   }, []);
 
   return (
@@ -227,16 +284,25 @@ export const SystemHealthCheck = () => {
             <CardTitle className="text-sm font-medium">Actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button 
-              onClick={() => {
-                runAllTests();
-                updateHealthMetrics();
-              }} 
-              disabled={isRunningAll} 
-              className="w-full"
-            >
-              {isRunningAll ? "Tests en cours..." : "🚀 Tout tester"}
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => {
+                  runAllTests();
+                  updateHealthMetrics();
+                }} 
+                disabled={isRunningAll} 
+                className="flex-1"
+              >
+                {isRunningAll ? "Tests en cours..." : "🚀 Tester"}
+              </Button>
+              <Button
+                onClick={clearAllTests}
+                variant="outline"
+                className="flex-1"
+              >
+                🗑️ Effacer
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

@@ -11,6 +11,7 @@ interface SearchRequest {
   query?: string;
   competitorSiteIds?: string[];
   maxResults?: number;
+  testMode?: boolean;
 }
 
 interface SearchError {
@@ -110,6 +111,32 @@ serve(async (req) => {
       hasProductName: !!rawProductName,
       timestamp: new Date().toISOString()
     });
+    
+    // Mode test : retourner mock
+    if (requestBody.testMode) {
+      console.log('[DUAL-ENGINE] Test mode - skipping search API calls');
+      return new Response(JSON.stringify({
+        results: [
+          {
+            product_name: 'Test Product',
+            price: 999.99,
+            source: 'test-site',
+            url: 'https://example.com/test',
+            search_engine: 'test'
+          }
+        ],
+        stats: {
+          total_results: 1,
+          google_results: 0,
+          serper_results: 0,
+          dual_results: 0,
+          response_time_ms: 0
+        },
+        testMode: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
     const GOOGLE_CX = Deno.env.get('GOOGLE_SEARCH_CX');

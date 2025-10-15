@@ -19,7 +19,22 @@ serve(async (req) => {
     const body = await req.json();
     console.log('[AI-CHAT] Request body:', JSON.stringify(body));
     
-    const { message, messages = [], mcpContext } = body;
+    const { message, messages = [], mcpContext, skipAICall } = body;
+    
+    // Mode test : validation seulement
+    if (skipAICall) {
+      console.log('[AI-CHAT] Test mode - skipping AI call');
+      return new Response(
+        JSON.stringify({ 
+          response: 'Test mode successful - validation OK',
+          testMode: true 
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200,
+        }
+      );
+    }
     console.log('[AI-CHAT] Message:', message);
     console.log('[AI-CHAT] Messages count:', messages.length);
     console.log('[AI-CHAT] MCP Context:', mcpContext);

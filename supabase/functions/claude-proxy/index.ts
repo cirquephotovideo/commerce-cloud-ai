@@ -79,7 +79,21 @@ serve(async (req) => {
       });
     }
 
-    const { model = 'claude-sonnet-4-20250514', messages, max_tokens = 4096 } = await req.json();
+    const { model = 'claude-sonnet-4-20250514', messages, max_tokens = 4096, testMode } = await req.json();
+    
+    // Mode test : retourner mock
+    if (testMode) {
+      console.log('[CLAUDE-PROXY] Test mode - returning mock response');
+      return new Response(JSON.stringify({
+        id: 'test-msg-id',
+        content: [{ type: 'text', text: 'Test mode response' }],
+        model: model,
+        usage: { input_tokens: 0, output_tokens: 0 },
+        testMode: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     console.log('[CLAUDE-PROXY] Request:', { 
       model, 

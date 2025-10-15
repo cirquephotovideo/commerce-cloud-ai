@@ -224,13 +224,28 @@ serve(async (req) => {
     throw new Error('Missing productInput, name, url, or structured data');
   }
 
-  console.log('[PRODUCT-ANALYZER] Request validated:', {
-    productInput,
-    inputType: detectInputType(productInput),
-    includeImages,
-    hasAdditionalData: Object.keys(additionalData).length > 0,
-    timestamp: new Date().toISOString()
-  });
+    console.log('[PRODUCT-ANALYZER] Request validated:', {
+      productInput,
+      inputType: detectInputType(productInput),
+      includeImages,
+      hasAdditionalData: Object.keys(additionalData).length > 0,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Mode test : retourner mock
+    if (body.testMode) {
+      console.log('[PRODUCT-ANALYZER] Test mode - returning mock analysis');
+      return new Response(
+        JSON.stringify({
+          product_name: 'Test Product',
+          category: 'Electronics',
+          price: 999.99,
+          seo_title: 'Test Product - Mock Data',
+          testMode: true
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {

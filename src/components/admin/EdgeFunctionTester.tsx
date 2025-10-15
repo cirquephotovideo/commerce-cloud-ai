@@ -24,7 +24,8 @@ const edgeFunctions: EdgeFunction[] = [
     status: 'untested',
     testPayload: {
       productInput: "https://www.amazon.fr/dp/B0CX23V2ZK",
-      includeImages: true
+      includeImages: true,
+      testMode: true
     }
   },
   { name: 'check-subscription', category: 'core', status: 'untested' },
@@ -46,7 +47,8 @@ const edgeFunctions: EdgeFunction[] = [
     testPayload: { 
       productName: 'MacBook Air M2',
       competitorSiteIds: [],
-      maxResults: 5
+      maxResults: 5,
+      testMode: true
     }
   },
   
@@ -56,10 +58,39 @@ const edgeFunctions: EdgeFunction[] = [
   { name: 'amazon-token-manager', category: 'amazon', status: 'untested' },
   
   // AI Functions
-  { name: 'ai-chat', category: 'ai', status: 'untested', testPayload: { messages: [{ role: 'user', content: 'Hello' }] } },
+  { 
+    name: 'ai-chat', 
+    category: 'ai', 
+    status: 'untested',
+    testPayload: {
+      message: 'test',
+      messages: [],
+      skipAICall: true
+    }
+  },
   { name: 'ai-taxonomy-categorizer', category: 'ai', status: 'untested' },
-  { name: 'claude-proxy', category: 'ai', status: 'untested' },
-  { name: 'openai-proxy', category: 'ai', status: 'untested' },
+  { 
+    name: 'claude-proxy', 
+    category: 'ai', 
+    status: 'untested',
+    testPayload: {
+      model: 'claude-sonnet-4-20250514',
+      messages: [{ role: 'user', content: 'test' }],
+      max_tokens: 10,
+      testMode: true
+    }
+  },
+  { 
+    name: 'openai-proxy', 
+    category: 'ai', 
+    status: 'untested',
+    testPayload: {
+      model: 'gpt-5-mini',
+      messages: [{ role: 'user', content: 'test' }],
+      max_completion_tokens: 10,
+      testMode: true
+    }
+  },
   { 
     name: 'openrouter-proxy', 
     category: 'ai', 
@@ -73,7 +104,14 @@ const edgeFunctions: EdgeFunction[] = [
       max_tokens: 50
     }
   },
-  { name: 'ollama-proxy', category: 'ai', status: 'untested' },
+  { 
+    name: 'ollama-proxy', 
+    category: 'ai', 
+    status: 'untested',
+    testPayload: {
+      action: 'test'
+    }
+  },
   
   // Export Functions
   { name: 'export-to-odoo', category: 'export', status: 'untested' },
@@ -214,24 +252,131 @@ export const EdgeFunctionTester = () => {
         variant: "destructive",
       });
     }
+    
+    // Émettre événement pour mise à jour du score
+    window.dispatchEvent(new CustomEvent('health-metrics-updated'));
   };
 
   const generateFixPrompt = (functionName: string, errorMessage: string): string => {
-    // Special handling for dual-search-engine
     if (functionName === 'dual-search-engine') {
       return `Fix the dual-search-engine edge function. Error: "${errorMessage}".
 
 Checklist:
-1. ✅ Validate request has productName (required)
-2. ✅ Handle empty competitorSiteIds by fetching all active sites
-3. ✅ Check GOOGLE_SEARCH_API_KEY or SERPER_API_KEY configured
-4. ✅ Add proper error codes (MISSING_PRODUCT_NAME, NO_COMPETITOR_SITES)
-5. ✅ Log all steps with timestamps
+1. ✅ Support both { productName } and { query } in request
+2. ✅ Validate GOOGLE_SEARCH_API_KEY or SERPER_API_KEY is set
+3. ✅ Handle empty competitorSiteIds (fetch from database)
+4. ✅ Add timeout protection for search API calls (10s)
+5. ✅ Log all search results with [DUAL-ENGINE] prefix
 
 Common issues:
-- Missing productName → Return 400 with clear message
-- No competitor sites → Fetch all active ones automatically
-- API errors → Log full response with timestamps`;
+- Missing productName → Add query fallback
+- No competitor sites → Fetch from database automatically
+- Search API timeout → Add fetchWithTimeout wrapper
+- Price extraction failing → Improve extractPrice regex`;
+    }
+
+    if (functionName === 'product-analyzer') {
+      return `Fix the product-analyzer edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Validate request body supports: { url }, { productInput }, { name }, or string
+2. ✅ Test with payload: { "url": "https://www.amazon.fr/dp/B0CX23V2ZK" }
+3. ✅ Verify LOVABLE_API_KEY is configured
+4. ✅ Check AI response has valid JSON structure
+5. ✅ Log all validation steps with [PRODUCT-ANALYZER] prefix
+
+Common issues:
+- Missing url/productInput → Add body.url validation
+- Invalid JSON response → Improve JSON cleanup logic
+- Image search failing → Handle search-product-images errors gracefully`;
+    }
+
+    if (functionName === 'advanced-product-analyzer') {
+      return `Fix the advanced-product-analyzer edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Validate AI response has data.choices[0] before accessing
+2. ✅ Handle AI API errors (429, 500, 503) gracefully
+3. ✅ Test all analysis types: technical, commercial, market, risk
+4. ✅ Verify LOVABLE_API_KEY and GOOGLE_SEARCH_API_KEY are set
+5. ✅ Add fallback error objects if AI fails
+
+Common issues:
+- TypeError: Cannot read property '0' → Check data.choices exists
+- AI timeout → Add timeout protection (30s)
+- Invalid JSON → Improve safeParseAIResponse function
+- Missing market analysis → Verify Google API keys`;
+    }
+
+    if (functionName === 'check-subscription') {
+      return `Fix the check-subscription edge function. Error: "${errorMessage}".
+
+This function is working perfectly! If errors occur:
+1. ✅ Verify STRIPE_SECRET_KEY is configured
+2. ✅ Check user has valid auth token
+3. ✅ Verify subscription_plans table has correct data
+4. ✅ Test with both admin and regular user accounts
+
+Common issues:
+- Stripe API errors → Check API key validity
+- No customer found → Normal for new users
+- Trial logic → Verify trial_end dates in database`;
+    }
+
+    if (functionName === 'ai-chat') {
+      return `Fix the ai-chat edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Verify LOVABLE_API_KEY is configured
+2. ✅ Handle skipAICall flag for testing
+3. ✅ Validate messages array format
+4. ✅ Test with: { "message": "test", "messages": [], "skipAICall": true }
+
+Common issues:
+- 402 Payment Required → Use skipAICall flag in tests
+- Invalid messages format → Check array structure`;
+    }
+
+    if (functionName === 'claude-proxy') {
+      return `Fix the claude-proxy edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Check user/global Claude API key configuration
+2. ✅ Support testMode flag for testing without API calls
+3. ✅ Validate messages format
+4. ✅ Handle 402/429 errors gracefully
+
+Common issues:
+- No API key configured → Check ai_provider_configs table
+- 402 errors → Use testMode: true in tests`;
+    }
+
+    if (functionName === 'openai-proxy') {
+      return `Fix the openai-proxy edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Check user/global OpenAI API key configuration
+2. ✅ Support testMode flag for testing
+3. ✅ Use max_completion_tokens (not max_tokens for newer models)
+4. ✅ Handle 402/429 errors gracefully
+
+Common issues:
+- No API key configured → Check ai_provider_configs table
+- Invalid parameter → Check model-specific parameters`;
+    }
+
+    if (functionName === 'ollama-proxy') {
+      return `Fix the ollama-proxy edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Support action: 'test' for connection testing
+2. ✅ Check ollama_configurations table for user config
+3. ✅ Validate ollama_url is accessible
+4. ✅ Handle timeout errors
+
+Common issues:
+- Connection refused → Check Ollama is running
+- No configuration → User needs to setup Ollama first`;
     }
     
     // Special handling for manage-newsletter

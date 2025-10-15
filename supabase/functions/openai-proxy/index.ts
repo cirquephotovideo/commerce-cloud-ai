@@ -80,7 +80,21 @@ serve(async (req) => {
       });
     }
 
-    const { model = 'gpt-5-mini', messages, max_completion_tokens } = await req.json();
+    const { model = 'gpt-5-mini', messages, max_completion_tokens, testMode } = await req.json();
+    
+    // Mode test
+    if (testMode) {
+      console.log('[OPENAI-PROXY] Test mode - returning mock response');
+      return new Response(JSON.stringify({
+        id: 'test-completion-id',
+        choices: [{ message: { role: 'assistant', content: 'Test response' } }],
+        model: model,
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+        testMode: true
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     console.log('[OPENAI-PROXY] Request:', { 
       model, 
