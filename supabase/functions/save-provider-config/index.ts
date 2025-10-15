@@ -24,7 +24,7 @@ async function testClaudeProvider(apiKey: string): Promise<ProviderTestResult> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 10,
         messages: [{ role: 'user', content: 'Test' }],
       }),
@@ -40,7 +40,7 @@ async function testClaudeProvider(apiKey: string): Promise<ProviderTestResult> {
     return {
       success: true,
       latency,
-      models: ['claude-opus-4-20250514', 'claude-sonnet-4-20250514', 'claude-3-5-haiku-20241022'],
+      models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
     };
   } catch (error) {
     return {
