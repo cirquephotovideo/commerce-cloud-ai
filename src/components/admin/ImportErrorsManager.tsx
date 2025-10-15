@@ -50,6 +50,17 @@ export const ImportErrorsManager = () => {
     }
   };
 
+  const handleBulkRetry = async () => {
+    try {
+      const { error } = await supabase.functions.invoke("retry-failed-imports");
+      if (error) throw error;
+      toast({ title: "Retry en masse lancé avec succès" });
+      queryClient.invalidateQueries({ queryKey: ["import-errors"] });
+    } catch (error: any) {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    }
+  };
+
   const handleMarkResolved = async (errorId: string, method: 'manual_fix' | 'ignored') => {
     try {
       const { error } = await supabase

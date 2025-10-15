@@ -614,6 +614,51 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          priority: number | null
+          rule_name: string
+          rule_type: string
+          trigger_count: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          priority?: number | null
+          rule_name: string
+          rule_type: string
+          trigger_count?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          priority?: number | null
+          rule_name?: string
+          rule_type?: string
+          trigger_count?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       aws_credentials: {
         Row: {
           access_key_id_encrypted: string
@@ -1764,6 +1809,104 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      import_schedules: {
+        Row: {
+          config: Json | null
+          created_at: string | null
+          cron_expression: string | null
+          error_count: number | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          last_run_at: string | null
+          next_run_at: string | null
+          schedule_name: string
+          schedule_type: string
+          success_count: number | null
+          supplier_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string | null
+          cron_expression?: string | null
+          error_count?: number | null
+          frequency: string
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          schedule_name: string
+          schedule_type: string
+          success_count?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string | null
+          cron_expression?: string | null
+          error_count?: number | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          last_run_at?: string | null
+          next_run_at?: string | null
+          schedule_name?: string
+          schedule_type?: string
+          success_count?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_schedules_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mapping_templates: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          mapping_config: Json
+          template_name: string
+          updated_at: string | null
+          use_count: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          mapping_config: Json
+          template_name: string
+          updated_at?: string | null
+          use_count?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          mapping_config?: Json
+          template_name?: string
+          updated_at?: string | null
+          use_count?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       market_trends: {
         Row: {
@@ -4040,6 +4183,28 @@ export type Database = {
       }
     }
     Views: {
+      import_statistics: {
+        Row: {
+          avg_products_per_import: number | null
+          error_count: number | null
+          import_date: string | null
+          success_count: number | null
+          supplier_id: string | null
+          total_imports: number | null
+          total_products_created: number | null
+          total_products_updated: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_inbox_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_subscription_plans: {
         Row: {
           currency: string | null
