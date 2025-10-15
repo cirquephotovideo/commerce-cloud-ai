@@ -26,6 +26,7 @@ export const PlatformSettings = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('shopify');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [config, setConfig] = useState({
     platform_url: '',
     api_key_encrypted: '',
@@ -74,6 +75,40 @@ export const PlatformSettings = () => {
       toast.error('Error loading configuration');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (!selectedPlatform || !config.platform_url || !config.api_key_encrypted) {
+      toast.error("Veuillez remplir tous les champs requis");
+      return;
+    }
+
+    setTesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-prestashop-connection', {
+        body: {
+          url: config.platform_url,
+          apiKey: config.api_key_encrypted,
+          apiSecret: config.api_secret_encrypted,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        if (data.details?.sampleProductCount) {
+          toast.info(`${data.details.sampleProductCount} produits trouvés en exemple`);
+        }
+      } else {
+        toast.error(data.error || "Échec du test de connexion");
+      }
+    } catch (error) {
+      console.error('Test connection error:', error);
+      toast.error("Erreur lors du test de connexion");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -339,19 +374,42 @@ export const PlatformSettings = () => {
           <>
             {getPlatformFields()}
             {![''].includes(selectedPlatform) && (
-              <Button onClick={saveConfiguration} disabled={saving} className="w-full">
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" />
-                    Save Configuration
-                  </>
+              <div className="flex gap-2">
+                {selectedPlatform === 'prestashop' && (
+                  <Button 
+                    onClick={testConnection} 
+                    disabled={testing || !config.platform_url || !config.api_key_encrypted}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    {testing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Testing...
+                      </>
+                    ) : (
+                      'Test Connection'
+                    )}
+                  </Button>
                 )}
-              </Button>
+                <Button 
+                  onClick={saveConfiguration} 
+                  disabled={saving}
+                  className={selectedPlatform === 'prestashop' ? 'flex-1' : 'w-full'}
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Configuration
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </>
         )}

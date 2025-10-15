@@ -1,3 +1,4 @@
+// IMAP Email Poller - Version 2.1 (Native MD5/HMAC-MD5 Implementation)
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
