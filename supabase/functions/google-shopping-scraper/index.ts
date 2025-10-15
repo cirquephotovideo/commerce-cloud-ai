@@ -8,6 +8,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface ShoppingRequest {
+  productName?: string;
+  productUrl?: string;
+  maxResults?: number;
+}
+
+interface ShoppingError {
+  error: string;
+  code: 'MISSING_INPUT' | 'NO_API_KEYS' | 'API_TIMEOUT' | 'AUTH_ERROR' | 'INTERNAL_ERROR' | 'INVALID_REQUEST_BODY';
+  details?: any;
+  suggestion?: string;
+}
+
 interface ProductResult {
   title: string;
   price: number | null;
@@ -19,6 +32,24 @@ interface ProductResult {
   availability: string;
   rating: number | null;
   reviews_count: number | null;
+}
+
+// Timeout wrapper for fetch operations
+async function fetchWithTimeout(url: string, options: any, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeout);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeout);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout after 10 seconds');
+    }
+    throw error;
+  }
 }
 
 // Fonction pour rechercher avec Serper.dev Shopping API
@@ -276,7 +307,41 @@ serve(async (req) => {
   let provider = 'unknown';
 
   try {
-    const { productName, productUrl, maxResults = 10 } = await req.json();
+    // Parse and validate request body
+    let requestBody: ShoppingRequest;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      console.error('[SHOPPING-SCRAPER] Invalid JSON:', parseError);
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JSON in request body',
+        code: 'INVALID_REQUEST_BODY'
+      } as ShoppingError), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { productName, productUrl, maxResults = 10 } = requestBody;
+
+    // Validation : au moins un champ requis
+    if ((!productName || productName.trim() === '') && (!productUrl || productUrl.trim() === '')) {
+      return new Response(JSON.stringify({ 
+        error: 'Either productName or productUrl is required',
+        code: 'MISSING_INPUT',
+        suggestion: 'Provide either a product name for search or a direct product URL'
+      } as ShoppingError), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('[SHOPPING-SCRAPER] Request validated:', { 
+      hasProductName: !!productName, 
+      hasProductUrl: !!productUrl,
+      maxResults,
+      timestamp: new Date().toISOString()
+    });
 
     // Authentification
     const authHeader = req.headers.get('Authorization')!;
@@ -288,12 +353,42 @@ serve(async (req) => {
     });
 
     const { data: { user } } = await supabase.auth.getUser(token);
-    if (!user) throw new Error('Non authentifié');
+    if (!user) {
+      return new Response(JSON.stringify({ 
+        error: 'Not authenticated',
+        code: 'AUTH_ERROR'
+      } as ShoppingError), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
     const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
     const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+
+    // Valider API keys avant utilisation
+    if (!productUrl && !GOOGLE_SEARCH_API_KEY && !SERPER_API_KEY) {
+      return new Response(JSON.stringify({ 
+        error: 'No search API configured (Google Custom Search or Serper.dev)',
+        code: 'NO_API_KEYS',
+        suggestion: 'Configure GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_CX or SERPER_API_KEY'
+      } as ShoppingError), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ 
+        error: 'LOVABLE_API_KEY is required for AI extraction',
+        code: 'NO_API_KEYS'
+      } as ShoppingError), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     let results: ProductResult[] = [];
 
@@ -313,7 +408,7 @@ serve(async (req) => {
         const searchQuery = `${productName} acheter prix`;
         const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(searchQuery)}&num=${maxResults}`;
         
-        const searchResponse = await fetch(searchUrl);
+        const searchResponse = await fetchWithTimeout(searchUrl, {}, 10000);
         const searchData = await searchResponse.json();
 
         if (searchData.error) {
@@ -354,10 +449,15 @@ serve(async (req) => {
         console.log('🛍️ Recherche directe avec Serper.dev pour:', productName);
         results = await searchWithSerper(productName, maxResults, SERPER_API_KEY);
       } else {
-        throw new Error('Aucune API de recherche configurée (Google Custom Search ou Serper.dev)');
+        return new Response(JSON.stringify({ 
+          error: 'No search API configured',
+          code: 'NO_API_KEYS',
+          suggestion: 'Configure at least one search API'
+        } as ShoppingError), {
+          status: 503,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
-    } else {
-      throw new Error('productName ou productUrl requis');
     }
 
     console.log(`📊 ${results.length} produits extraits avec ${provider}`);
@@ -493,11 +593,16 @@ serve(async (req) => {
 
   } catch (error) {
     const elapsed = Date.now() - startTime;
-    console.error('❌ Erreur Google Shopping scraper:', error);
+    console.error('❌ Erreur Google Shopping scraper:', {
+      message: error instanceof Error ? error.message : 'Erreur inconnue',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
     
     return new Response(JSON.stringify({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Erreur inconnue',
+      code: 'INTERNAL_ERROR',
       provider,
       response_time_ms: elapsed,
     }), {

@@ -92,13 +92,30 @@ const edgeFunctions: EdgeFunction[] = [
   // Marketing Functions
   { name: 'send-contact-email', category: 'marketing', status: 'untested' },
   { name: 'send-email-campaign', category: 'marketing', status: 'untested' },
-  { name: 'manage-newsletter', category: 'marketing', status: 'untested' },
+  { 
+    name: 'manage-newsletter', 
+    category: 'marketing', 
+    status: 'untested',
+    testPayload: {
+      action: 'subscribe',
+      email: 'test@example.com',
+      full_name: 'Test User'
+    }
+  },
   
   // Utility Functions
   { name: 'generate-image', category: 'utility', status: 'untested' },
   { name: 'generate-themed-image', category: 'utility', status: 'untested' },
   { name: 'search-product-images', category: 'utility', status: 'untested' },
-  { name: 'google-shopping-scraper', category: 'utility', status: 'untested' },
+  { 
+    name: 'google-shopping-scraper', 
+    category: 'utility', 
+    status: 'untested',
+    testPayload: {
+      productName: 'iPhone 15 Pro',
+      maxResults: 5
+    }
+  },
   { name: 'market-intelligence', category: 'utility', status: 'untested' },
 ];
 
@@ -183,6 +200,57 @@ export const EdgeFunctionTester = () => {
   };
 
   const generateFixPrompt = (functionName: string, errorMessage: string): string => {
+    // Special handling for dual-search-engine
+    if (functionName === 'dual-search-engine') {
+      return `Fix the dual-search-engine edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Validate request has productName (required)
+2. ✅ Handle empty competitorSiteIds by fetching all active sites
+3. ✅ Check GOOGLE_SEARCH_API_KEY or SERPER_API_KEY configured
+4. ✅ Add proper error codes (MISSING_PRODUCT_NAME, NO_COMPETITOR_SITES)
+5. ✅ Log all steps with timestamps
+
+Common issues:
+- Missing productName → Return 400 with clear message
+- No competitor sites → Fetch all active ones automatically
+- API errors → Log full response with timestamps`;
+    }
+    
+    // Special handling for manage-newsletter
+    if (functionName === 'manage-newsletter') {
+      return `Fix the manage-newsletter edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Validate action is 'subscribe' or 'unsubscribe'
+2. ✅ Validate email format with regex
+3. ✅ Normalize email (trim + lowercase)
+4. ✅ Add proper error codes (INVALID_ACTION, INVALID_EMAIL)
+5. ✅ Log successful operations
+
+Common issues:
+- Invalid email format → Use EMAIL_REGEX validation
+- Invalid action → Check against ['subscribe', 'unsubscribe']
+- Database errors → Wrap in try/catch with detailed logs`;
+    }
+    
+    // Special handling for google-shopping-scraper
+    if (functionName === 'google-shopping-scraper') {
+      return `Fix the google-shopping-scraper edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Validate at least one of productName OR productUrl provided
+2. ✅ Check API keys before making requests
+3. ✅ Add timeout protection (10s) on all fetch calls
+4. ✅ Add proper error codes (MISSING_INPUT, NO_API_KEYS, API_TIMEOUT)
+5. ✅ Log with provider name and timestamps
+
+Common issues:
+- Neither productName nor productUrl → Return 400 with hint
+- Missing API keys → Check LOVABLE_API_KEY, GOOGLE_SEARCH_API_KEY, SERPER_API_KEY
+- Timeout → Use fetchWithTimeout wrapper`;
+    }
+    
     // Special handling for openrouter-proxy
     if (functionName === 'openrouter-proxy') {
       return `Fix the openrouter-proxy edge function. Error: "${errorMessage}".

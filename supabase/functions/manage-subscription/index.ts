@@ -146,6 +146,18 @@ serve(async (req) => {
       });
     }
 
+    // Valider format UUID
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(newPlanId)) {
+      return new Response(JSON.stringify({ 
+        error: 'newPlanId must be a valid UUID',
+        code: 'INVALID_PLAN_ID'
+      } as ErrorResponse), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
+
     if (!billingInterval || !["monthly", "yearly"].includes(billingInterval)) {
       return new Response(JSON.stringify({ 
         error: "billingInterval must be 'monthly' or 'yearly'",
@@ -368,16 +380,38 @@ serve(async (req) => {
         type: stripeError.type,
         code: stripeError.code,
         message: stripeError.message,
-        statusCode: stripeError.statusCode
+        statusCode: stripeError.statusCode,
+        raw: stripeError.raw
       });
 
+      // Mapper les erreurs Stripe vers des messages user-friendly
+      let userMessage = 'Error communicating with Stripe';
+      let httpStatus = 502;
+      
+      if (stripeError.type === 'StripeCardError') {
+        userMessage = 'Payment method declined. Please use a different card.';
+        httpStatus = 402;
+      } else if (stripeError.type === 'StripeInvalidRequestError') {
+        userMessage = 'Invalid subscription configuration. Please contact support.';
+        httpStatus = 400;
+      } else if (stripeError.type === 'StripeRateLimitError') {
+        userMessage = 'Too many requests. Please try again in a few seconds.';
+        httpStatus = 429;
+      } else if (stripeError.type === 'StripeAuthenticationError') {
+        userMessage = 'Stripe authentication error. Please contact support.';
+        httpStatus = 500;
+      } else if (stripeError.type === 'StripeAPIError') {
+        userMessage = 'Stripe service temporarily unavailable. Please try again.';
+        httpStatus = 503;
+      }
+
       return new Response(JSON.stringify({
-        error: "Error communicating with Stripe",
+        error: userMessage,
         code: stripeError.code || "STRIPE_ERROR",
         details: stripeError.message
       } as ErrorResponse), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 502,
+        status: httpStatus,
       });
     }
   } catch (error) {

@@ -6,6 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface SearchRequest {
+  productName?: string;
+  competitorSiteIds?: string[];
+  maxResults?: number;
+}
+
+interface SearchError {
+  error: string;
+  code: 'MISSING_PRODUCT_NAME' | 'NO_COMPETITOR_SITES' | 'AUTH_ERROR' | 'INTERNAL_ERROR';
+  details?: any;
+  hint?: string;
+}
+
 interface SearchResult {
   product_name: string;
   price: number;
@@ -42,24 +55,95 @@ serve(async (req) => {
     );
 
     const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    if (!user) {
+      return new Response(JSON.stringify({ 
+        error: 'Not authenticated',
+        code: 'AUTH_ERROR'
+      } as SearchError), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
-    const { productName, competitorSiteIds } = await req.json();
-    console.log('[DUAL-ENGINE] Starting search for:', productName);
+    // Parse and validate request body
+    let requestBody: SearchRequest;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      console.error('[DUAL-ENGINE] Invalid JSON:', parseError);
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JSON in request body',
+        code: 'INTERNAL_ERROR'
+      } as SearchError), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { productName, competitorSiteIds = [], maxResults = 10 } = requestBody;
+
+    // Validation
+    if (!productName || productName.trim() === '') {
+      console.error('[DUAL-ENGINE] Missing productName');
+      return new Response(JSON.stringify({ 
+        error: 'productName is required and must be non-empty',
+        code: 'MISSING_PRODUCT_NAME'
+      } as SearchError), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('[DUAL-ENGINE] Request validated:', { 
+      productName, 
+      siteCount: competitorSiteIds.length,
+      timestamp: new Date().toISOString()
+    });
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
     const GOOGLE_CX = Deno.env.get('GOOGLE_SEARCH_CX');
     const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
 
-    // Get competitor sites
+    // Get competitor sites - if none provided, fetch all active ones
+    let finalSiteIds = [...competitorSiteIds];
+    
+    if (finalSiteIds.length === 0) {
+      console.log('[DUAL-ENGINE] No competitor sites, fetching all active sites');
+      const { data: allSites } = await supabaseClient
+        .from('competitor_sites')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(5);
+      
+      if (!allSites || allSites.length === 0) {
+        return new Response(JSON.stringify({ 
+          error: 'No competitor sites configured. Please add competitor sites first.',
+          code: 'NO_COMPETITOR_SITES',
+          hint: 'Go to /admin → Market Intelligence → Competitor Sites'
+        } as SearchError), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      finalSiteIds = allSites.map(s => s.id);
+    }
+
     const { data: sites } = await supabaseClient
       .from('competitor_sites')
       .select('*')
-      .in('id', competitorSiteIds)
+      .in('id', finalSiteIds)
       .eq('is_active', true);
 
     if (!sites || sites.length === 0) {
-      throw new Error('No active competitor sites found');
+      return new Response(JSON.stringify({ 
+        error: 'No active competitor sites found',
+        code: 'NO_COMPETITOR_SITES'
+      } as SearchError), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const allResults: SearchResult[] = [];
@@ -183,9 +267,16 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('[DUAL-ENGINE] Error:', error);
+    console.error('[DUAL-ENGINE] Error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        code: 'INTERNAL_ERROR'
+      } as SearchError),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
