@@ -7,39 +7,228 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// TypeScript Types
+interface AnalysisRequest {
+  productInput: string;
+  inputType?: 'url' | 'name' | 'barcode';
+  analysisTypes: ('technical' | 'commercial' | 'market' | 'risk')[];
+  platform?: string;
+}
+
+interface TechnicalAnalysis {
+  product_name: string;
+  compatibility?: any;
+  specs?: any;
+  obsolescence_score?: number;
+  lifecycle_stage?: string;
+  repairability?: any;
+  hs_code?: any;
+  environmental_impact?: any;
+  error?: string;
+  raw_response?: string;
+}
+
+interface CommercialAnalysis {
+  margin?: any;
+  bundles?: any[];
+  return_prediction?: any;
+}
+
+interface MarketAnalysis {
+  competitor_prices?: any[];
+  promotion_alerts?: any[];
+  seasonality?: any;
+}
+
+interface RiskAnalysis {
+  compliance_status?: any;
+  warranty_analysis?: any;
+  authenticity_score?: number;
+  risk_level?: string;
+}
+
+interface AnalysisResults {
+  technical?: TechnicalAnalysis;
+  commercial?: CommercialAnalysis;
+  market?: MarketAnalysis;
+  risk?: RiskAnalysis;
+}
+
+interface SuccessResponse {
+  success: true;
+  results: AnalysisResults;
+}
+
+interface ErrorResponse {
+  success: false;
+  error: string;
+  code?: string;
+  details?: any;
+}
+
+type AnalyzerResponse = SuccessResponse | ErrorResponse;
+
+// Helper function for safe JSON parsing
+function safeParseAIResponse(content: string, analysisType: string): any {
+  try {
+    // Clean content
+    content = content.trim();
+    
+    // Extract JSON if wrapped in text
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      content = jsonMatch[0];
+    }
+    
+    return JSON.parse(content);
+  } catch (parseError) {
+    console.error(`Error parsing ${analysisType} JSON:`, parseError);
+    console.error('Content received:', content.substring(0, 500));
+    
+    return {
+      error: `Failed to parse ${analysisType} analysis response`,
+      raw_response: content.substring(0, 500)
+    };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { productInput, inputType = 'url', analysisTypes, platform } = await req.json();
-    
-    const authHeader = req.headers.get('Authorization')!;
+    // Validate ALL required environment variables upfront
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    const missingVars: string[] = [];
+    if (!LOVABLE_API_KEY) missingVars.push('LOVABLE_API_KEY');
+    if (!SUPABASE_URL) missingVars.push('SUPABASE_URL');
+    if (!SUPABASE_SERVICE_ROLE_KEY) missingVars.push('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (missingVars.length > 0) {
+      console.error('Missing environment variables:', missingVars);
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Missing environment variables: ${missingVars.join(', ')}`,
+        code: 'MISSING_ENV_VARS'
+      } as ErrorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+    const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
+
+    console.log('Environment variables validated ✓');
+
+    // Validate Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing Authorization header');
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Authorization header required',
+        code: 'NO_AUTH_HEADER'
+      } as ErrorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const token = authHeader.replace('Bearer ', '');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user } } = await supabase.auth.getUser(token);
-    if (!user) throw new Error("Non authentifié");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      console.error('Authentication failed:', authError);
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid or expired token',
+        code: 'AUTHENTICATION_FAILED',
+        details: authError?.message
+      } as ErrorResponse), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    console.log('Analyses demandées:', analysisTypes);
-    console.log('Type d\'entrée:', inputType);
+    console.log('User authenticated:', user.email);
+
+    // Parse and validate request body
+    let requestData: Partial<AnalysisRequest>;
+    try {
+      requestData = await req.json();
+    } catch (parseError) {
+      console.error('Invalid JSON in request body:', parseError);
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'Invalid JSON in request body',
+        code: 'INVALID_REQUEST_BODY'
+      } as ErrorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { 
+      productInput, 
+      inputType = 'url', 
+      analysisTypes, 
+      platform 
+    } = requestData;
+
+    // Validate required fields
+    if (!productInput || typeof productInput !== 'string' || productInput.trim() === '') {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'productInput is required and must be a non-empty string',
+        code: 'MISSING_PRODUCT_INPUT'
+      } as ErrorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!analysisTypes || !Array.isArray(analysisTypes) || analysisTypes.length === 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: 'analysisTypes is required and must be a non-empty array',
+        code: 'MISSING_ANALYSIS_TYPES',
+        hint: 'Valid types: technical, commercial, market, risk'
+      } as ErrorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate analysis types
+    const validTypes = ['technical', 'commercial', 'market', 'risk'];
+    const invalidTypes = analysisTypes.filter(type => !validTypes.includes(type));
+    if (invalidTypes.length > 0) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Invalid analysis types: ${invalidTypes.join(', ')}`,
+        code: 'INVALID_ANALYSIS_TYPES',
+        hint: `Valid types are: ${validTypes.join(', ')}`
+      } as ErrorResponse), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('Request validated:', { productInput, inputType, analysisTypes, platform });
     
     // Determine the product identifier based on input type
     let productIdentifier = productInput;
     if (inputType === 'name' || inputType === 'barcode') {
       productIdentifier = `${inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}: ${productInput}`;
     }
-
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY non configurée");
-
-    const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
-    const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
 
     const results: any = {};
 
@@ -107,35 +296,12 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
       });
 
       const techData = await techResponse.json();
-      let technicalResult;
-
-      try {
-        // Extraire le JSON du message
-        let content = techData.choices[0].message.content;
-        
-        // Nettoyer le contenu si nécessaire
-        content = content.trim();
-        
-        // Si ça commence par du texte, chercher le JSON
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          content = jsonMatch[0];
-        }
-        
-        technicalResult = JSON.parse(content);
-      } catch (parseError) {
-        console.error('Erreur parsing JSON:', parseError);
-        console.error('Contenu reçu:', techData.choices[0].message.content);
-        
-        // Retourner une structure par défaut
-        technicalResult = {
-          product_name: productInput,
-          error: "Impossible de parser la réponse de l'IA",
-          raw_response: techData.choices[0].message.content
-        };
-      }
-
+      const technicalResult = safeParseAIResponse(
+        techData.choices[0].message.content,
+        'technical'
+      );
       results.technical = technicalResult;
+      console.log('Technical analysis completed');
     }
 
     // Commercial Optimization
@@ -168,7 +334,11 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
       });
 
       const commData = await commResponse.json();
-      results.commercial = JSON.parse(commData.choices[0].message.content);
+      results.commercial = safeParseAIResponse(
+        commData.choices[0].message.content, 
+        'commercial'
+      );
+      console.log('Commercial analysis completed');
     }
 
     // Market Intelligence with Web Search
@@ -206,7 +376,11 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
       });
 
       const marketData = await marketResponse.json();
-      results.market = JSON.parse(marketData.choices[0].message.content);
+      results.market = safeParseAIResponse(
+        marketData.choices[0].message.content, 
+        'market'
+      );
+      console.log('Market analysis completed');
     }
 
     // Risk Assessment
@@ -240,19 +414,32 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
       });
 
       const riskData = await riskResponse.json();
-      results.risk = JSON.parse(riskData.choices[0].message.content);
+      results.risk = safeParseAIResponse(
+        riskData.choices[0].message.content, 
+        'risk'
+      );
+      console.log('Risk analysis completed');
     }
 
-    return new Response(JSON.stringify({ success: true, results }), {
+    console.log('All analyses completed successfully:', Object.keys(results));
+    
+    return new Response(JSON.stringify({ success: true, results } as SuccessResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Erreur analyse avancée:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Erreur inconnue' 
-    }), {
+    console.error('Error in advanced-product-analyzer:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      type: error?.constructor?.name
+    });
+    
+    return new Response(JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      code: 'INTERNAL_ERROR',
+      details: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join('\n') : undefined
+    } as ErrorResponse), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
