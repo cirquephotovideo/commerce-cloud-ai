@@ -66,8 +66,8 @@ serve(async (req) => {
     logStep("All environment variables verified");
 
     const supabaseClient = createClient(
-      supabaseUrl,
-      supabaseServiceKey,
+      supabaseUrl!,
+      supabaseServiceKey!,
       { auth: { persistSession: false } }
     );
 
