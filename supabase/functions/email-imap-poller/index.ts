@@ -623,20 +623,26 @@ serve(async (req) => {
 
           const bodyStruct = bodyStructMatch[1];
           
-          // Look for CSV/XLSX attachments
-          const attachmentRegex = /"(?:attachment|inline)"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls))"?/gi;
-          const attachments = [];
+          // Look for CSV/XLSX/XLS/ZIP attachments with dual pattern detection
+          const pattern1 = /"(?:attachment|inline)"[^)]*"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?/gi;
+          const pattern2 = /"(?:filename|name)"\s+"?([^")\s]+\.(csv|xlsx|xls|zip))"?[^)]*"(?:attachment|inline)"/gi;
+          
+          const attachmentSet = new Set();
           let match;
           
-          while ((match = attachmentRegex.exec(bodyStruct)) !== null) {
-            attachments.push({
-              filename: match[1],
-              type: match[2].toLowerCase()
-            });
+          while ((match = pattern1.exec(bodyStruct)) !== null) {
+            attachmentSet.add(JSON.stringify({ filename: match[1], type: match[2].toLowerCase() }));
           }
+          
+          while ((match = pattern2.exec(bodyStruct)) !== null) {
+            attachmentSet.add(JSON.stringify({ filename: match[1], type: match[2].toLowerCase() }));
+          }
+          
+          const attachments = Array.from(attachmentSet).map((str: unknown) => JSON.parse(str as string));
 
           if (attachments.length === 0) {
-            console.log(`[${supplierId}] Email ${msgId}: No CSV/XLSX attachments found`);
+            console.log(`[${supplierId}] Email ${msgId}: No CSV/XLSX/XLS/ZIP attachments found`);
+            console.log(`[${supplierId}] BODYSTRUCTURE preview:`, bodyStruct.substring(0, 500));
             continue;
           }
 
@@ -666,7 +672,7 @@ serve(async (req) => {
           const attachmentBuffer = Uint8Array.from(atob(base64Content), c => c.charCodeAt(0));
 
           const fileName = attachments[0].filename;
-          const fileType = attachments[0].type === 'csv' ? 'csv' : 'xlsx';
+          const fileType = attachments[0].type;
 
           console.log(`[${supplierId}] Email ${msgId}: Decoded ${fileName}, size: ${attachmentBuffer.length} bytes`);
 
@@ -674,11 +680,18 @@ serve(async (req) => {
           const timestamp = new Date().getTime();
           const storagePath = `${userId}/${supplierId}/${timestamp}-${fileName}`;
           
+          const contentTypeMap: Record<string, string> = {
+            'csv': 'text/csv',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'zip': 'application/zip'
+          };
+
           const { data: uploadData, error: uploadError } = await supabaseAdmin
             .storage
             .from('email-attachments')
             .upload(storagePath, attachmentBuffer, {
-              contentType: fileType === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              contentType: contentTypeMap[fileType] || 'application/octet-stream',
               upsert: false
             });
 

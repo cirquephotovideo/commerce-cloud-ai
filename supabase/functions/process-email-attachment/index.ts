@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import { ZipReader, BlobReader, BlobWriter } from "https://deno.land/x/zipjs@v2.7.34/index.js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,11 +54,55 @@ serve(async (req) => {
     const fileBuffer = await fileData.arrayBuffer();
     console.log('[PROCESS-ATTACHMENT] Downloaded file, size:', fileBuffer.byteLength);
 
-    // Parse file (support CSV, XLSX)
+    // === ZIP DECOMPRESSION LOGIC ===
+    let processBuffer = fileBuffer;
+    let processFileName = inbox.attachment_name;
+    let originalArchive: string | null = null;
+
+    if (inbox.attachment_name?.endsWith('.zip')) {
+      console.log('[PROCESS-ATTACHMENT] ZIP detected, decompressing...');
+      
+      try {
+        const zipReader = new ZipReader(new BlobReader(new Blob([fileBuffer])));
+        const entries = await zipReader.getEntries();
+        
+        console.log(`[PROCESS-ATTACHMENT] ZIP contains ${entries.length} file(s):`, entries.map((e: any) => e.filename));
+        
+        // Find first CSV/XLSX/XLS file
+        const targetEntry = entries.find((e: any) => 
+          e.filename.match(/\.(csv|xlsx|xls)$/i) && !e.directory
+        );
+        
+        if (!targetEntry || !targetEntry.getData) {
+          throw new Error('Invalid entry found in ZIP archive');
+        }
+        
+        console.log(`[PROCESS-ATTACHMENT] Extracting: ${targetEntry.filename}`);
+        
+        // Extract content
+        const writer = new BlobWriter();
+        await targetEntry.getData(writer);
+        const extractedBlob = await writer.getData();
+        processBuffer = await extractedBlob.arrayBuffer();
+        originalArchive = processFileName;
+        processFileName = targetEntry.filename;
+        
+        await zipReader.close();
+        
+        console.log(`[PROCESS-ATTACHMENT] Extracted ${processFileName}, size: ${processBuffer.byteLength} bytes`);
+        
+      } catch (zipError: any) {
+        console.error('[PROCESS-ATTACHMENT] ZIP extraction failed:', zipError);
+        throw new Error(`Failed to decompress ZIP: ${zipError.message}`);
+      }
+    }
+    // === END ZIP DECOMPRESSION ===
+
+    // Parse file (support CSV, XLSX, XLS)
     let rows: any[] = [];
     
-    if (inbox.attachment_type?.includes('csv') || inbox.attachment_name?.endsWith('.csv')) {
-      const text = new TextDecoder().decode(fileBuffer);
+    if (processFileName?.includes('.csv') || processFileName?.endsWith('.csv')) {
+      const text = new TextDecoder().decode(processBuffer);
       const lines = text.split('\n').filter(l => l.trim());
       const headers = lines[0].split(/[,;]/);
       rows = lines.slice(1).map(line => {
@@ -66,15 +111,18 @@ serve(async (req) => {
         headers.forEach((h, i) => row[h.trim()] = values[i]?.trim());
         return row;
       });
-    } else if (inbox.attachment_name?.match(/\.(xlsx|xls)$/)) {
-      const workbook = XLSX.read(fileBuffer, { type: 'array' });
+    } else if (processFileName?.match(/\.(xlsx|xls)$/)) {
+      const workbook = XLSX.read(processBuffer, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       rows = XLSX.utils.sheet_to_json(firstSheet);
     } else {
-      throw new Error('Unsupported file type');
+      throw new Error(`Unsupported file type: ${processFileName}`);
     }
 
-    console.log('[PROCESS-ATTACHMENT] Parsed', rows.length, 'rows');
+    console.log('[PROCESS-ATTACHMENT] Successfully parsed', rows.length, 'rows from', processFileName);
+    if (originalArchive) {
+      console.log('[PROCESS-ATTACHMENT] Original archive:', originalArchive);
+    }
 
     // Detect column mapping with AI
     const sampleRow = rows[0];
