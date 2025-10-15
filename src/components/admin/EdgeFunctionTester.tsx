@@ -43,7 +43,19 @@ const edgeFunctions: EdgeFunction[] = [
   { name: 'ai-taxonomy-categorizer', category: 'ai', status: 'untested' },
   { name: 'claude-proxy', category: 'ai', status: 'untested' },
   { name: 'openai-proxy', category: 'ai', status: 'untested' },
-  { name: 'openrouter-proxy', category: 'ai', status: 'untested' },
+  { 
+    name: 'openrouter-proxy', 
+    category: 'ai', 
+    status: 'untested',
+    testPayload: {
+      action: 'chat',
+      model: 'openai/gpt-3.5-turbo',
+      messages: [
+        { role: 'user', content: 'Say "test successful" in French' }
+      ],
+      max_tokens: 50
+    }
+  },
   { name: 'ollama-proxy', category: 'ai', status: 'untested' },
   
   // Export Functions
@@ -171,6 +183,25 @@ export const EdgeFunctionTester = () => {
   };
 
   const generateFixPrompt = (functionName: string, errorMessage: string): string => {
+    // Special handling for openrouter-proxy
+    if (functionName === 'openrouter-proxy') {
+      return `Fix the openrouter-proxy edge function. Error: "${errorMessage}".
+
+Checklist:
+1. ✅ Verify OPENROUTER_API_KEY is configured in ai_provider_configs table
+2. ✅ Validate request body has: action, model, messages[]
+3. ✅ Check OpenRouter API response format (should be JSON)
+4. ✅ Test with payload: { action: 'chat', model: 'openai/gpt-3.5-turbo', messages: [...] }
+5. ✅ Log all errors with full details for debugging
+
+Common issues:
+- Missing API key → Check ai_provider_configs table for provider='openrouter'
+- Invalid model name → Use 'openai/gpt-3.5-turbo' for testing
+- Malformed messages → Must be array of {role, content}
+- Rate limiting → OpenRouter API has usage limits
+- 400 errors → Check request validation (model and messages required)`;
+    }
+    
     return `Fix the ${functionName} edge function. The error is: "${errorMessage}".
 
 Please:

@@ -1,6 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// TypeScript interfaces for type safety
+interface OpenRouterRequest {
+  action?: 'list_models' | 'chat';
+  model?: string;
+  messages?: Array<{ role: string; content: string }>;
+  max_tokens?: number;
+  temperature?: number;
+}
+
+interface OpenRouterError {
+  error: {
+    message: string;
+    type: string;
+    code?: string;
+  };
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -79,11 +96,52 @@ serve(async (req) => {
       });
     }
 
-    const { action, model, messages } = await req.json();
-    console.log('[OPENROUTER-PROXY] Request:', { 
-      action, 
+    // Parse and validate request body
+    let requestBody: OpenRouterRequest;
+    try {
+      requestBody = await req.json();
+    } catch (parseError) {
+      console.error('[OPENROUTER-PROXY] Invalid JSON:', parseError);
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JSON in request body' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const { action, model, messages, max_tokens, temperature } = requestBody;
+
+    // Validate required fields based on action
+    if (action === 'chat' || !action) {
+      if (!model) {
+        console.error('[OPENROUTER-PROXY] Missing model field');
+        return new Response(JSON.stringify({ 
+          error: 'Missing required field: model' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        console.error('[OPENROUTER-PROXY] Invalid messages field:', { messages });
+        return new Response(JSON.stringify({ 
+          error: 'Missing or invalid messages array. Must be a non-empty array of message objects.' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
+    console.log('[OPENROUTER-PROXY] Validated request:', { 
+      action: action || 'chat', 
       model, 
       messageCount: messages?.length,
+      hasMaxTokens: !!max_tokens,
+      hasTemperature: temperature !== undefined,
+      user_id: user.id,
       timestamp: new Date().toISOString()
     });
 
@@ -120,13 +178,37 @@ serve(async (req) => {
       body: JSON.stringify({
         model,
         messages,
+        ...(max_tokens && { max_tokens }),
+        ...(temperature !== undefined && { temperature }),
+        stream: false // Explicitly disable streaming
       }),
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('[OPENROUTER-PROXY] Error:', response.status, error);
-      throw new Error(`OpenRouter API error: ${response.status} - ${error}`);
+      let errorDetails = 'Unknown error';
+      try {
+        const errorJson: OpenRouterError = await response.json();
+        errorDetails = errorJson.error?.message || JSON.stringify(errorJson);
+      } catch {
+        errorDetails = await response.text();
+      }
+      
+      console.error('[OPENROUTER-PROXY] OpenRouter API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorDetails,
+        model,
+        messageCount: messages?.length
+      });
+      
+      return new Response(JSON.stringify({ 
+        error: `OpenRouter API error (${response.status}): ${errorDetails}`,
+        status: response.status,
+        model
+      }), {
+        status: response.status >= 500 ? 502 : response.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     const data = await response.json();
