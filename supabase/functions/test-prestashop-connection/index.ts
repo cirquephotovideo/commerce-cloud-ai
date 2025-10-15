@@ -1,4 +1,8 @@
+// PrestaShop Connection Tester - Version 1.0.1
+// Last updated: 2025-10-15 16:16:00 UTC
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+
+console.log('[PRESTASHOP-TEST] Function loaded - Version 1.0.1');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
