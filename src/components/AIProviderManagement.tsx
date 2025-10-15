@@ -360,44 +360,6 @@ export default function AIProviderManagement() {
         />
       </div>
 
-      <Card className="border-primary/50 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
-            Provider IA Principal
-          </CardTitle>
-          <CardDescription>
-            Actuellement utilisé pour toutes les requêtes IA
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between p-4 rounded-lg bg-background border-2 border-primary">
-            <div className="flex items-center gap-4">
-              <div className="text-4xl">
-                {(() => {
-                  const providerIcons: Record<AIProvider, string> = {
-                    'lovable': '🚀',
-                    'claude': '🤖',
-                    'openai': '🔥',
-                    'openrouter': '🌐',
-                    'ollama_cloud': '☁️',
-                    'ollama_local': '💻',
-                  };
-                  return providerIcons[currentProvider];
-                })()}
-              </div>
-              <div>
-                <div className="font-bold text-xl">{providerNames[currentProvider]}</div>
-                <div className="text-sm text-muted-foreground">Provider actif</div>
-              </div>
-            </div>
-            <div className="text-right">
-              {getStatusBadge(currentProvider)}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-3 h-auto">
           <TabsTrigger value="selector" className="flex flex-col gap-1 p-3">
@@ -585,6 +547,45 @@ export default function AIProviderManagement() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Carte Provider IA Principal - Résumé du choix */}
+      <Card className="border-primary/50 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            Provider IA Principal Sélectionné
+          </CardTitle>
+          <CardDescription>
+            Ce provider est actuellement utilisé pour toutes les requêtes IA
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-background border-2 border-primary">
+            <div className="flex items-center gap-4">
+              <div className="text-4xl">
+                {(() => {
+                  const providerIcons: Record<AIProvider, string> = {
+                    'lovable': '🚀',
+                    'claude': '🤖',
+                    'openai': '🔥',
+                    'openrouter': '🌐',
+                    'ollama_cloud': '☁️',
+                    'ollama_local': '💻',
+                  };
+                  return providerIcons[currentProvider];
+                })()}
+              </div>
+              <div>
+                <div className="font-bold text-xl">{providerNames[currentProvider]}</div>
+                <div className="text-sm text-muted-foreground">Provider actif</div>
+              </div>
+            </div>
+            <div className="text-right">
+              {getStatusBadge(currentProvider)}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
