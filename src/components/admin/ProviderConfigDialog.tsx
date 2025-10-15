@@ -54,19 +54,26 @@ export const ProviderConfigDialog = ({ provider, open, onOpenChange, onSuccess }
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        setTestResult({
+          success: false,
+          error: error.message || 'Erreur lors du test'
+        });
+        toast.error(`❌ ${error.message || 'Erreur lors du test'}`);
+        return;
+      }
 
       setTestResult({
-        success: data.testResult.success,
-        latency: data.testResult.latency,
-        models: data.testResult.models,
-        error: data.testResult.error
+        success: data.success,
+        latency: data.latency,
+        models: data.models,
+        error: data.error
       });
 
-      if (data.testResult.success) {
-        toast.success(`✅ Connexion réussie (${data.testResult.latency}ms)`);
+      if (data.success) {
+        toast.success(`✅ Connexion réussie (${data.latency}ms)`);
       } else {
-        toast.error(`❌ Test échoué: ${data.testResult.error}`);
+        toast.error(`❌ ${data.error || 'Test échoué'}`);
       }
     } catch (err) {
       console.error('[ProviderConfigDialog] Test error:', err);
@@ -170,13 +177,23 @@ export const ProviderConfigDialog = ({ provider, open, onOpenChange, onSuccess }
                     </p>
                   )}
                   {testResult.success && testResult.models && testResult.models.length > 0 && (
-                    <p className="text-sm text-green-700">
-                      Modèles disponibles : {testResult.models.slice(0, 3).join(', ')}
-                      {testResult.models.length > 3 && ` (+${testResult.models.length - 3} autres)`}
-                    </p>
+                    <div className="text-sm text-green-700 space-y-1">
+                      <p className="font-medium">Modèles disponibles :</p>
+                      <p>{testResult.models.join(', ')}</p>
+                      {provider === 'claude' && (
+                        <a 
+                          href="https://docs.anthropic.com/en/docs/about-claude/models" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-green-600 hover:text-green-800 underline block mt-1"
+                        >
+                          Voir les tarifs →
+                        </a>
+                      )}
+                    </div>
                   )}
                   {testResult.error && (
-                    <p className="text-sm text-red-700">{testResult.error}</p>
+                    <p className="text-sm text-red-700 break-words">{testResult.error}</p>
                   )}
                 </div>
               </div>

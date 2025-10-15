@@ -26,21 +26,64 @@ async function testClaudeProvider(apiKey: string): Promise<ProviderTestResult> {
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
         max_tokens: 10,
-        messages: [{ role: 'user', content: 'Test' }],
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Test' }] }],
       }),
     });
 
     const latency = Date.now() - startTime;
 
     if (!response.ok) {
-      const error = await response.text();
-      return { success: false, latency, error: `API Error: ${response.status}` };
+      const errorText = await response.text();
+      let errorMessage = `API Error: ${response.status}`;
+      
+      // Parse detailed error message from Anthropic
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.error?.message) {
+          errorMessage = `${response.status} - ${errorData.error.message}`;
+        }
+      } catch {
+        // If parsing fails, use the raw text
+        if (errorText) {
+          errorMessage = `${response.status} - ${errorText.substring(0, 200)}`;
+        }
+      }
+      
+      // Specific message for 401
+      if (response.status === 401) {
+        errorMessage = "Clé API invalide ou non autorisée";
+      }
+      
+      console.error(`[testClaudeProvider] Failed:`, errorMessage);
+      return { success: false, latency, error: errorMessage };
+    }
+
+    // Try to fetch available models dynamically
+    let models = ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'];
+    
+    try {
+      const modelsResponse = await fetch('https://api.anthropic.com/v1/models', {
+        method: 'GET',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+      });
+      
+      if (modelsResponse.ok) {
+        const modelsData = await modelsResponse.json();
+        if (modelsData.data && Array.isArray(modelsData.data)) {
+          models = modelsData.data.map((m: any) => m.id).filter((id: string) => id.includes('claude'));
+        }
+      }
+    } catch (err) {
+      console.log('[testClaudeProvider] Could not fetch models list, using defaults:', err);
     }
 
     return {
       success: true,
       latency,
-      models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
+      models,
     };
   } catch (error) {
     return {
