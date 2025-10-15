@@ -1,38 +1,66 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { RefreshCw, CheckCircle, XCircle, AlertTriangle, Clock, TrendingUp, Eye, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useState } from "react";
 
 export function EmailPollMonitoring() {
+  const [selectedLog, setSelectedLog] = useState<any>(null);
+  
   const { data: pollLogs, refetch } = useQuery({
     queryKey: ['email-poll-logs'],
     queryFn: async () => {
-      // Get latest poll log per supplier
       const { data, error } = await supabase
         .from('email_poll_logs')
         .select(`
           *,
           supplier_configurations(supplier_name, connection_config)
         `)
-        .order('poll_time', { ascending: false });
+        .order('poll_time', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
 
       // Group by supplier_id and keep only latest
       const latestBySupplier = new Map();
       data?.forEach(log => {
-        if (!latestBySupplier.has(log.supplier_id) || 
-            new Date(log.poll_time) > new Date(latestBySupplier.get(log.supplier_id).poll_time)) {
+        if (!latestBySupplier.has(log.supplier_id)) {
           latestBySupplier.set(log.supplier_id, log);
         }
       });
 
       return Array.from(latestBySupplier.values());
     },
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 30000,
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ['email-poll-stats'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('email_poll_logs')
+        .select('*')
+        .gte('poll_time', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+
+      if (error) throw error;
+
+      const totalEmails = data.reduce((sum, log) => sum + (log.emails_processed || 0), 0);
+      const successCount = data.filter(log => log.status === 'emails_found' || log.status === 'no_new_emails').length;
+      const successRate = (successCount / Math.max(data.length, 1)) * 100;
+
+      return { 
+        totalEmails, 
+        successRate: successRate.toFixed(1), 
+        totalPolls: data.length 
+      };
+    },
+    refetchInterval: 60000,
   });
 
   const handleManualPoll = async () => {
@@ -56,8 +84,8 @@ export function EmailPollMonitoring() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'success':
-        return <Badge variant="default" className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" /> Succès</Badge>;
+      case 'emails_found':
+        return <Badge variant="default" className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" /> Emails trouvés</Badge>;
       case 'no_new_emails':
         return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" /> Aucun nouveau</Badge>;
       case 'auth_failed':
@@ -72,64 +100,189 @@ export function EmailPollMonitoring() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">
-          Vérifications automatiques toutes les 15 minutes
-        </p>
-        <Button variant="outline" size="sm" onClick={handleManualPoll}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Vérifier maintenant
-        </Button>
+    <>
+      <div className="space-y-4">
+        {/* Stats cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Emails traités (7j)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.totalEmails || 0}</div>
+              <p className="text-xs text-muted-foreground">
+                <TrendingUp className="h-3 w-3 inline mr-1" />
+                {stats?.totalPolls || 0} vérifications
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Taux de succès</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.successRate || 0}%</div>
+              <p className="text-xs text-muted-foreground">Connexions réussies</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Fournisseurs actifs</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{pollLogs?.length || 0}</div>
+              <p className="text-xs text-muted-foreground">Avec polling IMAP activé</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main monitoring table */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Monitoring des Vérifications Email</CardTitle>
+            <div className="flex gap-2 items-center">
+              <p className="text-sm text-muted-foreground">
+                Auto: toutes les 15 min
+              </p>
+              <Button onClick={handleManualPoll} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Vérifier maintenant
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fournisseur</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead>Emails</TableHead>
+                  <TableHead>Dernière vérification</TableHead>
+                  <TableHead>Alerte</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pollLogs?.map((log: any) => {
+                  const lastPoll = new Date(log.poll_time);
+                  const hoursSinceLastPoll = (Date.now() - lastPoll.getTime()) / (1000 * 60 * 60);
+                  const isInactive = hoursSinceLastPoll > 24;
+                  
+                  return (
+                    <TableRow key={log.id} className={isInactive ? 'bg-destructive/5' : ''}>
+                      <TableCell className="font-medium">
+                        {log.supplier_configurations?.supplier_name || 'Inconnu'}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(log.status)}</TableCell>
+                      <TableCell>
+                        <div className="text-sm space-y-1">
+                          <div>Trouvés: <Badge variant="secondary">{log.emails_found || 0}</Badge></div>
+                          <div className="text-muted-foreground">Traités: <Badge variant="default">{log.emails_processed || 0}</Badge></div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {lastPoll.toLocaleString('fr-FR')}
+                          <div className="text-xs text-muted-foreground">
+                            Il y a {Math.floor(hoursSinceLastPoll)}h
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {isInactive && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Inactif &gt;24h
+                          </Badge>
+                        )}
+                        {log.error_message && !isInactive && (
+                          <Badge variant="destructive" className="text-xs">
+                            Erreur
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedLog(log)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {!pollLogs?.length && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      Aucune vérification effectuée pour le moment
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Fournisseur</TableHead>
-            <TableHead>Statut</TableHead>
-            <TableHead>Emails trouvés</TableHead>
-            <TableHead>Emails traités</TableHead>
-            <TableHead>Dernière vérification</TableHead>
-            <TableHead>Erreur</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {pollLogs?.map((log) => (
-            <TableRow key={log.id}>
-              <TableCell className="font-medium">
-                {log.supplier_configurations?.supplier_name || 'Inconnu'}
-              </TableCell>
-              <TableCell>
-                {getStatusBadge(log.status)}
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary">{log.emails_found || 0}</Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant="default">{log.emails_processed || 0}</Badge>
-              </TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {new Date(log.poll_time).toLocaleString('fr-FR')}
-              </TableCell>
-              <TableCell className="text-sm text-red-600">
-                {log.error_message && (
-                  <span className="truncate max-w-xs block" title={log.error_message}>
-                    {log.error_message}
-                  </span>
+      {/* Detail dialog */}
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Détails de la vérification</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh]">
+            {selectedLog && (
+              <div className="space-y-4 p-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Informations générales</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Fournisseur:</span>{' '}
+                      {selectedLog.supplier_configurations?.supplier_name}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Statut:</span>{' '}
+                      {getStatusBadge(selectedLog.status)}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Emails trouvés:</span>{' '}
+                      {selectedLog.emails_found || 0}
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Emails traités:</span>{' '}
+                      {selectedLog.emails_processed || 0}
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Date:</span>{' '}
+                      {new Date(selectedLog.poll_time).toLocaleString('fr-FR')}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedLog.error_message && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-destructive">Erreur</h4>
+                    <p className="text-sm bg-destructive/10 p-3 rounded">
+                      {selectedLog.error_message}
+                    </p>
+                  </div>
                 )}
-              </TableCell>
-            </TableRow>
-          ))}
-          {!pollLogs?.length && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                Aucune vérification effectuée pour le moment
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </div>
+
+                {selectedLog.details && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Détails techniques</h4>
+                    <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
+                      {JSON.stringify(selectedLog.details, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

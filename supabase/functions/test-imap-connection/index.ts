@@ -232,13 +232,16 @@ async function testIMAPConnection(config: {
       throw new Error('Invalid IMAP greeting');
     }
 
-    const capabilities = parseCapabilities(greeting);
-    console.log('[IMAP-TEST] Capabilities:', capabilities);
+    // Get capabilities
+    const capResp = await sendCommand('A000', 'CAPABILITY');
+    const allCapabilities = parseCapabilities(greeting + ' ' + capResp);
+    console.log('[IMAP-TEST] Server capabilities:', allCapabilities);
 
     let authMethod = 'LOGIN';
     let authenticated = false;
 
-    if (capabilities.includes('AUTH=CRAM-MD5')) {
+    // Try CRAM-MD5 first if available (most secure)
+    if (allCapabilities.includes('AUTH=CRAM-MD5')) {
       try {
         console.log('[IMAP-TEST] Attempting CRAM-MD5 authentication...');
         await conn.write(encoder.encode(`A001 AUTHENTICATE CRAM-MD5\r\n`));
@@ -258,6 +261,8 @@ async function testIMAPConnection(config: {
             authMethod = 'CRAM-MD5';
             authenticated = true;
             console.log('[IMAP-TEST] CRAM-MD5 authentication successful');
+          } else {
+            console.warn('[IMAP-TEST] CRAM-MD5 server rejected:', authResponse);
           }
         }
       } catch (cramError) {
@@ -265,6 +270,7 @@ async function testIMAPConnection(config: {
       }
     }
 
+    // Fallback to LOGIN
     if (!authenticated) {
       console.log('[IMAP-TEST] Using LOGIN authentication...');
       const loginResponse = await sendCommand(
@@ -272,8 +278,14 @@ async function testIMAPConnection(config: {
         `LOGIN "${config.email}" "${config.password}"`
       );
 
-      if (!loginResponse.includes('A002 OK')) {
-        throw new Error('Authentication failed');
+      if (loginResponse.includes('LOGINDISABLED') || loginResponse.includes('NO LOGIN')) {
+        const supportedMethods = allCapabilities.filter(c => c.startsWith('AUTH=')).join(', ');
+        throw new Error(`LOGIN authentication is disabled. Server supports: ${supportedMethods}. You may need to enable "Less secure apps" or use app-specific passwords.`);
+      } else if (!loginResponse.includes('A002 OK')) {
+        if (loginResponse.includes('535') || loginResponse.includes('authentication failed')) {
+          throw new Error('Authentication failed: Invalid username or password');
+        }
+        throw new Error(`Authentication failed: ${loginResponse}`);
       }
       authMethod = 'LOGIN';
       console.log('[IMAP-TEST] LOGIN authentication successful');

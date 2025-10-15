@@ -1587,6 +1587,53 @@ export type Database = {
         }
         Relationships: []
       }
+      imap_session_logs: {
+        Row: {
+          commands_sent: Json | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          server_responses: Json | null
+          session_end: string | null
+          session_start: string | null
+          status: string
+          supplier_id: string | null
+          user_id: string
+        }
+        Insert: {
+          commands_sent?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          server_responses?: Json | null
+          session_end?: string | null
+          session_start?: string | null
+          status: string
+          supplier_id?: string | null
+          user_id: string
+        }
+        Update: {
+          commands_sent?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          server_responses?: Json | null
+          session_end?: string | null
+          session_start?: string | null
+          status?: string
+          supplier_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imap_session_logs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_errors: {
         Row: {
           created_at: string | null
@@ -4038,6 +4085,14 @@ export type Database = {
       cleanup_old_amazon_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      decrypt_email_password: {
+        Args: { encrypted_password: string }
+        Returns: string
+      }
+      encrypt_email_password: {
+        Args: { plain_password: string }
+        Returns: string
       }
       get_retryable_import_errors: {
         Args: Record<PropertyKey, never>
