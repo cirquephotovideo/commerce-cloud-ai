@@ -26,7 +26,15 @@ interface ErrorResponse {
   redirect_to?: string;
 }
 
-type ManageSubscriptionResponse = SuccessResponse | ErrorResponse;
+interface CompletePaymentResponse {
+  error: string;
+  code: "PAYMENT_ACTION_REQUIRED";
+  action: "complete_payment";
+  hosted_invoice_url?: string;
+  payment_intent_status?: string;
+}
+
+type ManageSubscriptionResponse = SuccessResponse | ErrorResponse | CompletePaymentResponse;
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -72,14 +80,42 @@ serve(async (req) => {
     );
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader) {
+      logStep("ERROR - No authorization header");
+      return new Response(JSON.stringify({ 
+        error: "Authorization header required",
+        code: "NO_AUTH_HEADER"
+      } as ErrorResponse), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
     logStep("Authorization header found");
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    if (userError) {
+      logStep("ERROR - Authentication failed", { error: userError.message });
+      return new Response(JSON.stringify({ 
+        error: "Invalid or expired token",
+        code: "AUTHENTICATION_FAILED",
+        details: userError.message
+      } as ErrorResponse), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
     const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    if (!user?.email) {
+      logStep("ERROR - User missing email");
+      return new Response(JSON.stringify({ 
+        error: "User not authenticated or email not available",
+        code: "AUTHENTICATION_FAILED"
+      } as ErrorResponse), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
+    }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     // Valider le body de la requête
@@ -128,10 +164,22 @@ serve(async (req) => {
       .select("*")
       .eq("id", newPlanId)
       .eq("is_active", true)
-      .single();
+      .maybeSingle();
 
-    if (planError || !newPlan) {
-      logStep("ERROR - Plan not found or inactive", { newPlanId, error: planError });
+    if (planError) {
+      logStep("ERROR - Database error fetching plan", { newPlanId, error: planError });
+      return new Response(JSON.stringify({ 
+        error: "Database error fetching plan",
+        code: "DATABASE_ERROR",
+        details: planError.message
+      } as ErrorResponse), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
+
+    if (!newPlan) {
+      logStep("ERROR - Plan not found or inactive", { newPlanId });
       return new Response(JSON.stringify({ 
         error: `Plan with ID ${newPlanId} not found or inactive`,
         code: "PLAN_NOT_FOUND"
@@ -229,7 +277,7 @@ serve(async (req) => {
         });
       }
 
-      // Update the subscription
+      // Update the subscription with expanded invoice data
       const updatedSubscription = await stripe.subscriptions.update(currentSubscription.id, {
         items: [
           {
@@ -238,11 +286,48 @@ serve(async (req) => {
           },
         ],
         proration_behavior: "always_invoice",
+        expand: ["latest_invoice.payment_intent"],
       });
       logStep("Subscription updated in Stripe", { 
         subscriptionId: updatedSubscription.id,
-        newPrice: newPriceId
+        newPrice: newPriceId,
+        status: updatedSubscription.status
       });
+
+      // Check if payment action is required
+      const latestInvoice = updatedSubscription.latest_invoice as any;
+      const paymentIntent = latestInvoice?.payment_intent;
+      const paymentIntentStatus = paymentIntent?.status;
+
+      logStep("Payment status check", {
+        subscriptionStatus: updatedSubscription.status,
+        invoiceId: latestInvoice?.id,
+        paymentIntentStatus,
+        hostedInvoiceUrl: latestInvoice?.hosted_invoice_url
+      });
+
+      if (
+        updatedSubscription.status === "incomplete" ||
+        (paymentIntentStatus && ["requires_payment_method", "requires_action"].includes(paymentIntentStatus))
+      ) {
+        logStep("Payment action required", {
+          invoiceId: latestInvoice?.id,
+          hostedInvoiceUrl: latestInvoice?.hosted_invoice_url,
+          paymentIntentStatus,
+          nextAction: paymentIntent?.next_action
+        });
+
+        return new Response(JSON.stringify({
+          error: "Payment action required to complete the plan change",
+          code: "PAYMENT_ACTION_REQUIRED",
+          action: "complete_payment",
+          hosted_invoice_url: latestInvoice?.hosted_invoice_url,
+          payment_intent_status: paymentIntentStatus
+        } as CompletePaymentResponse), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 402,
+        });
+      }
 
       // Update user_subscriptions table
       const { error: updateError } = await supabaseClient
@@ -298,7 +383,10 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR in manage-subscription", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      code: "INTERNAL_ERROR"
+    } as ErrorResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
