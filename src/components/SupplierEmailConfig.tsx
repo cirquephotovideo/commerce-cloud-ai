@@ -2,6 +2,10 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Lock } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import { DedicatedEmailConfig } from "./supplier-email-modes/DedicatedEmailConfig";
 import { IMAPConfig } from "./supplier-email-modes/IMAPConfig";
 import { POP3Config } from "./supplier-email-modes/POP3Config";
@@ -15,10 +19,44 @@ interface SupplierEmailConfigProps {
 
 export function SupplierEmailConfig({ supplierId, config, onConfigChange }: SupplierEmailConfigProps) {
   const [emailMode, setEmailMode] = useState(config.email_mode || 'dedicated');
+  const [isEncrypting, setIsEncrypting] = useState(false);
   
   const handleModeChange = (mode: string) => {
     setEmailMode(mode);
     onConfigChange({ ...config, email_mode: mode });
+  };
+
+  const handleEncryptPassword = async () => {
+    if (!supplierId) {
+      toast({
+        title: "Erreur",
+        description: "ID du fournisseur manquant",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsEncrypting(true);
+    try {
+      const { error } = await supabase.rpc('encrypt_supplier_password', {
+        p_supplier_id: supplierId
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "✅ Succès",
+        description: "Mot de passe chiffré avec succès",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsEncrypting(false);
+    }
   };
 
   return (
@@ -53,6 +91,21 @@ export function SupplierEmailConfig({ supplierId, config, onConfigChange }: Supp
           </div>
         </CardContent>
       </Card>
+
+      {/* Bouton de chiffrement manuel */}
+      {(emailMode === 'imap' || emailMode === 'pop3') && supplierId && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEncryptPassword}
+            disabled={isEncrypting}
+          >
+            <Lock className="h-4 w-4 mr-2" />
+            {isEncrypting ? "Chiffrement..." : "🔒 Chiffrer le mot de passe"}
+          </Button>
+        </div>
+      )}
 
       {/* Affichage conditionnel selon le mode */}
       {emailMode === 'dedicated' && <DedicatedEmailConfig supplierId={supplierId} />}

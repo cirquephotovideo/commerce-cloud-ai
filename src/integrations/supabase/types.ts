@@ -4094,6 +4094,10 @@ export type Database = {
         Args: { plain_password: string }
         Returns: string
       }
+      encrypt_supplier_password: {
+        Args: { p_supplier_id: string }
+        Returns: undefined
+      }
       get_retryable_import_errors: {
         Args: Record<PropertyKey, never>
         Returns: {

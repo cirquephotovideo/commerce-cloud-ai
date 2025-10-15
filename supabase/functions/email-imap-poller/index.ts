@@ -90,26 +90,29 @@ serve(async (req) => {
     let errorMessage = null;
 
     try {
-      // Récupérer et déchiffrer le mot de passe
-      const { data: credentials } = await supabase
-        .from('supplier_email_credentials')
-        .select('encrypted_password')
-        .eq('supplier_id', supplierId)
-        .single();
+      // Récupérer et gérer le mot de passe (chiffré ou clair)
+      let imapPassword = config.imap_password;
 
-      let password = config.imap_password;
-      if (credentials?.encrypted_password) {
-        const { data: decrypted, error: decryptError } = await supabase
-          .rpc('decrypt_email_password', {
-            encrypted_password: credentials.encrypted_password
-          });
+      // Détecter si le mot de passe est chiffré (base64 long = chiffré)
+      const isEncrypted = imapPassword && imapPassword.length > 50 && /^[A-Za-z0-9+/=]+$/.test(imapPassword);
+
+      if (isEncrypted) {
+        console.log('[IMAP-POLLER] Déchiffrement du mot de passe...');
+        const { data: decryptedPassword, error: decryptError } = await supabase.rpc(
+          'decrypt_email_password',
+          { encrypted_password: imapPassword }
+        );
         
-        if (!decryptError && decrypted) {
-          password = decrypted;
+        if (decryptError || !decryptedPassword) {
+          throw new Error(`Échec du déchiffrement: ${decryptError?.message}`);
         }
+        
+        imapPassword = decryptedPassword;
+      } else {
+        console.log('[IMAP-POLLER] Mot de passe en clair détecté');
       }
 
-      if (!config.imap_host || !config.imap_email || !password) {
+      if (!config.imap_host || !config.imap_email || !imapPassword) {
         throw new Error('Configuration IMAP incomplète');
       }
 
@@ -179,6 +182,11 @@ serve(async (req) => {
       let authSuccess = false;
       
       if (capabilities.includes('AUTH=CRAM-MD5')) {
+        console.log('[IMAP-POLLER] Tentative CRAM-MD5', {
+          email: config.imap_email,
+          password_length: imapPassword?.length || 0,
+          is_encrypted: isEncrypted,
+        });
         console.log('[IMAP-POLLER] Attempting CRAM-MD5');
         try {
           await conn.write(encoder.encode('A01 AUTHENTICATE CRAM-MD5\r\n'));
@@ -191,7 +199,7 @@ serve(async (req) => {
             // HMAC-MD5 simpliste (production devrait utiliser crypto.subtle)
             const hmac = await crypto.subtle.importKey(
               'raw',
-              encoder.encode(password),
+              encoder.encode(imapPassword),
               { name: 'HMAC', hash: 'SHA-256' },
               false,
               ['sign']
@@ -217,7 +225,7 @@ serve(async (req) => {
       }
       
       if (!authSuccess) {
-        const loginResp = await sendCommand(`LOGIN ${config.imap_email} ${password}`, 'A02');
+        const loginResp = await sendCommand(`LOGIN ${config.imap_email} ${imapPassword}`, 'A02');
         if (!loginResp.includes('A02 OK')) {
           throw new Error('Authentification échouée');
         }
@@ -368,7 +376,14 @@ serve(async (req) => {
 
     } catch (error) {
       errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[IMAP-POLLER] Error:`, error);
+      console.error('[IMAP-POLLER] Erreur détaillée:', {
+        supplier: supplier.supplier_name,
+        host: config.imap_host,
+        port: config.imap_port,
+        ssl: config.imap_ssl,
+        error_message: errorMessage,
+        error_stack: error instanceof Error ? error.stack : undefined,
+      });
       
       pollStatus = errorMessage.includes('auth') || errorMessage.includes('password') 
         ? 'auth_failed' 
