@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail } from "lucide-react";
+import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail, AlertCircle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,6 +28,7 @@ import { SupplierProductLinksTab } from "@/components/SupplierProductLinksTab";
 import { BulkProductLinksManager } from "@/components/BulkProductLinksManager";
 import { ImportStatsDashboard } from "@/components/ImportStatsDashboard";
 import { MappingTemplatesManager } from "@/components/MappingTemplatesManager";
+import { SupplierMappingSetup } from "@/components/SupplierMappingSetup";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -506,6 +507,7 @@ export default function Suppliers() {
         <TabsList>
           <TabsTrigger value="list">Fournisseurs</TabsTrigger>
           <TabsTrigger value="products">Produits</TabsTrigger>
+          <TabsTrigger value="mapping-setup">🗺️ Configuration Mapping</TabsTrigger>
           <TabsTrigger value="inbox">📧 Boîte de réception</TabsTrigger>
           <TabsTrigger value="email-setup">⚙️ Configuration Email</TabsTrigger>
           <TabsTrigger value="platforms">🔑 Plateformes E-commerce</TabsTrigger>
@@ -684,6 +686,54 @@ export default function Suppliers() {
 
         <TabsContent value="linked">
           <SupplierProductLinksTab />
+        </TabsContent>
+
+        <TabsContent value="mapping-setup">
+          <div className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Sélectionnez un fournisseur ci-dessous pour configurer son mapping de colonnes de manière préventive.
+              </AlertDescription>
+            </Alert>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Sélectionner un fournisseur</CardTitle>
+                <CardDescription>
+                  Choisissez le fournisseur pour lequel vous souhaitez configurer le mapping
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4">
+                  {suppliers?.map((supplier) => (
+                    <Button
+                      key={supplier.id}
+                      variant="outline"
+                      className="justify-start h-auto p-4"
+                      onClick={() => setSelectedSupplierId(supplier.id)}
+                    >
+                      <div className="flex flex-col items-start gap-1 w-full">
+                        <div className="font-semibold">{supplier.supplier_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Type: {supplierTypeLabels[supplier.supplier_type]}
+                        </div>
+                        {supplier.column_mapping && (
+                          <Badge variant="outline" className="mt-1">
+                            ✅ Mapping déjà configuré
+                          </Badge>
+                        )}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {selectedSupplierId && (
+              <SupplierMappingSetup supplierId={selectedSupplierId} />
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="inbox">

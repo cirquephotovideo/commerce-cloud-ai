@@ -158,9 +158,36 @@ serve(async (req) => {
         return row;
       });
     } else if (processFileName?.match(/\.(xlsx|xls)$/)) {
-      const workbook = XLSX.read(processBuffer, { type: 'array' });
+      // Enhanced Excel parsing with robust options
+      const workbook = XLSX.read(processBuffer, {
+        type: 'array',
+        raw: true,              // Force raw value reading
+        cellDates: true,        // Handle dates correctly
+        cellNF: false,          // Ignore custom formatting
+        cellText: false,        // Use raw values
+        dateNF: 'yyyy-mm-dd',   // Standard date format
+        codepage: 65001         // UTF-8 for special characters
+      });
+
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(firstSheet);
+
+      // Convert to array of arrays first
+      const rawRows = XLSX.utils.sheet_to_json(firstSheet, { 
+        header: 1,              // Array of arrays
+        defval: '',             // Default value for empty cells
+        blankrows: false,       // Ignore completely empty rows
+        raw: true               // Raw values without formatting
+      });
+
+      // Then convert to objects with headers
+      const headers = (rawRows[0] as any[]).map(h => String(h || '').trim());
+      rows = (rawRows.slice(1) as any[][]).map((row: any[]) => {
+        const obj: any = {};
+        headers.forEach((header, idx) => {
+          obj[header || `col_${idx}`] = row[idx]?.toString().trim() || '';
+        });
+        return obj;
+      }).filter(row => Object.values(row).some(v => v)); // Filter empty rows
     } else {
       throw new Error(`Unsupported file type: ${processFileName}`);
     }
@@ -168,8 +195,9 @@ serve(async (req) => {
     console.log('[PROCESS-ATTACHMENT] File parsed successfully:', {
       format: processFileName.endsWith('.csv') ? 'CSV' : 'Excel',
       rows_found: rows.length,
-      columns: Object.keys(rows[0] || {}).length,
-      sample_columns: Object.keys(rows[0] || {}).slice(0, 5)
+      columns_detected: Object.keys(rows[0] || {}),
+      first_row_sample: rows[0],
+      file_size_kb: Math.round(processBuffer.byteLength / 1024)
     });
     
     if (originalArchive) {
@@ -244,19 +272,35 @@ serve(async (req) => {
       } else {
         // Detect column mapping with AI
         const sampleRow = rows[0];
-        const columnMappingPrompt = `Analyse cette ligne de fichier fournisseur et identifie les colonnes correspondantes.
+        const columnMappingPrompt = `Analyse ce fichier fournisseur Excel et identifie le mapping des colonnes.
 
-Colonnes disponibles: ${Object.keys(sampleRow).join(', ')}
-Exemple de valeurs: ${JSON.stringify(sampleRow, null, 2)}
+COLONNES DISPONIBLES DANS LE FICHIER :
+${Object.keys(sampleRow).map((k, i) => `${i}. "${k}"`).join('\n')}
 
-Réponds UNIQUEMENT en JSON valide:
+VALEURS EXEMPLE (première ligne de données) :
+${JSON.stringify(sampleRow, null, 2)}
+
+RÈGLES DE DÉTECTION (insensible à la casse et accents) :
+- product_name : rechercher "nom", "désignation", "libellé", "produit", "article", "description", "intitulé"
+- ean : rechercher "ean", "ean13", "code barre", "code-barre", "gtin", "barcode"
+- supplier_reference : rechercher "référence", "ref", "code", "sku", "ref fournisseur", "code article"
+- purchase_price : rechercher "prix", "tarif", "pa", "prix achat", "prix ht", "pu", "prix unitaire", "tarif ht"
+- stock_quantity : rechercher "stock", "quantité", "qté", "dispo", "disponible", "en stock"
+- brand : rechercher "marque", "brand", "fabricant", "manufacturer"
+
+IMPORTANT : 
+- Retourne les NOMS EXACTS des colonnes (pas les index)
+- Si une colonne n'est pas trouvée, mets null
+- Ne réponds QU'avec le JSON, aucun texte avant ou après
+
+Format de réponse OBLIGATOIRE (JSON uniquement) :
 {
-  "product_name": "nom-colonne-ou-null",
-  "ean": "nom-colonne-ou-null",
-  "supplier_reference": "nom-colonne-ou-null",
-  "purchase_price": "nom-colonne-ou-null",
-  "stock_quantity": "nom-colonne-ou-null",
-  "brand": "nom-colonne-ou-null"
+  "product_name": "nom-exact-colonne-ou-null",
+  "ean": "nom-exact-colonne-ou-null",
+  "supplier_reference": "nom-exact-colonne-ou-null",
+  "purchase_price": "nom-exact-colonne-ou-null",
+  "stock_quantity": "nom-exact-colonne-ou-null",
+  "brand": "nom-exact-colonne-ou-null"
 }`;
 
         console.log('[PROCESS-ATTACHMENT] Starting AI column mapping detection...');

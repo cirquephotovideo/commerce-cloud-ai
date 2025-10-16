@@ -14,6 +14,8 @@ import { useState, useMemo, useEffect } from "react";
 import { EmailDetailModal } from "./EmailDetailModal";
 import { EmailMappingDialog } from "./EmailMappingDialog";
 import { ImportProgressDialog } from "./ImportProgressDialog";
+import { EmailMappingValidation } from "./EmailMappingValidation";
+import * as XLSX from "xlsx";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -37,6 +39,13 @@ export function EmailInboxTable() {
     errors: 0,
     current_operation: ''
   });
+
+  const [mappingValidation, setMappingValidation] = useState<{
+    email: any;
+    columns: string[];
+    previewData: any[];
+    suggestedMapping: any;
+  } | null>(null);
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox', statusFilter],
@@ -139,8 +148,62 @@ export function EmailInboxTable() {
 
   const handleReprocess = async (inboxId: string) => {
     try {
-      toast.info("Retraitement en cours...");
+      const email = emailInbox?.find(e => e.id === inboxId);
+      if (!email?.attachment_url) {
+        toast.error("Fichier introuvable");
+        return;
+      }
+
+      toast.info("Chargement du fichier pour validation...");
+
+      // Download file from storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('email-attachments')
+        .download(email.attachment_url);
+
+      if (downloadError || !fileData) {
+        toast.error("Impossible de charger le fichier");
+        return;
+      }
+
+      // Parse to detect columns
+      const arrayBuffer = await fileData.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
       
+      const headers = rows[0] as string[];
+      const dataRows = rows.slice(1, 6).map(row => {
+        const obj: any = {};
+        headers.forEach((h, i) => obj[h] = (row as any)[i]);
+        return obj;
+      });
+
+      // Load saved supplier mapping
+      const { data: supplier } = await supabase
+        .from('supplier_configurations')
+        .select('column_mapping')
+        .eq('id', email.supplier_id)
+        .single();
+
+      // Open validation modal
+      setMappingValidation({
+        email,
+        columns: headers,
+        previewData: [headers, ...dataRows],
+        suggestedMapping: supplier?.column_mapping || {}
+      });
+
+    } catch (error) {
+      console.error('Error preparing reprocess:', error);
+      toast.error("Erreur lors du chargement du fichier");
+    }
+  };
+
+  const handleConfirmMapping = async (confirmedMapping: Record<string, number | null>) => {
+    if (!mappingValidation) return;
+
+    try {
       setImportProgress({
         open: true,
         total: 0,
@@ -150,20 +213,23 @@ export function EmailInboxTable() {
         errors: 0,
         current_operation: 'Initialisation...'
       });
-      
+
       const { error } = await supabase.functions.invoke('process-email-attachment', {
         body: {
-          inbox_id: inboxId,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-        },
+          inbox_id: mappingValidation.email.id,
+          user_id: mappingValidation.email.user_id,
+          custom_mapping: confirmedMapping
+        }
       });
 
       if (error) throw error;
-      
-      toast.success("Retraitement lancé");
-    } catch (error: any) {
-      console.error('Reprocess error:', error);
-      toast.error("Erreur lors du retraitement");
+
+      toast.success('Import relancé avec le mapping validé');
+      setMappingValidation(null);
+      refetch();
+    } catch (error) {
+      console.error('Error confirming mapping:', error);
+      toast.error("Erreur lors du lancement de l'import");
       setImportProgress(prev => ({ ...prev, open: false }));
     }
   };
@@ -649,10 +715,21 @@ export function EmailInboxTable() {
       />
     )}
 
-    <ImportProgressDialog
-      open={importProgress.open}
-      progress={importProgress}
-    />
+      <ImportProgressDialog
+        open={importProgress.open}
+        progress={importProgress}
+      />
+
+      {mappingValidation && (
+        <EmailMappingValidation
+          email={mappingValidation.email}
+          detectedColumns={mappingValidation.columns}
+          previewData={mappingValidation.previewData}
+          suggestedMapping={mappingValidation.suggestedMapping}
+          onConfirm={handleConfirmMapping}
+          onCancel={() => setMappingValidation(null)}
+        />
+      )}
     </>
   );
 }

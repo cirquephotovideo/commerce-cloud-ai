@@ -154,7 +154,7 @@ export function EmailDetailModal({ email, open, onOpenChange, onRefresh }: Email
             {Object.keys(mapping).length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">🔍 Mapping des colonnes (AI)</CardTitle>
+                  <CardTitle className="text-sm">🗺️ Mapping des colonnes</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-2 text-sm">
@@ -166,6 +166,32 @@ export function EmailDetailModal({ email, open, onOpenChange, onRefresh }: Email
                       </div>
                     ))}
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Colonnes détectées lors du parsing */}
+            {logs.find(log => log.columns_detected) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">📋 Colonnes détectées dans le fichier</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {logs.find(log => log.columns_detected)?.columns_detected.map((col: string, idx: number) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {idx}: {col}
+                      </Badge>
+                    ))}
+                  </div>
+                  {logs.find(log => log.first_row_sample) && (
+                    <div className="mt-4 p-3 bg-muted rounded-md">
+                      <p className="text-xs font-semibold mb-2">Exemple de valeurs (première ligne) :</p>
+                      <pre className="text-xs overflow-x-auto">
+                        {JSON.stringify(logs.find(log => log.first_row_sample)?.first_row_sample, null, 2)}
+                      </pre>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
