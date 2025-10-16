@@ -48,6 +48,7 @@ export function EmailInboxTable() {
     columns: string[];
     previewData: any[];
     suggestedMapping: any;
+    totalRows: number;
   } | null>(null);
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
@@ -115,7 +116,7 @@ export function EmailInboxTable() {
           open: inbox.status === 'processing',
           total: progressLog.total || prev.total,
           processed: progressLog.processed || 0,
-          success: inbox.products_created || 0,
+          success: progressLog.success ?? prev.success,
           skipped: progressLog.skipped || 0,
           errors: progressLog.errors || 0,
           current_operation: progressLog.message || 'Traitement en cours...'
@@ -256,7 +257,8 @@ export function EmailInboxTable() {
         email,
         columns: headers,
         previewData: [headers, ...preview],
-        suggestedMapping
+        suggestedMapping,
+        totalRows: dataRows.length
       });
 
       if (headerRowIndex > 0) {
@@ -276,15 +278,20 @@ export function EmailInboxTable() {
 
     console.log('[EmailInboxTable] Confirming mapping:', confirmedMapping);
 
-    // Calculate total rows for progress
-    const detectedTotal = mappingValidation.previewData.length > 1 
-      ? mappingValidation.previewData.length - 1 // -1 for header row
-      : 0;
+    // Convert column indices to column names for backend
+    const nameMapping = Object.fromEntries(
+      Object.entries(confirmedMapping).map(([key, idx]) => [
+        key,
+        idx === null ? null : mappingValidation.columns[idx]
+      ])
+    );
 
-    // Initialize progress dialog
+    console.log('[EmailInboxTable] Name mapping:', nameMapping);
+
+    // Initialize progress dialog with realistic total
     setImportProgress({
       open: true,
-      total: detectedTotal,
+      total: mappingValidation.totalRows,
       processed: 0,
       success: 0,
       skipped: 0,
@@ -300,7 +307,7 @@ export function EmailInboxTable() {
         body: {
           inbox_id: mappingValidation.email.id,
           user_id: mappingValidation.email.user_id,
-          custom_mapping: confirmedMapping
+          custom_mapping: nameMapping
         }
       });
 
