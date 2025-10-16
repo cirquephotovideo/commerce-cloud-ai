@@ -7,44 +7,49 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Trash2, Download, Filter } from "lucide-react";
+import { toast } from "sonner";
+import { Trash2, Filter } from "lucide-react";
+
+type ProductLink = any;
 
 export function BulkProductLinksManager() {
   const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set());
   const [filterSupplier, setFilterSupplier] = useState<string>("all");
   const [filterLinkType, setFilterLinkType] = useState<string>("all");
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: links, isLoading } = useQuery({
+  const { data: links, isLoading } = useQuery<ProductLink[]>({
     queryKey: ["product-links-bulk", filterSupplier, filterLinkType],
-    queryFn: async () => {
+    queryFn: async (): Promise<ProductLink[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase
+      const query = (supabase as any)
         .from("product_links")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
+      const { data, error } = await query;
       if (error) throw error;
-      return data as any[];
+      return data || [];
     },
   });
 
-  const { data: suppliers } = useQuery({
+  const { data: suppliers } = useQuery<any[]>({
     queryKey: ["suppliers-list"],
-    queryFn: async () => {
+    queryFn: async (): Promise<any[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
-      const { data, error } = await supabase
+      
+      const query = (supabase as any)
         .from("supplier_configurations")
         .select("*")
         .eq("user_id", user.id);
+      
+      const { data, error } = await query;
       if (error) throw error;
-      return data as any[];
+      return data || [];
     },
   });
 
@@ -56,7 +61,7 @@ export function BulkProductLinksManager() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["product-links-bulk"] });
       setSelectedLinks(new Set());
-      toast({ title: `${selectedLinks.size} lien(s) supprimé(s)` });
+      toast.success(`${selectedLinks.size} lien(s) supprimé(s)`);
     },
   });
 

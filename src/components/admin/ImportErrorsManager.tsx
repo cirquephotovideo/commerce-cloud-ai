@@ -54,10 +54,10 @@ export const ImportErrorsManager = () => {
     try {
       const { error } = await supabase.functions.invoke("retry-failed-imports");
       if (error) throw error;
-      toast({ title: "Retry en masse lancé avec succès" });
-      queryClient.invalidateQueries({ queryKey: ["import-errors"] });
+      toast.success("Retry en masse lancé avec succès");
+      refetch();
     } catch (error: any) {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast.error("Erreur: " + error.message);
     }
   };
 
