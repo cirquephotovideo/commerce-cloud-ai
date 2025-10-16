@@ -19,6 +19,7 @@ import { ProductsTable } from "@/components/ProductsTable";
 import { BatchEnrichmentDialog } from "@/components/BatchEnrichmentDialog";
 import { AutoLinkDialog } from "@/components/AutoLinkDialog";
 import { ProductDetailModal } from "@/components/ProductDetailModal";
+import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
 
 type EnrichmentStatus = "pending" | "enriching" | "completed" | "failed";
 
@@ -167,6 +168,10 @@ export default function ImportedProducts() {
     const productId = product.id;
     setEnrichingProductIds(prev => new Set(prev).add(productId));
     
+    console.log('[ImportedProducts] Creating analysis for:', product.product_name, product.id);
+    console.log('[ImportedProducts] Auto-enrich enabled:', autoAdvancedEnrich);
+    console.log('[ImportedProducts] Selected model:', selectedModel);
+    
     try {
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -204,6 +209,8 @@ export default function ImportedProducts() {
 
       if (analysisError) throw analysisError;
 
+      console.log('[ImportedProducts] Analysis created:', analysisData.id);
+
       // Update supplier_product enrichment_status
       await supabase
         .from('supplier_products')
@@ -212,6 +219,12 @@ export default function ImportedProducts() {
 
       // If auto-enrichment is enabled, call enrich-all
       if (autoAdvancedEnrich) {
+        console.log('[ImportedProducts] Calling enrich-all with:', {
+          analysisId: analysisData.id,
+          productName: product.product_name,
+          model: selectedModel
+        });
+
         const enrichPromise = supabase.functions.invoke('enrich-all', {
           body: {
             analysisId: analysisData.id,
@@ -224,6 +237,13 @@ export default function ImportedProducts() {
             purchasePrice: product.purchase_price,
             preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
           }
+        }).then(response => {
+          console.log('[ImportedProducts] enrich-all response:', response);
+          if (response.error) {
+            console.error('[ImportedProducts] enrich-all error:', response.error);
+            throw response.error;
+          }
+          return response;
         });
 
         await toast.promise(enrichPromise, {
@@ -231,10 +251,15 @@ export default function ImportedProducts() {
           success: (result) => {
             const data = result.data;
             const completed = data?.summary?.completed || 0;
+            console.log('[ImportedProducts] Enrichment completed:', data?.summary);
             return `✅ ${completed}/4 enrichissements réussis`;
           },
           error: (err) => {
-            console.error('Enrichment error:', err);
+            console.error('[ImportedProducts] Enrichment error details:', {
+              message: err.message,
+              status: err.status,
+              error: err
+            });
             
             // Handle specific error codes
             if (err.status === 402) {
@@ -254,11 +279,12 @@ export default function ImportedProducts() {
         toast.success(`✅ Analyse créée pour ${product.product_name}`);
       }
 
-      // Refresh data
-      refetch();
+      // Force refresh data
+      await refetch();
+      console.log('[ImportedProducts] Data refreshed');
       
     } catch (error: any) {
-      console.error('Error creating analysis:', error);
+      console.error('[ImportedProducts] Error creating analysis:', error);
       toast.error(`Erreur: ${error.message || 'Impossible de créer l\'analyse'}`);
     } finally {
       setEnrichingProductIds(prev => {
@@ -475,6 +501,14 @@ export default function ImportedProducts() {
             </div>
           </CardTitle>
         </CardHeader>
+        
+        {/* Enrichment Progress Monitor */}
+        {stats?.enriching > 0 && (
+          <div className="px-6 pt-4">
+            <EnrichmentProgressMonitor />
+          </div>
+        )}
+        
         <CardContent>
           {/* Search and Filters */}
           <div className="flex gap-2 mb-4 items-center flex-wrap">
@@ -651,6 +685,24 @@ export default function ImportedProducts() {
                               )}
                             </div>
                             
+                            {/* Enrichment Status Badges */}
+                            {analysis && (
+                              <div className="flex flex-wrap gap-2 text-xs mt-2">
+                                {analysis.specifications && (
+                                  <Badge variant="default">✅ Specs</Badge>
+                                )}
+                                {analysis.long_description && (
+                                  <Badge variant="default">✅ Description</Badge>
+                                )}
+                                {analysis.cost_analysis && (
+                                  <Badge variant="default">✅ Coûts</Badge>
+                                )}
+                                {analysis.rsgp_compliance && (
+                                  <Badge variant="default">✅ RSGP</Badge>
+                                )}
+                              </div>
+                            )}
+                            
                              {/* Action Button */}
                              <div>
                                {!analysis ? (
@@ -755,6 +807,32 @@ export default function ImportedProducts() {
           }
         }}
       />
+
+      {/* Floating Action Bar */}
+      {selectedProducts.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-primary text-primary-foreground px-6 py-4 rounded-lg shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom">
+          <span className="font-semibold">
+            {selectedProducts.size} produit{selectedProducts.size > 1 ? 's' : ''} sélectionné{selectedProducts.size > 1 ? 's' : ''}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={selectNone}
+            >
+              Désélectionner
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBatchEnrichmentOpen(true)}
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              Enrichir en masse
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
