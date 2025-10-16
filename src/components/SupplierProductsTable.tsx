@@ -278,6 +278,58 @@ export function SupplierProductsTable() {
 
                       {/* Actions */}
                       <div className="flex items-center gap-2">
+                        {!product.product_links || product.product_links.length === 0 ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                const { data: { user } } = await supabase.auth.getUser();
+                                if (!user) throw new Error("Non authentifié");
+
+                                // Create product_analyses
+                                const { data: newAnalysis, error: analysisError } = await supabase
+                                  .from('product_analyses')
+                                  .insert({
+                                    user_id: user.id,
+                                    ean: product.ean,
+                                    purchase_price: product.purchase_price,
+                                    purchase_currency: 'EUR',
+                                    supplier_product_id: product.id,
+                                    analysis_result: {
+                                      name: product.product_name,
+                                    },
+                                    needs_enrichment: true
+                                  })
+                                  .select('id')
+                                  .single();
+
+                                if (analysisError) throw analysisError;
+
+                                // Create enrichment queue
+                                await supabase.from('enrichment_queue').insert({
+                                  user_id: user.id,
+                                  analysis_id: newAnalysis.id,
+                                  supplier_product_id: product.id,
+                                  enrichment_type: ['specifications', 'description'],
+                                  priority: 'normal',
+                                  status: 'pending'
+                                });
+
+                                toast.success("Analyse créée et mise en file d'enrichissement");
+                                window.location.href = `/dashboard?filter=recent`;
+                              } catch (error: any) {
+                                toast.error("Erreur: " + error.message);
+                              }
+                            }}
+                            title="Créer une analyse produit"
+                            className="gap-2"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            Créer analyse
+                          </Button>
+                        ) : null}
                         {product.supplier_url && (
                           <Button
                             variant="ghost"

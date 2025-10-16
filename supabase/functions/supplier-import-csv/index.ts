@@ -290,6 +290,44 @@ serve(async (req) => {
             }
           }
 
+          // If no EAN match, create new product_analyses automatically
+          if (!matchedAnalysis) {
+            const { data: newAnalysis, error: analysisError } = await supabase
+              .from('product_analyses')
+              .insert({
+                user_id: user.id,
+                ean: productData.ean,
+                purchase_price: productData.purchase_price,
+                purchase_currency: 'EUR',
+                supplier_product_id: newProduct.id,
+                analysis_result: {
+                  name: cleanName,
+                },
+                needs_enrichment: true
+              })
+              .select('id')
+              .single();
+
+            if (!analysisError && newAnalysis) {
+              // Create enrichment queue entry
+              await supabase
+                .from('enrichment_queue')
+                .insert({
+                  user_id: user.id,
+                  analysis_id: newAnalysis.id,
+                  supplier_product_id: newProduct.id,
+                  enrichment_type: ['specifications', 'description'],
+                  priority: 'normal',
+                  status: 'pending'
+                });
+
+              console.log('[CSV-IMPORT] Created product_analyses and enrichment_queue for new product:', {
+                supplier_product_id: newProduct.id,
+                analysis_id: newAnalysis.id
+              });
+            }
+          }
+
           newProducts++;
         }
       } catch (error) {

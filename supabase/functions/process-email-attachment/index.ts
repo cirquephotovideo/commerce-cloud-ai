@@ -340,9 +340,9 @@ Réponds UNIQUEMENT en JSON valide:
     let productsErrors = 0;
     const updatedVariantIds: string[] = []; // Track variant IDs for price alerts
 
-    const rowsToProcess = rows.slice(0, 100); // Limit to 100 for performance
-    for (let i = 0; i < rowsToProcess.length; i++) {
-      const row = rowsToProcess[i];
+    // Process all rows without limit
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       try {
         const normalizedRow = {
           product_name: row[columnMapping.product_name] || '',
@@ -540,6 +540,7 @@ Réponds UNIQUEMENT en JSON valide:
             productsCreated++;
 
             // Try to auto-link to existing product_analyses if EAN match exists
+            let linkedAnalysisId: string | null = null;
             if (normalizedRow.ean) {
               const { data: eanAnalysis } = await supabase
                 .from('product_analyses')
@@ -549,6 +550,7 @@ Réponds UNIQUEMENT en JSON valide:
                 .maybeSingle();
 
               if (eanAnalysis) {
+                linkedAnalysisId = eanAnalysis.id;
                 // Create product_link
                 await supabase
                   .from('product_links')
@@ -566,6 +568,47 @@ Réponds UNIQUEMENT en JSON valide:
                 });
               }
             }
+
+            // If no EAN match, create new product_analyses automatically
+            if (!linkedAnalysisId) {
+              const { data: newAnalysis, error: analysisError } = await supabase
+                .from('product_analyses')
+                .insert({
+                  user_id: user_id,
+                  ean: normalizedRow.ean,
+                  purchase_price: normalizedRow.purchase_price,
+                  purchase_currency: 'EUR',
+                  supplier_product_id: newSupplierProduct.id,
+                  analysis_result: {
+                    name: normalizedRow.product_name,
+                    brand: normalizedRow.brand,
+                  },
+                  needs_enrichment: true
+                })
+                .select('id')
+                .single();
+
+              if (!analysisError && newAnalysis) {
+                linkedAnalysisId = newAnalysis.id;
+                
+                // Create enrichment queue entry
+                await supabase
+                  .from('enrichment_queue')
+                  .insert({
+                    user_id: user_id,
+                    analysis_id: newAnalysis.id,
+                    supplier_product_id: newSupplierProduct.id,
+                    enrichment_type: ['specifications', 'description'],
+                    priority: 'normal',
+                    status: 'pending'
+                  });
+
+                console.log('[PROCESS-ATTACHMENT] Created product_analyses and enrichment_queue for new product:', {
+                  supplier_product_id: newSupplierProduct.id,
+                  analysis_id: newAnalysis.id
+                });
+              }
+            }
           }
         }
       } catch (rowError) {
@@ -573,12 +616,12 @@ Réponds UNIQUEMENT en JSON valide:
         productsErrors++;
       }
 
-      // Update progress every 5 rows or on last row
-      if ((i + 1) % 5 === 0 || i === rowsToProcess.length - 1) {
+      // Update progress every 10 rows or on last row
+      if ((i + 1) % 10 === 0 || i === rows.length - 1) {
         await updateProgress(
-          `Traitement des produits (${i + 1}/${rowsToProcess.length})`,
+          `Traitement des produits (${i + 1}/${rows.length})`,
           i + 1,
-          rowsToProcess.length,
+          rows.length,
           productsCreated + productsUpdated,
           productsSkipped,
           productsErrors

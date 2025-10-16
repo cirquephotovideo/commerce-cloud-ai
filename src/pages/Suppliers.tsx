@@ -4,6 +4,9 @@ import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail } f
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ImportScheduler } from "@/components/ImportScheduler";
+import { AutomationRulesManager } from "@/components/AutomationRulesManager";
+import { OllamaHealthDashboard } from "@/components/OllamaHealthDashboard";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
