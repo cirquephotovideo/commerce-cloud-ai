@@ -206,17 +206,25 @@ serve(async (req) => {
         return 0; // Fallback to first row
       }
 
-      // Get skip_rows from supplier configuration
+      // Get skip_rows from supplier configuration (only if supplier exists)
       let headerRowIndex = 0;
-      const { data: supplierConfig } = await supabase
-        .from('supplier_configurations')
-        .select('skip_rows')
-        .eq('id', inbox.supplier_id)
-        .single();
+      let skipRowsConfig = 0;
+      
+      if (inbox.supplier_id) {
+        const { data: supplierConfig, error: configError } = await supabase
+          .from('supplier_configurations')
+          .select('skip_rows')
+          .eq('id', inbox.supplier_id)
+          .maybeSingle();
 
-      if (supplierConfig?.skip_rows && supplierConfig.skip_rows > 0) {
+        if (!configError && supplierConfig?.skip_rows !== null && supplierConfig?.skip_rows !== undefined) {
+          skipRowsConfig = supplierConfig.skip_rows;
+        }
+      }
+
+      if (skipRowsConfig > 0) {
         // Manual configuration takes precedence
-        headerRowIndex = supplierConfig.skip_rows;
+        headerRowIndex = skipRowsConfig;
         console.log('[SMART-PARSING] Using manual skip_rows configuration:', headerRowIndex);
       } else {
         // Automatic detection
@@ -242,7 +250,7 @@ serve(async (req) => {
         message: `Smart header detection: headers found at row ${headerRowIndex + 1}`,
         headerDetection: {
           detectedRow: headerRowIndex + 1,
-          method: supplierConfig?.skip_rows ? 'manual' : 'automatic',
+          method: skipRowsConfig > 0 ? 'manual' : 'automatic',
           headers: headers
         }
       });
