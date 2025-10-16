@@ -343,9 +343,27 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       const errorText = await response.text();
       console.error('AI API error:', response.status, errorText);
       
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Payment required', 
+            code: 'PAYMENT_REQUIRED',
+            message: 'Crédits API insuffisants ou clé invalide'
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 402,
+          }
+        );
+      }
+      
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: 'Limite de requêtes atteinte. Veuillez réessayer dans quelques instants.' }),
+          JSON.stringify({ 
+            error: 'Rate limit exceeded',
+            code: 'RATE_LIMIT', 
+            message: 'Limite de requêtes atteinte. Veuillez réessayer dans quelques instants.' 
+          }),
           { 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 429,

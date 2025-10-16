@@ -106,6 +106,32 @@ Réponds uniquement avec un JSON suivant ce format exact:
     });
 
     if (!aiResponse.ok) {
+      const errorText = await aiResponse.text();
+      console.error('AI API error:', aiResponse.status, errorText);
+      
+      // Retourner des codes d'erreur appropriés
+      if (aiResponse.status === 402) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Payment required', 
+            code: 'PAYMENT_REQUIRED',
+            message: 'Crédits API insuffisants ou clé invalide'
+          }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      if (aiResponse.status === 429) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'Rate limit exceeded', 
+            code: 'RATE_LIMIT',
+            message: 'Limite de requêtes atteinte, réessayez dans quelques instants'
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       throw new Error(`AI API error: ${aiResponse.status}`);
     }
 

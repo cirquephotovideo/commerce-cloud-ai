@@ -116,6 +116,26 @@ async function callAIAnalysis(
         status: response.status,
         statusText: response.statusText
       });
+      
+      // Retourner des codes d'erreur spécifiques
+      if (response.status === 402) {
+        return {
+          error: 'Payment required',
+          code: 'PAYMENT_REQUIRED',
+          message: 'Crédits API insuffisants ou clé invalide',
+          type: analysisType
+        };
+      }
+      
+      if (response.status === 429) {
+        return {
+          error: 'Rate limit exceeded',
+          code: 'RATE_LIMIT',
+          message: 'Limite de requêtes atteinte',
+          type: analysisType
+        };
+      }
+      
       return {
         error: `AI API error: ${response.status} ${response.statusText}`,
         type: analysisType

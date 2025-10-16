@@ -38,9 +38,29 @@ serve(async (req) => {
     logStep("Authenticating user with token");
     
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    const user = userData?.user;
+    
+    if (userError || !user) {
+      logStep('Authentication error', { error: userError?.message || 'User not found' });
+      
+      // Détecter token expiré/invalide spécifiquement
+      const errorMsg = userError?.message || '';
+      if (errorMsg.includes('JWT') || errorMsg.includes('expired') || errorMsg.includes('invalid') || errorMsg.includes('token')) {
+        return new Response(JSON.stringify({
+          subscribed: false,
+          error: 'Token expired or invalid',
+          code: 'TOKEN_EXPIRED',
+          expired: true
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      throw new Error('User authentication failed');
+    }
+    
+    if (!user.email) throw new Error("User email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     // Check if user is super_admin or admin
