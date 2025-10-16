@@ -275,6 +275,12 @@ export default function ImportedProducts() {
             return `❌ Erreur: ${err.message || 'Inconnu'}`;
           }
         });
+
+        // Log enrichment completion
+        console.log('[ImportedProducts] enrich-all completed for product:', {
+          productName: product.product_name,
+          analysisId: analysisData.id
+        });
       } else {
         toast.success(`✅ Analyse créée pour ${product.product_name}`);
       }
