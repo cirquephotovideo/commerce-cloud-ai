@@ -158,92 +158,160 @@ serve(async (req) => {
         return row;
       });
     } else if (processFileName?.match(/\.(xlsx|xls)$/)) {
-      // Enhanced Excel parsing with smart header detection
+      // ULTRA-ENHANCED Excel parsing with aggressive multi-strategy detection
       const workbook = XLSX.read(processBuffer, {
         type: 'array',
-        raw: true,
+        raw: false,  // Changed to false to get formatted values
         cellDates: true,
         cellNF: false,
         cellText: false,
         dateNF: 'yyyy-mm-dd',
-        codepage: 65001
+        codepage: 65001,
+        cellStyles: true  // Try to read styles to detect merged cells
       });
 
-      console.log('[PROCESS] Available sheets:', workbook.SheetNames);
+      console.log('[EXCEL-PARSE] Available sheets:', workbook.SheetNames);
 
-      // Try to find sheet with multiple columns
+      // Find the sheet with the richest data structure
       let bestSheet = null;
-      let maxColumns = 0;
+      let bestSheetName = '';
       let rawRows: any[] = [];
+      let maxDataDensity = 0;
 
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        const testRows = XLSX.utils.sheet_to_json(sheet, { 
-          header: 1,
-          defval: '',
-          blankrows: false,
-          raw: true
-        });
+        
+        // Try multiple parsing strategies
+        const strategies = [
+          { header: 1, raw: false, defval: '', blankrows: false },
+          { header: 1, raw: true, defval: '', blankrows: false },
+          { defval: '', blankrows: false }
+        ];
 
-        console.log(`[PROCESS] Sheet "${sheetName}": ${testRows.length} rows`);
+        let bestRows: any[] = [];
+        let bestColCount = 0;
 
-        if (testRows.length > 0) {
-          const firstRow = testRows[0] as any[];
-          const colCount = firstRow.filter((cell: any) => cell && String(cell).trim()).length;
+        for (const opts of strategies) {
+          const testRows = XLSX.utils.sheet_to_json(sheet, opts);
           
-          console.log(`[PROCESS] Sheet "${sheetName}" has ${colCount} non-empty columns in first row`);
-          
-          if (colCount > maxColumns) {
-            maxColumns = colCount;
-            bestSheet = sheet;
-            rawRows = testRows;
+          if (testRows.length > 0) {
+            // Check first 20 rows for column density
+            const densityCheck = testRows.slice(0, 20).map((row: any) => {
+              if (Array.isArray(row)) {
+                return row.filter(c => c && String(c).trim()).length;
+              } else {
+                return Object.values(row).filter(v => v && String(v).trim()).length;
+              }
+            });
+            
+            const maxCols = Math.max(...densityCheck);
+            console.log(`[EXCEL-PARSE] Sheet "${sheetName}" - Strategy ${JSON.stringify(opts)} - Max columns: ${maxCols}`);
+            
+            if (maxCols > bestColCount) {
+              bestColCount = maxCols;
+              bestRows = testRows;
+            }
           }
+        }
+
+        // Log first 10 rows for debugging
+        console.log(`[EXCEL-PARSE] Sheet "${sheetName}" - First 10 rows structure:`, 
+          bestRows.slice(0, 10).map((row: any, idx: number) => ({
+            rowIndex: idx,
+            columnCount: Array.isArray(row) ? row.length : Object.keys(row).length,
+            nonEmptyCount: Array.isArray(row) 
+              ? row.filter(c => c && String(c).trim()).length
+              : Object.values(row).filter(v => v && String(v).trim()).length,
+            sample: row
+          }))
+        );
+
+        // Calculate data density (total non-empty cells in first 20 rows)
+        const dataDensity = bestRows.slice(0, 20).reduce((sum: number, row: any) => {
+          if (Array.isArray(row)) {
+            return sum + row.filter(c => c && String(c).trim()).length;
+          } else {
+            return sum + Object.values(row).filter(v => v && String(v).trim()).length;
+          }
+        }, 0);
+
+        console.log(`[EXCEL-PARSE] Sheet "${sheetName}" data density: ${dataDensity}`);
+
+        if (dataDensity > maxDataDensity) {
+          maxDataDensity = dataDensity;
+          bestSheet = sheet;
+          bestSheetName = sheetName;
+          rawRows = bestRows;
         }
       }
 
       if (!bestSheet) {
+        console.log('[EXCEL-PARSE] WARNING: No optimal sheet found, using first sheet');
         bestSheet = workbook.Sheets[workbook.SheetNames[0]];
+        bestSheetName = workbook.SheetNames[0];
         rawRows = XLSX.utils.sheet_to_json(bestSheet, { 
           header: 1,
           defval: '',
           blankrows: false,
-          raw: true
+          raw: false
         });
       }
 
-      console.log('[PROCESS] Using sheet with most columns:', maxColumns);
-      console.log('[PROCESS] Raw file structure:', {
-        totalRows: rawRows.length,
-        firstRowSample: rawRows[0],
-        secondRowSample: rawRows[1],
-        thirdRowSample: rawRows[2]
-      });
+      console.log(`[EXCEL-PARSE] Selected sheet: "${bestSheetName}" with density score: ${maxDataDensity}`);
 
-      // Smart header detection function
-      function detectHeaderRow(rows: any[][]): number {
+      // AGGRESSIVE header detection function
+      function detectHeaderRow(rows: any[][]): { index: number, confidence: number } {
         const keywords = [
           'prix', 'tarif', 'référence', 'ref', 'code', 'ean', 
           'produit', 'article', 'désignation', 'description',
-          'stock', 'quantité', 'marque', 'catégorie'
+          'stock', 'quantité', 'marque', 'catégorie', 'pau', 'ht',
+          'disponibilité', 'dispo', 'ancien', 'nouveau'
         ];
         
-        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+        let bestIndex = 0;
+        let bestScore = 0;
+
+        // Scan first 30 rows (not just 20)
+        for (let i = 0; i < Math.min(rows.length, 30); i++) {
           const row = rows[i];
+          if (!row || row.length === 0) continue;
+
           const nonEmptyCols = row.filter((c: any) => c && String(c).trim()).length;
           
-          if (nonEmptyCols >= 5) {
-            const rowText = row.join(' ').toLowerCase();
-            const matchCount = keywords.filter(kw => rowText.includes(kw)).length;
-            
-            if (matchCount >= 3) {
-              const nextRow = rows[i + 1];
-              if (nextRow && nextRow.some((c: any) => c)) {
-                return i;
-              }
-            }
+          // Skip rows with only 1-2 columns (likely titles)
+          if (nonEmptyCols <= 2) {
+            console.log(`[HEADER-DETECT] Row ${i}: Only ${nonEmptyCols} columns - skipping (likely title)`);
+            continue;
+          }
+
+          // Calculate score based on:
+          // 1. Number of non-empty columns (weight: 2)
+          // 2. Keyword matches (weight: 3)
+          // 3. Next row has data (weight: 1)
+          
+          const rowText = row.map((c: any) => String(c || '').toLowerCase()).join(' ');
+          const matchCount = keywords.filter(kw => rowText.includes(kw)).length;
+          
+          let score = (nonEmptyCols * 2) + (matchCount * 3);
+          
+          // Bonus if next row exists and has data
+          const nextRow = rows[i + 1];
+          if (nextRow && nextRow.some((c: any) => c && String(c).trim())) {
+            score += 10;
+          }
+
+          console.log(`[HEADER-DETECT] Row ${i}: ${nonEmptyCols} cols, ${matchCount} keywords, score: ${score}`, 
+            { preview: row.slice(0, 5) });
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestIndex = i;
           }
         }
-        return 0; // Fallback to first row
+
+        console.log(`[HEADER-DETECT] Best match: Row ${bestIndex} with score ${bestScore}`);
+        
+        return { index: bestIndex, confidence: bestScore };
       }
 
       // Get skip_rows from supplier configuration (only if supplier exists)
@@ -268,8 +336,10 @@ serve(async (req) => {
         console.log('[SMART-PARSING] Using manual skip_rows configuration:', headerRowIndex);
       } else {
         // Automatic detection
-        headerRowIndex = detectHeaderRow(rawRows as any[][]);
-        console.log('[SMART-PARSING] Headers automatically detected at row', headerRowIndex + 1);
+        const detection = detectHeaderRow(rawRows as any[][]);
+        headerRowIndex = detection.index;
+        console.log('[SMART-PARSING] Headers automatically detected at row', headerRowIndex + 1, 
+          `with confidence score ${detection.confidence}`);
       }
 
       // Extract headers and data
@@ -291,7 +361,10 @@ serve(async (req) => {
         headerDetection: {
           detectedRow: headerRowIndex + 1,
           method: skipRowsConfig > 0 ? 'manual' : 'automatic',
-          headers: headers
+          confidence: skipRowsConfig > 0 ? 100 : detectHeaderRow(rawRows as any[][]).confidence,
+          headers: headers,
+          sheetUsed: bestSheetName,
+          totalSheetsScanned: workbook.SheetNames.length
         }
       });
     } else {
@@ -302,7 +375,9 @@ serve(async (req) => {
       format: processFileName.endsWith('.csv') ? 'CSV' : 'Excel',
       rows_found: rows.length,
       columns_detected: Object.keys(rows[0] || {}),
+      column_count: Object.keys(rows[0] || {}).length,
       first_row_sample: rows[0],
+      second_row_sample: rows[1],
       file_size_kb: Math.round(processBuffer.byteLength / 1024)
     });
     
