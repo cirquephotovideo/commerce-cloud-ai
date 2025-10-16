@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpDown, Eye, Truck } from "lucide-react";
+import { ArrowUpDown, Eye, Truck, Loader2 } from "lucide-react";
 import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,6 +15,9 @@ interface ProductsTableProps {
   onToggleSelection: (id: string) => void;
   onSelectAll: () => void;
   onViewDetails: (id: string) => void;
+  showCreateAnalysisAction?: boolean;
+  onCreateAnalysis?: (product: any) => void;
+  enrichingProductIds?: Set<string>;
 }
 
 type SortField = 'name' | 'ean' | 'supplier' | 'purchase_price' | 'estimated_price' | 'margin' | 'category';
@@ -25,7 +28,10 @@ export function ProductsTable({
   selectedProducts, 
   onToggleSelection, 
   onSelectAll,
-  onViewDetails 
+  onViewDetails,
+  showCreateAnalysisAction = false,
+  onCreateAnalysis,
+  enrichingProductIds = new Set()
 }: ProductsTableProps) {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -243,13 +249,28 @@ export function ProductsTable({
                   {category || 'N/A'}
                 </TableCell>
                 <TableCell className="text-right sticky right-0 bg-background z-10">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onViewDetails(product.id)}
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
+                  {showCreateAnalysisAction && !product.product_analyses ? (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => onCreateAnalysis?.(product)}
+                      disabled={enrichingProductIds.has(product.id)}
+                    >
+                      {enrichingProductIds.has(product.id) ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Créer analyse"
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onViewDetails(product.id)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             );

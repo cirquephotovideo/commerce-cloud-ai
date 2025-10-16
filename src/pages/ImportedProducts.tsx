@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Filter, Link2, Sparkles, Table2, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
@@ -32,6 +34,9 @@ export default function ImportedProducts() {
   const [batchEnrichmentOpen, setBatchEnrichmentOpen] = useState(false);
   const [autoLinkOpen, setAutoLinkOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(true);
+  const [selectedModel, setSelectedModel] = useState<'auto' | 'gpt-oss:120b-cloud' | 'qwen:110b-cloud' | 'google/gemini-2.5-flash' | 'openai/gpt-5-mini'>('auto');
+  const [enrichingProductIds, setEnrichingProductIds] = useState<Set<string>>(new Set());
   const ITEMS_PER_PAGE = 50;
   
   // Get current user
@@ -155,6 +160,113 @@ export default function ImportedProducts() {
   // Deselect all
   const selectNone = () => {
     setSelectedProducts(new Set());
+  };
+
+  // Create analysis and optionally enrich
+  const createAnalysisAndMaybeEnrich = async (product: any) => {
+    const productId = product.id;
+    setEnrichingProductIds(prev => new Set(prev).add(productId));
+    
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        toast.error("Vous devez être connecté");
+        return;
+      }
+
+      // Create product_analyses entry
+      const { data: analysisData, error: analysisError } = await supabase
+        .from('product_analyses')
+        .insert({
+          ean: product.ean,
+          purchase_price: product.purchase_price,
+          purchase_currency: 'EUR',
+          supplier_product_id: product.id,
+          user_id: user.id,
+          product_url: product.supplier_url || '',
+          analysis_result: {
+            name: product.product_name,
+            category: 'Produit fournisseur',
+            ean: product.ean,
+            supplier_reference: product.supplier_reference
+          },
+          enrichment_status: {
+            base_analysis: 'pending',
+            specifications: 'pending',
+            technical_description: 'pending',
+            cost_analysis: 'pending',
+            rsgp: 'pending'
+          }
+        })
+        .select()
+        .single();
+
+      if (analysisError) throw analysisError;
+
+      // Update supplier_product enrichment_status
+      await supabase
+        .from('supplier_products')
+        .update({ enrichment_status: 'enriching' })
+        .eq('id', productId);
+
+      // If auto-enrichment is enabled, call enrich-all
+      if (autoAdvancedEnrich) {
+        const enrichPromise = supabase.functions.invoke('enrich-all', {
+          body: {
+            analysisId: analysisData.id,
+            productData: {
+              name: product.product_name,
+              ean: product.ean,
+              category: 'Produit fournisseur',
+              description: product.description || ''
+            },
+            purchasePrice: product.purchase_price,
+            preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
+          }
+        });
+
+        await toast.promise(enrichPromise, {
+          loading: `Enrichissement de ${product.product_name}...`,
+          success: (result) => {
+            const data = result.data;
+            const completed = data?.summary?.completed || 0;
+            return `✅ ${completed}/4 enrichissements réussis`;
+          },
+          error: (err) => {
+            console.error('Enrichment error:', err);
+            
+            // Handle specific error codes
+            if (err.status === 402) {
+              return "❌ Crédits insuffisants - Rechargez votre compte";
+            }
+            if (err.status === 429) {
+              return "❌ Limite de requêtes atteinte - Réessayez plus tard";
+            }
+            if (err.status === 503) {
+              return "❌ Service temporairement indisponible";
+            }
+            
+            return `❌ Erreur: ${err.message || 'Inconnu'}`;
+          }
+        });
+      } else {
+        toast.success(`✅ Analyse créée pour ${product.product_name}`);
+      }
+
+      // Refresh data
+      refetch();
+      
+    } catch (error: any) {
+      console.error('Error creating analysis:', error);
+      toast.error(`Erreur: ${error.message || 'Impossible de créer l\'analyse'}`);
+    } finally {
+      setEnrichingProductIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(productId);
+        return newSet;
+      });
+    }
   };
 
   // Trigger background enrichment
@@ -288,7 +400,34 @@ export default function ImportedProducts() {
               <Package className="w-5 h-5" />
               Produits Importés
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-3 items-center">
+              {/* Auto-enrichment controls */}
+              <div className="flex items-center gap-2 border-r pr-3">
+                <Switch
+                  id="auto-enrich"
+                  checked={autoAdvancedEnrich}
+                  onCheckedChange={setAutoAdvancedEnrich}
+                />
+                <Label htmlFor="auto-enrich" className="text-sm cursor-pointer">
+                  Enrichissements avancés
+                </Label>
+              </div>
+              
+              {autoAdvancedEnrich && (
+                <Select value={selectedModel} onValueChange={(v: any) => setSelectedModel(v)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">🔄 Auto (Ollama + fallback)</SelectItem>
+                    <SelectItem value="gpt-oss:120b-cloud">🧠 GPT-OSS 120B (Cloud)</SelectItem>
+                    <SelectItem value="qwen:110b-cloud">🚀 Qwen 110B (Cloud)</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash">✨ Gemini Flash</SelectItem>
+                    <SelectItem value="openai/gpt-5-mini">🤖 GPT-5 Mini</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              
               <Button size="sm" variant="outline" onClick={() => setAutoLinkOpen(true)}>
                 <Link2 className="w-4 h-4 mr-2" />
                 Lier automatiquement
@@ -319,22 +458,20 @@ export default function ImportedProducts() {
                   )}
                 </Button>
               )}
-              <div className="flex gap-2">
-                <Button 
-                  size="sm"
-                  variant={viewMode === 'cards' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('cards')}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </Button>
-                <Button 
-                  size="sm"
-                  variant={viewMode === 'table' ? 'default' : 'outline'}
-                  onClick={() => setViewMode('table')}
-                >
-                  <Table2 className="w-4 h-4" />
-                </Button>
-              </div>
+              <Button 
+                size="sm"
+                variant={viewMode === 'cards' ? 'default' : 'outline'}
+                onClick={() => setViewMode('cards')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button 
+                size="sm"
+                variant={viewMode === 'table' ? 'default' : 'outline'}
+                onClick={() => setViewMode('table')}
+              >
+                <Table2 className="w-4 h-4" />
+              </Button>
             </div>
           </CardTitle>
         </CardHeader>
@@ -446,6 +583,9 @@ export default function ImportedProducts() {
                     onToggleSelection={toggleSelection}
                     onSelectAll={() => selectedProducts.size === products?.length ? selectNone() : selectAll()}
                     onViewDetails={setSelectedProductDetail}
+                    showCreateAnalysisAction={true}
+                    onCreateAnalysis={createAnalysisAndMaybeEnrich}
+                    enrichingProductIds={enrichingProductIds}
                   />
                 ) : (
                   products?.map(product => {
@@ -511,20 +651,38 @@ export default function ImportedProducts() {
                               )}
                             </div>
                             
-                            {/* Action Button */}
-                            <div>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setSelectedProductDetail(product.id)}
-                              >
-                                <Eye className="w-4 h-4 mr-2" />
-                                Voir les détails
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
+                             {/* Action Button */}
+                             <div>
+                               {!analysis ? (
+                                 <Button 
+                                   variant="default"
+                                   size="sm"
+                                   onClick={() => createAnalysisAndMaybeEnrich(product)}
+                                   disabled={enrichingProductIds.has(product.id)}
+                                 >
+                                   {enrichingProductIds.has(product.id) ? (
+                                     <>
+                                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                       Création...
+                                     </>
+                                   ) : (
+                                     "Créer analyse"
+                                   )}
+                                 </Button>
+                               ) : (
+                                 <Button 
+                                   variant="outline" 
+                                   size="sm"
+                                   onClick={() => setSelectedProductDetail(product.id)}
+                                 >
+                                   <Eye className="w-4 h-4 mr-2" />
+                                   Voir les détails
+                                 </Button>
+                               )}
+                             </div>
+                           </div>
+                         </div>
+                       </Card>
                     );
                   })
                 )}
