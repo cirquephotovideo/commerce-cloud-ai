@@ -29,6 +29,7 @@ import { BulkProductLinksManager } from "@/components/BulkProductLinksManager";
 import { ImportStatsDashboard } from "@/components/ImportStatsDashboard";
 import { MappingTemplatesManager } from "@/components/MappingTemplatesManager";
 import { SupplierMappingSetup } from "@/components/SupplierMappingSetup";
+import { SupplierMappingPreview } from "@/components/SupplierMappingPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -693,7 +694,7 @@ export default function Suppliers() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Sélectionnez un fournisseur ci-dessous pour configurer son mapping de colonnes de manière préventive.
+                Sélectionnez un fournisseur ci-dessous pour configurer ou visualiser son mapping de colonnes.
               </AlertDescription>
             </Alert>
             
@@ -701,7 +702,7 @@ export default function Suppliers() {
               <CardHeader>
                 <CardTitle>Sélectionner un fournisseur</CardTitle>
                 <CardDescription>
-                  Choisissez le fournisseur pour lequel vous souhaitez configurer le mapping
+                  Choisissez le fournisseur pour lequel vous souhaitez gérer le mapping
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -718,9 +719,13 @@ export default function Suppliers() {
                         <div className="text-xs text-muted-foreground">
                           Type: {supplierTypeLabels[supplier.supplier_type]}
                         </div>
-                        {supplier.column_mapping && (
-                          <Badge variant="outline" className="mt-1">
-                            ✅ Mapping déjà configuré
+                        {supplier.column_mapping ? (
+                          <Badge variant="default" className="mt-1">
+                            ✅ Mapping configuré
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="mt-1">
+                            ⚠️ À configurer
                           </Badge>
                         )}
                       </div>
@@ -731,7 +736,22 @@ export default function Suppliers() {
             </Card>
 
             {selectedSupplierId && (
-              <SupplierMappingSetup supplierId={selectedSupplierId} />
+              <Tabs defaultValue="preview" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="preview" className="flex items-center gap-2">
+                    📋 État du mapping
+                  </TabsTrigger>
+                  <TabsTrigger value="setup">⚙️ Configurer mapping</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="preview" className="mt-6">
+                  <SupplierMappingPreview supplierId={selectedSupplierId} />
+                </TabsContent>
+
+                <TabsContent value="setup" className="mt-6">
+                  <SupplierMappingSetup supplierId={selectedSupplierId} />
+                </TabsContent>
+              </Tabs>
             )}
           </div>
         </TabsContent>
