@@ -33,6 +33,7 @@ export function EmailInboxTable() {
     skipped: number;
     errors: number;
     current_operation: string;
+    processingLogs?: any[];
   }>({
     open: false,
     total: 0,
@@ -40,7 +41,8 @@ export function EmailInboxTable() {
     success: 0,
     skipped: 0,
     errors: 0,
-    current_operation: ''
+    current_operation: '',
+    processingLogs: []
   });
 
   const [mappingValidation, setMappingValidation] = useState<{
@@ -119,7 +121,8 @@ export function EmailInboxTable() {
           success: progressLog.success ?? prev.success,
           skipped: progressLog.skipped || 0,
           errors: progressLog.errors || 0,
-          current_operation: progressLog.message || 'Traitement en cours...'
+          current_operation: progressLog.message || 'Traitement en cours...',
+          processingLogs: logs || []
         }));
 
         // Close and refresh when done
@@ -129,10 +132,23 @@ export function EmailInboxTable() {
             setPollingIntervalId(null);
           }
           setCurrentInboxId(null);
-          setTimeout(() => {
-            setImportProgress(prev => ({ ...prev, open: false }));
-            refetch();
-          }, 2000);
+          
+          // Check if 0 products were processed
+          const hasNoProducts = (progressLog.success ?? 0) === 0 && (inbox.products_created ?? 0) === 0 && (inbox.products_updated ?? 0) === 0;
+          
+          if (hasNoProducts && inbox.status === 'completed') {
+            toast.error("⚠️ Import terminé mais aucun produit traité - Le fichier semble mal formaté");
+            // Keep modal open for user to see errors
+            setTimeout(() => {
+              setImportProgress(prev => ({ ...prev, open: false }));
+              refetch();
+            }, 5000);
+          } else {
+            setTimeout(() => {
+              setImportProgress(prev => ({ ...prev, open: false }));
+              refetch();
+            }, 2000);
+          }
         }
       }
     };
@@ -807,6 +823,7 @@ export function EmailInboxTable() {
       <ImportProgressDialog
         open={importProgress.open}
         progress={importProgress}
+        processingLogs={importProgress.processingLogs}
       />
 
       {mappingValidation && (

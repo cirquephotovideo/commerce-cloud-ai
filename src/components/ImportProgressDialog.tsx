@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 interface ImportProgressDialogProps {
   open: boolean;
@@ -13,12 +14,26 @@ interface ImportProgressDialogProps {
     errors: number;
     current_operation: string;
   };
+  processingLogs?: any[];
 }
 
-export const ImportProgressDialog = ({ open, progress }: ImportProgressDialogProps) => {
+export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportProgressDialogProps) => {
   const percentage = progress.total > 0 
     ? Math.round((progress.processed / progress.total) * 100) 
     : 0;
+
+  const handleDownloadLogs = () => {
+    if (!processingLogs || processingLogs.length === 0) return;
+    
+    const logs = JSON.stringify(processingLogs, null, 2);
+    const blob = new Blob([logs], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `import-logs-${new Date().toISOString()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Dialog open={open}>
@@ -61,6 +76,19 @@ export const ImportProgressDialog = ({ open, progress }: ImportProgressDialogPro
               <div className="text-muted-foreground text-xs">Erreurs</div>
             </Card>
           </div>
+
+          {/* Download logs button */}
+          {(progress.errors > 0 || progress.skipped > 0 || (progress.success === 0 && progress.processed > 0)) && processingLogs && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="w-full"
+              onClick={handleDownloadLogs}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Télécharger les logs détaillés
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

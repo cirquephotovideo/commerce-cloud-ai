@@ -169,14 +169,54 @@ serve(async (req) => {
         codepage: 65001
       });
 
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      console.log('[PROCESS] Available sheets:', workbook.SheetNames);
 
-      // Convert to array of arrays first
-      const rawRows = XLSX.utils.sheet_to_json(firstSheet, { 
-        header: 1,
-        defval: '',
-        blankrows: false,
-        raw: true
+      // Try to find sheet with multiple columns
+      let bestSheet = null;
+      let maxColumns = 0;
+      let rawRows: any[] = [];
+
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const testRows = XLSX.utils.sheet_to_json(sheet, { 
+          header: 1,
+          defval: '',
+          blankrows: false,
+          raw: true
+        });
+
+        console.log(`[PROCESS] Sheet "${sheetName}": ${testRows.length} rows`);
+
+        if (testRows.length > 0) {
+          const firstRow = testRows[0] as any[];
+          const colCount = firstRow.filter((cell: any) => cell && String(cell).trim()).length;
+          
+          console.log(`[PROCESS] Sheet "${sheetName}" has ${colCount} non-empty columns in first row`);
+          
+          if (colCount > maxColumns) {
+            maxColumns = colCount;
+            bestSheet = sheet;
+            rawRows = testRows;
+          }
+        }
+      }
+
+      if (!bestSheet) {
+        bestSheet = workbook.Sheets[workbook.SheetNames[0]];
+        rawRows = XLSX.utils.sheet_to_json(bestSheet, { 
+          header: 1,
+          defval: '',
+          blankrows: false,
+          raw: true
+        });
+      }
+
+      console.log('[PROCESS] Using sheet with most columns:', maxColumns);
+      console.log('[PROCESS] Raw file structure:', {
+        totalRows: rawRows.length,
+        firstRowSample: rawRows[0],
+        secondRowSample: rawRows[1],
+        thirdRowSample: rawRows[2]
       });
 
       // Smart header detection function
