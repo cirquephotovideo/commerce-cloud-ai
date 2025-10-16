@@ -23,6 +23,8 @@ export function EmailInboxTable() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEmail, setSelectedEmail] = useState<any>(null);
   const [mappingEmail, setMappingEmail] = useState<any>(null);
+  const [currentInboxId, setCurrentInboxId] = useState<string | null>(null);
+  const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null);
   const [importProgress, setImportProgress] = useState<{
     open: boolean;
     total: number;
@@ -97,55 +99,91 @@ export function EmailInboxTable() {
     toast.info("Actualisation en cours...");
   };
 
-  // Setup realtime subscription for import progress
+  // Real-time updates with polling fallback
   useEffect(() => {
+    if (!currentInboxId) return;
+
+    let realtimeReceived = false;
+    
+    const updateProgressFromInbox = (inbox: any) => {
+      const logs = inbox.processing_logs as any[];
+      const progressLog = logs?.find((log: any) => log.type === 'progress');
+      
+      if (progressLog) {
+        setImportProgress(prev => ({
+          ...prev,
+          open: inbox.status === 'processing',
+          total: progressLog.total || prev.total,
+          processed: progressLog.processed || 0,
+          success: inbox.products_created || 0,
+          skipped: progressLog.skipped || 0,
+          errors: progressLog.errors || 0,
+          current_operation: progressLog.message || 'Traitement en cours...'
+        }));
+
+        // Close and refresh when done
+        if (inbox.status === 'completed' || inbox.status === 'failed') {
+          if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+            setPollingIntervalId(null);
+          }
+          setCurrentInboxId(null);
+          setTimeout(() => {
+            setImportProgress(prev => ({ ...prev, open: false }));
+            refetch();
+          }, 2000);
+        }
+      }
+    };
+    
     const channel = supabase
-      .channel('import-progress')
+      .channel('email-inbox-updates')
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'email_inbox',
-          filter: `status=eq.processing`
+          filter: `id=eq.${currentInboxId}`
         },
         (payload) => {
-          const inbox = payload.new as any;
-          const logs = inbox.processing_logs || [];
-          const latestLog = logs[logs.length - 1];
+          realtimeReceived = true;
+          console.log('[EmailInboxTable] Realtime update:', payload.new);
           
-          if (latestLog?.type === 'progress') {
-            setImportProgress({
-              open: true,
-              total: latestLog.total || 0,
-              processed: latestLog.processed || 0,
-              success: latestLog.success || 0,
-              skipped: latestLog.skipped || 0,
-              errors: latestLog.errors || 0,
-              current_operation: latestLog.operation || 'Traitement en cours...'
-            });
+          // Stop polling if realtime works
+          if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+            setPollingIntervalId(null);
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'email_inbox',
-          filter: `status=eq.completed`
-        },
-        () => {
-          setImportProgress(prev => ({ ...prev, open: false }));
-          refetch();
+          
+          updateProgressFromInbox(payload.new);
         }
       )
       .subscribe();
 
+    // Fallback polling every 2s
+    const pollInterval = setInterval(async () => {
+      if (realtimeReceived) return;
+      
+      const { data: inbox } = await supabase
+        .from('email_inbox')
+        .select('*')
+        .eq('id', currentInboxId)
+        .maybeSingle();
+        
+      if (inbox) {
+        console.log('[EmailInboxTable] Polling update:', inbox);
+        updateProgressFromInbox(inbox);
+      }
+    }, 2000);
+    
+    setPollingIntervalId(pollInterval);
+
     return () => {
       supabase.removeChannel(channel);
+      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [refetch]);
+  }, [currentInboxId, refetch]);
 
   const handleReprocess = async (inboxId: string) => {
     try {
@@ -236,17 +274,28 @@ export function EmailInboxTable() {
   const handleConfirmMapping = async (confirmedMapping: Record<string, number | null>) => {
     if (!mappingValidation) return;
 
-    try {
-      setImportProgress({
-        open: true,
-        total: 0,
-        processed: 0,
-        success: 0,
-        skipped: 0,
-        errors: 0,
-        current_operation: 'Initialisation...'
-      });
+    console.log('[EmailInboxTable] Confirming mapping:', confirmedMapping);
 
+    // Calculate total rows for progress
+    const detectedTotal = mappingValidation.previewData.length > 1 
+      ? mappingValidation.previewData.length - 1 // -1 for header row
+      : 0;
+
+    // Initialize progress dialog
+    setImportProgress({
+      open: true,
+      total: detectedTotal,
+      processed: 0,
+      success: 0,
+      skipped: 0,
+      errors: 0,
+      current_operation: "Initialisation de l'import..."
+    });
+
+    // Store current inbox ID for realtime updates
+    setCurrentInboxId(mappingValidation.email.id);
+
+    try {
       const { error } = await supabase.functions.invoke('process-email-attachment', {
         body: {
           inbox_id: mappingValidation.email.id,
@@ -257,13 +306,13 @@ export function EmailInboxTable() {
 
       if (error) throw error;
 
-      toast.success('Import relancé avec le mapping validé');
+      toast.success('Import lancé');
       setMappingValidation(null);
-      refetch();
-    } catch (error) {
-      console.error('Error confirming mapping:', error);
-      toast.error("Erreur lors du lancement de l'import");
+    } catch (error: any) {
+      console.error('[EmailInboxTable] Error confirming mapping:', error);
+      setCurrentInboxId(null);
       setImportProgress(prev => ({ ...prev, open: false }));
+      toast.error(error.message || "Erreur lors du lancement de l'import");
     }
   };
 

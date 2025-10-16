@@ -25,6 +25,7 @@ export const ImportProgressDialog = ({ open, progress }: ImportProgressDialogPro
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Import en cours...</DialogTitle>
+          <p className="text-sm text-muted-foreground">Suivi de l'import fournisseur en temps réel</p>
         </DialogHeader>
         
         <div className="space-y-4">
