@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Package, Barcode, Link, Loader2, Store, RefreshCw } from "lucide-react";
+import { Package, Barcode, Link, Loader2, Store, RefreshCw, Sparkles, Cloud } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Progress } from "./ui/progress";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,6 +16,12 @@ interface BatchAnalyzerProps {
   onAnalysisComplete: (results: any[]) => void;
 }
 
+interface ProviderStat {
+  provider: string;
+  count: number;
+  successRate: number;
+}
+
 export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [batchInput, setBatchInput] = useState("");
   const [inputType, setInputType] = useState<"name" | "barcode" | "url">("name");
@@ -23,10 +29,12 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [progress, setProgress] = useState(0);
   const [currentProduct, setCurrentProduct] = useState("");
   const [currentProvider, setCurrentProvider] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<string>("auto");
   const [autoExport, setAutoExport] = useState(false);
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
+  const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -54,7 +62,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
     setProgress(0);
     setFailedProducts([]);
     const results = [];
-    const providerStats: Record<string, number> = {};
+    const providerMap: Record<string, { total: number; success: number }> = {};
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
@@ -63,10 +71,13 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
       try {
         const { data, error } = await supabase.functions.invoke('product-analyzer', {
-          body: { productInput: product, includeImages: true }
+          body: { 
+            productInput: product, 
+            includeImages: true,
+            preferred_model: selectedModel === 'auto' ? undefined : selectedModel
+          }
         });
 
-        // Phase E.3: Handle specific error codes (session expirée, rate limit, payment)
         if (error) {
           console.error('[BATCH] Product analyzer error:', { 
             status: error.status,
@@ -74,26 +85,31 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             product
           });
 
-          // Handle specific error codes
           if (error.status === 401) {
             toast.error("Session expirée, veuillez vous reconnecter");
             setIsAnalyzing(false);
-            return; // Stop batch processing
+            return;
           } else if (error.status === 402) {
             toast.warning(`Provider IA manque de crédits, tentative de fallback...`);
-            // The edge function should already handle fallback internally
           } else if (error.status === 429) {
             toast.warning(`Limite de requêtes atteinte, ralentissement...`);
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
           throw error;
         }
 
         if (data.success) {
           // Track provider usage
-          if (data.usedProvider) {
-            providerStats[data.usedProvider] = (providerStats[data.usedProvider] || 0) + 1;
-            setCurrentProvider(data.usedProvider);
+          const provider = data._provider || data.usedProvider || 'unknown';
+          const model = data._model || selectedModel;
+          
+          if (provider) {
+            if (!providerMap[provider]) {
+              providerMap[provider] = { total: 0, success: 0 };
+            }
+            providerMap[provider].total++;
+            providerMap[provider].success++;
+            setCurrentProvider(`${provider} - ${model}`);
           }
           
           // Validate analysis structure before saving
@@ -114,7 +130,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             results.push({
               product,
               error: 'Structure d\'analyse invalide - Aucune donnée valide retournée',
-              success: false
+              success: false,
+              provider,
+              model
             });
             continue;
           }
@@ -174,7 +192,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               analysis: data.analysis,
               imageUrls: data.imageUrls || [],
               success: true,
-              analysisId: insertedAnalysis?.id
+              analysisId: insertedAnalysis?.id,
+              provider,
+              model
             });
           }
         } else {
@@ -194,6 +214,14 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
       }
     }
 
+    // Calculate provider stats
+    const stats: ProviderStat[] = Object.entries(providerMap).map(([provider, data]) => ({
+      provider,
+      count: data.total,
+      successRate: (data.success / data.total) * 100
+    }));
+    setProviderStats(stats);
+
     setIsAnalyzing(false);
     setCurrentProduct("");
     setCurrentProvider("");
@@ -201,8 +229,8 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
     const successCount = results.filter(r => r.success).length;
     
     // Show provider statistics
-    const providerSummary = Object.entries(providerStats)
-      .map(([provider, count]) => `${provider}: ${count}`)
+    const providerSummary = stats
+      .map(s => `${s.provider}: ${s.count}`)
       .join(', ');
     
     toast.success(`Analyse terminée: ${successCount}/${products.length} produits analysés avec succès${providerSummary ? ` (Providers: ${providerSummary})` : ''}`);
@@ -266,20 +294,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           }
         } catch (exportError) {
           console.error('Export error:', exportError);
-          const platformDisplayNames: Record<string, string> = {
-            odoo: 'Odoo',
-            shopify: 'Shopify',
-            woocommerce: 'WooCommerce',
-            prestashop: 'PrestaShop',
-            magento: 'Magento',
-            salesforce: 'Salesforce',
-            sap: 'SAP',
-            uber_eats: 'Uber Eats',
-            deliveroo: 'Deliveroo',
-            just_eat: 'Just Eat',
-            windev: 'WinDev'
-          };
-          toast.error(`Erreur lors de l'export vers ${platformDisplayNames[exportPlatform] || exportPlatform}`);
+          toast.error(`Erreur lors de l'export`);
         }
       }
     }
@@ -310,6 +325,34 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="model-select">Modèle IA</Label>
+          <Select value={selectedModel} onValueChange={setSelectedModel}>
+            <SelectTrigger id="model-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">🔄 Auto (Fallback automatique)</SelectItem>
+              <SelectItem value="deepseek-v3.1:671b-cloud">
+                <Cloud className="w-4 h-4 inline mr-1" />
+                Ollama Cloud: DeepSeek V3.1
+              </SelectItem>
+              <SelectItem value="gpt-oss:120b-cloud">
+                <Cloud className="w-4 h-4 inline mr-1" />
+                Ollama Cloud: GPT-OSS 120B
+              </SelectItem>
+              <SelectItem value="kimi-k2:1t-cloud">
+                <Cloud className="w-4 h-4 inline mr-1" />
+                Ollama Cloud: Kimi K2 1T
+              </SelectItem>
+              <SelectItem value="google/gemini-2.5-flash">
+                <Sparkles className="w-4 h-4 inline mr-1" />
+                Lovable AI: Gemini Flash
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <Tabs value={inputType} onValueChange={(v) => setInputType(v as any)}>
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="name">
@@ -402,12 +445,42 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                     </p>
                     {currentProvider && (
                       <Badge variant="outline" className="text-xs">
-                        Provider: {currentProvider}
+                        {currentProvider}
                       </Badge>
                     )}
                   </div>
                 )}
               </div>
+            )}
+
+            {providerStats.length > 0 && !isAnalyzing && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Statistiques Providers
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {providerStats.map((stat) => (
+                      <div key={stat.provider} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">
+                            {stat.provider}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">
+                            {stat.count} produit{stat.count > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <Badge variant={stat.successRate === 100 ? 'default' : 'secondary'}>
+                          {stat.successRate.toFixed(0)}% réussite
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             {failedProducts.length > 0 && !isAnalyzing && (

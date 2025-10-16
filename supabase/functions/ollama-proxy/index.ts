@@ -6,6 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const CLOUD_MODELS = [
+  'deepseek-v3.1:671b-cloud',
+  'gpt-oss:20b-cloud',
+  'gpt-oss:120b-cloud',
+  'kimi-k2:1t-cloud',
+  'qwen3-coder:480b-cloud',
+  'glm-4.6:cloud'
+];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -56,11 +65,18 @@ serve(async (req) => {
     const config = configData;
 
     const targetUrl = ollama_url || config?.ollama_url;
-    const targetApiKey = api_key || config?.api_key_encrypted;
+    const isCloudMode = targetUrl === 'https://ollama.com';
+    
+    // For cloud mode, use OLLAMA_API_KEY from secrets
+    const targetApiKey = isCloudMode 
+      ? Deno.env.get('OLLAMA_API_KEY')
+      : (api_key || config?.api_key_encrypted);
 
     if (!targetUrl) {
       throw new Error('Ollama URL not configured');
     }
+
+    console.log(`[OLLAMA-PROXY] Mode: ${isCloudMode ? 'Cloud' : 'Local'}, URL: ${targetUrl}`);
 
     if (action === 'test') {
       // Test connection and list models
@@ -71,7 +87,8 @@ serve(async (req) => {
         headers['Authorization'] = `Bearer ${targetApiKey}`;
       }
 
-      const response = await fetch(`${targetUrl}/api/tags`, {
+      const testEndpoint = isCloudMode ? `${targetUrl}/api/tags` : `${targetUrl}/api/tags`;
+      const response = await fetch(testEndpoint, {
         headers,
       });
 
@@ -81,7 +98,12 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      const models = data.models?.map((m: any) => m.name) || [];
+      let models = data.models?.map((m: any) => m.name) || [];
+      
+      // For cloud mode, also include predefined cloud models
+      if (isCloudMode) {
+        models = [...new Set([...CLOUD_MODELS, ...models])];
+      }
 
       return new Response(
         JSON.stringify({ success: true, models }),
@@ -97,14 +119,28 @@ serve(async (req) => {
       headers['Authorization'] = `Bearer ${targetApiKey}`;
     }
 
-    const ollamaResponse = await fetch(`${targetUrl}/api/chat`, {
+    const endpoint = isCloudMode 
+      ? `${targetUrl}/v1/chat/completions`
+      : `${targetUrl}/api/chat`;
+
+    const requestBody = isCloudMode
+      ? {
+          model: model || 'gpt-oss:120b-cloud',
+          messages: messages,
+          stream: false
+        }
+      : {
+          model: model || 'llama2',
+          messages: messages,
+          stream: false
+        };
+
+    console.log(`[OLLAMA-PROXY] Calling ${endpoint} with model: ${requestBody.model}`);
+
+    const ollamaResponse = await fetch(endpoint, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: model || 'llama2',
-        messages: messages,
-        stream: false,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!ollamaResponse.ok) {

@@ -38,6 +38,9 @@ export async function callAIWithFallback(
   options: AICallOptions,
   skipProviders: string[] = []
 ): Promise<AIResponse> {
+  console.log('[AI-FALLBACK] Starting AI call with fallback...');
+  console.log('[AI-FALLBACK] Preferred model:', options.model || 'auto');
+  
   const providers = DEFAULT_PROVIDERS.filter(p => !skipProviders.includes(p.provider));
   let lastError: any = null;
 
@@ -64,9 +67,14 @@ export async function callAIWithFallback(
             .maybeSingle();
           
           if (ollamaConfig) {
-            apiUrl = `${ollamaConfig.ollama_url}/v1/chat/completions`;
-            apiKey = ollamaConfig.api_key_encrypted || '';
-            console.log(`[AI-FALLBACK] Using Ollama from DB: ${ollamaConfig.ollama_url}`);
+            const isCloudMode = ollamaConfig.ollama_url === 'https://ollama.com';
+            apiUrl = isCloudMode 
+              ? `${ollamaConfig.ollama_url}/v1/chat/completions`
+              : `${ollamaConfig.ollama_url}/v1/chat/completions`;
+            apiKey = isCloudMode 
+              ? (Deno.env.get('OLLAMA_API_KEY') || '')
+              : (ollamaConfig.api_key_encrypted || '');
+            console.log(`[AI-FALLBACK] Using Ollama ${isCloudMode ? 'Cloud' : 'Local'}: ${ollamaConfig.ollama_url}`);
           } else {
             // Fallback to env variables
             const OLLAMA_URL = Deno.env.get('OLLAMA_URL');
@@ -142,11 +150,13 @@ export async function callAIWithFallback(
 
       // Success!
       const data = await response.json();
+      const content = data.message?.content || data.choices?.[0]?.message?.content || data;
+      
       console.log(`[AI-FALLBACK] ✅ Success with provider: ${providerConfig.provider}`);
       
       return {
         success: true,
-        content: data,
+        content,
         provider: providerConfig.provider
       };
 

@@ -6,11 +6,26 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Server, TestTube, Settings, Cloud, HardDrive, RefreshCw } from "lucide-react";
 import { ImportExportButtons } from "./ImportExportButtons";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+const CLOUD_MODELS = [
+  'deepseek-v3.1:671b-cloud',
+  'gpt-oss:20b-cloud',
+  'gpt-oss:120b-cloud',
+  'kimi-k2:1t-cloud',
+  'qwen3-coder:480b-cloud',
+  'glm-4.6:cloud'
+];
+
+const LOCAL_MODELS = [
+  'llama2', 'llama3', 'llama3.1', 'mistral', 'mixtral', 
+  'gemma', 'gemma2', 'qwen', 'phi3', 'deepseek-coder'
+];
 
 export const OllamaConfiguration = () => {
   const [config, setConfig] = useState({
@@ -19,6 +34,7 @@ export const OllamaConfiguration = () => {
     available_models: [] as string[],
     is_active: true,
   });
+  const [selectedModel, setSelectedModel] = useState("llama3");
   const [isLoading, setIsLoading] = useState(true);
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -51,15 +67,17 @@ export const OllamaConfiguration = () => {
           : [];
         
         const url = latestConfig.ollama_url || "http://localhost:11434";
+        const isCloud = url === "https://ollama.com";
+        
         setConfig({
           ollama_url: url,
           api_key_encrypted: latestConfig.api_key_encrypted || "",
-          available_models: models,
+          available_models: models.length > 0 ? models : (isCloud ? CLOUD_MODELS : LOCAL_MODELS),
           is_active: latestConfig.is_active,
         });
         
-        // Détecter automatiquement le mode
-        setIsCloudMode(url === "https://ollama.com");
+        setSelectedModel(isCloud ? 'gpt-oss:120b-cloud' : 'llama3');
+        setIsCloudMode(isCloud);
       }
     } catch (error) {
       console.error("Error fetching Ollama config:", error);
@@ -135,10 +153,20 @@ export const OllamaConfiguration = () => {
 
   const handleModeChange = (mode: 'local' | 'cloud') => {
     if (mode === 'cloud') {
-      setConfig(prev => ({ ...prev, ollama_url: 'https://ollama.com' }));
+      setConfig(prev => ({ 
+        ...prev, 
+        ollama_url: 'https://ollama.com',
+        available_models: CLOUD_MODELS
+      }));
+      setSelectedModel('gpt-oss:120b-cloud');
       setIsCloudMode(true);
     } else {
-      setConfig(prev => ({ ...prev, ollama_url: 'http://localhost:11434' }));
+      setConfig(prev => ({ 
+        ...prev, 
+        ollama_url: 'http://localhost:11434',
+        available_models: LOCAL_MODELS
+      }));
+      setSelectedModel('llama3');
       setIsCloudMode(false);
     }
   };
@@ -278,6 +306,25 @@ export const OllamaConfiguration = () => {
               : "Cette clé sera utilisée pour authentifier les requêtes"
             }
           </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="model">Modèle par défaut</Label>
+          <Select 
+            value={selectedModel} 
+            onValueChange={setSelectedModel}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {config.available_models.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {!isCloudMode && (

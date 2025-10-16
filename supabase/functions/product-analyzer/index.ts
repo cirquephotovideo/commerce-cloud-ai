@@ -14,8 +14,54 @@ interface SearchResult {
   content?: string;
 }
 
+async function searchWebWithOllama(query: string): Promise<SearchResult[]> {
+  const OLLAMA_API_KEY = Deno.env.get('OLLAMA_API_KEY');
+  if (!OLLAMA_API_KEY) {
+    console.log('[WEB-SEARCH] No Ollama API key, skipping');
+    return [];
+  }
+
+  try {
+    console.log('[WEB-SEARCH] Trying Ollama Cloud...');
+    const response = await fetch('https://ollama.com/api/web_search', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OLLAMA_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        query,
+        max_results: 5
+      })
+    });
+
+    if (!response.ok) {
+      console.error(`[WEB-SEARCH] Ollama API error: ${response.status}`);
+      return [];
+    }
+
+    const data = await response.json();
+    console.log('[WEB-SEARCH] ✅ Ollama Cloud success');
+    
+    return data.results?.map((r: any) => ({
+      title: r.title,
+      url: r.url,
+      description: r.content || '',
+    })) || [];
+  } catch (error) {
+    console.error('[WEB-SEARCH] Ollama error:', error);
+    return [];
+  }
+}
+
 async function searchWeb(query: string): Promise<SearchResult[]> {
-  // Try Serper API first (preferred)
+  // 1. Try Ollama Cloud Web Search (PRIORITY)
+  const ollamaResults = await searchWebWithOllama(query);
+  if (ollamaResults.length > 0) {
+    return ollamaResults;
+  }
+
+  // 2. Try Serper API
   const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
   if (SERPER_API_KEY) {
     try {
@@ -239,6 +285,7 @@ serve(async (req) => {
     let productInput: string;
     let additionalData: any = {};
     let includeImages = true;
+    const preferredModel = body.preferred_model;
 
     if (typeof body === 'string') {
       productInput = body;
@@ -321,11 +368,11 @@ serve(async (req) => {
     console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → Lovable AI → OpenAI → OpenRouter)');
     
     const aiResponse = await callAIWithFallback({
-      model: 'llama3.2', // Ollama default model
+      model: preferredModel || 'gpt-oss:120b-cloud',
       messages: [
         {
           role: 'system',
-          content: `Tu es un expert en analyse e-commerce. 
+          content: `Tu es un expert en analyse e-commerce.
 
 RÈGLES ABSOLUES:
 1. Tu dois retourner UNIQUEMENT un objet JSON valide
@@ -359,7 +406,8 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       );
     }
 
-    console.log(`[PRODUCT-ANALYZER] Analysis complete with provider: ${aiResponse.provider}`);
+    console.log(`[PRODUCT-ANALYZER] ✅ Analysis completed with provider: ${aiResponse.provider || 'unknown'}`);
+    console.log(`[PRODUCT-ANALYZER] Model used: ${preferredModel || 'default'}`);
     
     let analysisContent = aiResponse.content;
     
@@ -438,6 +486,8 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
         analysis: analysisResult,
         imageUrls,
         usedProvider: aiResponse.provider,
+        _provider: aiResponse.provider,
+        _model: preferredModel || 'default',
         metadata: {
           inputType,
           hasWebSearch: searchResults.length > 0,
