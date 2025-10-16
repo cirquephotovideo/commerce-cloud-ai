@@ -20,7 +20,13 @@ export const useProductEnrichmentStatus = (analysisId: string) => {
 
   const checkStatuses = async () => {
     try {
-      const [amazonData, videoData, enrichmentQueue] = await Promise.all([
+      const [productAnalysis, amazonData, videoData, enrichmentQueue] = await Promise.all([
+        // ✅ Vérifier les nouvelles colonnes d'enrichissement
+        supabase
+          .from('product_analyses')
+          .select('specifications, long_description, cost_analysis, rsgp_compliance, enrichment_status')
+          .eq('id', analysisId)
+          .maybeSingle(),
         supabase
           .from('amazon_product_data')
           .select('id')
@@ -40,12 +46,18 @@ export const useProductEnrichmentStatus = (analysisId: string) => {
           .in('status', ['pending', 'processing']),
       ]);
 
+      const enrichmentStatus = (productAnalysis.data?.enrichment_status || {}) as Record<string, any>;
+      
       setStatus({
-        ai_analysis: true, // Assume analysis exists if we have the ID
+        ai_analysis: Boolean(productAnalysis.data),
         amazon: Boolean(amazonData.data),
         video: (videoData.data?.status as any) || null,
-        images: 0,
-        isEnriching: (enrichmentQueue.data?.length || 0) > 0,
+        images: 0, // TODO: Implémenter la vérification des images
+        isEnriching: (enrichmentQueue.data?.length || 0) > 0 || 
+                     enrichmentStatus.specifications === 'processing' ||
+                     enrichmentStatus.technical_description === 'processing' ||
+                     enrichmentStatus.cost_analysis === 'processing' ||
+                     enrichmentStatus.rsgp === 'processing',
       });
     } catch (error) {
       console.error('Error checking enrichment status:', error);

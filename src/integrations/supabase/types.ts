@@ -2612,6 +2612,7 @@ export type Database = {
           auto_enrichment_count: number | null
           competitive_cons: Json | null
           competitive_pros: Json | null
+          cost_analysis: Json | null
           created_at: string | null
           description_long: string | null
           ean: string | null
@@ -2624,6 +2625,7 @@ export type Database = {
           last_auto_enrichment_at: string | null
           last_exported_at: string | null
           last_price_update: string | null
+          long_description: string | null
           mapped_category_id: string | null
           mapped_category_name: string | null
           margin_percentage: number | null
@@ -2632,7 +2634,9 @@ export type Database = {
           product_url: string
           purchase_currency: string | null
           purchase_price: number | null
+          rsgp_compliance: Json | null
           rsgp_compliance_id: string | null
+          specifications: Json | null
           supplier_product_id: string | null
           tags: Json | null
           updated_at: string | null
@@ -2646,6 +2650,7 @@ export type Database = {
           auto_enrichment_count?: number | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
+          cost_analysis?: Json | null
           created_at?: string | null
           description_long?: string | null
           ean?: string | null
@@ -2658,6 +2663,7 @@ export type Database = {
           last_auto_enrichment_at?: string | null
           last_exported_at?: string | null
           last_price_update?: string | null
+          long_description?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
           margin_percentage?: number | null
@@ -2666,7 +2672,9 @@ export type Database = {
           product_url: string
           purchase_currency?: string | null
           purchase_price?: number | null
+          rsgp_compliance?: Json | null
           rsgp_compliance_id?: string | null
+          specifications?: Json | null
           supplier_product_id?: string | null
           tags?: Json | null
           updated_at?: string | null
@@ -2680,6 +2688,7 @@ export type Database = {
           auto_enrichment_count?: number | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
+          cost_analysis?: Json | null
           created_at?: string | null
           description_long?: string | null
           ean?: string | null
@@ -2692,6 +2701,7 @@ export type Database = {
           last_auto_enrichment_at?: string | null
           last_exported_at?: string | null
           last_price_update?: string | null
+          long_description?: string | null
           mapped_category_id?: string | null
           mapped_category_name?: string | null
           margin_percentage?: number | null
@@ -2700,7 +2710,9 @@ export type Database = {
           product_url?: string
           purchase_currency?: string | null
           purchase_price?: number | null
+          rsgp_compliance?: Json | null
           rsgp_compliance_id?: string | null
+          specifications?: Json | null
           supplier_product_id?: string | null
           tags?: Json | null
           updated_at?: string | null

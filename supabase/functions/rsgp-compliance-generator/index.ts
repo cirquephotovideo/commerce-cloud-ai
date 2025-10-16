@@ -1983,7 +1983,8 @@ serve(async (req) => {
     await supabase
       .from('product_analyses')
       .update({
-        rsgp_compliance_id: complianceRecord.id,
+        rsgp_compliance: finalPayload,  // ✅ Sauvegarde dans la colonne dédiée
+        rsgp_compliance_id: complianceRecord.id,  // ✅ + référence à la table séparée
         enrichment_status: {
           ...(analysis.enrichment_status || {}),
           rsgp: 'completed'

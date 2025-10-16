@@ -91,7 +91,8 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: newAnalysisResult,
+        long_description: technicalDescription,  // ✅ Sauvegarde dans la colonne dédiée
+        analysis_result: newAnalysisResult,  // ✅ + dans analysis_result pour compatibilité
         enrichment_status: enrichmentStatus
       })
       .eq('id', analysisId);

@@ -109,7 +109,8 @@ Fournis une analyse détaillée des coûts en JSON:
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: newAnalysisResult,
+        cost_analysis: costAnalysis,  // ✅ Sauvegarde dans la colonne dédiée
+        analysis_result: newAnalysisResult,  // ✅ + dans analysis_result pour compatibilité
         enrichment_status: enrichmentStatus
       })
       .eq('id', analysisId);
