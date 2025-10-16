@@ -450,18 +450,48 @@ Format de réponse OBLIGATOIRE (JSON uniquement) :
     let productsErrors = 0;
     const updatedVariantIds: string[] = []; // Track variant IDs for price alerts
 
+    // Helper function to get column value with case-insensitive matching
+    const getColumnValue = (row: any, columnName: string | null): string => {
+      if (!columnName) return '';
+      
+      // Try exact match first
+      if (row[columnName] !== undefined && row[columnName] !== null) {
+        return String(row[columnName]).trim();
+      }
+      
+      // Try case-insensitive match
+      const normalizedName = columnName.toLowerCase().trim();
+      const matchingKey = Object.keys(row).find(k => 
+        k.toLowerCase().trim() === normalizedName
+      );
+      
+      const value = matchingKey ? row[matchingKey] : '';
+      return value !== null && value !== undefined ? String(value).trim() : '';
+    };
+
+    // Debug: Log first row structure
+    if (rows.length > 0) {
+      console.log('[PROCESS] First row keys:', Object.keys(rows[0]));
+      console.log('[PROCESS] Column mapping:', JSON.stringify(columnMapping));
+    }
+
     // Process all rows without limit
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
         const normalizedRow = {
-          product_name: row[columnMapping.product_name] || '',
-          ean: row[columnMapping.ean] || '',
-          supplier_reference: row[columnMapping.supplier_reference] || '',
-          purchase_price: parseFloat(row[columnMapping.purchase_price] || '0'),
-          stock_quantity: parseInt(row[columnMapping.stock_quantity] || '0'),
-          brand: row[columnMapping.brand] || '',
+          product_name: getColumnValue(row, columnMapping.product_name),
+          ean: getColumnValue(row, columnMapping.ean),
+          supplier_reference: getColumnValue(row, columnMapping.supplier_reference),
+          purchase_price: parseFloat(getColumnValue(row, columnMapping.purchase_price) || '0'),
+          stock_quantity: parseInt(getColumnValue(row, columnMapping.stock_quantity) || '0'),
+          brand: getColumnValue(row, columnMapping.brand),
         };
+
+        // Debug: Log first few normalized rows
+        if (i < 3) {
+          console.log(`[PROCESS] Row ${i} normalized:`, JSON.stringify(normalizedRow));
+        }
 
         if (!normalizedRow.product_name && !normalizedRow.ean && !normalizedRow.supplier_reference) {
           productsSkipped++;
