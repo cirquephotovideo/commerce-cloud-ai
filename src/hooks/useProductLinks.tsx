@@ -4,27 +4,25 @@ import { toast } from 'sonner';
 
 interface ProductLink {
   id: string;
-  product_ean: string;
+  analysis_id: string;
   supplier_product_id: string;
-  link_type: 'manual' | 'auto' | 'suggested';
+  link_type: 'auto' | 'manual' | 'suggested';
   confidence_score: number;
-  matching_method: string;
-  match_details: any;
-  is_active: boolean;
   created_at: string;
-  supplier_product?: any; // Joined data
+  created_by: string;
+  supplier_product?: any;
 }
 
 /**
  * Phase C.2: Hook pour gérer les liens produits
  */
-export function useProductLinks(productEAN?: string) {
+export function useProductLinks(analysisId?: string) {
   const [links, setLinks] = useState<ProductLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadLinks = async () => {
-    if (!productEAN) return;
+    if (!analysisId) return;
     
     setIsLoading(true);
     setError(null);
@@ -32,9 +30,11 @@ export function useProductLinks(productEAN?: string) {
     try {
       const { data, error: fetchError } = await supabase
         .from('product_links')
-        .select('*')
-        .eq('product_ean', productEAN)
-        .eq('is_active', true)
+        .select(`
+          *,
+          supplier_product:supplier_products(*)
+        `)
+        .eq('analysis_id', analysisId)
         .order('confidence_score', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -50,15 +50,20 @@ export function useProductLinks(productEAN?: string) {
   };
 
   const createLink = async (supplierProductId: string, linkType: 'manual' | 'suggested' = 'manual', confidenceScore: number = 100) => {
+    if (!analysisId) return null;
+    
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('product_links')
         .insert({
-          product_ean: productEAN,
+          analysis_id: analysisId,
           supplier_product_id: supplierProductId,
           link_type: linkType,
           confidence_score: confidenceScore,
-          matching_method: linkType === 'manual' ? 'manual' : 'auto'
+          created_by: user.id
         })
         .select()
         .single();
@@ -92,13 +97,14 @@ export function useProductLinks(productEAN?: string) {
     }
   };
 
-  const autoLink = async (analysisId?: string) => {
+  const autoLink = async () => {
+    if (!analysisId) return null;
+    
     try {
       toast.info('Recherche de correspondances...');
       
       const { data, error } = await supabase.functions.invoke('auto-link-products', {
         body: { 
-          product_ean: productEAN,
           analysis_id: analysisId,
           auto_mode: true 
         }
@@ -129,10 +135,10 @@ export function useProductLinks(productEAN?: string) {
   };
 
   useEffect(() => {
-    if (productEAN) {
+    if (analysisId) {
       loadLinks();
     }
-  }, [productEAN]);
+  }, [analysisId]);
 
   return {
     links,

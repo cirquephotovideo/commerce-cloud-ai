@@ -12,6 +12,7 @@ import { Package, Heart, Share2, Download, Star, CheckCircle2, AlertCircle, Info
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { VideoPlayer } from "./VideoPlayer";
+import { ProductLinksCard } from "../ProductLinksCard";
 
 interface ProductOverviewTabProps {
   analysis: any;
@@ -432,6 +433,9 @@ export const ProductOverviewTab = ({ analysis }: ProductOverviewTabProps) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Liens Fournisseurs */}
+      <ProductLinksCard analysisId={analysis.id} />
 
       {/* Caractéristiques Clés */}
       {keyFeatures && keyFeatures.length > 0 && (

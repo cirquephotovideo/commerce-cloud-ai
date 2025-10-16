@@ -6,19 +6,14 @@ import { useProductLinks } from '@/hooks/useProductLinks';
 import { Alert, AlertDescription } from './ui/alert';
 
 interface ProductLinksCardProps {
-  productEAN: string;
-  analysisId?: string;
+  analysisId: string;
 }
 
 /**
  * Phase C.2: Composant pour afficher et gérer les liens produits
  */
-export function ProductLinksCard({ productEAN, analysisId }: ProductLinksCardProps) {
-  const { links, isLoading, error, deleteLink, autoLink } = useProductLinks(productEAN);
-
-  const handleAutoLink = async () => {
-    await autoLink(analysisId);
-  };
+export function ProductLinksCard({ analysisId }: ProductLinksCardProps) {
+  const { links, isLoading, error, deleteLink, autoLink } = useProductLinks(analysisId);
 
   const getConfidenceBadgeVariant = (score: number) => {
     if (score >= 95) return 'default';
@@ -40,7 +35,7 @@ export function ProductLinksCard({ productEAN, analysisId }: ProductLinksCardPro
             </CardDescription>
           </div>
           <Button
-            onClick={handleAutoLink}
+            onClick={autoLink}
             variant="outline"
             size="sm"
             disabled={isLoading}
@@ -91,7 +86,7 @@ export function ProductLinksCard({ productEAN, analysisId }: ProductLinksCardPro
                       {link.confidence_score}%
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      {link.matching_method}
+                      {link.link_type}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -108,14 +103,6 @@ export function ProductLinksCard({ productEAN, analysisId }: ProductLinksCardPro
                 </div>
 
                 <div className="flex items-center gap-2 ml-4">
-                  <Badge variant={
-                    link.link_type === 'auto' ? 'default' :
-                    link.link_type === 'manual' ? 'secondary' :
-                    'outline'
-                  }>
-                    {link.link_type}
-                  </Badge>
-                  
                   <Button
                     variant="ghost"
                     size="icon"
