@@ -20,6 +20,7 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
   const [lastFile, setLastFile] = useState<{ name: string; url: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditMode, setIsEditMode] = useState(false);
+  const [headerRowIndex, setHeaderRowIndex] = useState<number>(0);
   const [validationStats, setValidationStats] = useState({ valid: 0, invalid: 0, total: 0 });
 
   useEffect(() => {
@@ -83,10 +84,40 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
       const arrayBuffer = await fileData.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-      const headers = rows[0] as string[];
-      const dataRows = rows.slice(1, 11).map(row => {
+      // Detect header row using same logic as edge function
+      function detectHeaderRow(rows: any[][]): number {
+        const keywords = [
+          'prix', 'tarif', 'référence', 'ref', 'code', 'ean', 
+          'produit', 'article', 'désignation', 'description',
+          'stock', 'quantité', 'marque', 'catégorie'
+        ];
+        
+        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+          const row = rows[i];
+          const nonEmptyCols = row.filter((c: any) => c && String(c).trim()).length;
+          
+          if (nonEmptyCols >= 5) {
+            const rowText = row.join(' ').toLowerCase();
+            const matchCount = keywords.filter(kw => rowText.includes(kw)).length;
+            
+            if (matchCount >= 3) {
+              const nextRow = rows[i + 1];
+              if (nextRow && nextRow.some((c: any) => c)) {
+                return i;
+              }
+            }
+          }
+        }
+        return 0;
+      }
+
+      const detectedHeaderRow = detectHeaderRow(rawRows as any[][]);
+      setHeaderRowIndex(detectedHeaderRow);
+
+      const headers = rawRows[detectedHeaderRow] as string[];
+      const dataRows = rawRows.slice(detectedHeaderRow + 1, detectedHeaderRow + 11).map(row => {
         const obj: any = {};
         headers.forEach((h, i) => obj[h] = (row as any)[i]);
         return obj;
@@ -241,6 +272,11 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
             <span className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
               État du mapping
+              {headerRowIndex > 0 && (
+                <Badge variant="outline" className="ml-2">
+                  En-têtes ligne {headerRowIndex + 1}
+                </Badge>
+              )}
             </span>
             <div className="flex items-center gap-2">
               {!isEditMode ? (

@@ -3337,6 +3337,7 @@ export type Database = {
           mapping_config: Json | null
           matching_threshold: number | null
           preview_sample: Json | null
+          skip_rows: number | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
           sync_frequency: string | null
@@ -3361,6 +3362,7 @@ export type Database = {
           mapping_config?: Json | null
           matching_threshold?: number | null
           preview_sample?: Json | null
+          skip_rows?: number | null
           supplier_name: string
           supplier_type: Database["public"]["Enums"]["supplier_type"]
           sync_frequency?: string | null
@@ -3385,6 +3387,7 @@ export type Database = {
           mapping_config?: Json | null
           matching_threshold?: number | null
           preview_sample?: Json | null
+          skip_rows?: number | null
           supplier_name?: string
           supplier_type?: Database["public"]["Enums"]["supplier_type"]
           sync_frequency?: string | null

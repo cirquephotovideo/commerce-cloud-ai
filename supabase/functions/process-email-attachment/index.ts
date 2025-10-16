@@ -158,36 +158,94 @@ serve(async (req) => {
         return row;
       });
     } else if (processFileName?.match(/\.(xlsx|xls)$/)) {
-      // Enhanced Excel parsing with robust options
+      // Enhanced Excel parsing with smart header detection
       const workbook = XLSX.read(processBuffer, {
         type: 'array',
-        raw: true,              // Force raw value reading
-        cellDates: true,        // Handle dates correctly
-        cellNF: false,          // Ignore custom formatting
-        cellText: false,        // Use raw values
-        dateNF: 'yyyy-mm-dd',   // Standard date format
-        codepage: 65001         // UTF-8 for special characters
+        raw: true,
+        cellDates: true,
+        cellNF: false,
+        cellText: false,
+        dateNF: 'yyyy-mm-dd',
+        codepage: 65001
       });
 
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
 
       // Convert to array of arrays first
       const rawRows = XLSX.utils.sheet_to_json(firstSheet, { 
-        header: 1,              // Array of arrays
-        defval: '',             // Default value for empty cells
-        blankrows: false,       // Ignore completely empty rows
-        raw: true               // Raw values without formatting
+        header: 1,
+        defval: '',
+        blankrows: false,
+        raw: true
       });
 
-      // Then convert to objects with headers
-      const headers = (rawRows[0] as any[]).map(h => String(h || '').trim());
-      rows = (rawRows.slice(1) as any[][]).map((row: any[]) => {
+      // Smart header detection function
+      function detectHeaderRow(rows: any[][]): number {
+        const keywords = [
+          'prix', 'tarif', 'référence', 'ref', 'code', 'ean', 
+          'produit', 'article', 'désignation', 'description',
+          'stock', 'quantité', 'marque', 'catégorie'
+        ];
+        
+        for (let i = 0; i < Math.min(rows.length, 20); i++) {
+          const row = rows[i];
+          const nonEmptyCols = row.filter((c: any) => c && String(c).trim()).length;
+          
+          if (nonEmptyCols >= 5) {
+            const rowText = row.join(' ').toLowerCase();
+            const matchCount = keywords.filter(kw => rowText.includes(kw)).length;
+            
+            if (matchCount >= 3) {
+              const nextRow = rows[i + 1];
+              if (nextRow && nextRow.some((c: any) => c)) {
+                return i;
+              }
+            }
+          }
+        }
+        return 0; // Fallback to first row
+      }
+
+      // Get skip_rows from supplier configuration
+      let headerRowIndex = 0;
+      const { data: supplierConfig } = await supabase
+        .from('supplier_configurations')
+        .select('skip_rows')
+        .eq('id', inbox.supplier_id)
+        .single();
+
+      if (supplierConfig?.skip_rows && supplierConfig.skip_rows > 0) {
+        // Manual configuration takes precedence
+        headerRowIndex = supplierConfig.skip_rows;
+        console.log('[SMART-PARSING] Using manual skip_rows configuration:', headerRowIndex);
+      } else {
+        // Automatic detection
+        headerRowIndex = detectHeaderRow(rawRows as any[][]);
+        console.log('[SMART-PARSING] Headers automatically detected at row', headerRowIndex + 1);
+      }
+
+      // Extract headers and data
+      const headers = (rawRows[headerRowIndex] as any[]).map((h: any) => String(h || '').trim());
+      const dataRows = (rawRows as any[][]).slice(headerRowIndex + 1);
+
+      // Convert to objects
+      rows = dataRows.map((row: any[]) => {
         const obj: any = {};
-        headers.forEach((header, idx) => {
+        headers.forEach((header: string, idx: number) => {
           obj[header || `col_${idx}`] = row[idx]?.toString().trim() || '';
         });
         return obj;
-      }).filter(row => Object.values(row).some(v => v)); // Filter empty rows
+      }).filter(row => Object.values(row).some(v => v));
+
+      processingLogs.push({
+        timestamp: new Date().toISOString(),
+        message: `Smart header detection: headers found at row ${headerRowIndex + 1}`,
+        headerDetection: {
+          detectedRow: headerRowIndex + 1,
+          method: supplierConfig?.skip_rows ? 'manual' : 'automatic',
+          headers: headers
+        }
+      });
     } else {
       throw new Error(`Unsupported file type: ${processFileName}`);
     }

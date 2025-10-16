@@ -20,6 +20,7 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Record<string, number | null>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [skipRows, setSkipRows] = useState<number>(0);
 
   // Charger le mapping existant au montage
   useEffect(() => {
@@ -30,7 +31,7 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
     try {
       const { data, error } = await supabase
         .from('supplier_configurations')
-        .select('column_mapping')
+        .select('column_mapping, skip_rows')
         .eq('id', supplierId)
         .single();
 
@@ -38,6 +39,9 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
 
       if (data?.column_mapping) {
         setMapping(data.column_mapping as Record<string, number | null>);
+      }
+      if (data?.skip_rows !== undefined) {
+        setSkipRows(data.skip_rows);
       }
     } catch (error) {
       console.error('Error loading existing mapping:', error);
@@ -139,12 +143,15 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
       
       const { error } = await supabase
         .from('supplier_configurations')
-        .update({ column_mapping: mapping })
+        .update({ 
+          column_mapping: mapping,
+          skip_rows: skipRows 
+        })
         .eq('id', supplierId);
 
       if (error) throw error;
 
-      toast.success("✅ Mapping sauvegardé pour ce fournisseur");
+      toast.success("✅ Mapping et configuration sauvegardés");
     } catch (error) {
       console.error('Error saving mapping:', error);
       toast.error("Erreur lors de la sauvegarde");
@@ -217,6 +224,27 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
                 Mappez au minimum le nom du produit et le prix d'achat.
               </AlertDescription>
             </Alert>
+
+            {/* Skip rows configuration */}
+            <div className="space-y-2">
+              <Label htmlFor="skip-rows">
+                ⚙️ Lignes à ignorer avant les en-têtes (optionnel)
+              </Label>
+              <Input
+                id="skip-rows"
+                type="number"
+                min="0"
+                max="50"
+                value={skipRows}
+                onChange={(e) => setSkipRows(parseInt(e.target.value) || 0)}
+                placeholder="0 = détection automatique"
+              />
+              <p className="text-xs text-muted-foreground">
+                Nombre de lignes à ignorer avant les vrais en-têtes (titres, légendes, lignes vides).
+                <br />
+                <strong>0 = détection automatique</strong> (recommandé)
+              </p>
+            </div>
 
             <div className="space-y-2">
               <Label>2️⃣ Configurer le mapping des colonnes</Label>
