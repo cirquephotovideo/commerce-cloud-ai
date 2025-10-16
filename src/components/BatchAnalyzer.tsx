@@ -3,13 +3,14 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Package, Barcode, Link, Loader2, Store } from "lucide-react";
+import { Package, Barcode, Link, Loader2, Store, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Progress } from "./ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
+import { Badge } from "./ui/badge";
 
 interface BatchAnalyzerProps {
   onAnalysisComplete: (results: any[]) => void;
@@ -21,9 +22,11 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentProduct, setCurrentProduct] = useState("");
+  const [currentProvider, setCurrentProvider] = useState<string>("");
   const [autoExport, setAutoExport] = useState(false);
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
+  const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -49,7 +52,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
     setIsAnalyzing(true);
     setProgress(0);
+    setFailedProducts([]);
     const results = [];
+    const providerStats: Record<string, number> = {};
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
@@ -85,6 +90,12 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
         }
 
         if (data.success) {
+          // Track provider usage
+          if (data.usedProvider) {
+            providerStats[data.usedProvider] = (providerStats[data.usedProvider] || 0) + 1;
+            setCurrentProvider(data.usedProvider);
+          }
+          
           // Validate analysis structure before saving
           if (!data.analysis || typeof data.analysis !== 'object') {
             console.error('❌ Invalid analysis structure received:', {
@@ -94,6 +105,12 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               analysisKeys: data.analysis ? Object.keys(data.analysis) : [],
               rawData: data
             });
+            
+            setFailedProducts(prev => [...prev, {
+              product,
+              error: 'Structure d\'analyse invalide'
+            }]);
+            
             results.push({
               product,
               error: 'Structure d\'analyse invalide - Aucune donnée valide retournée',
@@ -179,9 +196,16 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
     setIsAnalyzing(false);
     setCurrentProduct("");
+    setCurrentProvider("");
     
     const successCount = results.filter(r => r.success).length;
-    toast.success(`Analyse terminée: ${successCount}/${products.length} produits analysés avec succès`);
+    
+    // Show provider statistics
+    const providerSummary = Object.entries(providerStats)
+      .map(([provider, count]) => `${provider}: ${count}`)
+      .join(', ');
+    
+    toast.success(`Analyse terminée: ${successCount}/${products.length} produits analysés avec succès${providerSummary ? ` (Providers: ${providerSummary})` : ''}`);
     
     // Auto-export to selected platform if enabled
     if (autoExport && successCount > 0) {
@@ -372,10 +396,30 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                 </div>
                 <Progress value={progress} />
                 {currentProduct && (
-                  <p className="text-sm text-muted-foreground">
-                    Produit actuel: {currentProduct}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Produit actuel: {currentProduct}
+                    </p>
+                    {currentProvider && (
+                      <Badge variant="outline" className="text-xs">
+                        Provider: {currentProvider}
+                      </Badge>
+                    )}
+                  </div>
                 )}
+              </div>
+            )}
+            
+            {failedProducts.length > 0 && !isAnalyzing && (
+              <div className="mt-4 p-3 bg-destructive/10 rounded-lg">
+                <p className="text-sm font-medium mb-2">Échecs ({failedProducts.length}):</p>
+                <div className="space-y-1">
+                  {failedProducts.map((fp, idx) => (
+                    <p key={idx} className="text-xs text-muted-foreground">
+                      • {fp.product}: {fp.error}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
 

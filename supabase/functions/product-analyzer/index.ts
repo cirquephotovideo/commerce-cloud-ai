@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,43 +15,75 @@ interface SearchResult {
 }
 
 async function searchWeb(query: string): Promise<SearchResult[]> {
+  // Try Serper API first (preferred)
+  const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
+  if (SERPER_API_KEY) {
+    try {
+      const response = await fetch('https://google.serper.dev/search', {
+        method: 'POST',
+        headers: {
+          'X-API-KEY': SERPER_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ q: query, num: 5 })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[WEB-SEARCH] Serper API success');
+        return data.organic?.slice(0, 5).map((r: any) => ({
+          title: r.title,
+          url: r.link,
+          description: r.snippet,
+        })) || [];
+      }
+    } catch (error) {
+      console.error('[WEB-SEARCH] Serper API error:', error);
+    }
+  }
+  
+  // Fallback to Brave Search
   try {
+    const BRAVE_API_KEY = Deno.env.get('BRAVE_SEARCH_API_KEY');
+    if (!BRAVE_API_KEY) {
+      console.log('[WEB-SEARCH] No search API available, continuing without web search');
+      return [];
+    }
+    
     const response = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`, {
       headers: {
         'Accept': 'application/json',
-        'X-Subscription-Token': Deno.env.get('BRAVE_SEARCH_API_KEY') || ''
+        'X-Subscription-Token': BRAVE_API_KEY
       }
     });
     
     if (!response.ok) {
-      console.log('Search API not available, continuing without web search');
+      console.log('[WEB-SEARCH] Brave API not available, continuing without web search');
       return [];
     }
     
     const data = await response.json();
+    console.log('[WEB-SEARCH] Brave API success');
     return data.web?.results?.slice(0, 5).map((r: any) => ({
       title: r.title,
       url: r.url,
       description: r.description,
     })) || [];
   } catch (error) {
-    console.log('Web search error:', error);
+    console.log('[WEB-SEARCH] Error, continuing without web search:', error);
     return [];
   }
 }
 
 function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
-  // Check if it's a URL
   if (input.match(/^https?:\/\//i)) {
     return 'url';
   }
   
-  // Check if it's a barcode (numeric, 8-13 digits)
   if (input.match(/^\d{8,13}$/)) {
     return 'barcode';
   }
   
-  // Otherwise it's a product name
   return 'product_name';
 }
 
@@ -203,26 +236,25 @@ serve(async (req) => {
   try {
     const body = await req.json();
     
-    // Handle multiple input formats
     let productInput: string;
     let additionalData: any = {};
     let includeImages = true;
 
-  if (typeof body === 'string') {
-    productInput = body;
-  } else if (body.url) {
-    productInput = body.url;
-    includeImages = true;
-  } else if (body.productInput) {
-    productInput = body.productInput;
-    additionalData = body.additionalData || {};
-    includeImages = body.includeImages !== false;
-  } else if (body.name) {
-    productInput = body.name;
-    additionalData = body;
-  } else {
-    throw new Error('Missing productInput, name, url, or structured data');
-  }
+    if (typeof body === 'string') {
+      productInput = body;
+    } else if (body.url) {
+      productInput = body.url;
+      includeImages = true;
+    } else if (body.productInput) {
+      productInput = body.productInput;
+      additionalData = body.additionalData || {};
+      includeImages = body.includeImages !== false;
+    } else if (body.name) {
+      productInput = body.name;
+      additionalData = body;
+    } else {
+      throw new Error('Missing productInput, name, url, or structured data');
+    }
 
     console.log('[PRODUCT-ANALYZER] Request validated:', {
       productInput,
@@ -232,7 +264,6 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     });
     
-    // Mode test : retourner mock
     if (body.testMode) {
       console.log('[PRODUCT-ANALYZER] Test mode - returning mock analysis');
       return new Response(
@@ -247,18 +278,11 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
-    // Get Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get authorization header
     const authHeader = req.headers.get('Authorization');
     let userId = null;
     let categories: any[] = [];
@@ -268,7 +292,6 @@ serve(async (req) => {
       const { data: { user } } = await supabaseClient.auth.getUser(token);
       userId = user?.id;
 
-      // Fetch user's Odoo categories
       if (userId) {
         const { data: categoriesData } = await supabaseClient
           .from('odoo_categories')
@@ -276,15 +299,13 @@ serve(async (req) => {
           .eq('user_id', userId);
         
         categories = categoriesData || [];
-        console.log(`Found ${categories.length} Odoo categories for user`);
+        console.log(`[PRODUCT-ANALYZER] Found ${categories.length} Odoo categories for user`);
       }
     }
 
-    // Detect input type
     const inputType = detectInputType(productInput);
-    console.log('Input type detected:', inputType);
+    console.log('[PRODUCT-ANALYZER] Input type detected:', inputType);
 
-    // Perform web search for additional context
     let searchQuery = productInput;
     if (inputType === 'barcode') {
       searchQuery = `produit code-barres ${productInput} prix avis`;
@@ -292,52 +313,19 @@ serve(async (req) => {
       searchQuery = `${productInput} acheter prix avis e-commerce`;
     }
 
-    console.log('Searching web for:', searchQuery);
+    console.log('[PRODUCT-ANALYZER] Searching web for:', searchQuery);
     const searchResults = await searchWeb(searchQuery);
-    console.log('Found', searchResults.length, 'search results');
+    console.log('[PRODUCT-ANALYZER] Found', searchResults.length, 'search results');
 
-    // Phase B.7: Call AI with automatic fallback
-    console.log('[PRODUCT-ANALYZER] Calling AI with fallback support...');
+    // Use shared AI fallback logic
+    console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → Lovable AI → OpenAI → OpenRouter)');
     
-    const aiProviders = ['lovable_ai', 'openai', 'openrouter', 'ollama'];
-    let aiResponse = null;
-    let usedProvider = null;
-    
-    for (const provider of aiProviders) {
-      const apiKey = Deno.env.get(
-        provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
-        provider === 'openai' ? 'OPENAI_API_KEY' :
-        provider === 'openrouter' ? 'OPENROUTER_API_KEY' :
-        'OLLAMA_URL'
-      );
-
-      if (!apiKey && provider !== 'ollama') {
-        console.log(`[PRODUCT-ANALYZER] Skipping ${provider} (no API key)`);
-        continue;
-      }
-
-      try {
-        const endpoint = 
-          provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
-          provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-          provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' :
-          `${apiKey}/v1/chat/completions`;
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
-                   provider === 'openai' ? 'gpt-5-mini-2025-08-07' : 
-                   provider === 'openrouter' ? 'anthropic/claude-3.5-sonnet' :
-                   'llama3',
-            messages: [
-              {
-                role: 'system',
-                content: `Tu es un expert en analyse e-commerce. 
+    const aiResponse = await callAIWithFallback({
+      model: 'llama3.2', // Ollama default model
+      messages: [
+        {
+          role: 'system',
+          content: `Tu es un expert en analyse e-commerce. 
 
 RÈGLES ABSOLUES:
 1. Tu dois retourner UNIQUEMENT un objet JSON valide
@@ -348,86 +336,20 @@ RÈGLES ABSOLUES:
 6. Le JSON DOIT être complet et valide
 7. TOUS les champs requis doivent être présents
 
-Structure minimale requise:
-{
-  "product_name": "string",
-  "description": "string",
-  "description_long": "string",
-  "seo": { "score": number, "keywords": [] },
-  "pricing": { "estimated_price": "string" },
-  "global_report": { "overall_score": number }
-}
-
 Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A" ou des valeurs par défaut, mais retourne TOUJOURS un JSON valide et complet.`
-              },
-              {
-                role: 'user',
-                content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
-              }
-            ],
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          const shouldFallback = response.status === 402 || response.status === 429 || response.status === 503;
-          
-          if (shouldFallback && aiProviders.indexOf(provider) < aiProviders.length - 1) {
-            console.warn(`[PRODUCT-ANALYZER] ${provider} failed (${response.status}), trying next provider...`);
-            continue;
-          }
-          
-          // Last provider or non-retriable error
-          console.error(`[PRODUCT-ANALYZER] AI API error (${provider}):`, response.status, errorText);
-          
-          if (response.status === 402) {
-            return new Response(
-              JSON.stringify({ 
-                error: 'Payment required', 
-                code: 'PAYMENT_REQUIRED',
-                message: 'Tous les providers IA sont hors crédits. Veuillez vérifier vos clés API.'
-              }),
-              { 
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 402,
-              }
-            );
-          }
-          
-          if (response.status === 429) {
-            return new Response(
-              JSON.stringify({ 
-                error: 'Rate limit exceeded',
-                code: 'RATE_LIMIT', 
-                message: 'Limite de requêtes atteinte sur tous les providers. Veuillez réessayer dans quelques instants.' 
-              }),
-              { 
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 429,
-              }
-            );
-          }
-          
-          throw new Error(`AI API error: ${response.status}`);
+        },
+        {
+          role: 'user',
+          content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
         }
+      ],
+    });
 
-        // Success!
-        aiResponse = await response.json();
-        usedProvider = provider;
-        console.log(`[PRODUCT-ANALYZER] Analysis complete with ${provider}`);
-        break;
-        
-      } catch (err: any) {
-        console.error(`[PRODUCT-ANALYZER] Exception with ${provider}:`, err);
-        continue;
-      }
-    }
-
-    if (!aiResponse) {
+    if (!aiResponse.success) {
       return new Response(
         JSON.stringify({ 
-          error: 'All AI providers failed',
-          code: 'PROVIDER_DOWN',
+          error: aiResponse.error || 'All AI providers failed',
+          code: aiResponse.errorCode || 'PROVIDER_DOWN',
           message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.'
         }),
         { 
@@ -437,32 +359,27 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       );
     }
 
-    const data = aiResponse;
-    console.log('Analysis complete');
+    console.log(`[PRODUCT-ANALYZER] Analysis complete with provider: ${aiResponse.provider}`);
     
-    let analysisContent = data.choices[0].message.content;
+    let analysisContent = aiResponse.content;
     
     // Clean up the response to extract pure JSON
     analysisContent = analysisContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    // Helper to extract field from partial JSON
     const extractField = (content: string, field: string): string => {
       const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i');
       const match = content.match(regex);
       return match ? match[1] : 'N/A';
     };
 
-    // Try to parse as JSON with robust error handling
     let analysisResult;
     try {
       analysisResult = JSON.parse(analysisContent);
     } catch (parseError) {
-      console.error('JSON parse failed, attempting cleanup...', parseError);
+      console.error('[PRODUCT-ANALYZER] JSON parse failed, attempting cleanup...', parseError);
       
-      // Try to repair truncated JSON
       let cleanedContent = analysisContent.trim();
       
-      // Close unclosed braces/brackets
       const openBraces = (cleanedContent.match(/{/g) || []).length;
       const closeBraces = (cleanedContent.match(/}/g) || []).length;
       if (openBraces > closeBraces) {
@@ -471,108 +388,76 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       
       try {
         analysisResult = JSON.parse(cleanedContent);
-        console.log('Successfully repaired JSON');
+        console.log('[PRODUCT-ANALYZER] Successfully repaired JSON');
       } catch (secondError) {
-        console.error('Second parse failed, cannot extract valid data');
-        console.error('Raw response sample:', analysisContent.substring(0, 200));
+        console.error('[PRODUCT-ANALYZER] Second parse failed, extracting partial data');
         
-        return new Response(
-          JSON.stringify({ 
-            success: false,
-            error: 'Impossible d\'analyser la réponse de l\'IA. Le format JSON retourné est invalide.',
-            details: 'L\'IA n\'a pas retourné un JSON valide malgré plusieurs tentatives de réparation.',
-            rawSample: analysisContent.substring(0, 200)
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 500,
-          }
-        );
+        analysisResult = {
+          product_name: extractField(cleanedContent, 'product_name') || productInput,
+          description: extractField(cleanedContent, 'description'),
+          description_long: extractField(cleanedContent, 'description_long'),
+          seo: {
+            score: 50,
+            keywords: []
+          },
+          pricing: {
+            estimated_price: 'N/A'
+          },
+          global_report: {
+            overall_score: 50
+          },
+          raw_analysis: cleanedContent,
+          parsing_error: true
+        };
       }
     }
 
-    // CRITICAL: Verify analysisResult is valid before continuing
-    if (!analysisResult || typeof analysisResult !== 'object') {
-      console.error('FATAL: analysisResult is null or not an object');
-      return new Response(
-        JSON.stringify({ 
-          success: false,
-          error: 'Structure d\'analyse invalide',
-          details: 'L\'analyse n\'a pas retourné un objet valide'
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500,
-        }
-      );
-    }
-
-    // Ensure at least product_name exists
-    if (!analysisResult.product_name || typeof analysisResult.product_name !== 'string') {
-      console.warn('Missing or invalid product_name, using input as fallback');
-      analysisResult.product_name = productInput;
-    }
-
-    // Search for product images if requested
+    // Fetch product images if requested
     let imageUrls: string[] = [];
     if (includeImages) {
-      console.log('Searching for product images...');
       try {
-        // Use the search-product-images function for better image results
-        // Safely get product name with fallback
-        const productNameForImages = analysisResult?.product_name || productInput;
+        const productName = analysisResult.product_name || productInput;
+        console.log(`[PRODUCT-ANALYZER] Fetching images for: ${productName}`);
         
-        if (!productNameForImages) {
-          console.warn('No product name available for image search, skipping...');
-        } else {
-          const { data: imageData, error: imageError } = await supabaseClient.functions.invoke(
-            'search-product-images',
-            {
-              body: { 
-                productName: productNameForImages,
-                maxResults: 8
-              }
-            }
-          );
+        const { data: imageData, error: imageError } = await supabaseClient.functions.invoke('search-product-images', {
+          body: { productName }
+        });
 
-          if (imageError) {
-            console.error('Error invoking search-product-images:', imageError);
-          } else if (imageData?.images) {
-            imageUrls = imageData.images.map((img: any) => img.url).filter(Boolean);
-            console.log(`Found ${imageUrls.length} images via search-product-images function`);
-          } else {
-            console.log('No images found or unexpected response format');
-          }
+        if (!imageError && imageData?.imageUrls) {
+          imageUrls = imageData.imageUrls;
+          console.log(`[PRODUCT-ANALYZER] Found ${imageUrls.length} images`);
         }
       } catch (imageError) {
-        console.error('Error searching images:', imageError);
+        console.error('[PRODUCT-ANALYZER] Image search error:', imageError);
       }
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: true,
-        productInput,
-        inputType,
         analysis: analysisResult,
         imageUrls,
-        searchResultsCount: searchResults.length,
-        timestamp: new Date().toISOString()
+        usedProvider: aiResponse.provider,
+        metadata: {
+          inputType,
+          hasWebSearch: searchResults.length > 0,
+          hasCategories: categories.length > 0,
+          timestamp: new Date().toISOString()
+        }
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Error in product-analyzer function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[PRODUCT-ANALYZER] Error:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        code: 'INTERNAL_ERROR'
+      }),
+      {
         status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }

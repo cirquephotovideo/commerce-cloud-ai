@@ -25,10 +25,10 @@ export interface AIResponse {
 }
 
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
-  { provider: 'lovable_ai', priority: 1, isActive: true },
-  { provider: 'openai', priority: 2, isActive: true },
-  { provider: 'openrouter', priority: 3, isActive: true },
-  { provider: 'ollama', priority: 4, isActive: true },
+  { provider: 'ollama', priority: 1, isActive: true },
+  { provider: 'lovable_ai', priority: 2, isActive: true },
+  { provider: 'openai', priority: 3, isActive: true },
+  { provider: 'openrouter', priority: 4, isActive: true },
 ];
 
 /**
@@ -42,26 +42,71 @@ export async function callAIWithFallback(
   let lastError: any = null;
 
   for (const providerConfig of providers) {
-    const apiKey = Deno.env.get(
-      providerConfig.provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
-      providerConfig.provider === 'openai' ? 'OPENAI_API_KEY' :
-      providerConfig.provider === 'openrouter' ? 'OPENROUTER_API_KEY' :
-      'OLLAMA_URL'
-    );
+    let apiKey: string | undefined;
+    let apiUrl: string;
 
-    if (!apiKey && providerConfig.provider !== 'ollama') {
-      console.log(`[AI-FALLBACK] Skipping ${providerConfig.provider} (no API key)`);
-      continue;
+    // Special handling for Ollama - try DB config first
+    if (providerConfig.provider === 'ollama') {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        
+        if (supabaseUrl && supabaseKey) {
+          const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+          const supabase = createClient(supabaseUrl, supabaseKey);
+          
+          const { data: ollamaConfig } = await supabase
+            .from('ollama_configurations')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (ollamaConfig) {
+            apiUrl = `${ollamaConfig.ollama_url}/v1/chat/completions`;
+            apiKey = ollamaConfig.api_key_encrypted || '';
+            console.log(`[AI-FALLBACK] Using Ollama from DB: ${ollamaConfig.ollama_url}`);
+          } else {
+            // Fallback to env variables
+            const OLLAMA_URL = Deno.env.get('OLLAMA_URL');
+            if (!OLLAMA_URL) {
+              console.log('[AI-FALLBACK] Skipping Ollama (no URL configured)');
+              continue;
+            }
+            apiUrl = `${OLLAMA_URL}/v1/chat/completions`;
+            apiKey = Deno.env.get('OLLAMA_API_KEY') || '';
+          }
+        } else {
+          console.log('[AI-FALLBACK] Skipping Ollama (no Supabase config)');
+          continue;
+        }
+      } catch (err) {
+        console.error('[AI-FALLBACK] Error loading Ollama config:', err);
+        continue;
+      }
+    } else {
+      apiKey = Deno.env.get(
+        providerConfig.provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
+        providerConfig.provider === 'openai' ? 'OPENAI_API_KEY' :
+        'OPENROUTER_API_KEY'
+      );
+
+      if (!apiKey) {
+        console.log(`[AI-FALLBACK] Skipping ${providerConfig.provider} (no API key)`);
+        continue;
+      }
+
+      apiUrl = 
+        providerConfig.provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
+        providerConfig.provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+        'https://openrouter.ai/api/v1/chat/completions';
     }
 
     try {
       console.log(`[AI-FALLBACK] Trying provider: ${providerConfig.provider}`);
 
-      const endpoint = 
-        providerConfig.provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
-        providerConfig.provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-        providerConfig.provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' :
-        `${apiKey}/v1/chat/completions`; // Ollama
+      const endpoint = apiUrl;
 
       const response = await fetch(endpoint, {
         method: 'POST',

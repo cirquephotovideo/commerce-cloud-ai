@@ -1,13 +1,13 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// TypeScript Types
 interface AnalysisRequest {
   productInput: string;
   inputType?: 'url' | 'name' | 'barcode';
@@ -57,6 +57,7 @@ interface AnalysisResults {
 interface SuccessResponse {
   success: true;
   results: AnalysisResults;
+  usedProviders?: Record<string, string>;
 }
 
 interface ErrorResponse {
@@ -68,13 +69,10 @@ interface ErrorResponse {
 
 type AnalyzerResponse = SuccessResponse | ErrorResponse;
 
-// Helper function for safe JSON parsing
 function safeParseAIResponse(content: string, analysisType: string): any {
   try {
-    // Clean content
     content = content.trim();
     
-    // Extract JSON if wrapped in text
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       content = jsonMatch[0];
@@ -82,8 +80,8 @@ function safeParseAIResponse(content: string, analysisType: string): any {
     
     return JSON.parse(content);
   } catch (parseError) {
-    console.error(`Error parsing ${analysisType} JSON:`, parseError);
-    console.error('Content received:', content.substring(0, 500));
+    console.error(`[ADVANCED-ANALYZER] Error parsing ${analysisType} JSON:`, parseError);
+    console.error('[ADVANCED-ANALYZER] Content received:', content.substring(0, 500));
     
     return {
       error: `Failed to parse ${analysisType} analysis response`,
@@ -92,86 +90,38 @@ function safeParseAIResponse(content: string, analysisType: string): any {
   }
 }
 
-// Phase B.7: Helper function to call AI analysis with automatic provider fallback
 async function callAIAnalysis(
   promptContent: string, 
-  analysisType: string, 
-  lovableApiKey: string
+  analysisType: string
 ): Promise<any> {
-  const aiProviders = ['lovable_ai', 'openai', 'openrouter'];
-  
-  for (const provider of aiProviders) {
-    const apiKey = Deno.env.get(
-      provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
-      provider === 'openai' ? 'OPENAI_API_KEY' :
-      'OPENROUTER_API_KEY'
-    );
+  const aiResponse = await callAIWithFallback({
+    model: 'llama3.2', // Default Ollama model
+    messages: [{ role: 'user', content: promptContent }],
+  });
 
-    if (!apiKey) {
-      console.log(`[ADVANCED-ANALYZER] Skipping ${provider} (no API key)`);
-      continue;
-    }
-
-    try {
-      const endpoint = 
-        provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
-        provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-        'https://openrouter.ai/api/v1/chat/completions';
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
-                 provider === 'openai' ? 'gpt-5-nano-2025-08-07' : 
-                 'anthropic/claude-3.5-sonnet',
-          messages: [{ role: 'user', content: promptContent }],
-        }),
-      });
-
-      if (!response.ok) {
-        console.error(`[ADVANCED-ANALYZER] ${analysisType} ${provider} API error:`, response.status);
-        
-        // Retry on retriable errors
-        if (response.status === 402 || response.status === 429 || response.status === 503) {
-          console.warn(`[ADVANCED-ANALYZER] ${provider} failed (${response.status}), trying next provider...`);
-          continue;
-        }
-        
-        // Non-retriable error
-        return {
-          error: `AI API error: ${response.status}`,
-          code: response.status === 402 ? 'PAYMENT_REQUIRED' : 
-                response.status === 429 ? 'RATE_LIMIT' : 
-                'PROVIDER_ERROR',
-          type: analysisType
-        };
-      }
-
-      const data = await response.json();
-      
-      if (!data.choices || !data.choices[0]) {
-        console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure from ${provider}`);
-        continue;
-      }
-
-      console.log(`[ADVANCED-ANALYZER] ${analysisType} success with ${provider}`);
-      return safeParseAIResponse(data.choices[0].message.content, analysisType);
-      
-    } catch (error) {
-      console.error(`[ADVANCED-ANALYZER] ${analysisType} ${provider} exception:`, error);
-      continue;
-    }
+  if (!aiResponse.success) {
+    return {
+      error: aiResponse.error || 'AI analysis failed',
+      code: aiResponse.errorCode || 'PROVIDER_ERROR',
+      type: analysisType
+    };
   }
 
-  // All providers failed
+  const data = aiResponse.content;
+  
+  if (!data.choices || !data.choices[0]) {
+    console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure`);
+    return {
+      error: 'Invalid response structure',
+      code: 'INVALID_RESPONSE',
+      type: analysisType
+    };
+  }
+
+  console.log(`[ADVANCED-ANALYZER] ${analysisType} success with ${aiResponse.provider}`);
   return {
-    error: 'All AI providers failed',
-    code: 'PROVIDER_DOWN',
-    type: analysisType
+    ...safeParseAIResponse(data.choices[0].message.content, analysisType),
+    _provider: aiResponse.provider
   };
 }
 
@@ -181,18 +131,15 @@ serve(async (req) => {
   }
 
   try {
-    // Validate ALL required environment variables upfront
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     const missingVars: string[] = [];
-    if (!LOVABLE_API_KEY) missingVars.push('LOVABLE_API_KEY');
     if (!SUPABASE_URL) missingVars.push('SUPABASE_URL');
     if (!SUPABASE_SERVICE_ROLE_KEY) missingVars.push('SUPABASE_SERVICE_ROLE_KEY');
 
     if (missingVars.length > 0) {
-      console.error('Missing environment variables:', missingVars);
+      console.error('[ADVANCED-ANALYZER] Missing environment variables:', missingVars);
       return new Response(JSON.stringify({
         success: false,
         error: `Missing environment variables: ${missingVars.join(', ')}`,
@@ -203,15 +150,11 @@ serve(async (req) => {
       });
     }
 
-    const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
-    const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
+    console.log('[ADVANCED-ANALYZER] Environment variables validated ✓');
 
-    console.log('Environment variables validated ✓');
-
-    // Validate Authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error('Missing Authorization header');
+      console.error('[ADVANCED-ANALYZER] Missing Authorization header');
       return new Response(JSON.stringify({
         success: false,
         error: 'Authorization header required',
@@ -229,7 +172,7 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      console.error('Authentication failed:', authError);
+      console.error('[ADVANCED-ANALYZER] Authentication failed:', authError);
       return new Response(JSON.stringify({
         success: false,
         error: 'Invalid or expired token',
@@ -241,14 +184,13 @@ serve(async (req) => {
       });
     }
 
-    console.log('User authenticated:', user.email);
+    console.log('[ADVANCED-ANALYZER] User authenticated:', user.email);
 
-    // Parse and validate request body
     let requestData: Partial<AnalysisRequest>;
     try {
       requestData = await req.json();
     } catch (parseError) {
-      console.error('Invalid JSON in request body:', parseError);
+      console.error('[ADVANCED-ANALYZER] Invalid JSON in request body:', parseError);
       return new Response(JSON.stringify({
         success: false,
         error: 'Invalid JSON in request body',
@@ -266,7 +208,6 @@ serve(async (req) => {
       platform 
     } = requestData;
 
-    // Validate required fields
     if (!productInput || typeof productInput !== 'string' || productInput.trim() === '') {
       return new Response(JSON.stringify({
         success: false,
@@ -290,7 +231,6 @@ serve(async (req) => {
       });
     }
 
-    // Validate analysis types
     const validTypes = ['technical', 'commercial', 'market', 'risk'];
     const invalidTypes = analysisTypes.filter(type => !validTypes.includes(type));
     if (invalidTypes.length > 0) {
@@ -305,15 +245,15 @@ serve(async (req) => {
       });
     }
 
-    console.log('Request validated:', { productInput, inputType, analysisTypes, platform });
+    console.log('[ADVANCED-ANALYZER] Request validated:', { productInput, inputType, analysisTypes, platform });
     
-    // Determine the product identifier based on input type
     let productIdentifier = productInput;
     if (inputType === 'name' || inputType === 'barcode') {
       productIdentifier = `${inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}: ${productInput}`;
     }
 
     const results: any = {};
+    const usedProviders: Record<string, string> = {};
 
     // Technical Analysis
     if (analysisTypes.includes('technical')) {
@@ -366,8 +306,13 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         }
       }`;
 
-      results.technical = await callAIAnalysis(technicalPrompt, 'technical', LOVABLE_API_KEY!);
-      console.log('Technical analysis completed');
+      const techResult = await callAIAnalysis(technicalPrompt, 'technical');
+      results.technical = techResult;
+      if (techResult._provider) {
+        usedProviders.technical = techResult._provider;
+        delete techResult._provider;
+      }
+      console.log('[ADVANCED-ANALYZER] Technical analysis completed');
     }
 
     // Commercial Optimization
@@ -387,19 +332,41 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "return_prediction": { "rate": 0.0, "main_causes": [], "sav_cost_estimate": 0 }
       }`;
 
-      results.commercial = await callAIAnalysis(commercialPrompt, 'commercial', LOVABLE_API_KEY!);
-      console.log('Commercial analysis completed');
+      const commResult = await callAIAnalysis(commercialPrompt, 'commercial');
+      results.commercial = commResult;
+      if (commResult._provider) {
+        usedProviders.commercial = commResult._provider;
+        delete commResult._provider;
+      }
+      console.log('[ADVANCED-ANALYZER] Commercial analysis completed');
     }
 
     // Market Intelligence with Web Search
-    if (analysisTypes.includes('market') && GOOGLE_SEARCH_API_KEY && GOOGLE_SEARCH_CX) {
-      const searchQuery = `${productInput} prix concurrents`;
-      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(searchQuery)}`;
+    if (analysisTypes.includes('market')) {
+      const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
+      let searchData: any = null;
       
-      const searchResponse = await fetch(searchUrl);
-      const searchData = await searchResponse.json();
+      if (SERPER_API_KEY) {
+        try {
+          const searchQuery = `${productInput} prix concurrents`;
+          const searchResponse = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: {
+              'X-API-KEY': SERPER_API_KEY,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ q: searchQuery, num: 5 })
+          });
+          
+          if (searchResponse.ok) {
+            searchData = await searchResponse.json();
+          }
+        } catch (error) {
+          console.error('[ADVANCED-ANALYZER] Search error:', error);
+        }
+      }
 
-      const marketPrompt = `Analyse de marché basée sur ces données: ${JSON.stringify(searchData.items?.slice(0, 5) || [])}
+      const marketPrompt = `Analyse de marché ${searchData ? `basée sur ces données: ${JSON.stringify(searchData.organic?.slice(0, 5) || [])}` : `pour: ${productIdentifier}`}
       
       Fournis:
       1. Prix concurrents détectés
@@ -413,8 +380,13 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "seasonality": { "peak_periods": [], "low_periods": [] }
       }`;
 
-      results.market = await callAIAnalysis(marketPrompt, 'market', LOVABLE_API_KEY!);
-      console.log('Market analysis completed');
+      const marketResult = await callAIAnalysis(marketPrompt, 'market');
+      results.market = marketResult;
+      if (marketResult._provider) {
+        usedProviders.market = marketResult._provider;
+        delete marketResult._provider;
+      }
+      console.log('[ADVANCED-ANALYZER] Market analysis completed');
     }
 
     // Risk Assessment
@@ -435,18 +407,28 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
         "risk_level": "low"
       }`;
 
-      results.risk = await callAIAnalysis(riskPrompt, 'risk', LOVABLE_API_KEY!);
-      console.log('Risk analysis completed');
+      const riskResult = await callAIAnalysis(riskPrompt, 'risk');
+      results.risk = riskResult;
+      if (riskResult._provider) {
+        usedProviders.risk = riskResult._provider;
+        delete riskResult._provider;
+      }
+      console.log('[ADVANCED-ANALYZER] Risk analysis completed');
     }
 
-    console.log('All analyses completed successfully:', Object.keys(results));
+    console.log('[ADVANCED-ANALYZER] All analyses completed successfully:', Object.keys(results));
+    console.log('[ADVANCED-ANALYZER] Providers used:', usedProviders);
     
-    return new Response(JSON.stringify({ success: true, results } as SuccessResponse), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      results,
+      usedProviders
+    } as SuccessResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('Error in advanced-product-analyzer:', {
+    console.error('[ADVANCED-ANALYZER] Error:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       type: error?.constructor?.name
