@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData } = await req.json();
+    const { analysisId, productData, preferred_model } = await req.json();
     console.log('[ENRICH-SPECS] Starting enrichment for analysis:', analysisId);
+    console.log('[ENRICH-SPECS] Preferred model:', preferred_model || 'auto');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -61,23 +62,23 @@ Fournis les spécifications suivantes en JSON structuré:
   "operating_conditions": ""
 }`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'Tu es un expert en spécifications techniques de produits.' },
-          { role: 'user', content: prompt }
-        ],
-      }),
+    // ✅ Use callAIWithFallback instead of direct Lovable AI call
+    const aiResponse = await callAIWithFallback({
+      model: preferred_model || 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: 'Tu es un expert en spécifications techniques de produits.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000
     });
 
-    const aiData = await response.json();
-    const specificationsRaw = aiData.choices[0]?.message?.content;
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI call failed');
+    }
+
+    console.log(`[ENRICH-SPECS] ✅ Provider used: ${aiResponse.provider}`);
+    const specificationsRaw = aiResponse.content;
     
     console.log('[ENRICH-SPECS] AI response length:', specificationsRaw?.length || 0);
 
@@ -96,6 +97,7 @@ Fournis les spécifications suivantes en JSON structuré:
     const newAnalysisResult = {
       ...currentAnalysis.analysis_result,
       specifications,
+      _enrichment_provider: aiResponse.provider,
       ...(parseError && { specifications_parse_error: parseError })
     };
 
@@ -115,14 +117,22 @@ Fournis les spécifications suivantes en JSON structuré:
     console.log('[ENRICH-SPECS] Specifications saved successfully → completed');
 
     return new Response(
-      JSON.stringify({ success: true, specifications }),
+      JSON.stringify({ 
+        success: true, 
+        specifications,
+        provider: aiResponse.provider 
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('[ENRICH-SPECS] Error:', error);
+    console.error('[ENRICH-SPECS] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     
-    // Mark as failed
+    // ✅ Phase 5: Mark as failed but return 200 status
     try {
       const { analysisId } = await req.json();
       const supabase = createClient(
@@ -155,9 +165,14 @@ Fournis les spécifications suivantes en JSON structuré:
       console.error('[ENRICH-SPECS] Failed to mark as failed:', e);
     }
     
+    // ✅ Return 200 with success: false instead of 500
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false,
+        partial: true,
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

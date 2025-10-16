@@ -32,6 +32,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [selectedModel, setSelectedModel] = useState<string>("auto");
   const [autoExport, setAutoExport] = useState(false);
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
+  const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(false);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
@@ -185,6 +186,27 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                   }
                 }).catch(err => console.error('Amazon enrichment error:', err));
               }
+            }
+
+            // ✅ Phase 3: Enrichissements avancés si activés
+            if (autoAdvancedEnrich && insertedAnalysis?.id) {
+              console.log('[BATCH] 🚀 Triggering advanced enrichments for:', product);
+              supabase.functions.invoke('enrich-all', {
+                body: { 
+                  analysisId: insertedAnalysis.id,
+                  productData: data.analysis,
+                  purchasePrice: null,
+                  preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
+                }
+              })
+              .then(({ data: enrichData, error: enrichError }) => {
+                if (enrichError) {
+                  console.error('[BATCH] Advanced enrichment error:', enrichError);
+                } else {
+                  console.log('[BATCH] ✅ Advanced enrichments summary:', enrichData);
+                }
+              })
+              .catch(err => console.error('[BATCH] Advanced enrichment exception:', err));
             }
 
             results.push({
@@ -380,6 +402,18 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                 />
                 <Label htmlFor="auto-amazon" className="cursor-pointer">
                   🔄 Auto-enrichissement Amazon (recommandé)
+                </Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="auto-advanced"
+                  checked={autoAdvancedEnrich}
+                  onCheckedChange={setAutoAdvancedEnrich}
+                  disabled={isAnalyzing}
+                />
+                <Label htmlFor="auto-advanced" className="cursor-pointer">
+                  ✨ Enrichissements avancés (Specs, Desc. technique, Coûts, RSGP)
                 </Label>
               </div>
               

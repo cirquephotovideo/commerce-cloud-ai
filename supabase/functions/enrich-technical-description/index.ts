@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData } = await req.json();
+    const { analysisId, productData, preferred_model } = await req.json();
     console.log('[ENRICH-TECH-DESC] Starting for:', analysisId);
+    console.log('[ENRICH-TECH-DESC] Preferred model:', preferred_model || 'auto');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -57,30 +58,31 @@ La description doit inclure:
 
 Format: Texte structuré en paragraphes avec sous-titres.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'Tu es un rédacteur technique expert spécialisé dans les descriptions produits B2B.' },
-          { role: 'user', content: prompt }
-        ],
-      }),
+    // ✅ Use callAIWithFallback
+    const aiResponse = await callAIWithFallback({
+      model: preferred_model || 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: 'Tu es un rédacteur technique expert spécialisé dans les descriptions produits B2B.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.4,
+      max_tokens: 3000
     });
 
-    const aiData = await response.json();
-    const technicalDescription = aiData.choices[0]?.message?.content;
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI call failed');
+    }
+
+    console.log(`[ENRICH-TECH-DESC] ✅ Provider used: ${aiResponse.provider}`);
+    const technicalDescription = aiResponse.content;
     
     console.log('[ENRICH-TECH-DESC] AI response length:', technicalDescription?.length || 0);
 
     // Merge with existing analysis_result
     const newAnalysisResult = {
       ...currentAnalysis.analysis_result,
-      technical_description: technicalDescription
+      technical_description: technicalDescription,
+      _enrichment_provider: aiResponse.provider
     };
 
     // Update status to completed
@@ -99,14 +101,22 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
     console.log('[ENRICH-TECH-DESC] Technical description saved → completed');
 
     return new Response(
-      JSON.stringify({ success: true, technicalDescription }),
+      JSON.stringify({ 
+        success: true, 
+        technicalDescription,
+        provider: aiResponse.provider
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('[ENRICH-TECH-DESC] Error:', error);
+    console.error('[ENRICH-TECH-DESC] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     
-    // Mark as failed
+    // ✅ Mark as failed but return 200
     try {
       const { analysisId } = await req.json();
       const supabase = createClient(
@@ -139,9 +149,14 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
       console.error('[ENRICH-TECH-DESC] Failed to mark as failed:', e);
     }
     
+    // ✅ Return 200 with success: false
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false,
+        partial: true,
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

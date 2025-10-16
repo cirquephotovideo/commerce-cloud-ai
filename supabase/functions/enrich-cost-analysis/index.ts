@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,12 +13,12 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData, purchasePrice } = await req.json();
+    const { analysisId, productData, purchasePrice, preferred_model } = await req.json();
     console.log('[ENRICH-COST] Starting cost analysis for:', analysisId);
+    console.log('[ENRICH-COST] Preferred model:', preferred_model || 'auto');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -63,23 +64,23 @@ Fournis une analyse détaillée des coûts en JSON:
   "pricing_strategy": ""
 }`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'Tu es un expert en analyse de coûts et pricing.' },
-          { role: 'user', content: prompt }
-        ],
-      }),
+    // ✅ Use callAIWithFallback
+    const aiResponse = await callAIWithFallback({
+      model: preferred_model || 'google/gemini-2.5-flash',
+      messages: [
+        { role: 'system', content: 'Tu es un expert en analyse de coûts et pricing.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 2000
     });
 
-    const aiData = await response.json();
-    const costAnalysisRaw = aiData.choices[0]?.message?.content;
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI call failed');
+    }
+
+    console.log(`[ENRICH-COST] ✅ Provider used: ${aiResponse.provider}`);
+    const costAnalysisRaw = aiResponse.content;
     
     console.log('[ENRICH-COST] AI response length:', costAnalysisRaw?.length || 0);
 
@@ -98,6 +99,7 @@ Fournis une analyse détaillée des coûts en JSON:
     const newAnalysisResult = {
       ...currentAnalysis.analysis_result,
       cost_analysis: costAnalysis,
+      _enrichment_provider: aiResponse.provider,
       ...(parseError && { cost_analysis_parse_error: parseError })
     };
 
@@ -117,14 +119,22 @@ Fournis une analyse détaillée des coûts en JSON:
     console.log('[ENRICH-COST] Cost analysis saved → completed');
 
     return new Response(
-      JSON.stringify({ success: true, costAnalysis }),
+      JSON.stringify({ 
+        success: true, 
+        costAnalysis,
+        provider: aiResponse.provider
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
     console.error('[ENRICH-COST] Error:', error);
+    console.error('[ENRICH-COST] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
     
-    // Mark as failed
+    // ✅ Mark as failed but return 200
     try {
       const { analysisId } = await req.json();
       const supabase = createClient(
@@ -157,9 +167,14 @@ Fournis une analyse détaillée des coûts en JSON:
       console.error('[ENRICH-COST] Failed to mark as failed:', e);
     }
     
+    // ✅ Return 200 with success: false
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false,
+        partial: true,
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

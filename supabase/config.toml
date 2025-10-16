@@ -255,3 +255,6 @@ verify_jwt = true
 [functions.auto-link-products]
 verify_jwt = true
 
+[functions.enrich-all]
+verify_jwt = true
+
