@@ -85,8 +85,8 @@ serve(async (req) => {
 
     // Extract providers used
     const providers = enrichments
-      .filter((e): e is PromiseFulfilledResult<any> => e.status === 'fulfilled' && e.value.data?.provider)
-      .map(e => e.value.data.provider);
+      .filter(e => e.status === 'fulfilled' && e.value?.data?.provider)
+      .map(e => (e as PromiseFulfilledResult<any>).value.data.provider);
 
     return new Response(
       JSON.stringify({ 

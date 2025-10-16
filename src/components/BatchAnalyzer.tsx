@@ -36,6 +36,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
+  const [enrichmentProgress, setEnrichmentProgress] = useState<Record<string, any>>({});
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -191,22 +192,63 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             // ✅ Phase 3: Enrichissements avancés si activés
             if (autoAdvancedEnrich && insertedAnalysis?.id) {
               console.log('[BATCH] 🚀 Triggering advanced enrichments for:', product);
-              supabase.functions.invoke('enrich-all', {
-                body: { 
-                  analysisId: insertedAnalysis.id,
-                  productData: data.analysis,
-                  purchasePrice: null,
-                  preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
-                }
-              })
-              .then(({ data: enrichData, error: enrichError }) => {
+              
+              try {
+                const { data: enrichData, error: enrichError } = await supabase.functions.invoke('enrich-all', {
+                  body: { 
+                    analysisId: insertedAnalysis.id,
+                    productData: data.analysis,
+                    purchasePrice: null,
+                    preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
+                  }
+                });
+                
                 if (enrichError) {
-                  console.error('[BATCH] Advanced enrichment error:', enrichError);
-                } else {
+                  console.error('[BATCH] Advanced enrichment error:', {
+                    status: enrichError.status,
+                    message: enrichError.message,
+                    product
+                  });
+                  
+                  toast.error(`Enrichissements avancés échoués pour ${product}`);
+                  
+                  // Fallback: call each function individually
+                  console.log('[BATCH] Falling back to individual enrichments');
+                  await Promise.allSettled([
+                    supabase.functions.invoke('enrich-specifications', { 
+                      body: { analysisId: insertedAnalysis.id, productData: data.analysis, preferred_model: selectedModel !== 'auto' ? selectedModel : undefined } 
+                    }),
+                    supabase.functions.invoke('enrich-technical-description', { 
+                      body: { analysisId: insertedAnalysis.id, productData: data.analysis, preferred_model: selectedModel !== 'auto' ? selectedModel : undefined } 
+                    }),
+                    supabase.functions.invoke('enrich-cost-analysis', { 
+                      body: { analysisId: insertedAnalysis.id, productData: data.analysis, preferred_model: selectedModel !== 'auto' ? selectedModel : undefined } 
+                    })
+                  ]);
+                  
+                } else if (enrichData?.success) {
                   console.log('[BATCH] ✅ Advanced enrichments summary:', enrichData);
+                  toast.success(`✨ Enrichissements avancés terminés pour ${product}`);
+                  
+                  setEnrichmentProgress(prev => ({
+                    ...prev,
+                    [product]: enrichData.summary
+                  }));
+                } else {
+                  console.warn('[BATCH] ⚠️ Partial enrichment success:', enrichData);
+                  toast.warning(`Enrichissements partiels pour ${product}`);
+                  
+                  if (enrichData?.summary) {
+                    setEnrichmentProgress(prev => ({
+                      ...prev,
+                      [product]: enrichData.summary
+                    }));
+                  }
                 }
-              })
-              .catch(err => console.error('[BATCH] Advanced enrichment exception:', err));
+              } catch (err) {
+                console.error('[BATCH] All enrichment methods failed:', err);
+                toast.error(`Erreur lors des enrichissements pour ${product}`);
+              }
             }
 
             results.push({
