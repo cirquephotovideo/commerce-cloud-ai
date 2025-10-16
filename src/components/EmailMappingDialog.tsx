@@ -91,6 +91,27 @@ export function EmailMappingDialog({ email, onClose, onConfirm }: EmailMappingDi
           });
           setMapping(convertedMapping);
         }
+      } else {
+        // No saved mapping - suggest via AI
+        if (rows.length > 0) {
+          const columns = Object.keys(rows[0]);
+          const { data: suggestedTemplate } = await supabase.functions.invoke('suggest-mapping-template', {
+            body: { columns }
+          });
+          
+          if (suggestedTemplate?.template) {
+            const convertedMapping: Record<string, number | null> = {};
+            Object.entries(suggestedTemplate.template.column_mapping).forEach(([field, colName]) => {
+              if (colName && typeof colName === 'string') {
+                const colIndex = columns.indexOf(colName);
+                convertedMapping[field] = colIndex >= 0 ? colIndex : null;
+              }
+            });
+            setMapping(convertedMapping);
+            setConfidence(suggestedTemplate.template.confidence || {});
+            toast.info(`Template "${suggestedTemplate.template.template_name}" suggéré automatiquement`);
+          }
+        }
       }
     } catch (error: any) {
       console.error('Preview load error:', error);

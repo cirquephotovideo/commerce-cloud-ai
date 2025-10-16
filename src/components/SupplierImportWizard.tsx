@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload, FileText, ArrowLeft, ArrowRight } from "lucide-react";
+import { Upload, FileText, ArrowLeft, ArrowRight, Save, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SupplierColumnMapper } from "./SupplierColumnMapper";
@@ -28,6 +28,10 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [skipRows, setSkipRows] = useState(1);
   const [preview, setPreview] = useState<any[]>([]);
   const [columnMapping, setColumnMapping] = useState<Record<string, number | null>>({});
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDescription, setTemplateDescription] = useState("");
   const [importProgress, setImportProgress] = useState({
     current: 0,
     total: 0,
@@ -42,6 +46,21 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         .from("supplier_configurations")
         .select("*")
         .eq("is_active", true);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Fetch templates
+  const { data: templates } = useQuery({
+    queryKey: ["mapping-templates"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      const { data, error } = await (supabase as any)
+        .from("supplier_mapping_templates")
+        .select("*")
+        .order("template_name");
       if (error) throw error;
       return data;
     },
@@ -186,6 +205,41 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     }
   };
 
+  const handleLoadTemplate = async (templateId: string) => {
+    const template = templates?.find(t => t.id === templateId);
+    if (template?.column_mapping) {
+      setColumnMapping(template.column_mapping);
+      toast.success(`Template "${template.template_name}" chargé`);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!templateName) {
+      toast.error("Veuillez saisir un nom pour le template");
+      return;
+    }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+      
+      await (supabase as any)
+        .from("supplier_mapping_templates")
+        .insert({
+          template_name: templateName,
+          template_description: templateDescription,
+          column_mapping: columnMapping,
+        });
+      
+      toast.success("Template sauvegardé avec succès");
+      setShowSaveTemplate(false);
+      setTemplateName("");
+      setTemplateDescription("");
+    } catch (error) {
+      console.error("Save template error:", error);
+      toast.error("Erreur lors de la sauvegarde du template");
+    }
+  };
+
   const canProceedToStep3 = file && preview.length > 0;
   const canImport = columnMapping.product_name !== null && columnMapping.purchase_price !== null;
 
@@ -289,11 +343,96 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
           {/* Step 3: Column Mapping */}
           {step === 3 && (
-            <SupplierColumnMapper
-              previewData={preview}
-              onMappingChange={setColumnMapping}
-              initialMapping={columnMapping}
-            />
+            <div className="space-y-4">
+              {/* Template controls */}
+              <Card className="bg-muted/50">
+                <CardContent className="pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold">📋 Templates de mapping</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowSaveTemplate(!showSaveTemplate)}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Sauvegarder en tant que template
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Label>Charger un template existant</Label>
+                      <Select value={selectedTemplate} onValueChange={(val) => {
+                        setSelectedTemplate(val);
+                        handleLoadTemplate(val);
+                      }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates?.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              <div className="flex items-center gap-2">
+                                <FolderOpen className="h-4 w-4" />
+                                {t.template_name}
+                                {t.template_description && (
+                                  <span className="text-xs text-muted-foreground">
+                                    - {t.template_description}
+                                  </span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {showSaveTemplate && (
+                    <div className="space-y-3 p-4 border rounded-lg bg-background">
+                      <div>
+                        <Label>Nom du template *</Label>
+                        <Input
+                          value={templateName}
+                          onChange={(e) => setTemplateName(e.target.value)}
+                          placeholder="Ex: Fournisseur standard"
+                        />
+                      </div>
+                      <div>
+                        <Label>Description (optionnelle)</Label>
+                        <Input
+                          value={templateDescription}
+                          onChange={(e) => setTemplateDescription(e.target.value)}
+                          placeholder="Ex: Template pour fichiers CSV standards"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleSaveTemplate}
+                          disabled={!templateName || !columnMapping}
+                        >
+                          Sauvegarder
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setShowSaveTemplate(false)}
+                        >
+                          Annuler
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <SupplierColumnMapper
+                previewData={preview}
+                onMappingChange={setColumnMapping}
+                initialMapping={columnMapping}
+              />
+            </div>
           )}
 
           {/* Progress Bar */}

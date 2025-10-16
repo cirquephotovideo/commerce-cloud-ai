@@ -40,10 +40,10 @@ serve(async (req) => {
 
     // Récupérer tous les templates de l'utilisateur
     const { data: templates, error: fetchError } = await supabaseClient
-      .from("mapping_templates")
+      .from("supplier_mapping_templates")
       .select("*")
       .eq("user_id", user.id)
-      .order("use_count", { ascending: false });
+      .order("usage_count", { ascending: false });
 
     if (fetchError) {
       console.error("[SUGGEST-MAPPING] Error fetching templates:", fetchError);
@@ -72,14 +72,14 @@ serve(async (req) => {
     let bestScore = 0;
 
     for (const template of templates) {
-      const mappingConfig = template.mapping_config as any;
-      const mappedColumns = Object.keys(mappingConfig);
+      const mappingConfig = template.column_mapping as any;
+      const mappedColumns = Object.values(mappingConfig).filter(Boolean) as string[];
       
       // Compter combien de colonnes du fichier correspondent au template
       let matchCount = 0;
       for (const col of normalizedColumns) {
         for (const mappedCol of mappedColumns) {
-          const normalizedMapped = mappedCol.toLowerCase().trim().replace(/[_\s-]+/g, "");
+          const normalizedMapped = String(mappedCol).toLowerCase().trim().replace(/[_\s-]+/g, "");
           if (col.includes(normalizedMapped) || normalizedMapped.includes(col)) {
             matchCount++;
             break;

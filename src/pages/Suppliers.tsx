@@ -384,6 +384,28 @@ export default function Suppliers() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const tabsList = document.querySelector('[role="tablist"]');
+              const templatesTab = Array.from(tabsList?.querySelectorAll('[role="tab"]') || [])
+                .find(tab => tab.textContent?.includes('Templates'));
+              (templatesTab as HTMLElement)?.click();
+            }}
+          >
+            📋 Templates de mapping
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const tabsList = document.querySelector('[role="tablist"]');
+              const linksTab = Array.from(tabsList?.querySelectorAll('[role="tab"]') || [])
+                .find(tab => tab.textContent?.includes('Produits'));
+              (linksTab as HTMLElement)?.click();
+            }}
+          >
+            🔗 Produits liés
+          </Button>
           <SupplierImportMenu onImportComplete={() => refetchSuppliers()} />
           <Button onClick={() => setShowImportWizard(true)} variant="outline">
             <Upload className="mr-2 h-4 w-4" />
