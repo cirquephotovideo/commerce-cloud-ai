@@ -111,6 +111,64 @@ export function EmailInboxTable() {
     const updateProgressFromInbox = (inbox: any) => {
       const logs = inbox.processing_logs as any[];
       const progressLog = logs?.find((log: any) => log.type === 'progress');
+      const jobIdLog = logs?.find((log: any) => log.job_id);
+      const jobId = jobIdLog?.job_id;
+
+      // If job created, track job progress instead
+      if (jobId && inbox.status === 'queued') {
+        // Switch to tracking import_jobs
+        const fetchJobProgress = async () => {
+          const { data: job } = await supabase
+            .from('import_jobs')
+            .select('*')
+            .eq('id', jobId)
+            .maybeSingle();
+
+          if (job) {
+            setImportProgress(prev => ({
+              ...prev,
+              open: true,
+              total: job.progress_total || prev.total,
+              processed: job.progress_current || 0,
+              success: job.products_imported || 0,
+              skipped: 0,
+              errors: job.products_errors || 0,
+              current_operation: job.status === 'queued' 
+                ? 'En file d\'attente...' 
+                : `Import en cours (${job.progress_current || 0}/${job.progress_total || 0})`,
+              processingLogs: logs || []
+            }));
+
+            if (job.status === 'completed' || job.status === 'failed') {
+              if (pollingIntervalId) {
+                clearInterval(pollingIntervalId);
+                setPollingIntervalId(null);
+              }
+              setCurrentInboxId(null);
+
+              if (job.products_imported === 0 && job.status === 'completed') {
+                toast.error("⚠️ Import terminé mais aucun produit traité - Vérifiez le mapping");
+                setTimeout(() => {
+                  setImportProgress(prev => ({ ...prev, open: false }));
+                  refetch();
+                }, 5000);
+              } else {
+                toast.success(`Import terminé: ${job.products_imported} produit(s) importé(s)`);
+                setTimeout(() => {
+                  setImportProgress(prev => ({ ...prev, open: false }));
+                  refetch();
+                }, 2000);
+              }
+            }
+          }
+        };
+
+        // Poll job progress
+        fetchJobProgress();
+        const jobPolling = setInterval(fetchJobProgress, 2000);
+        setPollingIntervalId(jobPolling);
+        return;
+      }
       
       if (progressLog) {
         setImportProgress(prev => ({
