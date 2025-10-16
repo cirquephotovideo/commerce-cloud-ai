@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export function ImportScheduler() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<string>("");
+  const [scheduleName, setScheduleName] = useState<string>("");
   const [frequency, setFrequency] = useState<string>("daily");
   const [cronExpression, setCronExpression] = useState<string>("0 2 * * *");
   const queryClient = useQueryClient();
@@ -51,11 +52,11 @@ export function ImportScheduler() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("import_schedules")
         .insert({
-          user_id: user.id,
           supplier_id: selectedSupplier,
+          schedule_name: scheduleName,
           schedule_type: "email_imap",
           frequency,
           cron_expression: cronExpression,
@@ -68,6 +69,7 @@ export function ImportScheduler() {
       queryClient.invalidateQueries({ queryKey: ["import-schedules"] });
       setShowCreateDialog(false);
       setSelectedSupplier("");
+      setScheduleName("");
       toast.success("Planification créée avec succès");
     },
     onError: (error: any) => {
@@ -252,6 +254,15 @@ export function ImportScheduler() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
+              <Label>Nom de la planification</Label>
+              <Input
+                value={scheduleName}
+                onChange={(e) => setScheduleName(e.target.value)}
+                placeholder="Import quotidien fournisseur X"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>Fournisseur</Label>
               <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
                 <SelectTrigger>
@@ -309,7 +320,7 @@ export function ImportScheduler() {
             </Button>
             <Button
               onClick={() => createSchedule.mutate()}
-              disabled={!selectedSupplier || createSchedule.isPending}
+              disabled={!selectedSupplier || !scheduleName || createSchedule.isPending}
             >
               Créer
             </Button>

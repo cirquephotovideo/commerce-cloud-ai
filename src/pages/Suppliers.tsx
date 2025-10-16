@@ -496,6 +496,11 @@ export default function Suppliers() {
             )}
           </TabsTrigger>
           <TabsTrigger value="logs">Historique</TabsTrigger>
+          <TabsTrigger value="scheduler">⏰ Planification</TabsTrigger>
+          <TabsTrigger value="automation">🤖 Automatisations</TabsTrigger>
+          <TabsTrigger value="templates">📋 Templates</TabsTrigger>
+          <TabsTrigger value="stats">📈 Statistiques</TabsTrigger>
+          <TabsTrigger value="ollama">🧠 Ollama AI</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list">
@@ -881,6 +886,26 @@ export default function Suppliers() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="scheduler">
+          <ImportScheduler />
+        </TabsContent>
+
+        <TabsContent value="automation">
+          <AutomationRulesManager />
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <MappingTemplatesManager />
+        </TabsContent>
+
+        <TabsContent value="stats">
+          <ImportStatsDashboard />
+        </TabsContent>
+
+        <TabsContent value="ollama">
+          <OllamaHealthDashboard />
         </TabsContent>
       </Tabs>
 

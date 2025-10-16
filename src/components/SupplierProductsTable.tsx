@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SupplierProductDetail } from "./SupplierProductDetail";
 import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
 import { BulkSupplierProductEditor } from "./BulkSupplierProductEditor";
+import { toast } from "sonner";
 
 export function SupplierProductsTable() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -289,10 +290,9 @@ export function SupplierProductsTable() {
                                 if (!user) throw new Error("Non authentifié");
 
                                 // Create product_analyses
-                                const { data: newAnalysis, error: analysisError } = await supabase
+                                const { data: newAnalysis, error: analysisError } = await (supabase as any)
                                   .from('product_analyses')
                                   .insert({
-                                    user_id: user.id,
                                     ean: product.ean,
                                     purchase_price: product.purchase_price,
                                     purchase_currency: 'EUR',
