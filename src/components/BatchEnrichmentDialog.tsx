@@ -9,6 +9,7 @@ import { Loader2, Sparkles, Image, Video, FileCheck, Package } from "lucide-reac
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAIProvider } from "@/hooks/useAIProvider";
+import { EnrichmentProviderSelector, AIProvider } from "@/components/product-detail/EnrichmentProviderSelector";
 
 interface BatchEnrichmentDialogProps {
   open: boolean;
@@ -31,8 +32,8 @@ export function BatchEnrichmentDialog({
   });
   const [priority, setPriority] = useState<"low" | "normal" | "high">("normal");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showProviderSelector, setShowProviderSelector] = useState(false);
   const { provider, updateProvider } = useAIProvider();
-  const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-flash');
 
   const selectedCount = selectedProducts.size;
   const selectedOptionsCount = Object.values(enrichmentOptions).filter(Boolean).length;
@@ -46,6 +47,42 @@ export function BatchEnrichmentDialog({
       .filter(([_, enabled]) => enabled)
       .forEach(([key]) => types.push(key));
     return types;
+  };
+
+  const getProviderIcon = (provider: AIProvider) => {
+    const icons = {
+      'lovable': '🚀',
+      'claude': '🤖',
+      'openai': '🔥',
+      'openrouter': '🌐',
+      'ollama_cloud': '☁️',
+      'ollama_local': '💻'
+    };
+    return icons[provider];
+  };
+
+  const getProviderName = (provider: AIProvider) => {
+    const names = {
+      'lovable': 'Lovable AI',
+      'claude': 'Claude',
+      'openai': 'OpenAI',
+      'openrouter': 'OpenRouter',
+      'ollama_cloud': 'Ollama Cloud',
+      'ollama_local': 'Ollama Local'
+    };
+    return names[provider];
+  };
+
+  const getModelForProvider = (provider: AIProvider): string | undefined => {
+    const mapping: Record<AIProvider, string | undefined> = {
+      'lovable': 'google/gemini-2.5-flash',
+      'claude': 'claude-sonnet-4-5',
+      'openai': 'gpt-5-mini',
+      'openrouter': undefined,
+      'ollama_cloud': 'qwen:110b-cloud',
+      'ollama_local': 'llama3.1:latest',
+    };
+    return mapping[provider];
   };
 
   const handleStartEnrichment = async () => {
@@ -66,7 +103,7 @@ export function BatchEnrichmentDialog({
         status: "pending" as const,
         metadata: {
           provider,
-          model: selectedModel
+          model: getModelForProvider(provider)
         }
       }));
 
@@ -119,41 +156,23 @@ export function BatchEnrichmentDialog({
 
         {!isProcessing ? (
           <div className="space-y-6">
-            {/* Sélecteur d'IA */}
+            {/* Provider IA */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium">Provider IA</h3>
-              <div className="space-y-3">
-                <div>
-                  <Label>Provider</Label>
-                  <Select value={provider} onValueChange={updateProvider}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lovable">Lovable AI (Recommandé)</SelectItem>
-                      <SelectItem value="openai">OpenAI</SelectItem>
-                      <SelectItem value="claude">Anthropic Claude</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Provider actuel:</span>
+                  <Badge variant="secondary" className="text-sm">
+                    {getProviderIcon(provider)} {getProviderName(provider)}
+                  </Badge>
                 </div>
-
-                {provider === 'lovable' && (
-                  <div>
-                    <Label>Modèle</Label>
-                    <Select value={selectedModel} onValueChange={setSelectedModel}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro (Plus précis)</SelectItem>
-                        <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (Équilibré)</SelectItem>
-                        <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (Rapide)</SelectItem>
-                        <SelectItem value="openai/gpt-5">GPT-5 (Premium)</SelectItem>
-                        <SelectItem value="openai/gpt-5-mini">GPT-5 Mini (Économique)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => setShowProviderSelector(true)}
+                >
+                  ✏️ Changer
+                </Button>
               </div>
             </div>
 
@@ -271,6 +290,15 @@ export function BatchEnrichmentDialog({
           </div>
         )}
       </DialogContent>
+
+      <EnrichmentProviderSelector
+        open={showProviderSelector}
+        onOpenChange={setShowProviderSelector}
+        onSelect={(newProvider) => {
+          updateProvider(newProvider);
+          toast.success(`Provider changé: ${getProviderName(newProvider)}`);
+        }}
+      />
     </Dialog>
   );
 }
