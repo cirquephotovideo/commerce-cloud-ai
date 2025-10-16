@@ -632,9 +632,13 @@ Retourne UNIQUEMENT le script, sans introduction ni conclusion.`;
           success: true,
           video_id,
           record_id: videoRecord.id,
-          status: 'processing'
+          status: 'queued',
+          message: 'Video generation queued. Poll for status updates.'
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 202,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
       );
     }
 

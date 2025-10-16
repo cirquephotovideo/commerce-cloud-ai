@@ -77,6 +77,17 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
             </Card>
           </div>
 
+          {/* Warning if 0 products imported */}
+          {progress.success === 0 && progress.processed > 0 && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm font-medium text-destructive">⚠️ Aucun produit importé</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Le fichier a été traité mais aucun produit valide n'a été trouvé. 
+                Vérifiez le mapping des colonnes ou le format du fichier.
+              </p>
+            </div>
+          )}
+
           {/* Download logs button */}
           {(progress.errors > 0 || progress.skipped > 0 || (progress.success === 0 && progress.processed > 0)) && processingLogs && (
             <Button 

@@ -195,9 +195,21 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('💥 [BUILD-CONTEXT] Error:', error);
+
+    // Determine appropriate status code
+    let statusCode = 500;
+    const errorMessage = (error instanceof Error ? error.message : '').toLowerCase();
+    
+    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('session')) {
+      statusCode = 401;
+    }
+
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Erreur inconnue' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
+        code: statusCode === 401 ? 'TOKEN_EXPIRED' : 'INTERNAL_ERROR'
+      }),
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

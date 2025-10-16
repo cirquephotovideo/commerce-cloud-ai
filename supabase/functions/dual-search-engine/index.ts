@@ -310,12 +310,23 @@ serve(async (req) => {
       stack: error instanceof Error ? error.stack : undefined,
       timestamp: new Date().toISOString()
     });
+
+    // Determine appropriate status code
+    let statusCode = 500;
+    let errorCode: SearchError['code'] = 'INTERNAL_ERROR';
+
+    const errorMessage = (error instanceof Error ? error.message : '').toLowerCase();
+    if (errorMessage.includes('auth') || errorMessage.includes('token')) {
+      statusCode = 401;
+      errorCode = 'AUTH_ERROR';
+    }
+
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Unknown error',
-        code: 'INTERNAL_ERROR'
+        code: errorCode
       } as SearchError),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

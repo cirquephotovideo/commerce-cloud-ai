@@ -148,10 +148,8 @@ export function EmailInboxTable() {
 
               if (job.products_imported === 0 && job.status === 'completed') {
                 toast.error("⚠️ Import terminé mais aucun produit traité - Vérifiez le mapping");
-                setTimeout(() => {
-                  setImportProgress(prev => ({ ...prev, open: false }));
-                  refetch();
-                }, 5000);
+                // Keep modal open for user to download logs
+                // Don't auto-close
               } else {
                 toast.success(`Import terminé: ${job.products_imported} produit(s) importé(s)`);
                 setTimeout(() => {

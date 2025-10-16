@@ -61,7 +61,17 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           body: { productInput: product, includeImages: true }
         });
 
-        if (error) throw error;
+        if (error) {
+          // Handle specific error codes
+          if (error.status === 402) {
+            toast.warning(`Provider IA manque de crédits, tentative de fallback...`);
+            // The edge function should already handle fallback internally
+          } else if (error.status === 429) {
+            toast.warning(`Limite de requêtes atteinte, ralentissement...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s
+          }
+          throw error;
+        }
 
         if (data.success) {
           // Validate analysis structure before saving
