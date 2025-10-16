@@ -168,6 +168,81 @@ export function EmailInboxTable() {
     }
   };
 
+  const handleDownload = async (email: any) => {
+    if (!email.attachment_url) return;
+    
+    try {
+      const link = document.createElement('a');
+      link.href = email.attachment_url;
+      link.download = email.attachment_name || 'attachment';
+      link.click();
+      toast.success("Téléchargement lancé");
+    } catch (error) {
+      toast.error("Erreur lors du téléchargement");
+    }
+  };
+
+  const handleDelete = async (inboxId: string) => {
+    if (!confirm("Supprimer cet email ?")) return;
+    
+    try {
+      const { error } = await supabase
+        .from('email_inbox')
+        .delete()
+        .eq('id', inboxId);
+      
+      if (error) throw error;
+      toast.success("Email supprimé");
+      refetch();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
+  const handleBulkReprocess = async (supplierName: string) => {
+    const emails = emailsBySupplier[supplierName]?.filter(e => e.status === 'failed');
+    if (!emails?.length) {
+      toast.info("Aucun email en erreur à retraiter");
+      return;
+    }
+    
+    if (!confirm(`Retraiter ${emails.length} email(s) en erreur de ${supplierName} ?`)) return;
+    
+    try {
+      toast.info(`Retraitement de ${emails.length} email(s)...`);
+      
+      for (const email of emails) {
+        await handleReprocess(email.id);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      toast.success("Retraitement en masse terminé");
+    } catch (error) {
+      toast.error("Erreur lors du retraitement en masse");
+    }
+  };
+
+  const handleBulkDelete = async (supplierName: string) => {
+    const emails = emailsBySupplier[supplierName];
+    if (!emails?.length) return;
+    
+    if (!confirm(`Supprimer tous les ${emails.length} email(s) de ${supplierName} ?`)) return;
+    
+    try {
+      const { error } = await supabase
+        .from('email_inbox')
+        .delete()
+        .in('id', emails.map(e => e.id));
+      
+      if (error) throw error;
+      
+      toast.success(`${emails.length} email(s) supprimé(s)`);
+      refetch();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression en masse");
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { variant: any; label: string; }> = {
       pending: { variant: "secondary", label: "En attente" },
@@ -313,10 +388,33 @@ export function EmailInboxTable() {
                     {supplierName}
                     <Badge variant="outline">{emails.length} email(s)</Badge>
                   </h3>
-                  <div className="flex gap-3 text-xs text-muted-foreground">
-                    <span>✅ {emails.filter(e => e.status === 'completed').length} traités</span>
-                    <span>⏳ {emails.filter(e => e.status === 'pending').length} en attente</span>
-                    <span>❌ {emails.filter(e => e.status === 'failed').length} erreurs</span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-3 text-xs text-muted-foreground">
+                      <span>✅ {emails.filter(e => e.status === 'completed').length} traités</span>
+                      <span>⏳ {emails.filter(e => e.status === 'pending').length} en attente</span>
+                      <span>❌ {emails.filter(e => e.status === 'failed').length} erreurs</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {emails.filter(e => e.status === 'failed').length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleBulkReprocess(supplierName)}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Tout retraiter ({emails.filter(e => e.status === 'failed').length})
+                        </Button>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleBulkDelete(supplierName)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Tout supprimer
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -451,6 +549,23 @@ export function EmailInboxTable() {
                               </TooltipProvider>
                             )}
                             
+                            {email.attachment_url && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleDownload(email)}
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Télécharger</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -466,21 +581,41 @@ export function EmailInboxTable() {
                               </Tooltip>
                             </TooltipProvider>
                             
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => handleReprocess(email.id)}
-                                    disabled={email.status === 'processing'}
-                                  >
-                                    <RefreshCw className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Retraiter</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                            {['pending', 'failed', 'completed'].includes(email.status) && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleReprocess(email.id)}
+                                      disabled={email.status === 'processing'}
+                                    >
+                                      <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Retraiter</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
+                            {['completed', 'failed'].includes(email.status) && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleDelete(email.id)}
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Supprimer</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>

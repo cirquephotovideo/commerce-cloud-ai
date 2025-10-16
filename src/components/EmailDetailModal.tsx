@@ -229,10 +229,46 @@ export function EmailDetailModal({ email, open, onOpenChange, onRefresh }: Email
             {email.error_message && (
               <Card className="border-destructive">
                 <CardHeader>
-                  <CardTitle className="text-sm text-destructive">❌ Erreur</CardTitle>
+                  <CardTitle className="text-sm text-destructive flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Erreur détaillée
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-destructive">{email.error_message}</p>
+                <CardContent className="space-y-3">
+                  <div className="bg-destructive/10 p-3 rounded-md">
+                    <p className="text-sm text-destructive font-mono">{email.error_message}</p>
+                  </div>
+                  
+                  {/* Suggestions de résolution */}
+                  <div className="border-l-4 border-yellow-500 bg-yellow-50 dark:bg-yellow-950 p-3 rounded">
+                    <p className="text-sm font-semibold mb-2">💡 Suggestions :</p>
+                    <ul className="text-xs space-y-1 list-disc list-inside">
+                      {email.error_message.includes('mapping') && (
+                        <li>Vérifiez que toutes les colonnes requises sont bien mappées</li>
+                      )}
+                      {email.error_message.includes('timeout') && (
+                        <li>Le fichier est peut-être trop volumineux. Réessayez plus tard.</li>
+                      )}
+                      {email.error_message.includes('parse') && (
+                        <li>Le format du fichier n'est peut-être pas valide (XLS/XLSX/CSV)</li>
+                      )}
+                      <li>Utilisez le bouton "Retraiter" pour réessayer</li>
+                      <li>Contactez le support si l'erreur persiste</li>
+                    </ul>
+                  </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(email.error_message);
+                      toast.success("Erreur copiée dans le presse-papier");
+                    }}
+                    className="w-full"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Copier l'erreur pour le support
+                  </Button>
                 </CardContent>
               </Card>
             )}

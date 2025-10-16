@@ -1243,6 +1243,36 @@ export type Database = {
           },
         ]
       }
+      email_retention_policies: {
+        Row: {
+          archive_successful: boolean | null
+          auto_delete_after_days: number | null
+          created_at: string | null
+          id: string
+          keep_failed_permanently: boolean | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          archive_successful?: boolean | null
+          auto_delete_after_days?: number | null
+          created_at?: string | null
+          id?: string
+          keep_failed_permanently?: boolean | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          archive_successful?: boolean | null
+          auto_delete_after_days?: number | null
+          created_at?: string | null
+          id?: string
+          keep_failed_permanently?: boolean | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_templates: {
         Row: {
           category: string | null
