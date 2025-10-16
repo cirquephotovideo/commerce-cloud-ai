@@ -25,6 +25,7 @@ export function EmailInboxTable() {
   const [mappingEmail, setMappingEmail] = useState<any>(null);
   const [currentInboxId, setCurrentInboxId] = useState<string | null>(null);
   const [pollingIntervalId, setPollingIntervalId] = useState<NodeJS.Timeout | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [importProgress, setImportProgress] = useState<{
     open: boolean;
     total: number;
@@ -34,6 +35,7 @@ export function EmailInboxTable() {
     errors: number;
     current_operation: string;
     processingLogs?: any[];
+    status?: string;
   }>({
     open: false,
     total: 0,
@@ -42,7 +44,8 @@ export function EmailInboxTable() {
     skipped: 0,
     errors: 0,
     current_operation: '',
-    processingLogs: []
+    processingLogs: [],
+    status: 'pending'
   });
 
   const [mappingValidation, setMappingValidation] = useState<{
@@ -96,6 +99,72 @@ export function EmailInboxTable() {
 
     return grouped;
   }, [emailInbox]);
+
+  // Poll import_jobs for active job
+  useEffect(() => {
+    if (!activeJobId) return;
+
+    const pollJob = async () => {
+      const { data: job } = await supabase
+        .from('import_jobs')
+        .select('*')
+        .eq('id', activeJobId)
+        .maybeSingle();
+
+      if (job) {
+        const isFinished = job.status === 'completed' || job.status === 'failed';
+        const metadata = job.metadata as any || {};
+        const processingLogs = metadata.processing_logs || [];
+        
+        setImportProgress(prev => ({
+          ...prev,
+          open: true,
+          total: job.progress_total || prev.total,
+          processed: job.progress_current || 0,
+          success: job.products_imported || 0,
+          skipped: 0,
+          errors: job.products_errors || 0,
+          current_operation: isFinished 
+            ? (job.status === 'completed' ? 'Import terminé ✓' : 'Import échoué ✗')
+            : `Import en cours... (${job.progress_current || 0}/${job.progress_total || 0})`,
+          processingLogs,
+          status: job.status
+        }));
+
+        if (isFinished) {
+          setActiveJobId(null);
+          
+          // Only auto-close if products were imported successfully
+          if (job.products_imported > 0) {
+            toast.success(`Import terminé: ${job.products_imported} produit(s) importé(s)`);
+            setTimeout(() => {
+              setImportProgress(prev => ({ ...prev, open: false }));
+              refetch();
+            }, 2000);
+          } else if (job.status === 'completed') {
+            toast.error("⚠️ Import terminé mais aucun produit traité - Vérifiez le mapping ou le format du fichier");
+            // Keep modal open - don't auto-close
+          } else {
+            const errorMsg = typeof metadata.error === 'string' ? metadata.error : 'Erreur inconnue';
+            toast.error("Import échoué: " + errorMsg);
+            setTimeout(() => {
+              setImportProgress(prev => ({ ...prev, open: false }));
+            }, 3000);
+          }
+          
+          return; // Stop polling
+        }
+      }
+    };
+
+    // Initial fetch
+    pollJob();
+    
+    // Poll every 2 seconds
+    const interval = setInterval(pollJob, 2000);
+    
+    return () => clearInterval(interval);
+  }, [activeJobId, refetch]);
 
   const handleManualRefresh = () => {
     refetch();
@@ -384,6 +453,20 @@ export function EmailInboxTable() {
       });
 
       if (error) throw error;
+
+      // Extract job_id from response if available
+      const response = await supabase.functions.invoke('process-email-attachment', {
+        body: {
+          inbox_id: mappingValidation.email.id,
+          user_id: mappingValidation.email.user_id,
+          custom_mapping: nameMapping
+        }
+      });
+
+      // Start polling the job
+      if (response.data?.job_id) {
+        setActiveJobId(response.data.job_id);
+      }
 
       toast.success('Import lancé');
       setMappingValidation(null);

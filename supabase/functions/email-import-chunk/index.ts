@@ -15,6 +15,8 @@ interface ChunkRequest {
   headers: string[];
   offset: number;
   limit: number;
+  correlation_id?: string;
+  retry_count?: number;
 }
 
 serve(async (req) => {
@@ -23,28 +25,49 @@ serve(async (req) => {
   }
 
   try {
-    const { job_id, user_id, supplier_id, ndjson_path, mapping, headers, offset, limit }: ChunkRequest = await req.json();
+    const { 
+      job_id, user_id, supplier_id, ndjson_path, mapping, headers, offset, limit,
+      correlation_id = crypto.randomUUID(),
+      retry_count = 0
+    }: ChunkRequest = await req.json();
     
-    console.log('[IMPORT-CHUNK] Starting chunk:', { job_id, offset, limit });
+    console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, { 
+      job_id, offset, limit, retry: retry_count 
+    });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Download NDJSON from storage
-    const { data: ndjsonFile, error: downloadError } = await supabase.storage
-      .from('email-attachments')
-      .download(ndjson_path);
+    // Download NDJSON from storage with retry on failure
+    let ndjsonFile: Blob | null = null;
+    let downloadAttempts = 0;
+    const maxDownloadRetries = 3;
 
-    if (downloadError) throw downloadError;
+    while (downloadAttempts < maxDownloadRetries && !ndjsonFile) {
+      const { data, error } = await supabase.storage
+        .from('email-attachments')
+        .download(ndjson_path);
+
+      if (error) {
+        downloadAttempts++;
+        console.warn(`[IMPORT-CHUNK][${correlation_id}] Download attempt ${downloadAttempts} failed:`, error);
+        if (downloadAttempts >= maxDownloadRetries) throw error;
+        await new Promise(resolve => setTimeout(resolve, 1000 * downloadAttempts)); // Backoff
+      } else {
+        ndjsonFile = data;
+      }
+    }
+
+    if (!ndjsonFile) throw new Error('Failed to download NDJSON after retries');
 
     // Parse NDJSON (newline-delimited JSON)
     const text = await ndjsonFile.text();
     const allLines = text.split('\n').filter(l => l.trim());
     const chunk = allLines.slice(offset, offset + limit);
 
-    console.log(`[IMPORT-CHUNK] Processing ${chunk.length} lines (${offset} to ${offset + chunk.length})`);
+    console.log(`[IMPORT-CHUNK][${correlation_id}] Processing ${chunk.length} lines (${offset} to ${offset + chunk.length})`);
 
     let successCount = 0;
     let errorCount = 0;
@@ -104,11 +127,11 @@ serve(async (req) => {
         });
 
       if (upsertError) {
-        console.error('[IMPORT-CHUNK] Upsert error:', upsertError);
+        console.error(`[IMPORT-CHUNK][${correlation_id}] Upsert error:`, upsertError);
         throw upsertError;
       }
 
-      console.log(`[IMPORT-CHUNK] Upserted ${supplierProductsToUpsert.length} supplier_products`);
+      console.log(`[IMPORT-CHUNK][${correlation_id}] Upserted ${supplierProductsToUpsert.length} supplier_products`);
     }
 
     // Batch update/create product_analyses
@@ -177,9 +200,9 @@ serve(async (req) => {
           .insert(toInsert);
 
         if (insertError) {
-          console.error('[IMPORT-CHUNK] Insert analyses error:', insertError);
+          console.error(`[IMPORT-CHUNK][${correlation_id}] Insert analyses error:`, insertError);
         } else {
-          console.log(`[IMPORT-CHUNK] Inserted ${toInsert.length} new product_analyses`);
+          console.log(`[IMPORT-CHUNK][${correlation_id}] Inserted ${toInsert.length} new product_analyses`);
         }
       }
     }
@@ -206,13 +229,13 @@ serve(async (req) => {
         })
         .eq('id', job_id);
 
-      console.log(`[IMPORT-CHUNK] Updated job: ${newProcessed} processed, ${newSuccess} success, ${newErrors} errors`);
+      console.log(`[IMPORT-CHUNK][${correlation_id}] Updated job: ${newProcessed} processed, ${newSuccess} success, ${newErrors} errors`);
 
       // If more lines remain, chain next invocation
       if (offset + limit < allLines.length) {
-        console.log(`[IMPORT-CHUNK] Chaining next chunk: offset ${offset + limit}`);
+        console.log(`[IMPORT-CHUNK][${correlation_id}] Chaining next chunk: offset ${offset + limit}`);
         
-        // Invoke next chunk in background (fire and forget)
+        // Invoke next chunk with same correlation_id for traceability
         supabase.functions.invoke('email-import-chunk', {
           body: {
             job_id,
@@ -222,11 +245,13 @@ serve(async (req) => {
             mapping,
             headers,
             offset: offset + limit,
-            limit
+            limit,
+            correlation_id,
+            retry_count: 0 // Reset retry count for new chunk
           }
-        }).catch(err => console.error('[IMPORT-CHUNK] Chain error:', err));
+        }).catch(err => console.error(`[IMPORT-CHUNK][${correlation_id}] Chain error:`, err));
       } else {
-        // Mark job as completed
+        // Mark job as completed and update inbox status
         await supabase
           .from('import_jobs')
           .update({
@@ -235,7 +260,27 @@ serve(async (req) => {
           })
           .eq('id', job_id);
 
-        console.log('[IMPORT-CHUNK] Job completed');
+        // Update inbox status to completed
+        const { data: jobMeta } = await supabase
+          .from('import_jobs')
+          .select('metadata')
+          .eq('id', job_id)
+          .single();
+
+        if (jobMeta?.metadata?.inbox_id) {
+          await supabase
+            .from('email_inbox')
+            .update({
+              status: 'completed',
+              processed_at: new Date().toISOString(),
+              products_created: newSuccess,
+              products_updated: 0,
+              products_found: newSuccess
+            })
+            .eq('id', jobMeta.metadata.inbox_id);
+        }
+
+        console.log(`[IMPORT-CHUNK][${correlation_id}] Job completed successfully`);
       }
     }
 
@@ -251,9 +296,60 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    console.error('[IMPORT-CHUNK] Error:', error);
+    const { job_id, correlation_id = 'unknown', retry_count = 0 } = await req.json().catch(() => ({}));
+    console.error(`[IMPORT-CHUNK][${correlation_id}] Error (retry ${retry_count}):`, error);
 
-    return new Response(JSON.stringify({ error: error.message }), {
+    // Retry logic (max 3 attempts)
+    if (retry_count < 3) {
+      console.log(`[IMPORT-CHUNK][${correlation_id}] Retrying chunk... (attempt ${retry_count + 1})`);
+      
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      const body = await req.json();
+      supabase.functions.invoke('email-import-chunk', {
+        body: {
+          ...body,
+          retry_count: retry_count + 1
+        }
+      }).catch(err => console.error(`[IMPORT-CHUNK][${correlation_id}] Retry invocation error:`, err));
+
+      return new Response(JSON.stringify({ 
+        error: error.message,
+        retry_scheduled: true,
+        retry_count: retry_count + 1
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 202 // Accepted for retry
+      });
+    }
+
+    // Max retries exceeded - mark job as failed
+    if (job_id) {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          metadata: {
+            error: error.message,
+            failed_at_correlation_id: correlation_id
+          }
+        })
+        .eq('id', job_id);
+    }
+
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      max_retries_exceeded: true 
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500
     });
