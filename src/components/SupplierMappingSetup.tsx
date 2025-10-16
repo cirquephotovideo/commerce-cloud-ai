@@ -8,6 +8,7 @@ import { AlertCircle, Upload, Save, RefreshCw } from "lucide-react";
 import { SupplierColumnMapper } from "./SupplierColumnMapper";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { detectHeaderRow, normalizeHeader } from "@/lib/detectHeaderRow";
 import * as XLSX from "xlsx";
 
 interface SupplierMappingSetupProps {
@@ -80,18 +81,30 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
       const arrayBuffer = await fileData.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
 
-      const headers = rows[0] as string[];
-      const dataRows = rows.slice(1, 6).map(row => {
-        const obj: any = {};
-        headers.forEach((h, i) => obj[h] = (row as any)[i]);
-        return obj;
-      });
+      // Use skipRows if manually configured, otherwise auto-detect
+      const headerRowIndex = skipRows > 0 ? skipRows : detectHeaderRow(rawRows);
+      const headers = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
+        normalizeHeader(h) || `Col ${i}`
+      );
+      const dataRows = rawRows.slice(headerRowIndex + 1);
 
       setDetectedColumns(headers);
-      setPreviewData([headers, ...dataRows]);
-      toast.success(`✅ Fichier "${lastEmail.attachment_name}" chargé avec ${headers.length} colonnes`);
+      const preview = dataRows.slice(0, 5).map(row => {
+        const obj: any = {};
+        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
+        return obj;
+      });
+      setPreviewData(preview);
+      
+      if (headerRowIndex > 0) {
+        toast.success(`✅ "${lastEmail.attachment_name}" - En-têtes ligne ${headerRowIndex + 1}`, {
+          description: `${headers.length} colonnes détectées`
+        });
+      } else {
+        toast.success(`✅ "${lastEmail.attachment_name}" - ${headers.length} colonnes`);
+      }
     } catch (error) {
       console.error('Error loading last file:', error);
       toast.error("Erreur lors du chargement du dernier fichier");
@@ -107,23 +120,37 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
     try {
       setIsLoading(true);
       
-      // Parse file to extract columns
-      const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+      // Use skipRows if manually configured, otherwise auto-detect
+      const headerRowIndex = skipRows > 0 ? skipRows : detectHeaderRow(rawRows);
+      const headers = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
+        normalizeHeader(h) || `Col ${i}`
+      );
+      const dataRows = rawRows.slice(headerRowIndex + 1);
+
+      setSampleFile(file);
+      setDetectedColumns(headers);
       
-      const headers = rows[0] as string[];
-      const dataRows = rows.slice(1, 6).map(row => {
+      const preview = dataRows.slice(0, 5).map(row => {
         const obj: any = {};
-        headers.forEach((h, i) => obj[h] = (row as any)[i]);
+        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
         return obj;
       });
-      
-      setDetectedColumns(headers);
-      setPreviewData([headers, ...dataRows]);
-      setSampleFile(file);
-      toast.success(`${headers.length} colonnes détectées dans le fichier`);
+      setPreviewData(preview);
+
+      if (headerRowIndex > 0) {
+        toast.success(`En-têtes détectés à la ligne ${headerRowIndex + 1} - ${headers.length} colonnes`, {
+          description: "Les en-têtes ont été détectés automatiquement."
+        });
+      } else {
+        toast.success(`${headers.length} colonnes détectées`);
+      }
+
+      console.log(`[SupplierMappingSetup] Headers detected at row ${headerRowIndex + 1}:`, headers);
     } catch (error) {
       console.error('Error parsing file:', error);
       toast.error("Erreur lors de la lecture du fichier");
@@ -236,7 +263,38 @@ export function SupplierMappingSetup({ supplierId }: SupplierMappingSetupProps) 
                 min="0"
                 max="50"
                 value={skipRows}
-                onChange={(e) => setSkipRows(parseInt(e.target.value) || 0)}
+                onChange={async (e) => {
+                  const newSkipRows = parseInt(e.target.value) || 0;
+                  setSkipRows(newSkipRows);
+                  
+                  // Re-parse file with new skip_rows
+                  if (sampleFile) {
+                    try {
+                      const arrayBuffer = await sampleFile.arrayBuffer();
+                      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+                      
+                      const headerRowIndex = newSkipRows > 0 ? newSkipRows : detectHeaderRow(rawRows);
+                      const headers = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
+                        normalizeHeader(h) || `Col ${i}`
+                      );
+                      const dataRows = rawRows.slice(headerRowIndex + 1);
+                      
+                      setDetectedColumns(headers);
+                      const preview = dataRows.slice(0, 5).map(row => {
+                        const obj: any = {};
+                        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
+                        return obj;
+                      });
+                      setPreviewData(preview);
+                      
+                      toast.info(`En-têtes recalculés à la ligne ${headerRowIndex + 1}`);
+                    } catch (error) {
+                      console.error('Error reparsing:', error);
+                    }
+                  }
+                }}
                 placeholder="0 = détection automatique"
               />
               <p className="text-xs text-muted-foreground">

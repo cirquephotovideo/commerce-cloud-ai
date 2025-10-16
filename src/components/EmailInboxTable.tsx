@@ -15,6 +15,7 @@ import { EmailDetailModal } from "./EmailDetailModal";
 import { EmailMappingDialog } from "./EmailMappingDialog";
 import { ImportProgressDialog } from "./ImportProgressDialog";
 import { EmailMappingValidation } from "./EmailMappingValidation";
+import { detectHeaderRow, normalizeHeader, suggestMapping } from "@/lib/detectHeaderRow";
 import * as XLSX from "xlsx";
 
 export function EmailInboxTable() {
@@ -166,33 +167,65 @@ export function EmailInboxTable() {
         return;
       }
 
-      // Parse to detect columns
+      // Parse file
       const arrayBuffer = await fileData.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+      // Load supplier configuration for skip_rows and existing mapping
+      let skipRowsConfig = 0;
+      let existingMapping: Record<string, number | null> = {};
       
-      const headers = rows[0] as string[];
-      const dataRows = rows.slice(1, 6).map(row => {
+      if (email.supplier_id) {
+        const { data: supplier, error: supplierError } = await supabase
+          .from('supplier_configurations')
+          .select('column_mapping, skip_rows')
+          .eq('id', email.supplier_id)
+          .maybeSingle();
+
+        if (!supplierError && supplier) {
+          skipRowsConfig = supplier.skip_rows || 0;
+          existingMapping = (supplier.column_mapping as Record<string, number | null>) || {};
+        }
+      }
+
+      // Detect header row using skip_rows or auto-detection
+      const headerRowIndex = skipRowsConfig > 0 ? skipRowsConfig : detectHeaderRow(rawRows);
+      const headers = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
+        normalizeHeader(h) || `Col ${i}`
+      );
+      const dataRows = rawRows.slice(headerRowIndex + 1);
+
+      console.log(`[handleReprocess] Headers detected at row ${headerRowIndex + 1}:`, headers);
+
+      // Build preview data
+      const preview = dataRows.slice(0, 5).map(row => {
         const obj: any = {};
-        headers.forEach((h, i) => obj[h] = (row as any)[i]);
+        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
         return obj;
       });
 
-      // Load saved supplier mapping
-      const { data: supplier } = await supabase
-        .from('supplier_configurations')
-        .select('column_mapping')
-        .eq('id', email.supplier_id)
-        .single();
+      // Suggest mapping if no existing mapping
+      let suggestedMapping = existingMapping;
+      if (Object.keys(existingMapping).length === 0 || Object.values(existingMapping).every(v => v === null)) {
+        suggestedMapping = suggestMapping(headers);
+        console.log('[handleReprocess] Auto-suggested mapping:', suggestedMapping);
+      }
 
       // Open validation modal
       setMappingValidation({
         email,
         columns: headers,
-        previewData: [headers, ...dataRows],
-        suggestedMapping: supplier?.column_mapping || {}
+        previewData: [headers, ...preview],
+        suggestedMapping
       });
+
+      if (headerRowIndex > 0) {
+        toast.success(`En-têtes détectés à la ligne ${headerRowIndex + 1}`, {
+          description: `${headers.length} colonnes trouvées`
+        });
+      }
 
     } catch (error) {
       console.error('Error preparing reprocess:', error);

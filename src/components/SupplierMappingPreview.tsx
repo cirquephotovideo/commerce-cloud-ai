@@ -8,6 +8,7 @@ import { AlertCircle, Check, X, RefreshCw, Save, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SupplierColumnMapper } from "./SupplierColumnMapper";
+import { detectHeaderRow, normalizeHeader } from "@/lib/detectHeaderRow";
 import * as XLSX from "xlsx";
 
 interface SupplierMappingPreviewProps {
@@ -31,18 +32,18 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
     try {
       setIsLoading(true);
 
-      // 1. Charger le mapping existant
+      // 1. Charger le mapping existant + skip_rows
       const { data: supplierConfig, error: configError } = await supabase
         .from('supplier_configurations')
-        .select('column_mapping')
+        .select('column_mapping, skip_rows')
         .eq('id', supplierId)
-        .single();
+        .maybeSingle();
 
       if (configError) throw configError;
 
-      if (supplierConfig?.column_mapping) {
-        setMapping(supplierConfig.column_mapping as Record<string, number | null>);
-      }
+      const mapping = (supplierConfig?.column_mapping as Record<string, number | null>) || {};
+      const skipRows = supplierConfig?.skip_rows || 0;
+      setMapping(mapping);
 
       // 2. Récupérer le dernier fichier email
       const { data: lastEmail, error: emailError } = await supabase
@@ -59,7 +60,7 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
 
       if (lastEmail?.attachment_url) {
         setLastFile({ name: lastEmail.attachment_name || 'fichier.xlsx', url: lastEmail.attachment_url });
-        await loadAndParseFile(lastEmail.attachment_url, supplierConfig?.column_mapping as any);
+        await loadAndParseFile(lastEmail.attachment_url, mapping, skipRows);
       } else {
         toast.info("Aucun fichier reçu pour ce fournisseur");
       }
@@ -71,7 +72,7 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
     }
   };
 
-  const loadAndParseFile = async (fileUrl: string, currentMapping?: any) => {
+  const loadAndParseFile = async (fileUrl: string, currentMapping: Record<string, number | null>, skipRows: number = 0) => {
     try {
       // Télécharger le fichier depuis Storage
       const { data: fileData, error: downloadError } = await supabase.storage
@@ -84,44 +85,22 @@ export function SupplierMappingPreview({ supplierId }: SupplierMappingPreviewPro
       const arrayBuffer = await fileData.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
 
-      // Detect header row using same logic as edge function
-      function detectHeaderRow(rows: any[][]): number {
-        const keywords = [
-          'prix', 'tarif', 'référence', 'ref', 'code', 'ean', 
-          'produit', 'article', 'désignation', 'description',
-          'stock', 'quantité', 'marque', 'catégorie'
-        ];
-        
-        for (let i = 0; i < Math.min(rows.length, 20); i++) {
-          const row = rows[i];
-          const nonEmptyCols = row.filter((c: any) => c && String(c).trim()).length;
-          
-          if (nonEmptyCols >= 5) {
-            const rowText = row.join(' ').toLowerCase();
-            const matchCount = keywords.filter(kw => rowText.includes(kw)).length;
-            
-            if (matchCount >= 3) {
-              const nextRow = rows[i + 1];
-              if (nextRow && nextRow.some((c: any) => c)) {
-                return i;
-              }
-            }
-          }
-        }
-        return 0;
-      }
+      // Use skip_rows if configured, otherwise auto-detect
+      const headerRow = skipRows > 0 ? skipRows : detectHeaderRow(rawRows);
+      setHeaderRowIndex(headerRow);
 
-      const detectedHeaderRow = detectHeaderRow(rawRows as any[][]);
-      setHeaderRowIndex(detectedHeaderRow);
-
-      const headers = rawRows[detectedHeaderRow] as string[];
-      const dataRows = rawRows.slice(detectedHeaderRow + 1, detectedHeaderRow + 11).map(row => {
+      const headers = (rawRows[headerRow] || []).map((h: any, i: number) => 
+        normalizeHeader(h) || `Col ${i}`
+      );
+      const dataRows = rawRows.slice(headerRow + 1, headerRow + 11).map(row => {
         const obj: any = {};
-        headers.forEach((h, i) => obj[h] = (row as any)[i]);
+        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
         return obj;
       });
+
+      console.log(`[SupplierMappingPreview] Headers at row ${headerRow + 1}:`, headers);
 
       setPreviewData([headers, ...dataRows]);
 
