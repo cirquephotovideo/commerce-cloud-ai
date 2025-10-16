@@ -61,9 +61,20 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           body: { productInput: product, includeImages: true }
         });
 
+        // Phase E.3: Handle specific error codes (session expirée, rate limit, payment)
         if (error) {
+          console.error('[BATCH] Product analyzer error:', { 
+            status: error.status,
+            message: error.message,
+            product
+          });
+
           // Handle specific error codes
-          if (error.status === 402) {
+          if (error.status === 401) {
+            toast.error("Session expirée, veuillez vous reconnecter");
+            setIsAnalyzing(false);
+            return; // Stop batch processing
+          } else if (error.status === 402) {
             toast.warning(`Provider IA manque de crédits, tentative de fallback...`);
             // The edge function should already handle fallback internally
           } else if (error.status === 429) {

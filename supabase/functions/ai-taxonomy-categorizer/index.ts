@@ -92,50 +92,101 @@ Réponds uniquement avec un JSON suivant ce format exact:
   "confidence_score": score entre 0 et 1
 }`;
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-      }),
-    });
+    // Phase B.7: AI with fallback support
+    const aiProviders = ['lovable_ai', 'openai', 'openrouter'];
+    let aiResponse = null;
+    
+    for (const provider of aiProviders) {
+      const apiKey = Deno.env.get(
+        provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
+        provider === 'openai' ? 'OPENAI_API_KEY' :
+        'OPENROUTER_API_KEY'
+      );
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      
-      // Retourner des codes d'erreur appropriés
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Payment required', 
-            code: 'PAYMENT_REQUIRED',
-            message: 'Crédits API insuffisants ou clé invalide'
-          }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (!apiKey) {
+        console.log(`[TAXONOMY] Skipping ${provider} (no API key)`);
+        continue;
       }
-      
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Rate limit exceeded', 
-            code: 'RATE_LIMIT',
-            message: 'Limite de requêtes atteinte, réessayez dans quelques instants'
+
+      try {
+        const endpoint = 
+          provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
+          provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+          'https://openrouter.ai/api/v1/chat/completions';
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
+                   provider === 'openai' ? 'gpt-5-nano-2025-08-07' : 
+                   'anthropic/claude-3.5-sonnet',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.3,
           }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[TAXONOMY] ${provider} API error:`, response.status, errorText);
+          
+          // Retry on retriable errors
+          if (response.status === 402 || response.status === 429 || response.status === 503) {
+            console.warn(`[TAXONOMY] ${provider} failed (${response.status}), trying next provider...`);
+            continue;
+          }
+          
+          // Non-retriable error (401, 400, etc.)
+          if (response.status === 402) {
+            return new Response(
+              JSON.stringify({ 
+                error: 'Payment required', 
+                code: 'PAYMENT_REQUIRED',
+                message: 'Crédits API insuffisants sur tous les providers'
+              }),
+              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          if (response.status === 429) {
+            return new Response(
+              JSON.stringify({ 
+                error: 'Rate limit exceeded', 
+                code: 'RATE_LIMIT',
+                message: 'Limite de requêtes atteinte sur tous les providers'
+              }),
+              { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          throw new Error(`AI API error: ${response.status}`);
+        }
+
+        aiResponse = await response.json();
+        console.log(`[TAXONOMY] Success with ${provider}`);
+        break;
+        
+      } catch (err: any) {
+        console.error(`[TAXONOMY] Exception with ${provider}:`, err);
+        continue;
       }
-      
-      throw new Error(`AI API error: ${aiResponse.status}`);
     }
 
-    const aiData = await aiResponse.json();
+    if (!aiResponse) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'All AI providers failed',
+          code: 'PROVIDER_DOWN',
+          message: 'Tous les providers IA sont indisponibles'
+        }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const aiData = aiResponse;
     const aiContent = aiData.choices[0]?.message?.content || '';
     const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
     const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;

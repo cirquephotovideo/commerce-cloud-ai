@@ -63,20 +63,26 @@ export function VideoSection({ analysisId, productName }: VideoSectionProps) {
     }
   };
 
+  // Phase D.3: Use get-video-status for polling
   const startPolling = (vId: string) => {
     if (pollingInterval) clearInterval(pollingInterval);
 
     const interval = setInterval(async () => {
       try {
-        const { data, error } = await supabase.functions.invoke('heygen-video-generator', {
-          body: {
-            action: 'check_status',
-            analysis_id: analysisId,
-            video_id: vId
-          }
+        const { data, error } = await supabase.functions.invoke('get-video-status', {
+          body: { video_id: vId, analysis_id: analysisId }
         });
 
-        if (error) throw error;
+        if (error) {
+          // Handle specific error codes
+          if (error.status === 401) {
+            toast.error('Session expirée, veuillez vous reconnecter');
+            clearInterval(interval);
+            setPollingInterval(null);
+            return;
+          }
+          throw error;
+        }
 
         console.log('[VideoSection] Poll result:', data);
 
@@ -86,6 +92,7 @@ export function VideoSection({ analysisId, productName }: VideoSectionProps) {
           clearInterval(interval);
           setPollingInterval(null);
           toast.success('✅ Vidéo générée avec succès');
+          loadLatestVideo(); // Reload to get full video data
         } else if (data.status === 'failed' || data.error) {
           setVideoStatus('failed');
           setErrorMessage(data.error_message || data.error || 'Erreur HeyGen');
@@ -97,14 +104,14 @@ export function VideoSection({ analysisId, productName }: VideoSectionProps) {
         console.error('[VideoSection] Poll error:', err);
         
         // Stop polling on persistent errors
-        if (err.status === 404 || err.status === 400) {
+        if (err.status === 404 || err.status === 400 || err.code === 'NOT_FOUND') {
           clearInterval(interval);
           setPollingInterval(null);
           setVideoStatus('failed');
-          setErrorMessage('Vidéo introuvable sur HeyGen');
+          setErrorMessage('Vidéo introuvable');
         }
       }
-    }, 3000); // Poll every 3s
+    }, 5000); // Poll every 5s (increased from 3s for better performance)
 
     setPollingInterval(interval);
   };

@@ -195,85 +195,63 @@ verify_jwt = true
 [functions.import-from-windev]
 verify_jwt = true
 
-[functions.supplier-import-batch]
-verify_jwt = false
-
-[functions.auto-supplier-sync]
-verify_jwt = false
-
-[functions.auto-export-manager]
-verify_jwt = false
-
-[functions.send-user-alert]
-verify_jwt = false
-
-[functions.supplier-sync-scheduler]
-verify_jwt = false
-
-[functions.supplier-sync-single-product]
-verify_jwt = true
-
-[functions.re-enrich-product]
-verify_jwt = true
-
-[functions.email-inbox-processor]
-verify_jwt = false
-
-[functions.email-imap-scheduler]
-verify_jwt = false
-
-[functions.email-imap-scheduler.schedule]
-schedule = "*/15 * * * *"  # Every 15 minutes
-
-[functions.email-imap-poller]
-verify_jwt = false
-
-# Cron job pour polling IMAP/POP3 toutes les 15 minutes
-[functions.email-imap-poller.schedule]
-cron = "*/15 * * * *"
-
-[functions.process-email-attachment]
-verify_jwt = false
-
-[functions.email-import-chunk]
-verify_jwt = false
-
-[functions.auto-link-supplier-products]
-verify_jwt = false
-
-[functions.test-imap-connection]
-verify_jwt = false
-
-[functions.test-pop3-connection]
-verify_jwt = false
-
-[functions.product-chat]
-verify_jwt = true
-
-[functions.build-product-chat-context]
-verify_jwt = true
-
-[functions.sync-ollama-to-providers]
-verify_jwt = true
-
-[functions.send-notification]
-verify_jwt = true
-
-[functions.api-endpoint]
-verify_jwt = true
-
-[functions.check-enrichment-queue-stuck]
-verify_jwt = false
-
-[functions.check-amazon-credentials-expiry]
-verify_jwt = false
-
-[functions.rotate-amazon-credentials]
-verify_jwt = false
-
 [functions.supplier-webhook-receiver]
 verify_jwt = false
 
 [functions.mcp-proxy]
+verify_jwt = true
+
+[functions.get-video-status]
+verify_jwt = true
+
+[functions.auto-link-products]
+verify_jwt = true
+
+[functions.batch-process-emails]
+verify_jwt = false
+
+[functions.auto-process-pending-emails]
+verify_jwt = false
+
+[functions.auto-retry-failed-emails]
+verify_jwt = false
+
+[functions.cleanup-old-emails]
+verify_jwt = false
+
+[functions.process-scheduled-imports]
+verify_jwt = false
+
+[functions.retry-failed-imports]
+verify_jwt = false
+
+[functions.test-prestashop-connection]
+verify_jwt = true
+
+[functions.manage-api-keys]
+verify_jwt = true
+
+[functions.enrich-specifications]
+verify_jwt = true
+
+[functions.enrich-technical-description]
+verify_jwt = true
+
+[functions.enrich-cost-analysis]
+verify_jwt = true
+
+[functions.suggest-mapping-template]
+verify_jwt = true
+
+[functions.stripe-webhook-handler]
+verify_jwt = false
+
+[functions.receive-ecommerce-order]
+verify_jwt = false
+
+[functions.get-video-status]
+verify_jwt = true
+
+[functions.auto-link-products]
 verify_jwt = true
 

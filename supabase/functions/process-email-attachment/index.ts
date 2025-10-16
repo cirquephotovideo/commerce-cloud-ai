@@ -414,23 +414,8 @@ serve(async (req) => {
       })
       .eq('id', inbox_id);
 
-    // Invoke first chunk immediately
-    const chunkSize = 500;
-    supabase.functions.invoke('email-import-chunk', {
-      body: {
-        job_id: importJob.id,
-        user_id,
-        supplier_id: inbox.supplier_id,
-        ndjson_path: ndjsonPath,
-        mapping: finalMapping,
-        headers: headers,
-        offset: 0,
-        limit: chunkSize
-      }
-    }).catch(err => console.error('[DISPATCHER] Chunk invocation error:', err));
-
     // Return 202 Accepted immediately
-    return new Response(JSON.stringify({ 
+    const response = new Response(JSON.stringify({ 
       success: true,
       job_id: importJob.id,
       status: 'queued',
@@ -440,6 +425,50 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 202
     });
+
+    // Phase A.1: Invoke first chunk using EdgeRuntime.waitUntil for background processing
+    const chunkSize = 500;
+    const correlation_id = crypto.randomUUID();
+    
+    const startChunkTask = async () => {
+      try {
+        const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
+          body: {
+            job_id: importJob.id,
+            user_id,
+            supplier_id: inbox.supplier_id,
+            ndjson_path: ndjsonPath,
+            mapping: finalMapping,
+            headers: headers,
+            offset: 0,
+            limit: chunkSize,
+            correlation_id,
+            retry_count: 0
+          }
+        });
+
+        if (chunkError) {
+          console.error(`[DISPATCHER][${correlation_id}] Failed to start chunk:`, chunkError);
+          // Mark job as failed if chunk invocation fails
+          await supabase.from('import_jobs')
+            .update({ 
+              status: 'failed', 
+              completed_at: new Date().toISOString(),
+              metadata: { error: 'Failed to start chunk processing', details: chunkError.message }
+            })
+            .eq('id', importJob.id);
+        } else {
+          console.log(`[DISPATCHER][${correlation_id}] Chunk invocation successful`);
+        }
+      } catch (err) {
+        console.error(`[DISPATCHER][${correlation_id}] Exception during chunk invocation:`, err);
+      }
+    };
+
+    // Use background task processing
+    startChunkTask().catch(err => console.error('[DISPATCHER] Background task error:', err));
+
+    return response;
 
   } catch (error: any) {
     console.error('[DISPATCHER] Error:', error);

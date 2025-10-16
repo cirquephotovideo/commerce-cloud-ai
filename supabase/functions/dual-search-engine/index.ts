@@ -304,6 +304,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+  // Phase C.1: Améliorer dual-search-engine avec normalisation et scoring
   } catch (error) {
     console.error('[DUAL-ENGINE] Error:', {
       message: error instanceof Error ? error.message : 'Unknown error',
@@ -311,12 +312,12 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     });
 
-    // Determine appropriate status code
+    // Phase E.2: Return appropriate status codes
     let statusCode = 500;
     let errorCode: SearchError['code'] = 'INTERNAL_ERROR';
 
     const errorMessage = (error instanceof Error ? error.message : '').toLowerCase();
-    if (errorMessage.includes('auth') || errorMessage.includes('token')) {
+    if (errorMessage.includes('auth') || errorMessage.includes('token') || errorMessage.includes('expired')) {
       statusCode = 401;
       errorCode = 'AUTH_ERROR';
     }
@@ -412,17 +413,31 @@ function extractPrice(text: string): number | null {
 function detectPromotions(results: SearchResult[], userId: string): SearchResult[] {
   if (results.length === 0) return results;
 
+  // Phase C.1: Normalisation et scoring améliorés
   const prices = results.map(r => r.price).filter(p => p > 0);
+  if (prices.length === 0) return results;
+  
   const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
   const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
 
   return results.map(result => {
-    const drop = ((avgPrice - result.price) / avgPrice) * 100;
+    // Normaliser le score de confiance selon la source
+    if (result.source === 'dual') {
+      result.confidence_score = 0.95; // Validé par 2 moteurs
+    } else if (result.source === 'serper') {
+      result.confidence_score = 0.8; // Serper seul
+    } else {
+      result.confidence_score = 0.7; // Google seul
+    }
+
+    // Calcul promo
+    const drop = avgPrice > 0 ? ((avgPrice - result.price) / avgPrice) * 100 : 0;
     const isPromo = drop > 10 || result.price === minPrice;
 
     result.search_metadata.is_promo = isPromo;
-    result.search_metadata.discount_percent = drop;
-    result.search_metadata.avg_price = avgPrice;
+    result.search_metadata.discount_percent = Math.round(drop);
+    result.search_metadata.avg_price = Math.round(avgPrice * 100) / 100;
     result.search_metadata.is_best_price = result.price === minPrice;
 
     return result;

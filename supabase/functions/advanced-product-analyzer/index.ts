@@ -92,75 +92,87 @@ function safeParseAIResponse(content: string, analysisType: string): any {
   }
 }
 
-// Helper function to call AI analysis with proper error handling
+// Phase B.7: Helper function to call AI analysis with automatic provider fallback
 async function callAIAnalysis(
   promptContent: string, 
   analysisType: string, 
   lovableApiKey: string
 ): Promise<any> {
-  try {
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [{ role: 'user', content: promptContent }],
-      }),
-    });
+  const aiProviders = ['lovable_ai', 'openai', 'openrouter'];
+  
+  for (const provider of aiProviders) {
+    const apiKey = Deno.env.get(
+      provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
+      provider === 'openai' ? 'OPENAI_API_KEY' :
+      'OPENROUTER_API_KEY'
+    );
 
-    if (!response.ok) {
-      console.error(`[ADVANCED-ANALYZER] ${analysisType} API error:`, {
-        status: response.status,
-        statusText: response.statusText
+    if (!apiKey) {
+      console.log(`[ADVANCED-ANALYZER] Skipping ${provider} (no API key)`);
+      continue;
+    }
+
+    try {
+      const endpoint = 
+        provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
+        provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+        'https://openrouter.ai/api/v1/chat/completions';
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
+                 provider === 'openai' ? 'gpt-5-nano-2025-08-07' : 
+                 'anthropic/claude-3.5-sonnet',
+          messages: [{ role: 'user', content: promptContent }],
+        }),
       });
-      
-      // Retourner des codes d'erreur spécifiques
-      if (response.status === 402) {
+
+      if (!response.ok) {
+        console.error(`[ADVANCED-ANALYZER] ${analysisType} ${provider} API error:`, response.status);
+        
+        // Retry on retriable errors
+        if (response.status === 402 || response.status === 429 || response.status === 503) {
+          console.warn(`[ADVANCED-ANALYZER] ${provider} failed (${response.status}), trying next provider...`);
+          continue;
+        }
+        
+        // Non-retriable error
         return {
-          error: 'Payment required',
-          code: 'PAYMENT_REQUIRED',
-          message: 'Crédits API insuffisants ou clé invalide',
+          error: `AI API error: ${response.status}`,
+          code: response.status === 402 ? 'PAYMENT_REQUIRED' : 
+                response.status === 429 ? 'RATE_LIMIT' : 
+                'PROVIDER_ERROR',
           type: analysisType
         };
       }
+
+      const data = await response.json();
       
-      if (response.status === 429) {
-        return {
-          error: 'Rate limit exceeded',
-          code: 'RATE_LIMIT',
-          message: 'Limite de requêtes atteinte',
-          type: analysisType
-        };
+      if (!data.choices || !data.choices[0]) {
+        console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure from ${provider}`);
+        continue;
       }
+
+      console.log(`[ADVANCED-ANALYZER] ${analysisType} success with ${provider}`);
+      return safeParseAIResponse(data.choices[0].message.content, analysisType);
       
-      return {
-        error: `AI API error: ${response.status} ${response.statusText}`,
-        type: analysisType
-      };
+    } catch (error) {
+      console.error(`[ADVANCED-ANALYZER] ${analysisType} ${provider} exception:`, error);
+      continue;
     }
-
-    const data = await response.json();
-    
-    if (!data.choices || !data.choices[0]) {
-      console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure:`, data);
-      return {
-        error: 'Invalid AI response structure',
-        raw_response: JSON.stringify(data).substring(0, 200),
-        type: analysisType
-      };
-    }
-
-    return safeParseAIResponse(data.choices[0].message.content, analysisType);
-  } catch (error) {
-    console.error(`[ADVANCED-ANALYZER] ${analysisType} analysis error:`, error);
-    return {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      type: analysisType
-    };
   }
+
+  // All providers failed
+  return {
+    error: 'All AI providers failed',
+    code: 'PROVIDER_DOWN',
+    type: analysisType
+  };
 }
 
 serve(async (req) => {

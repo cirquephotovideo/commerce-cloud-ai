@@ -296,19 +296,48 @@ serve(async (req) => {
     const searchResults = await searchWeb(searchQuery);
     console.log('Found', searchResults.length, 'search results');
 
-    console.log('Calling Lovable AI for product analysis...');
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: `Tu es un expert en analyse e-commerce. 
+    // Phase B.7: Call AI with automatic fallback
+    console.log('[PRODUCT-ANALYZER] Calling AI with fallback support...');
+    
+    const aiProviders = ['lovable_ai', 'openai', 'openrouter', 'ollama'];
+    let aiResponse = null;
+    let usedProvider = null;
+    
+    for (const provider of aiProviders) {
+      const apiKey = Deno.env.get(
+        provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
+        provider === 'openai' ? 'OPENAI_API_KEY' :
+        provider === 'openrouter' ? 'OPENROUTER_API_KEY' :
+        'OLLAMA_URL'
+      );
+
+      if (!apiKey && provider !== 'ollama') {
+        console.log(`[PRODUCT-ANALYZER] Skipping ${provider} (no API key)`);
+        continue;
+      }
+
+      try {
+        const endpoint = 
+          provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
+          provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+          provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' :
+          `${apiKey}/v1/chat/completions`;
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
+                   provider === 'openai' ? 'gpt-5-mini-2025-08-07' : 
+                   provider === 'openrouter' ? 'anthropic/claude-3.5-sonnet' :
+                   'llama3',
+            messages: [
+              {
+                role: 'system',
+                content: `Tu es un expert en analyse e-commerce. 
 
 RÈGLES ABSOLUES:
 1. Tu dois retourner UNIQUEMENT un objet JSON valide
@@ -330,51 +359,85 @@ Structure minimale requise:
 }
 
 Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A" ou des valeurs par défaut, mais retourne TOUJOURS un JSON valide et complet.`
-          },
-          {
-            role: 'user',
-            content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
-          }
-        ],
-      }),
-    });
+              },
+              {
+                role: 'user',
+                content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
+              }
+            ],
+          }),
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI API error:', response.status, errorText);
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Payment required', 
-            code: 'PAYMENT_REQUIRED',
-            message: 'Crédits API insuffisants ou clé invalide'
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 402,
+        if (!response.ok) {
+          const errorText = await response.text();
+          const shouldFallback = response.status === 402 || response.status === 429 || response.status === 503;
+          
+          if (shouldFallback && aiProviders.indexOf(provider) < aiProviders.length - 1) {
+            console.warn(`[PRODUCT-ANALYZER] ${provider} failed (${response.status}), trying next provider...`);
+            continue;
           }
-        );
-      }
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ 
-            error: 'Rate limit exceeded',
-            code: 'RATE_LIMIT', 
-            message: 'Limite de requêtes atteinte. Veuillez réessayer dans quelques instants.' 
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 429,
+          
+          // Last provider or non-retriable error
+          console.error(`[PRODUCT-ANALYZER] AI API error (${provider}):`, response.status, errorText);
+          
+          if (response.status === 402) {
+            return new Response(
+              JSON.stringify({ 
+                error: 'Payment required', 
+                code: 'PAYMENT_REQUIRED',
+                message: 'Tous les providers IA sont hors crédits. Veuillez vérifier vos clés API.'
+              }),
+              { 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 402,
+              }
+            );
           }
-        );
+          
+          if (response.status === 429) {
+            return new Response(
+              JSON.stringify({ 
+                error: 'Rate limit exceeded',
+                code: 'RATE_LIMIT', 
+                message: 'Limite de requêtes atteinte sur tous les providers. Veuillez réessayer dans quelques instants.' 
+              }),
+              { 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 429,
+              }
+            );
+          }
+          
+          throw new Error(`AI API error: ${response.status}`);
+        }
+
+        // Success!
+        aiResponse = await response.json();
+        usedProvider = provider;
+        console.log(`[PRODUCT-ANALYZER] Analysis complete with ${provider}`);
+        break;
+        
+      } catch (err: any) {
+        console.error(`[PRODUCT-ANALYZER] Exception with ${provider}:`, err);
+        continue;
       }
-      
-      throw new Error(`AI API error: ${response.status}`);
     }
 
-    const data = await response.json();
+    if (!aiResponse) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'All AI providers failed',
+          code: 'PROVIDER_DOWN',
+          message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 503,
+        }
+      );
+    }
+
+    const data = aiResponse;
     console.log('Analysis complete');
     
     let analysisContent = data.choices[0].message.content;
