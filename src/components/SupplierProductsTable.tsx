@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle, Sparkles, CheckSquare, Square, X } from "lucide-react";
+import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle, Sparkles, CheckSquare, Square, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { SupplierProductDetail } from "./SupplierProductDetail";
 import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
 import { BulkSupplierProductEditor } from "./BulkSupplierProductEditor";
@@ -23,6 +25,9 @@ export function SupplierProductsTable() {
   const [showBulkEditor, setShowBulkEditor] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
+  const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(true);
+  const [selectedModel, setSelectedModel] = useState('auto');
+  const [enrichingProductIds, setEnrichingProductIds] = useState<Set<string>>(new Set());
 
   // Fetch suppliers for filter
   const { data: suppliers } = useQuery({
@@ -136,7 +141,34 @@ export function SupplierProductsTable() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2 border-r pr-4">
+                <Switch 
+                  id="auto-enrich-supplier"
+                  checked={autoAdvancedEnrich}
+                  onCheckedChange={setAutoAdvancedEnrich}
+                />
+                <Label htmlFor="auto-enrich-supplier" className="text-sm cursor-pointer">
+                  Enrichissements avancés
+                  <span className="text-xs text-muted-foreground block">
+                    (Specs, Description, Coûts, RSGP via Ollama)
+                  </span>
+                </Label>
+              </div>
+              {autoAdvancedEnrich && (
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder="Modèle IA" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">🔄 Auto (Fallback)</SelectItem>
+                    <SelectItem value="gpt-oss:120b-cloud">🌩️ Ollama GPT-OSS 120B</SelectItem>
+                    <SelectItem value="qwen:110b-cloud">🌩️ Ollama Qwen 110B</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash">⚡ Gemini 2.5 Flash</SelectItem>
+                    <SelectItem value="openai/gpt-5-mini">🤖 GPT-5 Mini</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <Select value={supplierFilter} onValueChange={(val) => { setSupplierFilter(val); setPage(0); }}>
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Fournisseur" />
@@ -285,49 +317,101 @@ export function SupplierProductsTable() {
                             size="sm"
                             onClick={async (e) => {
                               e.stopPropagation();
-                              try {
-                                const { data: { user } } = await supabase.auth.getUser();
-                                if (!user) throw new Error("Non authentifié");
+                              
+                              const { data: { user } } = await supabase.auth.getUser();
+                              if (!user) {
+                                toast.error("Non authentifié");
+                                return;
+                              }
 
-                                // Create product_analyses
-                                const { data: newAnalysis, error: analysisError } = await (supabase as any)
+                              setEnrichingProductIds(prev => new Set(prev).add(product.id));
+
+                              try {
+                                const { data: newAnalysis, error: analysisError } = await supabase
                                   .from('product_analyses')
                                   .insert({
                                     ean: product.ean,
                                     purchase_price: product.purchase_price,
                                     purchase_currency: 'EUR',
                                     supplier_product_id: product.id,
+                                    user_id: user.id,
+                                    product_url: product.supplier_url || '',
                                     analysis_result: {
                                       name: product.product_name,
+                                      category: 'Produit fournisseur',
+                                      ean: product.ean,
+                                      supplier_reference: product.supplier_reference || ''
                                     },
-                                    needs_enrichment: true
+                                    enrichment_status: {
+                                      base_analysis: 'pending',
+                                      specifications: 'pending',
+                                      technical_description: 'pending',
+                                      cost_analysis: 'pending',
+                                      rsgp: 'pending'
+                                    }
                                   })
                                   .select('id')
                                   .single();
 
                                 if (analysisError) throw analysisError;
 
-                                // Create enrichment queue
-                                await supabase.from('enrichment_queue').insert({
-                                  user_id: user.id,
-                                  analysis_id: newAnalysis.id,
-                                  supplier_product_id: product.id,
-                                  enrichment_type: ['specifications', 'description'],
-                                  priority: 'normal',
-                                  status: 'pending'
-                                });
+                                if (autoAdvancedEnrich && newAnalysis?.id) {
+                                  await toast.promise(
+                                    supabase.functions.invoke('enrich-all', {
+                                      body: {
+                                        analysisId: newAnalysis.id,
+                                        productData: {
+                                          name: product.product_name,
+                                          ean: product.ean,
+                                          category: 'Produit fournisseur',
+                                          description: product.description || ''
+                                        },
+                                        purchasePrice: product.purchase_price,
+                                        preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
+                                      }
+                                    }),
+                                    {
+                                      loading: `🔄 Enrichissement de ${product.product_name} avec ${selectedModel === 'auto' ? 'fallback auto' : selectedModel}...`,
+                                      success: (result) => {
+                                        const { data } = result;
+                                        if (data?.success) {
+                                          return `✅ ${data.successCount}/4 enrichissements réussis`;
+                                        }
+                                        return '⚠️ Enrichissements partiels';
+                                      },
+                                      error: (err) => `❌ Échec : ${err.message}`
+                                    }
+                                  );
+                                } else {
+                                  toast.success("✅ Analyse créée (sans enrichissements)");
+                                }
 
-                                toast.success("Analyse créée et mise en file d'enrichissement");
                                 window.location.href = `/dashboard?filter=recent`;
                               } catch (error: any) {
                                 toast.error("Erreur: " + error.message);
+                              } finally {
+                                setEnrichingProductIds(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.delete(product.id);
+                                  return newSet;
+                                });
                               }
                             }}
                             title="Créer une analyse produit"
                             className="gap-2"
+                            disabled={enrichingProductIds.has(product.id)}
                           >
-                            <Sparkles className="h-4 w-4" />
-                            Créer analyse
+                            {enrichingProductIds.has(product.id) ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Enrichissement...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-4 w-4" />
+                                Créer analyse
+                              </>
+                            )}
                           </Button>
                         ) : null}
                         {product.supplier_url && (
@@ -399,6 +483,80 @@ export function SupplierProductsTable() {
               >
                 <Sparkles className="h-4 w-4" />
                 Enrichir
+              </Button>
+              <Button
+                onClick={async () => {
+                  const { data: { user } } = await supabase.auth.getUser();
+                  if (!user) {
+                    toast.error("Non authentifié");
+                    return;
+                  }
+
+                  const selectedProducts = products.filter(p => selectedProductIds.has(p.id));
+                  toast.info(`🔄 Enrichissement de ${selectedProducts.length} produit(s)...`);
+
+                  let successCount = 0;
+                  let failCount = 0;
+
+                  for (const product of selectedProducts) {
+                    try {
+                      const { data: newAnalysis, error: analysisError } = await supabase
+                        .from('product_analyses')
+                        .insert({
+                          ean: product.ean,
+                          purchase_price: product.purchase_price,
+                          purchase_currency: 'EUR',
+                          supplier_product_id: product.id,
+                          user_id: user.id,
+                          product_url: product.supplier_url || '',
+                          analysis_result: {
+                            name: product.product_name,
+                            category: 'Produit fournisseur',
+                            ean: product.ean
+                          },
+                          enrichment_status: {
+                            base_analysis: 'pending',
+                            specifications: 'pending',
+                            technical_description: 'pending',
+                            cost_analysis: 'pending',
+                            rsgp: 'pending'
+                          }
+                        })
+                        .select('id')
+                        .single();
+
+                      if (analysisError) throw analysisError;
+
+                      if (autoAdvancedEnrich && newAnalysis?.id) {
+                        await supabase.functions.invoke('enrich-all', {
+                          body: {
+                            analysisId: newAnalysis.id,
+                            productData: {
+                              name: product.product_name,
+                              ean: product.ean,
+                              category: 'Produit fournisseur'
+                            },
+                            purchasePrice: product.purchase_price,
+                            preferred_model: selectedModel !== 'auto' ? selectedModel : undefined
+                          }
+                        });
+                      }
+
+                      successCount++;
+                    } catch (err) {
+                      console.error('Bulk enrichment error:', err);
+                      failCount++;
+                    }
+                  }
+
+                  toast.success(`✅ ${successCount} produit(s) enrichi(s) ${failCount > 0 ? `(${failCount} échec(s))` : ''}`);
+                  setSelectedProductIds(new Set());
+                }}
+                className="gap-2"
+                variant="secondary"
+              >
+                <Sparkles className="h-4 w-4" />
+                Créer analyses pour la sélection ({selectedProductIds.size})
               </Button>
               <Button
                 onClick={() => setShowBulkEditor(true)}
