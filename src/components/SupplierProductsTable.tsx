@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { SupplierProductDetail } from "./SupplierProductDetail";
 import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
 import { BulkSupplierProductEditor } from "./BulkSupplierProductEditor";
+import { SupplierCrossSearch } from "./SupplierCrossSearch";
 import { toast } from "sonner";
 
 export function SupplierProductsTable() {
@@ -28,6 +29,8 @@ export function SupplierProductsTable() {
   const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(true);
   const [selectedModel, setSelectedModel] = useState('auto');
   const [enrichingProductIds, setEnrichingProductIds] = useState<Set<string>>(new Set());
+  const [searchProduct, setSearchProduct] = useState<any>(null);
+  const [enrichingProduct, setEnrichingProduct] = useState<string | null>(null);
 
   // Fetch suppliers for filter
   const { data: suppliers } = useQuery({
@@ -108,6 +111,37 @@ export function SupplierProductsTable() {
   const handleEnrichmentComplete = () => {
     setSelectedProductIds(new Set());
     setShowEnrichmentDialog(false);
+  };
+
+  const handleSearchSimilar = (product: any) => {
+    setSearchProduct(product);
+  };
+
+  const handleEnrichWithWeb = async (product: any) => {
+    setEnrichingProduct(product.id);
+    const loadingToast = toast.loading(`🔍 Enrichissement web pour "${product.product_name}"...`);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-supplier-product-web', {
+        body: { supplier_product_id: product.id }
+      });
+
+      if (error) throw error;
+
+      toast.success(`✅ "${data.product_name}" enrichi avec succès`, { id: loadingToast });
+      
+      // Refresh data
+      setSelectedProduct(null);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
+    } catch (error: any) {
+      console.error('Enrichment error:', error);
+      toast.error(`❌ Échec : ${error.message}`, { id: loadingToast });
+    } finally {
+      setEnrichingProduct(null);
+    }
   };
 
   const getStatusBadge = (product: any) => {
@@ -582,8 +616,16 @@ export function SupplierProductsTable() {
           product={selectedProduct}
           open={!!selectedProduct}
           onOpenChange={(open) => !open && setSelectedProduct(null)}
+          onSearchSimilar={handleSearchSimilar}
+          onEnrichWithWeb={handleEnrichWithWeb}
         />
       )}
+
+      <SupplierCrossSearch
+        product={searchProduct}
+        open={!!searchProduct}
+        onOpenChange={(open) => !open && setSearchProduct(null)}
+      />
 
       <BatchEnrichmentDialog
         open={showEnrichmentDialog}

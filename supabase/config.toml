@@ -120,6 +120,9 @@ verify_jwt = true
 [functions.save-provider-config]
 verify_jwt = true
 
+[functions.enrich-supplier-product-web]
+verify_jwt = false
+
 [functions.google-shopping-scraper]
 verify_jwt = true
 
