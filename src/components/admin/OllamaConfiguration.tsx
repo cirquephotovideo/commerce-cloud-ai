@@ -423,7 +423,7 @@ export const OllamaConfiguration = () => {
         )}
 
         {isCloudMode && (
-          <Card className="border-2 border-blue-200 bg-blue-50">
+          <Card className="border-2 border-gray-700 bg-black text-white">
             <CardHeader>
               <CardTitle className="text-lg">🔍 Test Web Search</CardTitle>
               <CardDescription>
@@ -451,7 +451,7 @@ export const OllamaConfiguration = () => {
               </Button>
 
               {webSearchResults && (
-                <div className="mt-4 p-4 bg-white rounded-lg border">
+                <div className="mt-4 p-4 bg-gray-900 rounded-lg border border-gray-700">
                   <h4 className="font-semibold mb-2">Résultat :</h4>
                   <pre className="text-sm whitespace-pre-wrap overflow-auto max-h-96">
                     {JSON.stringify(webSearchResults, null, 2)}
