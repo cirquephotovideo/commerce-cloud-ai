@@ -30,6 +30,7 @@ import { ImportStatsDashboard } from "@/components/ImportStatsDashboard";
 import { MappingTemplatesManager } from "@/components/MappingTemplatesManager";
 import { SupplierMappingSetup } from "@/components/SupplierMappingSetup";
 import { SupplierMappingPreview } from "@/components/SupplierMappingPreview";
+import { UnifiedMappingDialog } from "@/components/mapping/UnifiedMappingDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -71,7 +72,10 @@ export default function Suppliers() {
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [showImportWizard, setShowImportWizard] = useState(false);
   const [showFTPWizard, setShowFTPWizard] = useState(false);
+  const [showMappingWizard, setShowMappingWizard] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
+  const [selectedSupplierName, setSelectedSupplierName] = useState<string>("");
+  const [selectedSupplierType, setSelectedSupplierType] = useState<'email' | 'ftp' | 'file' | 'api'>('file');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
 
@@ -600,6 +604,20 @@ export default function Suppliers() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
+                          {/* Mapping Wizard Button - For all suppliers */}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              setSelectedSupplierId(supplier.id);
+                              setSelectedSupplierName(supplier.supplier_name);
+                              setSelectedSupplierType(supplier.supplier_type as any || 'file');
+                              setShowMappingWizard(true);
+                            }}
+                          >
+                            🗺️ Mapping
+                          </Button>
+                          
                           {/* FTP Mapping Button */}
                           {(supplier.supplier_type === 'ftp' || supplier.supplier_type === 'sftp') && !supplier.column_mapping && (
                             <Button 
@@ -1055,6 +1073,17 @@ export default function Suppliers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Unified Mapping Wizard Dialog */}
+      {showMappingWizard && selectedSupplierId && (
+        <UnifiedMappingDialog
+          open={showMappingWizard}
+          onOpenChange={setShowMappingWizard}
+          supplierId={selectedSupplierId}
+          supplierName={selectedSupplierName}
+          sourceType={selectedSupplierType}
+        />
+      )}
     </div>
   );
 }

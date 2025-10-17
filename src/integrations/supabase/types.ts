@@ -3496,6 +3496,56 @@ export type Database = {
           },
         ]
       }
+      supplier_mapping_profiles: {
+        Row: {
+          column_mapping: Json
+          created_at: string | null
+          excluded_columns: string[] | null
+          id: string
+          is_default: boolean | null
+          profile_name: string
+          skip_config: Json | null
+          source_type: string
+          supplier_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          column_mapping?: Json
+          created_at?: string | null
+          excluded_columns?: string[] | null
+          id?: string
+          is_default?: boolean | null
+          profile_name: string
+          skip_config?: Json | null
+          source_type: string
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          column_mapping?: Json
+          created_at?: string | null
+          excluded_columns?: string[] | null
+          id?: string
+          is_default?: boolean | null
+          profile_name?: string
+          skip_config?: Json | null
+          source_type?: string
+          supplier_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_mapping_profiles_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_price_history: {
         Row: {
           changed_at: string | null
