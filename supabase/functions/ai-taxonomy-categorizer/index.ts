@@ -191,8 +191,13 @@ Réponds uniquement avec un JSON suivant ce format exact:
     const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
     const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
 
-    if (!result) throw new Error('Invalid AI response');
+    if (!result || !result.category_id) {
+      console.error('[TAXONOMY] Invalid AI response - missing category_id:', result);
+      throw new Error('Invalid AI response: category_id missing');
+    }
 
+    console.log(`[TAXONOMY] Inserting primary taxonomy: ${taxonomyType}, category_id: ${result.category_id}`);
+    
     // Use upsert to handle duplicate entries gracefully
     await supabase.from('product_taxonomy_mappings').upsert({
       analysis_id,
@@ -233,7 +238,9 @@ Réponds uniquement avec un JSON suivant ce format exact:
       const otherJsonMatch = otherAiContent.match(/\{[\s\S]*\}/);
       const otherResult = otherJsonMatch ? JSON.parse(otherJsonMatch[0]) : null;
 
-      if (otherResult) {
+      if (otherResult && otherResult.category_id) {
+        console.log(`[TAXONOMY] Inserting secondary taxonomy: ${otherTaxonomyType}, category_id: ${otherResult.category_id}`);
+        
         // Use upsert to handle duplicate entries gracefully
         await supabase.from('product_taxonomy_mappings').upsert({
           analysis_id,
@@ -244,6 +251,8 @@ Réponds uniquement avec un JSON suivant ce format exact:
         }, {
           onConflict: 'analysis_id,taxonomy_type'
         });
+      } else {
+        console.warn(`[TAXONOMY] Skipping secondary taxonomy - invalid category_id from AI`);
       }
     }
 
