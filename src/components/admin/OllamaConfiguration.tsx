@@ -40,6 +40,9 @@ export const OllamaConfiguration = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
   const [isCloudMode, setIsCloudMode] = useState(false);
+  const [testPrompt, setTestPrompt] = useState("");
+  const [webSearchResults, setWebSearchResults] = useState<any>(null);
+  const [isTestingWebSearch, setIsTestingWebSearch] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -148,6 +151,53 @@ export const OllamaConfiguration = () => {
       toast.error(`Erreur de test de connexion: ${message}`);
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  const testWebSearch = async () => {
+    if (!testPrompt.trim()) {
+      toast.error("Entrez un prompt de test");
+      return;
+    }
+
+    if (!isCloudMode) {
+      toast.error("Web Search n'est disponible qu'en mode Cloud");
+      return;
+    }
+
+    setIsTestingWebSearch(true);
+    setWebSearchResults(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('ollama-proxy', {
+        body: {
+          action: 'chat',
+          ollama_url: config.ollama_url,
+          api_key: config.api_key_encrypted,
+          model: selectedModel,
+          web_search: true,
+          messages: [
+            { role: 'user', content: testPrompt }
+          ]
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error(`Erreur: ${data.error}`);
+      } else if (data?.success) {
+        toast.success("Recherche web réussie !");
+        setWebSearchResults(data.response);
+      } else {
+        toast.error("Échec de la recherche web");
+      }
+    } catch (error) {
+      console.error("Error testing web search:", error);
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+      toast.error(`Erreur: ${message}`);
+    } finally {
+      setIsTestingWebSearch(false);
     }
   };
 
@@ -370,6 +420,46 @@ export const OllamaConfiguration = () => {
               ))}
             </div>
           </div>
+        )}
+
+        {isCloudMode && (
+          <Card className="border-2 border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-lg">🔍 Test Web Search</CardTitle>
+              <CardDescription>
+                Testez la recherche web d'Ollama Cloud avec un prompt personnalisé
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="test_prompt">Prompt de test</Label>
+                <Input
+                  id="test_prompt"
+                  placeholder="Ex: Quel est le prix moyen des iPhone 15 en France ?"
+                  value={testPrompt}
+                  onChange={(e) => setTestPrompt(e.target.value)}
+                />
+              </div>
+              
+              <Button
+                onClick={testWebSearch}
+                disabled={isTestingWebSearch}
+                className="w-full"
+              >
+                <TestTube className="w-4 h-4 mr-2" />
+                {isTestingWebSearch ? "Recherche en cours..." : "Lancer la recherche web"}
+              </Button>
+
+              {webSearchResults && (
+                <div className="mt-4 p-4 bg-white rounded-lg border">
+                  <h4 className="font-semibold mb-2">Résultat :</h4>
+                  <pre className="text-sm whitespace-pre-wrap overflow-auto max-h-96">
+                    {JSON.stringify(webSearchResults, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <div className="flex gap-2">

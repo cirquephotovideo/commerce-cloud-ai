@@ -47,7 +47,7 @@ serve(async (req) => {
     
     console.log('User authenticated:', user.id);
 
-    const { action, ollama_url, api_key, model, messages } = await req.json();
+    const { action, ollama_url, api_key, model, messages, web_search } = await req.json();
 
     // Get user's Ollama configuration
     const { data: configData, error: configError } = await supabaseClient
@@ -127,7 +127,8 @@ serve(async (req) => {
       ? {
           model: model || 'gpt-oss:120b-cloud',
           messages: messages,
-          stream: false
+          stream: false,
+          web_search: web_search || false
         }
       : {
           model: model || 'llama2',
