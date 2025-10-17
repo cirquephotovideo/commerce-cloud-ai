@@ -74,7 +74,7 @@ serve(async (req) => {
       type: fileData.type
     });
 
-    // 2. Read file in streaming mode
+    // 2. Read file content
     const text = await fileData.text();
     const lines = text.split('\n').filter(line => line.trim());
     
@@ -118,7 +118,6 @@ serve(async (req) => {
       let purchase_price = null;
       const priceStr = extractField(columns, columnMapping.purchase_price);
       if (priceStr) {
-        const decimalSep = columnMapping.decimal_separator || '.';
         const normalizedPrice = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
         purchase_price = parseFloat(normalizedPrice);
       }
