@@ -514,6 +514,42 @@ export function EmailInboxTable() {
     }
   };
 
+  const handleForceDelete = async (inboxId: string, email: any) => {
+    const confirmMsg = isStuckProcessing(email)
+      ? "⚠️ Cet email est bloqué en traitement. Voulez-vous vraiment le forcer à supprimer ?"
+      : "Supprimer cet email ?";
+    
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+      // Si bloqué, marquer comme failed avant de supprimer (pour les logs)
+      if (isStuckProcessing(email)) {
+        await supabase
+          .from('email_inbox')
+          .update({ 
+            status: 'failed',
+            error_message: 'Suppression forcée par l\'utilisateur (email bloqué)',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', inboxId);
+      }
+      
+      // Puis supprimer
+      const { error } = await supabase
+        .from('email_inbox')
+        .delete()
+        .eq('id', inboxId);
+      
+      if (error) throw error;
+      
+      await queryClient.invalidateQueries({ queryKey: ['email-inbox'] });
+      toast.success(isStuckProcessing(email) ? "Email bloqué supprimé" : "Email supprimé");
+    } catch (error) {
+      console.error('[ForceDelete] Error:', error);
+      toast.error("Erreur lors de la suppression");
+    }
+  };
+
   const handleBulkReprocess = async (supplierName: string) => {
     const emails = emailsBySupplier[supplierName]?.filter(e => e.status === 'failed');
     if (!emails?.length) {
@@ -558,6 +594,13 @@ export function EmailInboxTable() {
     } catch (error) {
       toast.error("Erreur lors de la suppression en masse");
     }
+  };
+
+  // Vérifie si un email est bloqué en traitement depuis > 10 minutes
+  const isStuckProcessing = (email: any) => {
+    if (email.status !== 'processing') return false;
+    const minutesSinceUpdate = (Date.now() - new Date(email.updated_at).getTime()) / 1000 / 60;
+    return minutesSinceUpdate > 10;
   };
 
   const getStatusBadge = (status: string) => {
@@ -818,7 +861,14 @@ export function EmailInboxTable() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(email.status)}
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(email.status)}
+                            {isStuckProcessing(email) && (
+                              <Badge variant="destructive" className="animate-pulse">
+                                ⚠️ Bloqué
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <TooltipProvider>
@@ -898,7 +948,7 @@ export function EmailInboxTable() {
                               </Tooltip>
                             </TooltipProvider>
                             
-                            {['pending', 'failed', 'completed'].includes(email.status) && (
+                            {email.status !== 'ignored' && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -906,24 +956,25 @@ export function EmailInboxTable() {
                                       size="sm"
                                       variant="ghost"
                                       onClick={() => handleReprocess(email.id)}
-                                      disabled={email.status === 'processing'}
                                     >
                                       <RefreshCw className="h-4 w-4" />
                                     </Button>
                                   </TooltipTrigger>
-                                  <TooltipContent>Retraiter</TooltipContent>
+                                  <TooltipContent>
+                                    {isStuckProcessing(email) ? "Forcer le retraitement" : "Retraiter"}
+                                  </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             )}
                             
-                            {['completed', 'failed'].includes(email.status) && (
+                            {email.status !== 'ignored' && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      onClick={() => handleDelete(email.id)}
+                                      onClick={() => handleForceDelete(email.id, email)}
                                       className="text-destructive hover:text-destructive"
                                     >
                                       <Trash2 className="h-4 w-4" />
