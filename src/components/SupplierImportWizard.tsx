@@ -108,14 +108,14 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         return;
       }
       
-      // Validate file size (100 MB max, 50 MB warning)
-      const warningSize = 50 * 1024 * 1024; // 50 MB
-      const maxSize = 100 * 1024 * 1024; // 100 MB
+      // Validate file size (500 MB max, 200 MB warning)
+      const warningSize = 200 * 1024 * 1024; // 200 MB
+      const maxSize = 500 * 1024 * 1024; // 500 MB
       
       if (selectedFile.size > maxSize) {
         toast.error(
           `❌ Fichier trop volumineux (${(selectedFile.size / 1024 / 1024).toFixed(0)} MB). ` +
-          `Maximum : 100 MB. Veuillez diviser votre fichier en plusieurs parties.`
+          `Maximum : 500 MB. Veuillez diviser votre fichier en plusieurs parties.`
         );
         return;
       }
