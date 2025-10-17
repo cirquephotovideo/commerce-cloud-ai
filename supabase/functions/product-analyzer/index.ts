@@ -415,15 +415,34 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     // Clean up the response to extract pure JSON
     analysisContent = analysisContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     
-    const extractField = (content: string, field: string): string => {
-      const regex = new RegExp(`"${field}"\\s*:\\s*"([^"]*)"`, 'i');
-      const match = content.match(regex);
-      return match ? match[1] : 'N/A';
+    // Phase 3: Improved JSON extraction for complex objects and arrays
+    const extractField = (content: string, field: string): any => {
+      // Try to extract objects, arrays, or strings
+      const objectRegex = new RegExp(`"${field}"\\s*:\\s*(\\{[^}]+\\}|\\[[^\\]]+\\]|"[^"]*")`, 'gi');
+      const match = content.match(objectRegex);
+      if (match) {
+        try {
+          const value = match[0].split(':')[1].trim();
+          return JSON.parse(value);
+        } catch {
+          return match[0].split(':')[1].replace(/"/g, '').trim();
+        }
+      }
+      return null;
     };
 
     let analysisResult;
     try {
       analysisResult = JSON.parse(analysisContent);
+      
+      // Phase 4: Debug logs to trace data structure
+      console.log('[PRODUCT-ANALYZER] 🔍 Parsed analysis structure:', {
+        has_product_name: !!analysisResult.product_name,
+        has_images: !!analysisResult.images,
+        has_description: !!analysisResult.description,
+        has_description_long: !!analysisResult.description_long,
+        top_level_keys: Object.keys(analysisResult).slice(0, 10)
+      });
     } catch (parseError) {
       console.error('[PRODUCT-ANALYZER] JSON parse failed, attempting cleanup...', parseError);
       
@@ -441,16 +460,18 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       } catch (secondError) {
         console.error('[PRODUCT-ANALYZER] Second parse failed, extracting partial data');
         
+        // Phase 3: Better fallback extraction
         analysisResult = {
           product_name: extractField(cleanedContent, 'product_name') || productInput,
-          description: extractField(cleanedContent, 'description'),
-          description_long: extractField(cleanedContent, 'description_long'),
+          description: extractField(cleanedContent, 'description') || 'N/A',
+          description_long: extractField(cleanedContent, 'description_long') || extractField(cleanedContent, 'description') || 'Description non disponible',
+          images: extractField(cleanedContent, 'images') || [],
           seo: {
             score: 50,
-            keywords: []
+            keywords: extractField(cleanedContent, 'keywords') || []
           },
           pricing: {
-            estimated_price: 'N/A'
+            estimated_price: extractField(cleanedContent, 'estimated_price') || 'N/A'
           },
           global_report: {
             overall_score: 50
@@ -458,6 +479,12 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
           raw_analysis: cleanedContent,
           parsing_error: true
         };
+        
+        console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
+          product_name: analysisResult.product_name,
+          has_description: !!analysisResult.description,
+          has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
+        });
       }
     }
 
@@ -481,21 +508,31 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
       }
     }
 
+    // Phase 1: Flatten structure - return data directly, not wrapped in "analysis"
+    const responseData = {
+      ...analysisResult,
+      imageUrls,
+      usedProvider: aiResponse.provider,
+      _provider: aiResponse.provider,
+      _model: preferredModel || 'default',
+      _timestamp: new Date().toISOString(),
+      metadata: {
+        inputType,
+        hasWebSearch: searchResults.length > 0,
+        hasCategories: categories.length > 0,
+        timestamp: new Date().toISOString()
+      }
+    };
+    
+    console.log('[PRODUCT-ANALYZER] 🔍 Final response structure:', {
+      has_product_name: !!responseData.product_name,
+      has_images: !!responseData.imageUrls,
+      has_description_long: !!responseData.description_long,
+      provider: responseData._provider
+    });
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        analysis: analysisResult,
-        imageUrls,
-        usedProvider: aiResponse.provider,
-        _provider: aiResponse.provider,
-        _model: preferredModel || 'default',
-        metadata: {
-          inputType,
-          hasWebSearch: searchResults.length > 0,
-          hasCategories: categories.length > 0,
-          timestamp: new Date().toISOString()
-        }
-      }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

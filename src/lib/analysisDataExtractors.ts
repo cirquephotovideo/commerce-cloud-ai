@@ -95,26 +95,51 @@ export const getProductImages = (analysis: any): string[] => {
       return storedImages;
     }
     
-    // Priority 2: Images in analysis_result
+    // Phase 2: Priority 2 with fallback for old "analysis" wrapper structure
     const images = analysis?.analysis_result?.images || 
+                   analysis?.analysis_result?.analysis?.images ||  // NEW FALLBACK
                    analysis?.analysis_result?.image_urls ||
+                   analysis?.analysis_result?.analysis?.image_urls ||  // NEW FALLBACK
                    [];
     
-    return Array.isArray(images) ? images : [];
+    const result = Array.isArray(images) ? images : [];
+    
+    // Phase 4: Debug logs
+    console.log('[EXTRACTORS] 🔍 Product images extraction:', {
+      from_stored: storedImages?.length || 0,
+      from_direct: analysis?.analysis_result?.images?.length || 0,
+      from_analysis_wrapper: analysis?.analysis_result?.analysis?.images?.length || 0,
+      final_count: result.length
+    });
+    
+    return result;
   } catch (error) {
-    console.error('Error extracting product images:', error);
+    console.error('[EXTRACTORS] Error extracting product images:', error);
     return [];
   }
 };
 
 export const getProductName = (analysis: any): string => {
   try {
-    return analysis?.analysis_result?.product_name ||
+    // Phase 2: Add fallback for old structure with "analysis" wrapper
+    const result = analysis?.analysis_result?.product_name ||
+           analysis?.analysis_result?.analysis?.product_name ||  // NEW FALLBACK
            analysis?.analysis_result?.name ||
+           analysis?.analysis_result?.analysis?.name ||          // NEW FALLBACK
            analysis?.analysis_result?.title ||
            analysis?.analysis_result?.productName ||
            'Produit sans nom';
+    
+    // Phase 4: Debug logs
+    console.log('[EXTRACTORS] 🔍 Product name extraction:', {
+      from_direct: analysis?.analysis_result?.product_name,
+      from_analysis_wrapper: analysis?.analysis_result?.analysis?.product_name,
+      final: result
+    });
+    
+    return result;
   } catch (error) {
+    console.error('[EXTRACTORS] Error in getProductName:', error);
     return 'Produit sans nom';
   }
 };
