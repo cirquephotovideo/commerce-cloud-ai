@@ -134,6 +134,7 @@ verify_jwt = true
 
 [functions.supplier-import-csv]
 verify_jwt = true
+memory_mb = 512
 
 [functions.supplier-import-xlsx]
 verify_jwt = true

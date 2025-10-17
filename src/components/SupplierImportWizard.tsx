@@ -107,6 +107,18 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         toast.error("Seuls les fichiers CSV et XLSX sont acceptés");
         return;
       }
+      
+      // Validate file size (10 MB max)
+      const maxSize = 10 * 1024 * 1024; // 10 MB
+      
+      if (selectedFile.size > maxSize) {
+        toast.error(
+          `❌ Fichier trop volumineux (${(selectedFile.size / 1024 / 1024).toFixed(1)} MB). ` +
+          `Maximum : 10 MB. Pour les gros catalogues, divisez le fichier en plusieurs parties.`
+        );
+        return;
+      }
+      
       setFile(selectedFile);
       previewFile(selectedFile);
     }
@@ -308,10 +320,23 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       }
       
       setTimeout(() => onClose(), 1500); // Close after 1.5s
-    } catch (error) {
-      console.error("Import error:", error);
-      setImportProgress({ current: 0, total: 100, status: 'error', message: '❌ Erreur lors de l\'importation' });
-      toast.error("❌ Erreur lors de l'importation");
+    } catch (error: any) {
+      console.error('Import error:', error);
+      
+      let errorMessage = 'Une erreur est survenue lors de l\'importation';
+      
+      if (error.message?.includes('Memory limit exceeded')) {
+        errorMessage = '❌ Fichier trop volumineux pour être traité. Réduisez le nombre de lignes (max 5000) ou divisez le fichier.';
+      } else if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+        errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit ou divisez-le en plusieurs parties.';
+      } else if (error.message?.includes('Failed to start chunk processing')) {
+        errorMessage = '❌ Échec du démarrage du traitement. Vérifiez votre connexion et réessayez.';
+      } else if (error.message) {
+        errorMessage = `❌ Erreur: ${error.message}`;
+      }
+      
+      toast.error(errorMessage);
+      setImportProgress(prev => ({ ...prev, status: 'error', message: errorMessage }));
     } finally {
       setLoading(false);
     }

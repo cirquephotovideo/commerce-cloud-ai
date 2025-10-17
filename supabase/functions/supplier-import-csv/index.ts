@@ -75,31 +75,26 @@ serve(async (req) => {
     }
 
     const { supplierId, fileContent, delimiter: userDelimiter, skipRows = 1, columnMapping = {} } = await req.json();
-
-    console.log('[CSV-IMPORT] Starting for supplier:', supplierId);
-    console.log('[CSV-IMPORT] Skip rows:', skipRows);
-    console.log('[CSV-IMPORT] User delimiter:', userDelimiter);
     
-    // Whitelist of supported fields
-    const supportedFields = ['product_name', 'supplier_reference', 'ean', 'purchase_price', 'stock_quantity'];
-    const mappingFields = Object.keys(columnMapping);
-    const unsupportedFields = mappingFields.filter(field => !supportedFields.includes(field));
-    
-    if (unsupportedFields.length > 0) {
-      console.log('[CSV-IMPORT] ⚠️ Ignoring unsupported fields:', unsupportedFields.join(', '));
+    if (!supplierId || !fileContent) {
+      return new Response(
+        JSON.stringify({ error: 'Missing supplierId or fileContent' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    console.log('[CSV-IMPORT] Using fields:', mappingFields.filter(field => supportedFields.includes(field)).join(', '));
-    console.log('[CSV-IMPORT] Column mapping:', JSON.stringify(columnMapping, null, 2));
 
-    // Remove BOM if present
+    console.log('[CSV-IMPORT] Starting chunked import', {
+      supplier_id: supplierId,
+      file_size_mb: (fileContent.length / 1024 / 1024).toFixed(2),
+      user_id: user.id,
+      skip_rows: skipRows
+    });
+
+    // Auto-detect delimiter
+    let delimiter = userDelimiter || ';';
     const cleanContent = fileContent.replace(/^\uFEFF/, '');
     const lines = cleanContent.split(/\r?\n/).filter((line: string) => line.trim());
     
-    console.log(`[CSV-IMPORT] Total lines: ${lines.length}`);
-
-    // Auto-detect delimiter if not specified
-    let delimiter = userDelimiter || ';';
     if (lines.length > 0) {
       const firstLine = lines[0];
       const commaCount = (firstLine.match(/,/g) || []).length;
@@ -107,49 +102,35 @@ serve(async (req) => {
       
       if (commaCount > 3 && commaCount > semicolonCount) {
         delimiter = ',';
-        console.log(`[CSV-IMPORT] Auto-detected delimiter: "," (${commaCount} commas vs ${semicolonCount} semicolons)`);
-      } else {
-        console.log(`[CSV-IMPORT] Using delimiter: "${delimiter}"`);
       }
+      console.log(`[CSV-IMPORT] Detected delimiter: "${delimiter}"`);
     }
 
-    // Log first 3 lines
-    console.log('[CSV-IMPORT] First 3 lines:');
-    lines.slice(0, 3).forEach((line: string, i: number) => {
-      console.log(`  Line ${i}: ${line.substring(0, 300)}`);
-    });
+    console.log('[CSV-IMPORT] Total lines:', lines.length);
+
+    // Convert CSV to NDJSON for chunked processing
+    const ndjsonLines: string[] = [];
+    let validProducts = 0;
+    let invalidProducts = 0;
 
     const startIndex = skipRows;
     const dataLines = lines.slice(startIndex);
-    console.log(`[CSV-IMPORT] Processing ${dataLines.length} data lines (after skipping ${skipRows})`);
-
-    let matched = 0;
-    let newProducts = 0;
-    let failed = 0;
-    let skippedEmpty = 0;
-    let skippedNoRef = 0;
-    let skippedNoPrice = 0;
-    let dbErrors = 0;
 
     for (let i = 0; i < dataLines.length; i++) {
       const line = dataLines[i].trim();
-      if (!line) {
-        skippedEmpty++;
-        continue;
-      }
+      if (!line) continue;
 
       try {
-        // Split by delimiter and clean quotes
         const columns = line.split(delimiter).map((col: string) => 
           col.trim().replace(/^["']|["']$/g, '')
         );
 
-        // Extract fields using advanced mapping
+        // Extract fields using mapping
         const productName = extractField(columns, columnMapping?.product_name) || columns[0] || '';
         const supplierRef = extractField(columns, columnMapping?.supplier_reference) || columns[1] || '';
         const ean = extractField(columns, columnMapping?.ean) || (columns[2] || null);
         
-        // Extract price with decimal handling
+        // Extract price
         let purchasePrice: number | null = null;
         const priceMapping = columnMapping?.purchase_price;
         const priceStr = extractField(columns, priceMapping);
@@ -175,39 +156,16 @@ serve(async (req) => {
           }
         }
 
-        // Validation with detailed logging
-        if (!supplierRef) {
-          skippedNoRef++;
-          if (i < 5) {
-            console.log(`[CSV-IMPORT] Line ${i}: Missing supplier reference`);
-          }
-          failed++;
+        // Validate required fields
+        if (!supplierRef || !purchasePrice) {
+          invalidProducts++;
           continue;
-        }
-
-        if (!purchasePrice) {
-          skippedNoPrice++;
-          if (i < 5) {
-            console.log(`[CSV-IMPORT] Line ${i}: Missing or invalid price (ref: ${supplierRef})`);
-          }
-          failed++;
-          continue;
-        }
-
-        // Log first few parsed products
-        if (i < 3) {
-          console.log(`[CSV-IMPORT] Sample product ${i + 1}:`, {
-            name: productName,
-            ref: supplierRef,
-            ean: ean,
-            price: purchasePrice,
-            stock: stockQuantity
-          });
         }
 
         // Decode HTML entities
         const cleanName = decodeHtmlEntities(productName || supplierRef);
 
+        // Create NDJSON row
         const productData = {
           user_id: user.id,
           supplier_id: supplierId,
@@ -220,134 +178,112 @@ serve(async (req) => {
           needs_enrichment: true,
         };
 
-        // Check if product exists by supplier_reference
-        const { data: existing } = await supabase
-          .from('supplier_products')
-          .select('id')
-          .eq('supplier_id', supplierId)
-          .eq('supplier_reference', supplierRef)
-          .maybeSingle();
-
-        if (existing) {
-          // Update existing
-          const { error: updateError } = await supabase
-            .from('supplier_products')
-            .update({
-              product_name: productData.product_name,
-              ean: productData.ean,
-              purchase_price: productData.purchase_price,
-              stock_quantity: productData.stock_quantity,
-              last_updated: new Date().toISOString(),
-            })
-            .eq('id', existing.id);
-
-          if (updateError) {
-            console.error('[CSV-IMPORT] Update error:', updateError);
-            dbErrors++;
-            failed++;
-          } else {
-            matched++;
-          }
-        } else {
-          // Insert new
-          const { data: newProduct, error: insertError } = await supabase
-            .from('supplier_products')
-            .insert([productData])
-            .select()
-            .single();
-
-          if (insertError) {
-            console.error('[CSV-IMPORT] Insert error:', insertError);
-            dbErrors++;
-            failed++;
-            continue;
-          }
-
-          // Try to match with existing product_analyses by EAN
-          let matchedAnalysis = false;
-          if (productData.ean) {
-            const { data: analysis } = await supabase
-              .from('product_analyses')
-              .select('id')
-              .eq('ean', productData.ean)
-              .maybeSingle();
-
-            if (analysis) {
-              await supabase
-                .from('product_analyses')
-                .update({
-                  purchase_price: productData.purchase_price,
-                  purchase_currency: 'EUR',
-                  supplier_product_id: newProduct.id,
-                })
-                .eq('id', analysis.id);
-              
-              await supabase
-                .from('supplier_products')
-                .update({ enrichment_status: 'completed', enrichment_progress: 100 })
-                .eq('id', newProduct.id);
-              
-              matchedAnalysis = true;
-            }
-          }
-
-          // If no EAN match, create new product_analyses automatically
-          if (!matchedAnalysis) {
-            const { data: newAnalysis, error: analysisError } = await supabase
-              .from('product_analyses')
-              .insert({
-                user_id: user.id,
-                ean: productData.ean,
-                purchase_price: productData.purchase_price,
-                purchase_currency: 'EUR',
-                supplier_product_id: newProduct.id,
-                analysis_result: {
-                  name: cleanName,
-                },
-                needs_enrichment: true
-              })
-              .select('id')
-              .single();
-
-            if (!analysisError && newAnalysis) {
-              // Create enrichment queue entry
-              await supabase
-                .from('enrichment_queue')
-                .insert({
-                  user_id: user.id,
-                  analysis_id: newAnalysis.id,
-                  supplier_product_id: newProduct.id,
-                  enrichment_type: ['specifications', 'description'],
-                  priority: 'normal',
-                  status: 'pending'
-                });
-
-              console.log('[CSV-IMPORT] Created product_analyses and enrichment_queue for new product:', {
-                supplier_product_id: newProduct.id,
-                analysis_id: newAnalysis.id
-              });
-            }
-          }
-
-          newProducts++;
-        }
+        ndjsonLines.push(JSON.stringify(productData));
+        validProducts++;
       } catch (error) {
-        console.error(`[CSV-IMPORT] Error processing line ${i}:`, error);
-        dbErrors++;
-        failed++;
+        console.error(`[CSV-IMPORT] Error parsing line ${i}:`, error);
+        invalidProducts++;
       }
     }
 
-    console.log('[CSV-IMPORT] Summary:', {
-      total: dataLines.length,
-      newProducts,
-      matched,
-      failed,
-      skippedEmpty,
-      skippedNoRef,
-      skippedNoPrice,
-      dbErrors
+    console.log('[CSV-IMPORT] NDJSON conversion completed', {
+      valid_products: validProducts,
+      invalid_products: invalidProducts
     });
+
+    if (ndjsonLines.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No valid products found in CSV' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Upload NDJSON to Storage
+    const jobId = crypto.randomUUID();
+    const ndjsonContent = ndjsonLines.join('\n');
+    const fileName = `imports/${user.id}/${jobId}.ndjson`;
+
+    console.log('[CSV-IMPORT] Uploading NDJSON to storage:', {
+      file_name: fileName,
+      size_mb: (ndjsonContent.length / 1024 / 1024).toFixed(2)
+    });
+
+    const { error: uploadError } = await supabase.storage
+      .from('email-attachments')
+      .upload(fileName, ndjsonContent, {
+        contentType: 'application/x-ndjson',
+        upsert: true
+      });
+
+    if (uploadError) {
+      console.error('[CSV-IMPORT] Upload error:', uploadError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to upload file for processing' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Create import job
+    const { data: jobData, error: jobError } = await supabase
+      .from('import_jobs')
+      .insert({
+        user_id: user.id,
+        supplier_id: supplierId,
+        status: 'processing',
+        total_rows: ndjsonLines.length,
+        processed_rows: 0,
+        success_rows: 0,
+        error_rows: 0,
+        file_path: fileName
+      })
+      .select()
+      .single();
+
+    if (jobError || !jobData) {
+      console.error('[CSV-IMPORT] Job creation error:', jobError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to create import job' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[CSV-IMPORT] Import job created:', jobData.id);
+
+    // Start chunked processing (100 lines per chunk)
+    const chunkSize = 100;
+    const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
+      body: {
+        job_id: jobData.id,
+        user_id: user.id,
+        supplier_id: supplierId,
+        file_path: fileName,
+        offset: 0,
+        limit: chunkSize,
+        correlation_id: jobId,
+        mapping: columnMapping
+      }
+    });
+
+    if (chunkError) {
+      console.error('[CSV-IMPORT] Chunk processing error:', chunkError);
+      
+      await supabase
+        .from('import_jobs')
+        .update({ status: 'failed', error_message: chunkError.message })
+        .eq('id', jobData.id);
+
+      return new Response(
+        JSON.stringify({ error: 'Failed to start chunk processing' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Update supplier last_sync_at
+    await supabase
+      .from('supplier_configurations')
+      .update({ last_sync_at: new Date().toISOString() })
+      .eq('id', supplierId)
+      .eq('user_id', user.id);
 
     // Log the import
     await supabase.from('supplier_import_logs').insert([{
@@ -355,31 +291,30 @@ serve(async (req) => {
       supplier_id: supplierId,
       import_type: 'manual',
       source_file: 'csv_upload',
-      products_found: dataLines.length,
-      products_matched: matched,
-      products_new: newProducts,
-      products_updated: matched,
-      products_failed: failed,
-      import_status: failed === 0 ? 'success' : failed < dataLines.length ? 'partial' : 'failed',
+      products_found: validProducts,
+      products_matched: 0,
+      products_new: 0,
+      products_updated: 0,
+      products_failed: invalidProducts,
+      import_status: 'processing',
     }]);
 
-    // Update supplier last sync
-    await supabase
-      .from('supplier_configurations')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', supplierId);
+    console.log('[CSV-IMPORT] Chunked import started successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
-        imported: newProducts + matched,
-        matched,
-        newProducts,
-        failed,
+        job_id: jobData.id,
+        message: 'Import started, processing in chunks',
+        stats: {
+          total: validProducts,
+          invalid: invalidProducts
+        }
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    console.error('[CSV-IMPORT] Fatal error:', error);
     return handleError(error, 'SUPPLIER-IMPORT-CSV', corsHeaders);
   }
 });
