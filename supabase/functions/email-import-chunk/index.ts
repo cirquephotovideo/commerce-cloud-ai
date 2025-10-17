@@ -30,15 +30,28 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // ✅ Read and store body ONCE to avoid "Body already consumed" errors
+  let requestBody: ChunkRequest;
   try {
-    const { 
-      job_id, user_id, supplier_id, ndjson_path, mapping, headers,
-      skip_config = {},
-      excluded_columns = [],
-      offset, limit,
-      correlation_id = crypto.randomUUID(),
-      retry_count = 0
-    }: ChunkRequest = await req.json();
+    requestBody = await req.json();
+  } catch (parseError) {
+    console.error('[IMPORT-CHUNK] Failed to parse request body:', parseError);
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400
+    });
+  }
+
+  const { 
+    job_id, user_id, supplier_id, ndjson_path, mapping, headers,
+    skip_config = {},
+    excluded_columns = [],
+    offset, limit,
+    correlation_id = crypto.randomUUID(),
+    retry_count = 0
+  } = requestBody;
+
+  try {
     
     console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, { 
       job_id, offset, limit, retry: retry_count,
@@ -102,19 +115,21 @@ serve(async (req) => {
         const supplierRef = normalized.supplier_reference || 
           `AUTO_${normalized.product_name?.substring(0, 20).replace(/\s/g, '_').toUpperCase() || 'UNKNOWN'}`;
 
-        // Prepare supplier_product
+        // ✅ Prepare supplier_product with additional_data JSON field
         supplierProductsToUpsert.push({
           user_id,
           supplier_id,
           supplier_reference: supplierRef,
-          name: normalized.product_name || supplierRef,
+          product_name: normalized.product_name || supplierRef,
           ean: normalized.ean,
-          brand: normalized.brand,
-          category: normalized.category,
           purchase_price: normalized.purchase_price,
           stock_quantity: normalized.stock_quantity,
-          vat_rate: normalized.vat_rate,
-          last_sync_at: new Date().toISOString()
+          additional_data: {
+            brand: normalized.brand,
+            category: normalized.category,
+            vat_rate: normalized.vat_rate
+          },
+          last_updated: new Date().toISOString()
         });
 
         if (normalized.ean) {
@@ -180,13 +195,13 @@ serve(async (req) => {
           toInsert.push({
             user_id,
             ean: sp.ean,
-            product_name: sp.name,
+            product_name: sp.product_name,
             purchase_price: sp.purchase_price,
             analysis_result: {
               basic_info: {
-                name: sp.name,
-                brand: sp.brand,
-                category: sp.category
+                name: sp.product_name,
+                brand: sp.additional_data?.brand,
+                category: sp.additional_data?.category
               }
             }
           });
@@ -309,7 +324,7 @@ serve(async (req) => {
     });
 
   } catch (error: any) {
-    const { job_id, correlation_id = 'unknown', retry_count = 0 } = await req.json().catch(() => ({}));
+    const { job_id, correlation_id = 'unknown', retry_count = 0 } = requestBody;
     console.error(`[IMPORT-CHUNK][${correlation_id}] Error (retry ${retry_count}):`, error);
 
     // Retry logic (max 3 attempts)
@@ -321,10 +336,9 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
-      const body = await req.json();
       supabase.functions.invoke('email-import-chunk', {
         body: {
-          ...body,
+          ...requestBody,
           retry_count: retry_count + 1
         }
       }).catch(err => console.error(`[IMPORT-CHUNK][${correlation_id}] Retry invocation error:`, err));
