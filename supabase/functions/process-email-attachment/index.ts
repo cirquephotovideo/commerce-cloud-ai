@@ -110,8 +110,14 @@ serve(async (req) => {
   }
 
   try {
-    const { inbox_id, user_id, custom_mapping } = await req.json();
-    console.log('[DISPATCHER] Starting:', { inbox_id, user_id, has_custom_mapping: !!custom_mapping });
+    const { inbox_id, user_id, custom_mapping, skip_config, excluded_columns } = await req.json();
+    console.log('[DISPATCHER] Starting:', { 
+      inbox_id, 
+      user_id, 
+      has_custom_mapping: !!custom_mapping,
+      has_skip_config: !!skip_config,
+      has_excluded_columns: !!excluded_columns
+    });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -267,6 +273,28 @@ serve(async (req) => {
       throw new Error('Unsupported file format');
     }
 
+    // Load profile from supplier_mapping_profiles if available
+    let profileSkipConfig = skip_config;
+    let profileExcludedColumns = excluded_columns;
+    
+    if (inbox.supplier_id && !skip_config) {
+      const { data: profile } = await supabase
+        .from('supplier_mapping_profiles')
+        .select('*')
+        .eq('supplier_id', inbox.supplier_id)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (profile) {
+        profileSkipConfig = profile.skip_config;
+        profileExcludedColumns = profile.excluded_columns || [];
+        console.log('[DISPATCHER] Loaded profile:', {
+          skip_config: profileSkipConfig,
+          excluded_columns: profileExcludedColumns
+        });
+      }
+    }
+
     // Determine mapping
     let finalMapping: Record<string, number | null> = {};
     
@@ -298,46 +326,110 @@ serve(async (req) => {
       }
     }
 
+    // Apply skip_config and excluded_columns
+    let dataRows = rawRows.slice(headerRowIndex + 1);
+    
+    // Apply skip_config
+    if (profileSkipConfig) {
+      const { skip_rows_top, skip_rows_bottom, skip_patterns } = profileSkipConfig as any;
+      
+      if (skip_rows_top > 0) {
+        dataRows = dataRows.slice(skip_rows_top);
+        console.log(`[DISPATCHER] Skipped ${skip_rows_top} top rows`);
+      }
+      
+      if (skip_rows_bottom > 0) {
+        dataRows = dataRows.slice(0, -skip_rows_bottom);
+        console.log(`[DISPATCHER] Skipped ${skip_rows_bottom} bottom rows`);
+      }
+      
+      if (skip_patterns && skip_patterns.length > 0) {
+        const beforeCount = dataRows.length;
+        dataRows = dataRows.filter((row: any) => {
+          const rowStr = row.join(' ').toLowerCase();
+          return !skip_patterns.some((pattern: string) => {
+            const regex = new RegExp(pattern.replace(/\*/g, '.*'), 'i');
+            return regex.test(rowStr);
+          });
+        });
+        console.log(`[DISPATCHER] Filtered ${beforeCount - dataRows.length} rows by patterns`);
+      }
+    }
+
+    // Filter excluded columns from headers and adjust mapping
+    let activeHeaders = [...headers];
+    let columnIndexMap = headers.map((_, idx) => idx);
+    
+    if (profileExcludedColumns && profileExcludedColumns.length > 0) {
+      const includedIndices: number[] = [];
+      activeHeaders = [];
+      
+      headers.forEach((h: string, idx: number) => {
+        if (!(profileExcludedColumns as string[]).includes(h)) {
+          activeHeaders.push(h);
+          includedIndices.push(idx);
+        }
+      });
+      
+      columnIndexMap = includedIndices;
+      console.log(`[DISPATCHER] Excluded ${profileExcludedColumns.length} columns`);
+      console.log(`[DISPATCHER] Active columns:`, activeHeaders);
+      
+      // Remap finalMapping to new indices
+      const remappedMapping: Record<string, number | null> = {};
+      for (const [key, oldIdx] of Object.entries(finalMapping)) {
+        if (oldIdx === null) {
+          remappedMapping[key] = null;
+        } else {
+          const newIdx = columnIndexMap.indexOf(oldIdx as number);
+          remappedMapping[key] = newIdx !== -1 ? newIdx : null;
+        }
+      }
+      finalMapping = remappedMapping;
+    }
+
     // Convert data rows to NDJSON
-    const dataRows = rawRows.slice(headerRowIndex + 1);
     const ndjsonLines: string[] = [];
     let validCount = 0;
 
     for (const row of dataRows) {
       if (!row || row.length === 0) continue;
+      
+      // Map row data to included columns only
+      const mappedRow = columnIndexMap.map((idx: number) => row[idx]);
 
-      // Extract values using mapping
-      const ean = finalMapping.ean !== null ? row[finalMapping.ean] : null;
-      const supplierRef = finalMapping.supplier_reference !== null ? row[finalMapping.supplier_reference] : null;
-      const productName = finalMapping.product_name !== null ? row[finalMapping.product_name] : null;
-      const brand = finalMapping.brand !== null ? row[finalMapping.brand] : null;
-      const category = finalMapping.category !== null ? row[finalMapping.category] : null;
+      // Extract values using mapping (from mappedRow)
+      const ean = finalMapping.ean !== null ? mappedRow[finalMapping.ean] : null;
+      const supplierRef = finalMapping.supplier_reference !== null ? mappedRow[finalMapping.supplier_reference] : null;
+      const productName = finalMapping.product_name !== null ? mappedRow[finalMapping.product_name] : null;
+      const brand = finalMapping.brand !== null ? mappedRow[finalMapping.brand] : null;
+      const category = finalMapping.category !== null ? mappedRow[finalMapping.category] : null;
       
       let purchasePrice = null;
       if (finalMapping.purchase_price !== null) {
-        purchasePrice = normalizeFVSPrice(row[finalMapping.purchase_price]);
+        purchasePrice = normalizeFVSPrice(mappedRow[finalMapping.purchase_price]);
       }
       // Fallback to PPI HT if PAU HT is NC
       if (purchasePrice === null) {
-        const fallbackIndex = headers.findIndex(h => 
+        const fallbackIndex = activeHeaders.findIndex(h => 
           normalizeFVSHeader(h).includes('ppi ht') ||
           normalizeFVSHeader(h).includes('ancien pau')
         );
         if (fallbackIndex !== -1) {
-          purchasePrice = normalizeFVSPrice(row[fallbackIndex]);
+          purchasePrice = normalizeFVSPrice(mappedRow[fallbackIndex]);
         }
       }
 
-      const stockStatusIndex = headers.findIndex(h => 
+      const stockStatusIndex = activeHeaders.findIndex(h => 
         normalizeFVSHeader(h).includes('disponibilite') ||
         normalizeFVSHeader(h).includes('dispo')
       );
       const stockQuantity = normalizeFVSStock(
-        finalMapping.stock_quantity !== null ? row[finalMapping.stock_quantity] : null,
-        stockStatusIndex !== -1 ? row[stockStatusIndex] : null
+        finalMapping.stock_quantity !== null ? mappedRow[finalMapping.stock_quantity] : null,
+        stockStatusIndex !== -1 ? mappedRow[stockStatusIndex] : null
       );
 
-      const vatRate = finalMapping.vat_rate !== null ? normalizeFVSPrice(row[finalMapping.vat_rate]) : null;
+      const vatRate = finalMapping.vat_rate !== null ? normalizeFVSPrice(mappedRow[finalMapping.vat_rate]) : null;
 
       // Normalize
       const normalized = {

@@ -18,7 +18,11 @@ interface UnifiedMappingWizardProps {
   supplierId: string;
   sourceType: 'email' | 'ftp' | 'file' | 'api';
   fileData?: File | ArrayBuffer;
-  onSave?: () => void;
+  onSave?: (profile: {
+    column_mapping: Record<string, number | null>;
+    skip_config: { skip_rows_top: number; skip_rows_bottom: number; skip_patterns: string[] };
+    excluded_columns: string[];
+  }) => void;
 }
 
 export function UnifiedMappingWizard({
@@ -93,11 +97,12 @@ export function UnifiedMappingWizard({
             .download(lastEmail.attachment_url.replace('email-attachments/', ''));
           
           if (fileBlob) {
-            await parseFile(fileBlob);
+            const arrayBuffer = await fileBlob.arrayBuffer();
+            await parseFile(arrayBuffer);
           }
         }
       } else {
-        await parseFile(fileData instanceof File ? fileData : new Blob([fileData]));
+        await parseFile(fileData);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
@@ -111,9 +116,18 @@ export function UnifiedMappingWizard({
     }
   };
 
-  const parseFile = async (file: File | Blob) => {
+  const parseFile = async (data: File | ArrayBuffer) => {
     try {
-      const arrayBuffer = await file.arrayBuffer();
+      let arrayBuffer: ArrayBuffer;
+      
+      if (data instanceof ArrayBuffer) {
+        arrayBuffer = data;
+      } else if (data instanceof File) {
+        arrayBuffer = await data.arrayBuffer();
+      } else {
+        throw new Error("Unsupported file type");
+      }
+      
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const allRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
@@ -250,7 +264,15 @@ export function UnifiedMappingWizard({
         description: `Le profil "${profileName}" a été enregistré avec succès`
       });
 
-      onSave?.();
+      onSave?.({
+        column_mapping: mapping,
+        skip_config: {
+          skip_rows_top: skipRowsTop,
+          skip_rows_bottom: skipRowsBottom,
+          skip_patterns: skipPatterns
+        },
+        excluded_columns: excludedColumns
+      });
     } catch (error) {
       console.error('Error saving profile:', error);
       toast({

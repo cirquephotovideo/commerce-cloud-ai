@@ -14,9 +14,10 @@ import { useState, useMemo, useEffect } from "react";
 import { EmailDetailModal } from "./EmailDetailModal";
 import { EmailMappingDialog } from "./EmailMappingDialog";
 import { ImportProgressDialog } from "./ImportProgressDialog";
-import { EmailMappingValidation } from "./EmailMappingValidation";
+import { UnifiedMappingWizard } from "./mapping/UnifiedMappingWizard";
 import { detectHeaderRow, normalizeHeader, suggestMapping } from "@/lib/detectHeaderRow";
 import * as XLSX from "xlsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function EmailInboxTable() {
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -54,6 +55,7 @@ export function EmailInboxTable() {
     previewData: any[];
     suggestedMapping: any;
     totalRows: number;
+    rawFile: ArrayBuffer;
   } | null>(null);
   
   const queryClient = useQueryClient();
@@ -401,7 +403,8 @@ export function EmailInboxTable() {
         columns: headers,
         previewData: [headers, ...preview],
         suggestedMapping,
-        totalRows: dataRows.length
+        totalRows: dataRows.length,
+        rawFile: arrayBuffer
       });
 
       if (headerRowIndex > 0) {
@@ -416,14 +419,18 @@ export function EmailInboxTable() {
     }
   };
 
-  const handleConfirmMapping = async (confirmedMapping: Record<string, number | null>) => {
+  const handleConfirmMapping = async (profile: {
+    column_mapping: Record<string, number | null>;
+    skip_config: { skip_rows_top: number; skip_rows_bottom: number; skip_patterns: string[] };
+    excluded_columns: string[];
+  }) => {
     if (!mappingValidation) return;
 
-    console.log('[EmailInboxTable] Confirming mapping:', confirmedMapping);
+    console.log('[EmailInboxTable] Confirming profile:', profile);
 
     // Convert column indices to column names for backend
     const nameMapping = Object.fromEntries(
-      Object.entries(confirmedMapping).map(([key, idx]) => [
+      Object.entries(profile.column_mapping).map(([key, idx]) => [
         key,
         idx === null ? null : mappingValidation.columns[idx]
       ])
@@ -446,24 +453,35 @@ export function EmailInboxTable() {
     setCurrentInboxId(mappingValidation.email.id);
 
     try {
-      const { error } = await supabase.functions.invoke('process-email-attachment', {
-        body: {
-          inbox_id: mappingValidation.email.id,
-          user_id: mappingValidation.email.user_id,
-          custom_mapping: nameMapping
-        }
-      });
+      // Save the profile to supplier_mapping_profiles
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
 
-      if (error) throw error;
+      await supabase
+        .from('supplier_mapping_profiles')
+        .upsert({
+          user_id: user.id,
+          supplier_id: mappingValidation.email.supplier_id,
+          profile_name: `Email ${new Date().toLocaleDateString()}`,
+          source_type: 'email',
+          skip_config: profile.skip_config,
+          excluded_columns: profile.excluded_columns,
+          column_mapping: profile.column_mapping,
+          is_default: true
+        });
 
-      // Extract job_id from response if available
+      // Launch import with the Edge Function
       const response = await supabase.functions.invoke('process-email-attachment', {
         body: {
           inbox_id: mappingValidation.email.id,
           user_id: mappingValidation.email.user_id,
-          custom_mapping: nameMapping
+          custom_mapping: nameMapping,
+          skip_config: profile.skip_config,
+          excluded_columns: profile.excluded_columns
         }
       });
+
+      if (response.error) throw response.error;
 
       // Start polling the job
       if (response.data?.job_id) {
@@ -1024,14 +1042,24 @@ export function EmailInboxTable() {
       />
 
       {mappingValidation && (
-        <EmailMappingValidation
-          email={mappingValidation.email}
-          detectedColumns={mappingValidation.columns}
-          previewData={mappingValidation.previewData}
-          suggestedMapping={mappingValidation.suggestedMapping}
-          onConfirm={handleConfirmMapping}
-          onCancel={() => setMappingValidation(null)}
-        />
+        <Dialog open={true} onOpenChange={() => setMappingValidation(null)}>
+          <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                🗺️ Configuration du mapping pour {mappingValidation.email.attachment_name}
+              </DialogTitle>
+            </DialogHeader>
+            
+            <UnifiedMappingWizard
+              supplierId={mappingValidation.email.supplier_id}
+              sourceType="email"
+              fileData={mappingValidation.rawFile}
+              onSave={(profile) => {
+                handleConfirmMapping(profile);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );
