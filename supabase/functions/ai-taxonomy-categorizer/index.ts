@@ -193,12 +193,15 @@ Réponds uniquement avec un JSON suivant ce format exact:
 
     if (!result) throw new Error('Invalid AI response');
 
-    await supabase.from('product_taxonomy_mappings').insert({
+    // Use upsert to handle duplicate entries gracefully
+    await supabase.from('product_taxonomy_mappings').upsert({
       analysis_id,
       taxonomy_type: taxonomyType,
       category_id: result.category_id,
       category_path: result.category_path,
       confidence_score: result.confidence_score,
+    }, {
+      onConflict: 'analysis_id,taxonomy_type'
     });
 
     // Also categorize with the other taxonomy
@@ -231,12 +234,15 @@ Réponds uniquement avec un JSON suivant ce format exact:
       const otherResult = otherJsonMatch ? JSON.parse(otherJsonMatch[0]) : null;
 
       if (otherResult) {
-        await supabase.from('product_taxonomy_mappings').insert({
+        // Use upsert to handle duplicate entries gracefully
+        await supabase.from('product_taxonomy_mappings').upsert({
           analysis_id,
           taxonomy_type: otherTaxonomyType,
           category_id: otherResult.category_id,
           category_path: otherResult.category_path,
           confidence_score: otherResult.confidence_score,
+        }, {
+          onConflict: 'analysis_id,taxonomy_type'
         });
       }
     }
