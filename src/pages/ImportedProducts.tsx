@@ -508,12 +508,10 @@ export default function ImportedProducts() {
           </CardTitle>
         </CardHeader>
         
-        {/* Enrichment Progress Monitor */}
-        {stats?.enriching > 0 && (
-          <div className="px-6 pt-4">
-            <EnrichmentProgressMonitor />
-          </div>
-        )}
+        {/* Enrichment Progress Monitor - Toujours visible pour afficher les tâches des 24 dernières heures */}
+        <div className="px-6 pt-4">
+          <EnrichmentProgressMonitor />
+        </div>
         
         <CardContent>
           {/* Search and Filters */}

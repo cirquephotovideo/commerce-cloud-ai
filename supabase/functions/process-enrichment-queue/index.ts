@@ -257,6 +257,18 @@ serve(async (req) => {
           })
           .eq('id', task.id);
 
+        // Update supplier_product status to completed
+        if (task.supplier_product_id) {
+          await supabase
+            .from('supplier_products')
+            .update({
+              enrichment_status: 'completed',
+              enrichment_progress: 100
+            })
+            .eq('id', task.supplier_product_id);
+          console.log(`[ENRICHMENT-QUEUE] Marked supplier_product ${task.supplier_product_id} as completed`);
+        }
+
         // Create user alert
         await supabase.from('user_alerts').insert({
           user_id: task.user_id,

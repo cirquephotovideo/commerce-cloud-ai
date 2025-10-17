@@ -94,21 +94,22 @@ export function BatchEnrichmentDialog({
 
       const enrichmentTypes = getEnrichmentTypes();
 
-      // Créer les tâches dans la queue
+      // Créer les tâches dans la queue (sans metadata - colonne inexistante)
       const tasks = Array.from(selectedProducts).map(productId => ({
         user_id: user.id,
         supplier_product_id: productId,
         enrichment_type: enrichmentTypes,
         priority,
         status: "pending" as const,
-        metadata: {
-          provider,
-          model: getModelForProvider(provider)
-        }
       }));
 
       const { error: insertError } = await supabase.from("enrichment_queue").insert(tasks);
-      if (insertError) throw insertError;
+      
+      if (insertError) {
+        console.error('[BatchEnrichment] Erreur insertion queue:', insertError);
+        toast.error(`Erreur lors de l'ajout à la file: ${insertError.message || 'PGRST204'}`);
+        throw insertError;
+      }
 
       toast.success(`${selectedCount} produits ajoutés à la file d'enrichissement`);
 
