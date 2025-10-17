@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Filter, Link2, Sparkles, Table2, LayoutGrid } from "lucide-react";
+import { Loader2, Upload, Check, AlertCircle, RefreshCw, Package, Eye, Filter, Link2, Sparkles, Table2, LayoutGrid, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatPrice, formatMargin, getMarginColor, getStatusVariant, extractAnalysisData, getImageUrl } from "@/lib/formatters";
 import { ProductsTable } from "@/components/ProductsTable";
@@ -304,6 +304,33 @@ export default function ImportedProducts() {
         newSet.delete(productId);
         return newSet;
       });
+    }
+  };
+
+  // Delete a product
+  const deleteProduct = async (productId: string) => {
+    try {
+      const { error } = await supabase
+        .from('supplier_products')
+        .delete()
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      toast.success('Produit supprimé avec succès');
+      
+      // Remove from selection if selected
+      if (selectedProducts.has(productId)) {
+        const newSelection = new Set(selectedProducts);
+        newSelection.delete(productId);
+        setSelectedProducts(newSelection);
+      }
+      
+      // Refresh list
+      refetch();
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast.error('Erreur lors de la suppression du produit');
     }
   };
 
@@ -630,6 +657,7 @@ export default function ImportedProducts() {
                     showCreateAnalysisAction={true}
                     onCreateAnalysis={createAnalysisAndMaybeEnrich}
                     enrichingProductIds={enrichingProductIds}
+                    onDeleteProduct={deleteProduct}
                   />
                 ) : (
                   products?.map(product => {
@@ -712,9 +740,9 @@ export default function ImportedProducts() {
                                 )}
                               </div>
                             )}
-                            
-                             {/* Action Button */}
-                             <div>
+                             
+                             {/* Action Buttons */}
+                             <div className="flex gap-2">
                                {!analysis ? (
                                  <Button 
                                    variant="default"
@@ -741,6 +769,18 @@ export default function ImportedProducts() {
                                    Voir les détails
                                  </Button>
                                )}
+                               
+                               <Button 
+                                 variant="destructive" 
+                                 size="sm"
+                                 onClick={() => {
+                                   if (confirm(`Êtes-vous sûr de vouloir supprimer "${product.product_name}" ?`)) {
+                                     deleteProduct(product.id);
+                                   }
+                                 }}
+                               >
+                                 <Trash2 className="w-4 h-4" />
+                               </Button>
                              </div>
                            </div>
                          </div>
