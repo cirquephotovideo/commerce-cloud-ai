@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,12 +8,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, FileText, ArrowLeft, ArrowRight, Save, FolderOpen } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SupplierColumnMapper } from "./SupplierColumnMapper";
 import { CheckCircle2, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
-import { useEffect } from "react";
+import { detectHeaderRow } from "@/lib/detectHeaderRow";
+import { RawFilePreview } from "./mapping/RawFilePreview";
+import { RowFilterConfig } from "./mapping/RowFilterConfig";
+import { ColumnSelector } from "./mapping/ColumnSelector";
 
 interface SupplierImportWizardProps {
   onClose: () => void;
@@ -38,6 +41,14 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     status: 'idle' as 'idle' | 'processing' | 'complete' | 'error',
     message: '',
   });
+  
+  // Unified mapper states
+  const [skipRowsTop, setSkipRowsTop] = useState(0);
+  const [skipRowsBottom, setSkipRowsBottom] = useState(0);
+  const [skipPatterns, setSkipPatterns] = useState<string[]>([]);
+  const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
+  const [detectedHeaderRow, setDetectedHeaderRow] = useState(0);
+  const [rawRows, setRawRows] = useState<any[][]>([]);
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers"],
@@ -109,16 +120,93 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const workbook = XLSX.read(data);
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+      
+      // Store all raw rows for unified mapper
+      setRawRows(jsonData);
+      
+      // Detect header row
+      const headerRowIdx = detectHeaderRow(jsonData);
+      setDetectedHeaderRow(headerRowIdx);
+      
       // Show first 10 rows including headers for preview
       setPreview(jsonData.slice(0, 10));
     } else {
       const text = await file.text();
       const allLines = text.split("\n");
+      const parsed = allLines.map(line => line.split(delimiter));
+      
+      // Store all raw rows for unified mapper
+      setRawRows(parsed);
+      
+      // Detect header row
+      const headerRowIdx = detectHeaderRow(parsed);
+      setDetectedHeaderRow(headerRowIdx);
+      
       // Show first 10 rows including headers for preview
       const lines = allLines.slice(0, 10);
-      const parsed = lines.map(line => line.split(delimiter));
-      setPreview(parsed);
+      const previewParsed = lines.map(line => line.split(delimiter));
+      setPreview(previewParsed);
     }
+  };
+
+  // Utility functions for unified mapper
+  const calculateIgnoredRows = () => {
+    let count = skipRowsTop + skipRowsBottom;
+    
+    if (skipPatterns.length > 0) {
+      const dataRows = rawRows.slice(detectedHeaderRow + 1);
+      const patternMatches = dataRows.filter(row => {
+        const rowStr = row.join(' ').toLowerCase();
+        return skipPatterns.some(pattern => {
+          const regex = new RegExp(pattern.replace(/\*/g, '.*'), 'i');
+          return regex.test(rowStr);
+        });
+      });
+      count += patternMatches.length;
+    }
+    
+    return count;
+  };
+
+  const getDetectedColumns = () => {
+    const headerRow = rawRows[detectedHeaderRow] || [];
+    return headerRow.map(h => String(h || '').trim());
+  };
+
+  const getFilteredPreviewData = () => {
+    // Apply skip_config and excluded_columns
+    let filteredRows = rawRows.slice(detectedHeaderRow + 1);
+    
+    // Skip top/bottom
+    if (skipRowsTop > 0) filteredRows = filteredRows.slice(skipRowsTop);
+    if (skipRowsBottom > 0) filteredRows = filteredRows.slice(0, -skipRowsBottom);
+    
+    // Skip patterns
+    if (skipPatterns.length > 0) {
+      filteredRows = filteredRows.filter(row => {
+        const rowStr = row.join(' ').toLowerCase();
+        return !skipPatterns.some(pattern => {
+          const regex = new RegExp(pattern.replace(/\*/g, '.*'), 'i');
+          return regex.test(rowStr);
+        });
+      });
+    }
+    
+    // Filter excluded columns
+    const headers = getDetectedColumns();
+    const includedIndices = headers
+      .map((h, idx) => !excludedColumns.includes(h) ? idx : -1)
+      .filter(idx => idx !== -1);
+    
+    return filteredRows.slice(0, 10).map(row => {
+      const obj: any = {};
+      headers.forEach((h, i) => {
+        if (!excludedColumns.includes(h)) {
+          obj[h] = row[i];
+        }
+      });
+      return obj;
+    });
   };
 
   const handleImport = async () => {
@@ -142,7 +230,31 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     try {
       const isXLSX = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
       
-      // Save column mapping to supplier configuration
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+
+      // Save unified mapping profile
+      await supabase
+        .from('supplier_mapping_profiles')
+        .upsert({
+          user_id: user.id,
+          supplier_id: supplierId,
+          profile_name: `Import ${new Date().toLocaleDateString()}`,
+          source_type: 'file',
+          skip_config: {
+            skip_rows_top: skipRowsTop,
+            skip_rows_bottom: skipRowsBottom,
+            skip_patterns: skipPatterns
+          },
+          excluded_columns: excludedColumns,
+          column_mapping: columnMapping,
+          is_default: true
+        }, {
+          onConflict: 'supplier_id,is_default'
+        });
+      
+      // Save column mapping to supplier configuration (for backward compatibility)
       await supabase
         .from('supplier_configurations')
         .update({ column_mapping: columnMapping })
@@ -317,33 +429,51 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             </Card>
           )}
 
-          {/* Step 2: Preview */}
-          {step === 2 && preview.length > 0 && (
-            <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-4">👁️ Aperçu du fichier (premières lignes)</h3>
-                <div className="overflow-x-auto border rounded">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {preview.map((row, i) => (
-                        <tr key={i} className={i === 0 ? "font-bold bg-muted" : "hover:bg-muted/50"}>
-                          {row.map((cell: any, j: number) => (
-                            <td key={j} className="p-2 border-r last:border-r-0">
-                              {String(cell || '-')}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Step 2: Raw File Preview */}
+          {step === 2 && rawRows.length > 0 && (
+            <RawFilePreview
+              rawRows={rawRows}
+              detectedHeaderRow={detectedHeaderRow}
+              onHeaderRowChange={setDetectedHeaderRow}
+            />
           )}
 
-          {/* Step 3: Column Mapping */}
+          {/* Step 3: Unified Mapping Configuration */}
           {step === 3 && (
-            <div className="space-y-4">
+            <div className="space-y-6">
+              {/* Row Filtering */}
+              <RowFilterConfig
+                skipRowsTop={skipRowsTop}
+                skipRowsBottom={skipRowsBottom}
+                skipPatterns={skipPatterns}
+                totalRows={rawRows.length - detectedHeaderRow - 1}
+                ignoredRowsCount={calculateIgnoredRows()}
+                onSkipRowsTopChange={setSkipRowsTop}
+                onSkipRowsBottomChange={setSkipRowsBottom}
+                onSkipPatternsChange={setSkipPatterns}
+              />
+              
+              {/* Column Selection */}
+              <ColumnSelector
+                detectedColumns={getDetectedColumns()}
+                excludedColumns={excludedColumns}
+                onExcludedColumnsChange={setExcludedColumns}
+              />
+              
+              {/* Column Mapping */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>🔗 Configuration du mapping</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SupplierColumnMapper
+                    previewData={getFilteredPreviewData()}
+                    onMappingChange={setColumnMapping}
+                    initialMapping={columnMapping}
+                  />
+                </CardContent>
+              </Card>
+              
               {/* Template controls */}
               <Card className="bg-muted/50">
                 <CardContent className="pt-6 space-y-4">
@@ -426,12 +556,6 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                   )}
                 </CardContent>
               </Card>
-
-              <SupplierColumnMapper
-                previewData={preview}
-                onMappingChange={setColumnMapping}
-                initialMapping={columnMapping}
-              />
             </div>
           )}
 
