@@ -120,7 +120,7 @@ serve(async (req) => {
     }
 
     const endpoint = isCloudMode 
-      ? `${targetUrl}/v1/chat/completions`
+      ? `${targetUrl}/api/chat`
       : `${targetUrl}/api/chat`;
 
     const requestBody = isCloudMode
