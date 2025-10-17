@@ -334,6 +334,31 @@ export default function ImportedProducts() {
     }
   };
 
+  // Delete multiple products
+  const deleteBulkProducts = async () => {
+    if (selectedProducts.size === 0) return;
+    
+    const count = selectedProducts.size;
+    if (!confirm(`Supprimer ${count} produit(s) sélectionné(s) ?`)) return;
+    
+    try {
+      const ids = Array.from(selectedProducts);
+      const { error } = await supabase
+        .from('supplier_products')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      toast.success(`${count} produit(s) supprimé(s) avec succès`);
+      setSelectedProducts(new Set());
+      refetch();
+    } catch (error) {
+      console.error('Error deleting products:', error);
+      toast.error('Erreur lors de la suppression en masse');
+    }
+  };
+
   // Trigger background enrichment
   const handleProcessEnrichments = async () => {
     setIsProcessing(true);
@@ -879,6 +904,14 @@ export default function ImportedProducts() {
             >
               <Sparkles className="w-4 h-4 mr-2" />
               Enrichir en masse
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={deleteBulkProducts}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Supprimer ({selectedProducts.size})
             </Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -55,6 +55,8 @@ export function EmailInboxTable() {
     suggestedMapping: any;
     totalRows: number;
   } | null>(null);
+  
+  const queryClient = useQueryClient();
   
   const { data: emailInbox, refetch, isRefetching } = useQuery({
     queryKey: ['email-inbox', statusFilter],
@@ -502,8 +504,11 @@ export function EmailInboxTable() {
         .eq('id', inboxId);
       
       if (error) throw error;
+      
+      // Invalidate cache immediately for instant refresh
+      await queryClient.invalidateQueries({ queryKey: ['email-inbox'] });
+      
       toast.success("Email supprimé");
-      refetch();
     } catch (error) {
       toast.error("Erreur lors de la suppression");
     }
@@ -546,8 +551,10 @@ export function EmailInboxTable() {
       
       if (error) throw error;
       
+      // Invalidate cache immediately for instant refresh
+      await queryClient.invalidateQueries({ queryKey: ['email-inbox'] });
+      
       toast.success(`${emails.length} email(s) supprimé(s)`);
-      refetch();
     } catch (error) {
       toast.error("Erreur lors de la suppression en masse");
     }
