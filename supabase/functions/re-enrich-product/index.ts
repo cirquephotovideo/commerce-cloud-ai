@@ -149,11 +149,7 @@ serve(async (req) => {
         analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',
-        status: 'pending',
-        metadata: {
-          provider: provider || 'lovable-ai',
-          model: model || 'google/gemini-2.5-flash'
-        }
+        status: 'pending'
       })
       .select()
       .single();

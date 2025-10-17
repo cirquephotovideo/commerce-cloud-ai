@@ -83,7 +83,13 @@ export default function ImportedProducts() {
         .select(`
           *,
           supplier_configurations(supplier_name),
-          product_analyses(id, analysis_result, image_urls, margin_percentage)
+          product_analyses(
+            id, 
+            analysis_result, 
+            image_urls, 
+            margin_percentage,
+            amazon_product_data(images)
+          )
         `)
         .eq('enrichment_status', currentTab)
         .order('created_at', { ascending: false });

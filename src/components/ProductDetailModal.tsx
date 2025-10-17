@@ -74,7 +74,7 @@ export function ProductDetailModal({
     queryFn: async () => {
       const { data } = await supabase
         .from('product_analyses')
-        .select('*')
+        .select('*, amazon_product_data(images)')
         .eq('id', product.linked_analysis_id || product.id)
         .single();
       return data;
@@ -190,7 +190,10 @@ export function ProductDetailModal({
   // Calculer le statut d'enrichissement
   const hasAmazonData = product.amazon_enriched_at !== null;
   const hasVideoData = product.video_url !== null;
-  const imageCount = product.image_urls?.length || 0;
+  const analysisImages = Array.isArray(analysis?.image_urls) ? analysis.image_urls : [];
+  const amazonData = Array.isArray(analysis?.amazon_product_data) ? analysis.amazon_product_data[0] : null;
+  const amazonImages = Array.isArray(amazonData?.images) ? amazonData.images : [];
+  const imageCount = analysisImages.length + amazonImages.length;
   const hasImages = imageCount > 0;
   const hasRSGPData = product.enrichment_status?.rsgp === 'completed';
   const hasCompetitors = product.analysis_result?.competitors?.length > 0;
