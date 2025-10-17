@@ -76,8 +76,22 @@ serve(async (req) => {
 
       if (error) {
         downloadAttempts++;
-        console.warn(`[IMPORT-CHUNK][${correlation_id}] Download attempt ${downloadAttempts} failed:`, error);
-        if (downloadAttempts >= maxDownloadRetries) throw error;
+        console.error(`[IMPORT-CHUNK][${correlation_id}] Download attempt ${downloadAttempts}/${maxDownloadRetries} failed:`, error);
+        
+        if (downloadAttempts >= maxDownloadRetries) {
+          // After 3 failed attempts, mark job as failed
+          await supabase
+            .from('import_jobs')
+            .update({
+              status: 'failed',
+              completed_at: new Date().toISOString(),
+              metadata: { error: `Failed to download NDJSON file after ${maxDownloadRetries} attempts: ${error.message}` }
+            })
+            .eq('id', job_id);
+          
+          throw new Error(`NDJSON download failed after ${maxDownloadRetries} attempts: ${error.message}`);
+        }
+        
         await new Promise(resolve => setTimeout(resolve, 1000 * downloadAttempts)); // Backoff
       } else {
         ndjsonFile = data;
@@ -115,15 +129,18 @@ serve(async (req) => {
         const supplierRef = normalized.supplier_reference || 
           `AUTO_${normalized.product_name?.substring(0, 20).replace(/\s/g, '_').toUpperCase() || 'UNKNOWN'}`;
 
-        // ✅ Prepare supplier_product with additional_data JSON field
+        // ✅ Prepare supplier_product with strict type conversion
+        const parsedPrice = normalized.purchase_price ? Number(normalized.purchase_price) : undefined;
+        const parsedQuantity = normalized.stock_quantity ? parseInt(String(normalized.stock_quantity)) : undefined;
+
         supplierProductsToUpsert.push({
           user_id,
           supplier_id,
           supplier_reference: supplierRef,
           product_name: normalized.product_name || supplierRef,
           ean: normalized.ean,
-          purchase_price: normalized.purchase_price,
-          stock_quantity: normalized.stock_quantity,
+          purchase_price: !isNaN(parsedPrice!) ? parsedPrice : undefined,
+          stock_quantity: !isNaN(parsedQuantity!) ? parsedQuantity : undefined,
           additional_data: {
             brand: normalized.brand,
             category: normalized.category,
@@ -143,21 +160,28 @@ serve(async (req) => {
       }
     }
 
-    // Batch upsert supplier_products
+    // Batch upsert supplier_products with accurate counting
+    let actualSuccessCount = 0;
+    let actualErrorCount = 0;
+
     if (supplierProductsToUpsert.length > 0) {
-      const { error: upsertError } = await supabase
+      const { data: upsertData, error: upsertError } = await supabase
         .from('supplier_products')
         .upsert(supplierProductsToUpsert, {
           onConflict: 'supplier_id,supplier_reference',
           ignoreDuplicates: false
-        });
+        })
+        .select();
 
       if (upsertError) {
         console.error(`[IMPORT-CHUNK][${correlation_id}] Upsert error:`, upsertError);
-        throw upsertError;
+        actualErrorCount = supplierProductsToUpsert.length;
+        errorCount += actualErrorCount;
+      } else {
+        actualSuccessCount = upsertData?.length || supplierProductsToUpsert.length;
+        successCount = actualSuccessCount; // Override with actual count
+        console.log(`[IMPORT-CHUNK][${correlation_id}] Upserted ${actualSuccessCount} supplier_products (chunk size: ${chunk.length})`);
       }
-
-      console.log(`[IMPORT-CHUNK][${correlation_id}] Upserted ${supplierProductsToUpsert.length} supplier_products`);
     }
 
     // Batch update/create product_analyses
@@ -191,11 +215,10 @@ serve(async (req) => {
             });
           }
         } else {
-          // Create new analysis
+          // Create new analysis (product_name column doesn't exist in product_analyses)
           toInsert.push({
             user_id,
             ean: sp.ean,
-            product_name: sp.product_name,
             purchase_price: sp.purchase_price,
             analysis_result: {
               basic_info: {
