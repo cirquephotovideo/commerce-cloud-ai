@@ -1,7 +1,35 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const useEnrichmentQueue = (analysisId: string) => {
+  const queryClient = useQueryClient();
+
+  // Realtime updates: invalidate query on any change for this analysis
+  useEffect(() => {
+    if (!analysisId) return;
+
+    const channel = supabase
+      .channel(`enrichment-queue-${analysisId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'enrichment_queue',
+          filter: `analysis_id=eq.${analysisId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['enrichment-queue', analysisId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [analysisId, queryClient]);
+
   return useQuery({
     queryKey: ['enrichment-queue', analysisId],
     queryFn: async () => {
@@ -13,7 +41,7 @@ export const useEnrichmentQueue = (analysisId: string) => {
       
       if (error) {
         console.error('Error fetching enrichment queue:', error);
-        return { pending: [], processing: [], completed: [], failed: [] };
+        return { pending: [], processing: [], completed: [], failed: [] } as any;
       }
 
       return {
@@ -22,7 +50,7 @@ export const useEnrichmentQueue = (analysisId: string) => {
         completed: data?.filter(e => e.status === 'completed') || [],
         failed: data?.filter(e => e.status === 'failed') || [],
         all: data || []
-      };
+      } as any;
     },
     // Polling adaptatif : rapide si tâches actives, sinon ralenti
     refetchInterval: (query) => {
