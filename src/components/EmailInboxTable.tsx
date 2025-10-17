@@ -51,7 +51,8 @@ export function EmailInboxTable() {
 
   const [mappingValidation, setMappingValidation] = useState<{
     email: any;
-    columns: string[];
+    columns: string[];  // Normalized headers for UI display
+    originalColumns?: string[];  // Original headers for backend mapping
     previewData: any[];
     suggestedMapping: any;
     totalRows: number;
@@ -376,32 +377,36 @@ export function EmailInboxTable() {
 
       // Detect header row using skip_rows or auto-detection
       const headerRowIndex = skipRowsConfig > 0 ? skipRowsConfig : detectHeaderRow(rawRows);
-      const headers = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
-        normalizeHeader(h) || `Col ${i}`
+      
+      // Store BOTH original and normalized headers
+      const originalHeaders = (rawRows[headerRowIndex] || []).map((h: any, i: number) => 
+        String(h || '').trim() || `Col ${i}`
       );
+      const normalizedHeaders = originalHeaders.map(h => normalizeHeader(h));
       const dataRows = rawRows.slice(headerRowIndex + 1);
 
-      console.log(`[handleReprocess] Headers detected at row ${headerRowIndex + 1}:`, headers);
+      console.log(`[handleReprocess] Headers detected at row ${headerRowIndex + 1}:`, originalHeaders);
 
-      // Build preview data
+      // Build preview data using normalized headers for display
       const preview = dataRows.slice(0, 5).map(row => {
         const obj: any = {};
-        headers.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
+        normalizedHeaders.forEach((h: string, i: number) => obj[h] = (row as any)[i]);
         return obj;
       });
 
-      // Suggest mapping if no existing mapping
+      // Suggest mapping if no existing mapping (using normalized headers)
       let suggestedMapping = existingMapping;
       if (Object.keys(existingMapping).length === 0 || Object.values(existingMapping).every(v => v === null)) {
-        suggestedMapping = suggestMapping(headers);
+        suggestedMapping = suggestMapping(normalizedHeaders);
         console.log('[handleReprocess] Auto-suggested mapping:', suggestedMapping);
       }
 
-      // Open validation modal
+      // Open validation modal with BOTH normalized (for display) and original (for mapping)
       setMappingValidation({
         email,
-        columns: headers,
-        previewData: [headers, ...preview],
+        columns: normalizedHeaders,  // For display in UI
+        originalColumns: originalHeaders,  // For backend mapping
+        previewData: [normalizedHeaders, ...preview],
         suggestedMapping,
         totalRows: dataRows.length,
         rawFile: arrayBuffer
@@ -409,7 +414,7 @@ export function EmailInboxTable() {
 
       if (headerRowIndex > 0) {
         toast.success(`En-têtes détectés à la ligne ${headerRowIndex + 1}`, {
-          description: `${headers.length} colonnes trouvées`
+          description: `${originalHeaders.length} colonnes trouvées`
         });
       }
 
@@ -428,15 +433,15 @@ export function EmailInboxTable() {
 
     console.log('[EmailInboxTable] Confirming profile:', profile);
 
-    // Convert column indices to column names for backend
+    // Convert column indices to ORIGINAL column names (not normalized) for backend
     const nameMapping = Object.fromEntries(
       Object.entries(profile.column_mapping).map(([key, idx]) => [
         key,
-        idx === null ? null : mappingValidation.columns[idx]
+        idx === null ? null : (mappingValidation.originalColumns || mappingValidation.columns)[idx]
       ])
     );
 
-    console.log('[EmailInboxTable] Name mapping:', nameMapping);
+    console.log('[EmailInboxTable] Name mapping (original headers):', nameMapping);
 
     // Initialize progress dialog with realistic total
     setImportProgress({
