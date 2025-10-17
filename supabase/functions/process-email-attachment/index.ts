@@ -490,7 +490,9 @@ serve(async (req) => {
           inbox_id,
           ndjson_path: ndjsonPath,
           mapping: finalMapping,
-          headers: headers
+          headers: headers,
+          skip_config: profileSkipConfig || {},
+          excluded_columns: profileExcludedColumns || []
         }
       })
       .select()
@@ -539,6 +541,8 @@ serve(async (req) => {
             ndjson_path: ndjsonPath,
             mapping: finalMapping,
             headers: headers,
+            skip_config: profileSkipConfig || {},
+            excluded_columns: profileExcludedColumns || [],
             offset: 0,
             limit: chunkSize,
             correlation_id,

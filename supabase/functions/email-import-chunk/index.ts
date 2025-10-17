@@ -13,6 +13,12 @@ interface ChunkRequest {
   ndjson_path: string;
   mapping: Record<string, number | null>;
   headers: string[];
+  skip_config?: {
+    skip_rows_top?: number;
+    skip_rows_bottom?: number;
+    skip_patterns?: string[];
+  };
+  excluded_columns?: string[];
   offset: number;
   limit: number;
   correlation_id?: string;
@@ -26,13 +32,18 @@ serve(async (req) => {
 
   try {
     const { 
-      job_id, user_id, supplier_id, ndjson_path, mapping, headers, offset, limit,
+      job_id, user_id, supplier_id, ndjson_path, mapping, headers,
+      skip_config = {},
+      excluded_columns = [],
+      offset, limit,
       correlation_id = crypto.randomUUID(),
       retry_count = 0
     }: ChunkRequest = await req.json();
     
     console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, { 
-      job_id, offset, limit, retry: retry_count 
+      job_id, offset, limit, retry: retry_count,
+      skip_config,
+      excluded_columns
     });
 
     const supabase = createClient(
@@ -244,6 +255,8 @@ serve(async (req) => {
             ndjson_path,
             mapping,
             headers,
+            skip_config,
+            excluded_columns,
             offset: offset + limit,
             limit,
             correlation_id,
