@@ -127,21 +127,33 @@ export default function Suppliers() {
   const { data: suppliers, refetch: refetchSuppliers } = useQuery({
     queryKey: ["suppliers"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch suppliers
+      const { data: supplierData, error: supplierError } = await supabase
         .from("supplier_configurations")
-        .select(`
-          *,
-          supplier_products(count)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      
-      // Transformer pour ajouter product_count
-      return data?.map(s => ({
-        ...s,
-        product_count: s.supplier_products?.[0]?.count || 0
-      }));
+      if (supplierError) throw supplierError;
+      if (!supplierData) return [];
+
+      // Fetch product counts for each supplier
+      const suppliersWithCounts = await Promise.all(
+        supplierData.map(async (supplier) => {
+          const { count, error: countError } = await supabase
+            .from("supplier_products")
+            .select("id", { count: "exact", head: true })
+            .eq("supplier_id", supplier.id);
+
+          console.log(`Supplier ${supplier.supplier_name}: ${count || 0} products`);
+
+          return {
+            ...supplier,
+            product_count: count || 0
+          };
+        })
+      );
+
+      return suppliersWithCounts;
     },
   });
 
