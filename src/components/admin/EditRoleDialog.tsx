@@ -31,78 +31,29 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
     setLoading(true);
 
     try {
-      // La validation de rôle est gérée côté serveur par les politiques RLS
-      // Pas de vérification côté client - c'est bypassable et inutile
-      
-      // Si le rôle est "user", supprimer l'entrée dans user_roles
-      if (selectedRole === "user") {
-        const { error } = await supabase
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId);
+      // Appel direct sans vérification préalable côté client
+      // La sécurité est assurée par les RLS policies
+      const { error } = await supabase
+        .from("user_roles")
+        .upsert({
+          user_id: userId,
+          role: selectedRole as any
+        }, {
+          onConflict: 'user_id,role'
+        });
 
-        if (error) {
-          // Si l'erreur est liée aux permissions, afficher un message approprié
-          if (error.message.includes("policy") || error.message.includes("permission")) {
-            toast({
-              title: "Accès refusé",
-              description: "Vous n'avez pas les permissions pour modifier les rôles",
-              variant: "destructive",
-            });
-            setLoading(false);
-            return;
-          }
+      if (error) {
+        // Si l'erreur est liée aux permissions, afficher un message approprié
+        if (error.code === 'PGRST301' || error.message.includes('permission') || error.message.includes('policy')) {
+          toast({
+            title: "Accès refusé",
+            description: "Vous n'avez pas les permissions nécessaires",
+            variant: "destructive"
+          });
+        } else {
           throw error;
         }
-      } else {
-        // Vérifier si l'utilisateur a déjà un rôle
-        const { data: existingRole } = await supabase
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", userId)
-          .single();
-
-        if (existingRole) {
-          // Mettre à jour le rôle existant
-          const { error } = await supabase
-            .from("user_roles")
-            .update({ role: selectedRole as any })
-            .eq("user_id", userId);
-
-          if (error) {
-            if (error.message.includes("policy") || error.message.includes("permission")) {
-              toast({
-                title: "Accès refusé",
-                description: "Vous n'avez pas les permissions pour modifier les rôles",
-                variant: "destructive",
-              });
-              setLoading(false);
-              return;
-            }
-            throw error;
-          }
-        } else {
-          // Créer un nouveau rôle
-          const { error } = await supabase
-            .from("user_roles")
-            .insert({
-              user_id: userId,
-              role: selectedRole as any
-            });
-
-          if (error) {
-            if (error.message.includes("policy") || error.message.includes("permission")) {
-              toast({
-                title: "Accès refusé",
-                description: "Vous n'avez pas les permissions pour modifier les rôles",
-                variant: "destructive",
-              });
-              setLoading(false);
-              return;
-            }
-            throw error;
-          }
-        }
+        return;
       }
 
       toast({
@@ -116,7 +67,7 @@ export const EditRoleDialog = ({ open, onOpenChange, userId, userEmail, currentR
       console.error("Error updating role:", error);
       toast({
         title: "Erreur",
-        description: error.message || "Impossible de modifier le rôle",
+        description: "Impossible de modifier le rôle",
         variant: "destructive",
       });
     } finally {

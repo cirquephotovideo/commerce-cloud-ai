@@ -4256,9 +4256,9 @@ export type Database = {
           description: string | null
           display_order: number | null
           features: Json | null
-          features_summary: Json | null
           id: string | null
           name: string | null
+          plan_features: Json | null
           price_monthly: number | null
           price_yearly: number | null
         }
@@ -4267,9 +4267,9 @@ export type Database = {
           description?: string | null
           display_order?: number | null
           features?: Json | null
-          features_summary?: never
           id?: string | null
           name?: string | null
+          plan_features?: never
           price_monthly?: number | null
           price_yearly?: number | null
         }
@@ -4278,9 +4278,9 @@ export type Database = {
           description?: string | null
           display_order?: number | null
           features?: Json | null
-          features_summary?: never
           id?: string | null
           name?: string | null
+          plan_features?: never
           price_monthly?: number | null
           price_yearly?: number | null
         }

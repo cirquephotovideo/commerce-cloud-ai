@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { enrichmentSchema } from "../_shared/validation-schemas.ts";
+import { handleError } from "../_shared/error-handler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +22,7 @@ serve(async (req) => {
     if (!authHeader) {
       console.error('[RE-ENRICH] No authorization header');
       return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
+        JSON.stringify({ error: 'Authentication required' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -31,14 +33,17 @@ serve(async (req) => {
     if (userError || !user) {
       console.error('[RE-ENRICH] Authentication failed:', userError);
       return new Response(
-        JSON.stringify({ error: 'Authentication failed' }),
+        JSON.stringify({ error: 'Authentication required' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     console.log(`[RE-ENRICH] User authenticated: ${user.id}`);
 
-    const { productId, enrichmentTypes, provider, model } = await req.json();
+    // Validation des entrées
+    const rawBody = await req.json();
+    const validated = enrichmentSchema.parse(rawBody);
+    const { productId, enrichmentTypes, provider, model } = validated;
 
     if (!productId) {
       console.error('[RE-ENRICH] No product ID provided');
@@ -269,15 +274,6 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[RE-ENRICH] Error:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return handleError(error, 'RE-ENRICH', corsHeaders);
   }
 });

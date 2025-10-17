@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
+import { handleError } from '../_shared/error-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -168,14 +169,6 @@ Fournis une analyse détaillée des coûts en JSON:
       console.error('[ENRICH-COST] Failed to mark as failed:', e);
     }
     
-    // ✅ Return 200 with success: false
-    return new Response(
-      JSON.stringify({ 
-        success: false,
-        partial: true,
-        error: error instanceof Error ? error.message : 'Unknown error' 
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return handleError(error, 'ENRICH-COST', corsHeaders);
   }
 });

@@ -41,10 +41,8 @@ const Pricing = () => {
   const fetchData = async () => {
     try {
       const { data, error } = await supabase
-        .from("subscription_plans")
+        .from("public_subscription_plans")
         .select("*")
-        .eq("is_active", true)
-        .neq("name", "Super Admin")
         .order("display_order");
 
       if (error) throw error;

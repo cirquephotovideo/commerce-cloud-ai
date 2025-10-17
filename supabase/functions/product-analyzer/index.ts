@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
+import { handleError } from '../_shared/error-handler.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -499,16 +500,6 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     );
 
   } catch (error) {
-    console.error('[PRODUCT-ANALYZER] Error:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        code: 'INTERNAL_ERROR'
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    return handleError(error, 'PRODUCT-ANALYZER', corsHeaders);
   }
 });
