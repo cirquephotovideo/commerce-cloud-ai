@@ -108,15 +108,23 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         return;
       }
       
-      // Validate file size (10 MB max)
-      const maxSize = 10 * 1024 * 1024; // 10 MB
+      // Validate file size (100 MB max, 50 MB warning)
+      const warningSize = 50 * 1024 * 1024; // 50 MB
+      const maxSize = 100 * 1024 * 1024; // 100 MB
       
       if (selectedFile.size > maxSize) {
         toast.error(
-          `❌ Fichier trop volumineux (${(selectedFile.size / 1024 / 1024).toFixed(1)} MB). ` +
-          `Maximum : 10 MB. Pour les gros catalogues, divisez le fichier en plusieurs parties.`
+          `❌ Fichier trop volumineux (${(selectedFile.size / 1024 / 1024).toFixed(0)} MB). ` +
+          `Maximum : 100 MB. Veuillez diviser votre fichier en plusieurs parties.`
         );
         return;
+      }
+      
+      if (selectedFile.size > warningSize) {
+        toast.warning(
+          `⚠️ Fichier volumineux détecté (${(selectedFile.size / 1024 / 1024).toFixed(0)} MB). ` +
+          `Le traitement peut prendre plusieurs minutes.`
+        );
       }
       
       setFile(selectedFile);
@@ -272,69 +280,73 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         .update({ column_mapping: columnMapping })
         .eq('id', supplierId);
       
-      setImportProgress({ current: 20, total: 100, status: 'processing', message: 'Envoi du fichier...' });
+      setImportProgress({ current: 10, total: 100, status: 'processing', message: 'Upload du fichier vers Storage...' });
       
-      if (isXLSX) {
-        const arrayBuffer = await file.arrayBuffer();
-        const base64 = btoa(
-          new Uint8Array(arrayBuffer).reduce(
-            (data, byte) => data + String.fromCharCode(byte),
-            ''
-          )
-        );
-        
-        setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement des produits...' });
-        
-        const { data, error } = await supabase.functions.invoke("supplier-import-xlsx", {
-          body: {
-            supplierId,
-            fileContent: base64,
-            skipRows,
-            columnMapping,
-          },
+      // 1. Upload file to Storage
+      const timestamp = Date.now();
+      const filePath = `${user.id}/${timestamp}_${file.name}`;
+      
+      console.log('[WIZARD] Uploading file to Storage:', filePath, `Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
+      
+      const { error: uploadError } = await supabase.storage
+        .from('supplier-imports')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
         });
 
-        if (error) throw error;
-        
-        setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.imported} produits importés` });
-        toast.success(`✅ Import réussi: ${data.imported} produits importés`);
-      } else {
-        const text = await file.text();
-        
-        setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement des produits...' });
-        
-        const { data, error } = await supabase.functions.invoke("supplier-import-csv", {
-          body: {
-            supplierId,
-            fileContent: text,
-            delimiter,
-            skipRows,
-            columnMapping,
-          },
-        });
-
-        if (error) throw error;
-        
-        setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.imported} produits importés` });
-        toast.success(`✅ Import réussi: ${data.imported} produits importés`);
+      if (uploadError) {
+        console.error('[WIZARD] Upload error:', uploadError);
+        throw new Error(`Erreur lors de l'upload: ${uploadError.message}`);
       }
       
-      setTimeout(() => onClose(), 1500); // Close after 1.5s
+      setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
+      
+      // 2. Call Edge Function with file path only
+      const functionName = isXLSX ? 'supplier-import-xlsx' : 'supplier-import-csv';
+      const body: any = {
+        supplierId,
+        filePath,  // ✅ Just the path, not the content
+        columnMapping,
+        skipRows,
+      };
+      
+      if (!isXLSX) {
+        body.delimiter = delimiter || ',';
+      }
+
+      console.log('[WIZARD] Calling function:', functionName, 'with filePath:', filePath);
+
+      const { data, error } = await supabase.functions.invoke(functionName, {
+        body,
+      });
+
+      if (error) {
+        console.error('[WIZARD] Function error:', error);
+        
+        let errorMessage = `Erreur lors de l'importation: ${error.message}`;
+        
+        if (error.message?.includes('Memory limit exceeded')) {
+          errorMessage = '❌ Fichier trop volumineux. Veuillez le diviser en plusieurs fichiers.';
+        } else if (error.message?.includes('timeout')) {
+          errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit.';
+        } else if (error.message?.includes('Failed to start chunk processing')) {
+          errorMessage = '❌ Échec du démarrage du traitement. Vérifiez le format du fichier.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      console.log('[WIZARD] Import response:', data);
+      
+      setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.message}` });
+      toast.success(`✅ ${data.message || 'Import démarré avec succès'}`);
+      
+      setTimeout(() => onClose(), 2000);
     } catch (error: any) {
-      console.error('Import error:', error);
+      console.error('[WIZARD] Import error:', error);
       
-      let errorMessage = 'Une erreur est survenue lors de l\'importation';
-      
-      if (error.message?.includes('Memory limit exceeded')) {
-        errorMessage = '❌ Fichier trop volumineux pour être traité. Réduisez le nombre de lignes (max 5000) ou divisez le fichier.';
-      } else if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
-        errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit ou divisez-le en plusieurs parties.';
-      } else if (error.message?.includes('Failed to start chunk processing')) {
-        errorMessage = '❌ Échec du démarrage du traitement. Vérifiez votre connexion et réessayez.';
-      } else if (error.message) {
-        errorMessage = `❌ Erreur: ${error.message}`;
-      }
-      
+      const errorMessage = error.message || 'Une erreur est survenue lors de l\'importation';
       toast.error(errorMessage);
       setImportProgress(prev => ({ ...prev, status: 'error', message: errorMessage }));
     } finally {

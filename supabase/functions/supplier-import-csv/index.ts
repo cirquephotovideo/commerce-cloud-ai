@@ -1,50 +1,29 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { handleError } from '../_shared/error-handler.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Decode HTML entities
 function decodeHtmlEntities(text: string): string {
-  const entities: Record<string, string> = {
-    '&agrave;': 'à', '&aacute;': 'á', '&acirc;': 'â', '&atilde;': 'ã', '&auml;': 'ä',
-    '&egrave;': 'è', '&eacute;': 'é', '&ecirc;': 'ê', '&euml;': 'ë',
-    '&igrave;': 'ì', '&iacute;': 'í', '&icirc;': 'î', '&iuml;': 'ï',
-    '&ograve;': 'ò', '&oacute;': 'ó', '&ocirc;': 'ô', '&otilde;': 'õ', '&ouml;': 'ö',
-    '&ugrave;': 'ù', '&uacute;': 'ú', '&ucirc;': 'û', '&uuml;': 'ü',
-    '&ccedil;': 'ç', '&ntilde;': 'ñ',
-    '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'",
-    '&euro;': '€', '&pound;': '£', '&yen;': '¥', '&copy;': '©', '&reg;': '®',
-  };
-  
-  return text.replace(/&[a-z]+;/gi, match => entities[match.toLowerCase()] || match);
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
-// Helper to extract field with sub-field support
 function extractField(columns: string[], mapping: any): string | null {
   if (!mapping) return null;
   
-  // Simple column index
-  if (typeof mapping === 'number') {
-    return columns[mapping] || null;
+  if (typeof mapping === 'string') {
+    return columns[parseInt(mapping)] || null;
   }
   
-  // Object with col/sub support
-  if (typeof mapping === 'object' && mapping.col !== undefined) {
-    const cellValue = columns[mapping.col] || '';
-    
-    // If no sub-field, return whole cell
-    if (mapping.sub === undefined) {
-      return cellValue.trim();
-    }
-    
-    // Extract sub-field
-    const subDelimiter = mapping.subDelimiter || ',';
-    const subFields = cellValue.split(subDelimiter).map(s => s.trim());
-    return subFields[mapping.sub] || null;
+  if (typeof mapping === 'object' && mapping.fields) {
+    return mapping.fields.map((f: any) => columns[f.index]).filter(Boolean).join(' ');
   }
   
   return null;
@@ -60,261 +39,225 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error('No authorization header');
+      throw new Error('Missing Authorization header');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
       authHeader.replace('Bearer ', '')
     );
 
-    if (userError || !user) {
-      throw new Error('Authentication failed');
+    if (authError || !user) {
+      throw new Error('Unauthorized');
     }
 
-    const { supplierId, fileContent, delimiter: userDelimiter, skipRows = 1, columnMapping = {} } = await req.json();
-    
-    if (!supplierId || !fileContent) {
-      return new Response(
-        JSON.stringify({ error: 'Missing supplierId or fileContent' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const { supplierId, filePath, delimiter, skipRows, columnMapping } = await req.json();
+
+    console.log('[IMPORT-CSV] Starting import for user:', user.id);
+    console.log('[IMPORT-CSV] File path:', filePath);
+
+    // 1. Download file from Storage
+    console.log('[IMPORT-CSV] Downloading file from Storage...');
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('supplier-imports')
+      .download(filePath);
+
+    if (downloadError || !fileData) {
+      console.error('[IMPORT-CSV] Download error:', downloadError);
+      throw new Error(`Failed to download file: ${downloadError?.message}`);
     }
 
-    console.log('[CSV-IMPORT] Starting chunked import', {
-      supplier_id: supplierId,
-      file_size_mb: (fileContent.length / 1024 / 1024).toFixed(2),
-      user_id: user.id,
-      skip_rows: skipRows
+    const fileSize = fileData.size;
+    console.log('[IMPORT-CSV] File downloaded:', {
+      size_mb: (fileSize / 1024 / 1024).toFixed(2),
+      type: fileData.type
     });
 
-    // Auto-detect delimiter
-    let delimiter = userDelimiter || ';';
-    const cleanContent = fileContent.replace(/^\uFEFF/, '');
-    const lines = cleanContent.split(/\r?\n/).filter((line: string) => line.trim());
+    // 2. Read file in streaming mode
+    const text = await fileData.text();
+    const lines = text.split('\n').filter(line => line.trim());
     
-    if (lines.length > 0) {
-      const firstLine = lines[0];
-      const commaCount = (firstLine.match(/,/g) || []).length;
-      const semicolonCount = (firstLine.match(/;/g) || []).length;
-      
-      if (commaCount > 3 && commaCount > semicolonCount) {
-        delimiter = ',';
-      }
-      console.log(`[CSV-IMPORT] Detected delimiter: "${delimiter}"`);
-    }
+    console.log('[IMPORT-CSV] Total lines:', lines.length);
 
-    console.log('[CSV-IMPORT] Total lines:', lines.length);
+    // Auto-detect delimiter if not provided
+    const detectedDelimiter = delimiter || (text.includes('\t') ? '\t' : ',');
+    console.log('[IMPORT-CSV] Using delimiter:', detectedDelimiter);
 
-    // Convert CSV to NDJSON for chunked processing
+    // Parse CSV to NDJSON
     const ndjsonLines: string[] = [];
-    let validProducts = 0;
-    let invalidProducts = 0;
+    let processedCount = 0;
+    let headerRow: string[] = [];
 
-    const startIndex = skipRows;
-    const dataLines = lines.slice(startIndex);
+    for (let i = skipRows || 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (i === (skipRows || 0)) {
+        headerRow = line.split(detectedDelimiter).map(h => h.trim());
+        console.log('[IMPORT-CSV] Header row:', headerRow);
+        continue;
+      }
 
-    for (let i = 0; i < dataLines.length; i++) {
-      const line = dataLines[i].trim();
-      if (!line) continue;
+      const columns = line.split(detectedDelimiter).map(col => {
+        let cleaned = col.trim().replace(/^["']|["']$/g, '');
+        return decodeHtmlEntities(cleaned);
+      });
 
-      try {
-        const columns = line.split(delimiter).map((col: string) => 
-          col.trim().replace(/^["']|["']$/g, '')
-        );
+      const reference = extractField(columns, columnMapping.supplier_reference);
+      const name = extractField(columns, columnMapping.product_name);
 
-        // Extract fields using mapping
-        const productName = extractField(columns, columnMapping?.product_name) || columns[0] || '';
-        const supplierRef = extractField(columns, columnMapping?.supplier_reference) || columns[1] || '';
-        const ean = extractField(columns, columnMapping?.ean) || (columns[2] || null);
-        
-        // Extract price
-        let purchasePrice: number | null = null;
-        const priceMapping = columnMapping?.purchase_price;
-        const priceStr = extractField(columns, priceMapping);
-        
-        if (priceStr) {
-          const decimalSep = (priceMapping && typeof priceMapping === 'object') 
-            ? priceMapping.decimal || ',' 
-            : ',';
-          const normalizedPrice = priceStr.replace(decimalSep, '.');
-          const parsed = parseFloat(normalizedPrice);
-          if (!isNaN(parsed) && parsed > 0) {
-            purchasePrice = parsed;
-          }
-        }
-        
-        // Extract stock
-        let stockQuantity: number | null = null;
-        const stockStr = extractField(columns, columnMapping?.stock_quantity);
-        if (stockStr) {
-          const parsed = parseInt(stockStr);
-          if (!isNaN(parsed)) {
-            stockQuantity = parsed;
-          }
-        }
+      if (!reference || !name) {
+        console.warn('[IMPORT-CSV] Skipping row - missing reference or name');
+        continue;
+      }
 
-        // Validate required fields
-        if (!supplierRef || !purchasePrice) {
-          invalidProducts++;
-          continue;
-        }
+      const ean = extractField(columns, columnMapping.ean);
+      const description = extractField(columns, columnMapping.description);
+      
+      // Parse price
+      let purchase_price = null;
+      const priceStr = extractField(columns, columnMapping.purchase_price);
+      if (priceStr) {
+        const decimalSep = columnMapping.decimal_separator || '.';
+        const normalizedPrice = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
+        purchase_price = parseFloat(normalizedPrice);
+      }
 
-        // Decode HTML entities
-        const cleanName = decodeHtmlEntities(productName || supplierRef);
+      // Parse stock
+      let stock = null;
+      const stockStr = extractField(columns, columnMapping.stock);
+      if (stockStr) {
+        stock = parseInt(stockStr.replace(/\D/g, ''));
+      }
 
-        // Create NDJSON row
-        const productData = {
-          user_id: user.id,
-          supplier_id: supplierId,
-          supplier_reference: supplierRef,
-          product_name: cleanName,
-          ean: ean,
-          purchase_price: purchasePrice,
-          stock_quantity: stockQuantity,
-          currency: 'EUR',
-          needs_enrichment: true,
-        };
+      const productData = {
+        supplier_id: supplierId,
+        user_id: user.id,
+        reference,
+        name,
+        ean: ean || null,
+        description: description || null,
+        purchase_price: purchase_price || null,
+        stock: stock || null,
+        currency: 'EUR',
+        brand: extractField(columns, columnMapping.brand) || null,
+        category: extractField(columns, columnMapping.category) || null,
+        last_sync_at: new Date().toISOString()
+      };
 
-        ndjsonLines.push(JSON.stringify(productData));
-        validProducts++;
-      } catch (error) {
-        console.error(`[CSV-IMPORT] Error parsing line ${i}:`, error);
-        invalidProducts++;
+      ndjsonLines.push(JSON.stringify(productData));
+      processedCount++;
+
+      if (processedCount % 1000 === 0) {
+        console.log(`[IMPORT-CSV] Processed ${processedCount} products...`);
       }
     }
 
-    console.log('[CSV-IMPORT] NDJSON conversion completed', {
-      valid_products: validProducts,
-      invalid_products: invalidProducts
-    });
+    console.log('[IMPORT-CSV] Total products converted to NDJSON:', processedCount);
 
-    if (ndjsonLines.length === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No valid products found in CSV' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Upload NDJSON to Storage
+    // 3. Upload NDJSON to Storage
     const jobId = crypto.randomUUID();
+    const ndjsonPath = `${user.id}/${jobId}.ndjson`;
     const ndjsonContent = ndjsonLines.join('\n');
-    const fileName = `imports/${user.id}/${jobId}.ndjson`;
 
-    console.log('[CSV-IMPORT] Uploading NDJSON to storage:', {
-      file_name: fileName,
-      size_mb: (ndjsonContent.length / 1024 / 1024).toFixed(2)
+    console.log('[IMPORT-CSV] Uploading NDJSON to Storage:', {
+      path: ndjsonPath,
+      size_mb: (ndjsonContent.length / 1024 / 1024).toFixed(2),
+      lines: ndjsonLines.length
     });
 
     const { error: uploadError } = await supabase.storage
-      .from('email-attachments')
-      .upload(fileName, ndjsonContent, {
+      .from('supplier-imports')
+      .upload(ndjsonPath, ndjsonContent, {
         contentType: 'application/x-ndjson',
         upsert: true
       });
 
     if (uploadError) {
-      console.error('[CSV-IMPORT] Upload error:', uploadError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to upload file for processing' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('[IMPORT-CSV] NDJSON upload error:', uploadError);
+      throw new Error(`Failed to upload NDJSON: ${uploadError.message}`);
     }
 
-    // Create import job
-    const { data: jobData, error: jobError } = await supabase
+    // 4. Create import job
+    const { data: job, error: jobError } = await supabase
       .from('import_jobs')
       .insert({
+        id: jobId,
         user_id: user.id,
         supplier_id: supplierId,
         status: 'processing',
-        total_rows: ndjsonLines.length,
-        processed_rows: 0,
-        success_rows: 0,
-        error_rows: 0,
-        file_path: fileName
+        total_lines: processedCount,
+        processed_lines: 0,
+        file_path: ndjsonPath,
+        source_type: 'csv_upload'
       })
       .select()
       .single();
 
-    if (jobError || !jobData) {
-      console.error('[CSV-IMPORT] Job creation error:', jobError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create import job' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (jobError) {
+      console.error('[IMPORT-CSV] Job creation error:', jobError);
+      throw new Error(`Failed to create import job: ${jobError.message}`);
     }
 
-    console.log('[CSV-IMPORT] Import job created:', jobData.id);
+    console.log('[IMPORT-CSV] Import job created:', job.id);
 
-    // Start chunked processing (100 lines per chunk)
-    const chunkSize = 100;
+    // 5. Invoke email-import-chunk to process in chunks
     const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
       body: {
-        job_id: jobData.id,
-        user_id: user.id,
-        supplier_id: supplierId,
-        file_path: fileName,
+        jobId: job.id,
+        filePath: ndjsonPath,
+        userId: user.id,
+        supplierId,
         offset: 0,
-        limit: chunkSize,
-        correlation_id: jobId,
-        mapping: columnMapping
+        limit: 100,
+        columnMapping
       }
     });
 
     if (chunkError) {
-      console.error('[CSV-IMPORT] Chunk processing error:', chunkError);
-      
+      console.error('[IMPORT-CSV] Chunk processing invocation error:', chunkError);
       await supabase
         .from('import_jobs')
         .update({ status: 'failed', error_message: chunkError.message })
-        .eq('id', jobData.id);
-
-      return new Response(
-        JSON.stringify({ error: 'Failed to start chunk processing' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        .eq('id', job.id);
+      
+      throw new Error(`Failed to start chunk processing: ${chunkError.message}`);
     }
 
-    // Update supplier last_sync_at
-    await supabase
-      .from('supplier_configurations')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', supplierId)
-      .eq('user_id', user.id);
-
-    // Log the import
-    await supabase.from('supplier_import_logs').insert([{
+    // 6. Log the import
+    await supabase.from('supplier_import_logs').insert({
       user_id: user.id,
       supplier_id: supplierId,
-      import_type: 'manual',
-      source_file: 'csv_upload',
-      products_found: validProducts,
-      products_matched: 0,
-      products_new: 0,
-      products_updated: 0,
-      products_failed: invalidProducts,
-      import_status: 'processing',
-    }]);
+      file_name: filePath.split('/').pop(),
+      file_size_kb: Math.round(fileSize / 1024),
+      products_imported: 0,
+      status: 'started',
+      import_source: 'csv_upload'
+    });
 
-    console.log('[CSV-IMPORT] Chunked import started successfully');
+    console.log('[IMPORT-CSV] Import started successfully, processing in chunks');
 
     return new Response(
       JSON.stringify({
         success: true,
-        job_id: jobData.id,
-        message: 'Import started, processing in chunks',
-        stats: {
-          total: validProducts,
-          invalid: invalidProducts
-        }
+        message: `Import démarré avec succès. ${processedCount} produits en cours de traitement par morceaux.`,
+        jobId: job.id,
+        productsQueued: processedCount
       }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
+
   } catch (error) {
-    console.error('[CSV-IMPORT] Fatal error:', error);
-    return handleError(error, 'SUPPLIER-IMPORT-CSV', corsHeaders);
+    console.error('[IMPORT-CSV] Fatal error:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        details: 'Voir les logs pour plus de détails'
+      }),
+      { 
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 });
