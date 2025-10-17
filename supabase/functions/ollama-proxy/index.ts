@@ -146,7 +146,20 @@ serve(async (req) => {
 
     if (!ollamaResponse.ok) {
       const statusText = ollamaResponse.statusText || 'Unknown error';
-      throw new Error(`Ollama request failed (status ${ollamaResponse.status}: ${statusText})`);
+      const errorBody = await ollamaResponse.text();
+      console.error(`[OLLAMA-PROXY] ❌ Request failed:`, {
+        status: ollamaResponse.status,
+        statusText,
+        endpoint,
+        model: requestBody.model,
+        errorBody
+      });
+      throw new Error(
+        `Ollama request failed (status ${ollamaResponse.status}: ${statusText})\n` +
+        `Endpoint: ${endpoint}\n` +
+        `Model: ${requestBody.model}\n` +
+        `Error: ${errorBody.substring(0, 500)}`
+      );
     }
 
     const result = await ollamaResponse.json();

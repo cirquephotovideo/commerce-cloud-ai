@@ -9,8 +9,11 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  let analysisIdForError: string | undefined;
+  
   try {
     const { analysisId, productData, purchasePrice } = await req.json();
+    analysisIdForError = analysisId;
     
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -92,7 +95,7 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
     const { data: ollamaData, error: ollamaError } = await supabase.functions.invoke('ollama-proxy', {
       body: {
         action: 'chat',
-        model: 'gpt-oss:120b-cloud',
+        model: 'qwen3-coder:480b-cloud', // Modèle plus stable pour extraction structurée
         web_search: true,
         messages: [
           { 
@@ -105,35 +108,107 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
 
-    if (ollamaError) {
-      console.error('[ENRICH-OLLAMA-WEB] ❌ Ollama error:', ollamaError);
-      throw ollamaError;
+    let finalData = ollamaData;
+    let usedFallback = false;
+
+    // ✅ FALLBACK vers Lovable AI si Ollama échoue
+    if (ollamaError || !ollamaData?.success || !ollamaData?.response) {
+      console.warn('[ENRICH-OLLAMA-WEB] ⚠️ Ollama failed, trying Lovable AI fallback...', {
+        ollamaError: ollamaError?.message,
+        ollamaDataValid: !!ollamaData?.success
+      });
+
+      // Mettre à jour enrichment_queue avec l'erreur Ollama
+      await supabase
+        .from('enrichment_queue')
+        .update({
+          error_message: `Ollama Cloud error: ${ollamaError?.message || 'Invalid response'}. Falling back to Lovable AI...`,
+          last_error: {
+            timestamp: new Date().toISOString(),
+            provider: 'ollama-cloud',
+            model: 'qwen3-coder:480b-cloud',
+            error: ollamaError?.message || 'Invalid response structure'
+          }
+        })
+        .eq('analysis_id', analysisId)
+        .in('enrichment_type', [['specifications'], ['cost_analysis'], ['technical_description']]);
+
+      try {
+        const { data: lovableData, error: lovableError } = await supabase.functions.invoke('openai-proxy', {
+          body: {
+            model: 'google/gemini-2.5-pro',
+            messages: [
+              { 
+                role: 'system', 
+                content: 'Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide. Utilise tes connaissances pour enrichir les données produit.' 
+              },
+              { role: 'user', content: prompt }
+            ]
+          },
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+
+        if (lovableError) {
+          throw new Error(`Lovable AI fallback also failed: ${lovableError.message}`);
+        }
+
+        console.log('[ENRICH-OLLAMA-WEB] ✅ Lovable AI fallback succeeded');
+        finalData = lovableData;
+        usedFallback = true;
+      } catch (fallbackError: any) {
+        console.error('[ENRICH-OLLAMA-WEB] ❌ Both Ollama and Lovable AI failed:', fallbackError);
+        
+        // Marquer comme failed dans enrichment_queue
+        await supabase
+          .from('enrichment_queue')
+          .update({
+            status: 'failed',
+            error_message: `All AI providers failed. Ollama: ${ollamaError?.message}. Lovable AI: ${fallbackError.message}`,
+            completed_at: new Date().toISOString()
+          })
+          .eq('analysis_id', analysisId);
+
+        throw new Error(`All AI providers failed: ${fallbackError.message}`);
+      }
     }
 
-    if (!ollamaData?.success || !ollamaData?.response) {
-      throw new Error('Invalid Ollama response structure');
+    if (!finalData?.success && !finalData?.choices?.[0]?.message?.content && !finalData?.message?.content) {
+      throw new Error('Invalid AI response structure from both providers');
     }
 
-    console.log('[ENRICH-OLLAMA-WEB] ✅ Ollama response received');
+    console.log('[ENRICH-OLLAMA-WEB] ✅ AI response received', { usedFallback, provider: usedFallback ? 'lovable-ai' : 'ollama' });
 
     // EXTRAIRE LA RÉPONSE JSON
     let enrichedData;
     try {
-      const content = ollamaData.response.choices?.[0]?.message?.content || 
-                     ollamaData.response.message?.content;
+      // Gérer les deux formats de réponse (Ollama et Lovable AI)
+      const content = usedFallback
+        ? (finalData.choices?.[0]?.message?.content || finalData.message?.content)
+        : (finalData.response?.choices?.[0]?.message?.content || finalData.response?.message?.content);
       
       if (!content) {
-        throw new Error('No content in Ollama response');
+        throw new Error('No content in AI response');
       }
 
       // Parser le JSON (nettoyer les backticks si présents)
       const cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       enrichedData = JSON.parse(cleanContent);
       
-      console.log('[ENRICH-OLLAMA-WEB] 📊 Parsed JSON successfully');
-    } catch (parseError) {
+      console.log('[ENRICH-OLLAMA-WEB] 📊 Parsed JSON successfully', { usedFallback });
+    } catch (parseError: any) {
       console.error('[ENRICH-OLLAMA-WEB] ❌ JSON parse failed:', parseError);
-      throw new Error(`Failed to parse Ollama JSON response: ${parseError.message}`);
+      
+      // Mettre à jour enrichment_queue avec l'erreur de parsing
+      await supabase
+        .from('enrichment_queue')
+        .update({
+          status: 'failed',
+          error_message: `Failed to parse AI JSON response: ${parseError?.message || 'Unknown error'}`,
+          completed_at: new Date().toISOString()
+        })
+        .eq('analysis_id', analysisId);
+      
+      throw new Error(`Failed to parse AI JSON response: ${parseError?.message || 'Unknown error'}`);
     }
 
     // MISE À JOUR DE LA BASE DE DONNÉES
@@ -171,15 +246,51 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
         success: true,
         enrichedData,
         web_sources: enrichedData.web_sources,
-        confidence_level: enrichedData.confidence_level
+        confidence_level: enrichedData.confidence_level,
+        provider_used: usedFallback ? 'lovable-ai' : 'ollama-cloud'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('[ENRICH-OLLAMA-WEB] Error:', error);
+    console.error('[ENRICH-OLLAMA-WEB] ❌ Fatal error:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Mettre à jour enrichment_queue avec l'erreur fatale
+    if (analysisIdForError) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+        
+        await supabase
+          .from('enrichment_queue')
+          .update({
+            status: 'failed',
+            error_message: `Fatal error: ${error.message}`,
+            completed_at: new Date().toISOString(),
+            last_error: {
+              timestamp: new Date().toISOString(),
+              type: 'fatal',
+              message: error.message,
+              stack: error.stack?.substring(0, 500)
+            }
+          })
+          .eq('analysis_id', analysisIdForError);
+      } catch (updateError) {
+        console.error('[ENRICH-OLLAMA-WEB] Failed to update queue with error:', updateError);
+      }
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack?.substring(0, 200)
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
