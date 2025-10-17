@@ -78,11 +78,13 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
     
     console.log('[ENRICH-TECH-DESC] AI response length:', technicalDescription?.length || 0);
 
-    // Merge with existing analysis_result
+    // Merge with existing analysis_result (garantir que l'objet existe)
+    const currentResult = currentAnalysis.analysis_result || {};
     const newAnalysisResult = {
-      ...currentAnalysis.analysis_result,
+      ...currentResult,
       technical_description: technicalDescription,
-      _enrichment_provider: aiResponse.provider
+      _enrichment_provider: aiResponse.provider,
+      _last_enriched: new Date().toISOString()
     };
 
     // Update status to completed

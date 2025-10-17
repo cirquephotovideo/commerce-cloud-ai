@@ -96,11 +96,13 @@ Fournis une analyse détaillée des coûts en JSON:
       parseError = e instanceof Error ? e.message : 'JSON parse error';
     }
 
-    // Merge with existing analysis_result
+    // Merge with existing analysis_result (garantir que l'objet existe)
+    const currentResult = currentAnalysis.analysis_result || {};
     const newAnalysisResult = {
-      ...currentAnalysis.analysis_result,
+      ...currentResult,
       cost_analysis: costAnalysis,
       _enrichment_provider: aiResponse.provider,
+      _last_enriched: new Date().toISOString(),
       ...(parseError && { cost_analysis_parse_error: parseError })
     };
 

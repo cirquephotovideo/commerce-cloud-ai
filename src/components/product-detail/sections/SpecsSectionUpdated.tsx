@@ -13,10 +13,10 @@ interface SpecsSectionProps {
 export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
   const enrichMutation = useEnrichment(analysis.id);
   
-  // Données existantes
-  const specifications = analysis?.analysis_result?.specifications;
-  const costAnalysis = analysis?.analysis_result?.cost_analysis;
-  const technicalDescription = analysis?.analysis_result?.technical_description;
+  // Données existantes avec fallback sur colonnes dédiées
+  const specifications = analysis?.specifications || analysis?.analysis_result?.specifications;
+  const costAnalysis = analysis?.cost_analysis || analysis?.analysis_result?.cost_analysis;
+  const technicalDescription = analysis?.long_description || analysis?.analysis_result?.technical_description;
   
   // Statuts d'enrichissement
   const enrichmentStatus = analysis?.enrichment_status || {};
