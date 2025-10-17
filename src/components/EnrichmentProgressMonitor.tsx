@@ -138,7 +138,12 @@ export function EnrichmentProgressMonitor() {
   const loadTasks = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.error('[ENRICHMENT-MONITOR] ❌ No user authenticated');
+        return;
+      }
+
+      console.log('[ENRICHMENT-MONITOR] 👤 Loading tasks for user:', user.id);
 
       // Get all tasks from last 24h
       const twentyFourHoursAgo = new Date();
@@ -151,10 +156,15 @@ export function EnrichmentProgressMonitor() {
         .gte('created_at', twentyFourHoursAgo.toISOString())
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ENRICHMENT-MONITOR] ❌ Error loading tasks:', error);
+        throw error;
+      }
+
+      console.log(`[ENRICHMENT-MONITOR] ✅ Loaded ${data?.length || 0} tasks:`, data);
       setTasks(data || []);
     } catch (error) {
-      console.error('[ENRICHMENT-MONITOR] Error loading tasks:', error);
+      console.error('[ENRICHMENT-MONITOR] ❌ Fatal error:', error);
     } finally {
       setLoading(false);
     }
@@ -404,21 +414,35 @@ export function EnrichmentProgressMonitor() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5" />
-            Progression des Enrichissements
-            {isUpdating && (
-              <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse text-sm px-2 py-1">
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Mise à jour...
-              </Badge>
-            )}
-          </CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Zap className="h-5 w-5" />
+          Progression des Enrichissements
+          <Badge variant="outline" className="text-xs">
+            {tasks.length} tâches chargées
+          </Badge>
+          {isUpdating && (
+            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse text-sm px-2 py-1">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              Mise à jour...
+            </Badge>
+          )}
+        </CardTitle>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className={`${queueStatus.color} border`}>
               <queueStatus.icon className="h-3 w-3 mr-1" />
               {queueStatus.label}
             </Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                console.log('[ENRICHMENT-MONITOR] 🔄 Manual refresh triggered');
+                loadTasks();
+              }}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Rafraîchir
+            </Button>
             {stats.failed > 0 && (
               <Button
                 size="sm"
