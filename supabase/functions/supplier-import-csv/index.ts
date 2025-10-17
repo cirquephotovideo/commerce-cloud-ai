@@ -74,108 +74,266 @@ serve(async (req) => {
       type: fileData.type
     });
 
-    // 2. Read file content
-    const text = await fileData.text();
-    const lines = text.split('\n').filter(line => line.trim());
-    
-    console.log('[IMPORT-CSV] Total lines:', lines.length);
-
-    // Auto-detect delimiter if not provided
-    const detectedDelimiter = delimiter || (text.includes('\t') ? '\t' : ',');
-    console.log('[IMPORT-CSV] Using delimiter:', detectedDelimiter);
-
-    // Parse CSV to NDJSON
-    const ndjsonLines: string[] = [];
+    // 2. Stream file content line by line
+    console.log('[IMPORT-CSV] Starting streaming processing...');
+    const reader = fileData.stream().getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let lineNumber = 0;
     let processedCount = 0;
+    let currentBatch: string[] = [];
+    let batchNumber = 1;
     let headerRow: string[] = [];
+    let detectedDelimiter = delimiter || ',';
+    const jobId = crypto.randomUUID();
 
-    for (let i = skipRows || 0; i < lines.length; i++) {
-      const line = lines[i];
+    // Helper function to write batch to storage
+    async function writeBatchToStorage(batch: string[], batchNum: number) {
+      if (batch.length === 0) return;
       
-      if (i === (skipRows || 0)) {
-        headerRow = line.split(detectedDelimiter).map(h => h.trim());
-        console.log('[IMPORT-CSV] Header row:', headerRow);
-        continue;
-      }
-
-      const columns = line.split(detectedDelimiter).map(col => {
-        let cleaned = col.trim().replace(/^["']|["']$/g, '');
-        return decodeHtmlEntities(cleaned);
-      });
-
-      const reference = extractField(columns, columnMapping.supplier_reference);
-      const name = extractField(columns, columnMapping.product_name);
-
-      if (!reference || !name) {
-        console.warn('[IMPORT-CSV] Skipping row - missing reference or name');
-        continue;
-      }
-
-      const ean = extractField(columns, columnMapping.ean);
-      const description = extractField(columns, columnMapping.description);
+      const batchPath = `${user.id}/${jobId}_batch${batchNum}.ndjson`;
+      const batchContent = batch.join('\n') + '\n';
       
-      // Parse price
-      let purchase_price = null;
-      const priceStr = extractField(columns, columnMapping.purchase_price);
-      if (priceStr) {
-        const normalizedPrice = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
-        purchase_price = parseFloat(normalizedPrice);
+      const { error: batchError } = await supabase.storage
+        .from('supplier-imports')
+        .upload(batchPath, batchContent, {
+          contentType: 'application/x-ndjson',
+          upsert: false
+        });
+      
+      if (batchError) {
+        throw new Error(`Failed to write batch ${batchNum}: ${batchError.message}`);
       }
-
-      // Parse stock
-      let stock = null;
-      const stockStr = extractField(columns, columnMapping.stock);
-      if (stockStr) {
-        stock = parseInt(stockStr.replace(/\D/g, ''));
-      }
-
-      const productData = {
-        supplier_id: supplierId,
-        user_id: user.id,
-        reference,
-        name,
-        ean: ean || null,
-        description: description || null,
-        purchase_price: purchase_price || null,
-        stock: stock || null,
-        currency: 'EUR',
-        brand: extractField(columns, columnMapping.brand) || null,
-        category: extractField(columns, columnMapping.category) || null,
-        last_sync_at: new Date().toISOString()
-      };
-
-      ndjsonLines.push(JSON.stringify(productData));
-      processedCount++;
-
-      if (processedCount % 1000 === 0) {
-        console.log(`[IMPORT-CSV] Processed ${processedCount} products...`);
-      }
+      
+      console.log(`[IMPORT-CSV] Batch ${batchNum} written (${batch.length} lines)`);
     }
 
-    console.log('[IMPORT-CSV] Total products converted to NDJSON:', processedCount);
+    // Stream processing loop
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          // Process remaining buffer
+          if (buffer.trim()) {
+            const line = buffer.trim();
+            lineNumber++;
+            
+            if (lineNumber > (skipRows || 0) + 1) {
+              const columns = line.split(detectedDelimiter).map(col => {
+                let cleaned = col.trim().replace(/^["']|["']$/g, '');
+                return decodeHtmlEntities(cleaned);
+              });
 
-    // 3. Upload NDJSON to Storage
-    const jobId = crypto.randomUUID();
+              const reference = extractField(columns, columnMapping.supplier_reference);
+              const name = extractField(columns, columnMapping.product_name);
+
+              if (reference && name) {
+                const ean = extractField(columns, columnMapping.ean);
+                const description = extractField(columns, columnMapping.description);
+                
+                let purchase_price = null;
+                const priceStr = extractField(columns, columnMapping.purchase_price);
+                if (priceStr) {
+                  const normalizedPrice = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
+                  purchase_price = parseFloat(normalizedPrice);
+                }
+
+                let stock = null;
+                const stockStr = extractField(columns, columnMapping.stock);
+                if (stockStr) {
+                  stock = parseInt(stockStr.replace(/\D/g, ''));
+                }
+
+                const productData = {
+                  supplier_id: supplierId,
+                  user_id: user.id,
+                  reference,
+                  name,
+                  ean: ean || null,
+                  description: description || null,
+                  purchase_price: purchase_price || null,
+                  stock: stock || null,
+                  currency: 'EUR',
+                  brand: extractField(columns, columnMapping.brand) || null,
+                  category: extractField(columns, columnMapping.category) || null,
+                  last_sync_at: new Date().toISOString()
+                };
+
+                currentBatch.push(JSON.stringify(productData));
+                processedCount++;
+              }
+            }
+          }
+          break;
+        }
+        
+        // Add chunk to buffer
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          lineNumber++;
+          const trimmedLine = line.trim();
+          
+          if (!trimmedLine) continue;
+          
+          // Skip initial rows
+          if (lineNumber <= (skipRows || 0)) continue;
+          
+          // Header row
+          if (lineNumber === (skipRows || 0) + 1) {
+            // Auto-detect delimiter from header
+            if (!delimiter) {
+              detectedDelimiter = trimmedLine.includes('\t') ? '\t' : ',';
+            }
+            headerRow = trimmedLine.split(detectedDelimiter).map(h => h.trim());
+            console.log('[IMPORT-CSV] Header row:', headerRow);
+            console.log('[IMPORT-CSV] Using delimiter:', detectedDelimiter);
+            continue;
+          }
+          
+          // Parse data row
+          const columns = trimmedLine.split(detectedDelimiter).map(col => {
+            let cleaned = col.trim().replace(/^["']|["']$/g, '');
+            return decodeHtmlEntities(cleaned);
+          });
+
+          const reference = extractField(columns, columnMapping.supplier_reference);
+          const name = extractField(columns, columnMapping.product_name);
+
+          if (!reference || !name) {
+            continue;
+          }
+
+          const ean = extractField(columns, columnMapping.ean);
+          const description = extractField(columns, columnMapping.description);
+          
+          // Parse price
+          let purchase_price = null;
+          const priceStr = extractField(columns, columnMapping.purchase_price);
+          if (priceStr) {
+            const normalizedPrice = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
+            purchase_price = parseFloat(normalizedPrice);
+          }
+
+          // Parse stock
+          let stock = null;
+          const stockStr = extractField(columns, columnMapping.stock);
+          if (stockStr) {
+            stock = parseInt(stockStr.replace(/\D/g, ''));
+          }
+
+          const productData = {
+            supplier_id: supplierId,
+            user_id: user.id,
+            reference,
+            name,
+            ean: ean || null,
+            description: description || null,
+            purchase_price: purchase_price || null,
+            stock: stock || null,
+            currency: 'EUR',
+            brand: extractField(columns, columnMapping.brand) || null,
+            category: extractField(columns, columnMapping.category) || null,
+            last_sync_at: new Date().toISOString()
+          };
+
+          currentBatch.push(JSON.stringify(productData));
+          processedCount++;
+
+          // Write batch every 1000 products
+          if (currentBatch.length >= 1000) {
+            await writeBatchToStorage(currentBatch, batchNumber);
+            currentBatch = [];
+            batchNumber++;
+            console.log(`[IMPORT-CSV] Processed ${processedCount} products...`);
+          }
+        }
+      }
+      
+      // Write final batch
+      if (currentBatch.length > 0) {
+        await writeBatchToStorage(currentBatch, batchNumber);
+        batchNumber++;
+      }
+      
+      console.log('[IMPORT-CSV] Streaming complete. Total products:', processedCount);
+      console.log('[IMPORT-CSV] Total batches written:', batchNumber - 1);
+      
+    } finally {
+      reader.releaseLock();
+    }
+
+    // 3. Concatenate all batches into final NDJSON
+    console.log('[IMPORT-CSV] Concatenating batches...');
     const ndjsonPath = `${user.id}/${jobId}.ndjson`;
-    const ndjsonContent = ndjsonLines.join('\n');
-
-    console.log('[IMPORT-CSV] Uploading NDJSON to Storage:', {
+    
+    // List all batch files
+    const { data: files, error: listError } = await supabase.storage
+      .from('supplier-imports')
+      .list(user.id, { 
+        search: `${jobId}_batch`
+      });
+    
+    if (listError) {
+      throw new Error(`Failed to list batch files: ${listError.message}`);
+    }
+    
+    // Sort batch files by number
+    const sortedFiles = (files || [])
+      .filter(f => f.name.startsWith(`${jobId}_batch`))
+      .sort((a, b) => {
+        const numA = parseInt(a.name.match(/batch(\d+)/)?.[1] || '0');
+        const numB = parseInt(b.name.match(/batch(\d+)/)?.[1] || '0');
+        return numA - numB;
+      });
+    
+    console.log('[IMPORT-CSV] Found batches:', sortedFiles.length);
+    
+    // Concatenate batches
+    let finalNdjson = '';
+    for (const file of sortedFiles) {
+      const { data: batchData, error: downloadError } = await supabase.storage
+        .from('supplier-imports')
+        .download(`${user.id}/${file.name}`);
+      
+      if (downloadError || !batchData) {
+        throw new Error(`Failed to download batch ${file.name}: ${downloadError?.message}`);
+      }
+      
+      finalNdjson += await batchData.text();
+    }
+    
+    // Upload final NDJSON
+    console.log('[IMPORT-CSV] Uploading final NDJSON:', {
       path: ndjsonPath,
-      size_mb: (ndjsonContent.length / 1024 / 1024).toFixed(2),
-      lines: ndjsonLines.length
+      size_mb: (finalNdjson.length / 1024 / 1024).toFixed(2),
+      products: processedCount
     });
-
+    
     const { error: uploadError } = await supabase.storage
       .from('supplier-imports')
-      .upload(ndjsonPath, ndjsonContent, {
+      .upload(ndjsonPath, finalNdjson, {
         contentType: 'application/x-ndjson',
         upsert: true
       });
 
     if (uploadError) {
-      console.error('[IMPORT-CSV] NDJSON upload error:', uploadError);
-      throw new Error(`Failed to upload NDJSON: ${uploadError.message}`);
+      throw new Error(`Failed to upload final NDJSON: ${uploadError.message}`);
     }
+    
+    // Clean up batch files
+    console.log('[IMPORT-CSV] Cleaning up batch files...');
+    const batchPaths = sortedFiles.map(f => `${user.id}/${f.name}`);
+    await supabase.storage
+      .from('supplier-imports')
+      .remove(batchPaths);
+    
+    console.log('[IMPORT-CSV] Batch files cleaned up');
 
     // 4. Create import job
     const { data: job, error: jobError } = await supabase
