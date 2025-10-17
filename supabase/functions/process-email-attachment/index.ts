@@ -81,12 +81,12 @@ function detectFVSMapping(headers: string[]): Record<string, number | null> {
   };
 
   const patterns: Record<string, string[]> = {
-    ean: ['code ean', 'ean', 'ean13', 'gtin'],
-    supplier_reference: ['code produit', 'reference', 'ref', 'code', 'ref fournisseur'],
+    ean: ['code ean', 'ean', 'ean13', 'gtin', 'gencode'],
+    supplier_reference: ['code produit', 'reference', 'ref', 'code', 'ref fournisseur', 'ref.feeder', 'ref feeder'],
     product_name: ['description', 'designation', 'libelle', 'nom', 'article'],
-    brand: ['marque', 'brand', 'fabricant'],
+    brand: ['marque', 'brand', 'fabricant', 'constructeur'],
     category: ['categorie', 'category', 'gamme', 'famille'],
-    purchase_price: ['pau ht', 'prix d\'achat', 'pa ht', 'prix achat ht', 'tarif ht'],
+    purchase_price: ['pau ht', 'prix d\'achat', 'pa ht', 'prix achat ht', 'tarif ht', 'prix.achat', 'prix achat'],
     stock_quantity: ['qte', 'quantite', 'stock'],
     vat_rate: ['tva', 'taux tva', 'tax']
   };
@@ -359,6 +359,12 @@ serve(async (req) => {
     }
 
     console.log(`[DISPATCHER] Prepared ${validCount} valid lines from ${dataRows.length} total`);
+    
+    if (validCount === 0 && dataRows.length > 0) {
+      console.warn('[DISPATCHER] ⚠️ NO VALID LINES! Sample raw row:', dataRows[0]);
+      console.warn('[DISPATCHER] ⚠️ Mapping used:', finalMapping);
+      console.warn('[DISPATCHER] ⚠️ Headers:', headers);
+    }
 
     // Save NDJSON to storage
     const ndjsonContent = ndjsonLines.join('\n');
@@ -366,8 +372,9 @@ serve(async (req) => {
     
     const { error: uploadError } = await supabase.storage
       .from('email-attachments')
-      .upload(ndjsonPath, new Blob([ndjsonContent], { type: 'application/x-ndjson' }), {
-        upsert: true
+      .upload(ndjsonPath, new Blob([ndjsonContent], { type: 'text/plain' }), {
+        upsert: true,
+        contentType: 'text/plain'
       });
 
     if (uploadError) throw uploadError;
