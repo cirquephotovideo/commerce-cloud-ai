@@ -6,9 +6,10 @@ interface EnrichmentPromptProps {
   type: 'amazon' | 'images' | 'video' | 'rsgp' | 'description' | 'specs';
   onEnrich: () => void;
   isLoading?: boolean;
+  loadingText?: string;
 }
 
-export const EnrichmentPrompt = ({ type, onEnrich, isLoading }: EnrichmentPromptProps) => {
+export const EnrichmentPrompt = ({ type, onEnrich, isLoading, loadingText }: EnrichmentPromptProps) => {
   const configs = {
     amazon: {
       icon: Package,
@@ -69,7 +70,7 @@ export const EnrichmentPrompt = ({ type, onEnrich, isLoading }: EnrichmentPrompt
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Enrichissement en cours...
+              {loadingText || 'Enrichissement en cours...'}
             </>
           ) : (
             <>

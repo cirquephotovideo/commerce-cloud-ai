@@ -25,7 +25,7 @@ interface ProviderConfig {
 }
 
 export function EnrichmentProviderSelector({ open, onOpenChange, onSelect }: EnrichmentProviderSelectorProps) {
-  const [selected, setSelected] = useState<AIProvider>('lovable');
+  const [selected, setSelected] = useState<AIProvider>('ollama_cloud');
   const [providers, setProviders] = useState<ProviderConfig[]>([
     {
       id: 'lovable',

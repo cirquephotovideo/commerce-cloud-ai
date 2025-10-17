@@ -171,6 +171,14 @@ serve(async (req) => {
 
     // Process the enrichment immediately
     console.log('[RE-ENRICH] Invoking product-analyzer...');
+    
+    // Map provider: ollama_cloud/ollama_local -> ollama
+    const effectiveProvider = (provider === 'ollama_cloud' || provider === 'ollama_local') 
+      ? 'ollama' 
+      : provider || 'lovable-ai';
+    
+    console.log(`[RE-ENRICH] Provider mapping: ${provider} -> ${effectiveProvider}`);
+    
     try {
       // Call product analyzer
       if (enrichmentsToRun.includes('amazon') || enrichmentsToRun.includes('ai_analysis')) {
@@ -185,7 +193,7 @@ serve(async (req) => {
                 description: productData.description
               },
               enrichmentOptions: enrichmentsToRun,
-              provider: provider || 'lovable-ai',
+              provider: effectiveProvider,
               model: model || 'google/gemini-2.5-flash'
             }
           }

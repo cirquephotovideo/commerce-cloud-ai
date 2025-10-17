@@ -156,7 +156,7 @@ export function ProductDetailModal({
     }
   }, [open, initialTab]);
 
-  const handleEnrich = (type: string) => {
+  const handleEnrich = async (type: string) => {
     const typeMap: Record<string, string[]> = {
       amazon: ['amazon'],
       images: ['images'],
@@ -166,7 +166,54 @@ export function ProductDetailModal({
       specs: ['specifications']
     };
     
-    enrichmentMutation.mutate({ enrichmentType: typeMap[type] || [type] });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Non authentifié");
+        return;
+      }
+
+      const enrichmentTypes = typeMap[type] || [type];
+
+      // Add task to queue
+      const { error: insertError } = await supabase
+        .from("enrichment_queue")
+        .insert({
+          user_id: user.id,
+          supplier_product_id: product.id,
+          analysis_id: analysis?.id,
+          enrichment_type: enrichmentTypes,
+          priority: "high",
+          status: "pending",
+        });
+
+      if (insertError) {
+        console.error('[ProductDetail] Queue insert error:', insertError);
+        toast.error(`Erreur: ${insertError.message}`);
+        return;
+      }
+
+      toast.success(`✨ Enrichissement ${type} ajouté à la file`);
+
+      // Trigger processing
+      const { data: processResult, error: processError } = await supabase.functions.invoke(
+        'process-enrichment-queue',
+        { body: { maxItems: 1 } }
+      );
+
+      if (processError) {
+        console.error('[ProductDetail] Processing error:', processError);
+        toast.warning("⏳ Enrichissement en file, vérifiez le Dashboard");
+      } else {
+        toast.success("🚀 Enrichissement démarré !");
+      }
+
+      // Refresh after 3 seconds
+      setTimeout(() => handleRefresh(), 3000);
+    } catch (error: any) {
+      console.error("[ProductDetail] Enrichment error:", error);
+      toast.error("❌ Erreur lors de l'enrichissement");
+    }
   };
 
   const handleBadgeClick = (type: string) => {

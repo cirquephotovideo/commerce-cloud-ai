@@ -100,6 +100,10 @@ function pickWhitelist<T extends Record<string, any>>(obj: T, allowedKeys: strin
 // FCC ID SEARCH & DATA FETCHING
 // ============================================
 
+console.log('[RSGP] ========================================');
+console.log('[RSGP] 🚀 DÉMARRAGE ANALYSE RSGP');
+console.log('[RSGP] ========================================');
+
 // ✅ Rechercher FCC ID via Serper
 async function searchFCCId(productName: string, brand: string, model: string): Promise<string | null> {
   console.log(`[FCC] 🔍 Recherche FCC ID pour: ${productName} ${brand} ${model}`);
@@ -2002,6 +2006,7 @@ serve(async (req) => {
       overallConfidence: rsgpData.generation_metadata?.overall_confidence,
       hasRealData: rsgpData.fabricant_nom !== 'non communiqué'
     });
+    console.log('[RSGP] ========================================');
 
     return new Response(
       JSON.stringify({
@@ -2012,7 +2017,9 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('[RSGP-COMPLIANCE] Error:', error);
+    console.error('[RSGP] ❌ === ERREUR GÉNÉRATION RSGP ===');
+    console.error('[RSGP] Error:', error);
+    console.error('[RSGP] ========================================');
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
