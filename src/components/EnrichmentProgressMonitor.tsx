@@ -322,7 +322,14 @@ export function EnrichmentProgressMonitor() {
   };
 
   // Supprimer une tâche
-  const deleteTask = async (taskId: string) => {
+  const deleteTask = async (taskId: string, taskStatus: string) => {
+    // Confirmation obligatoire pour les tâches en cours
+    if (taskStatus === 'processing') {
+      if (!confirm('⚠️ Cette tâche est en cours. Voulez-vous vraiment la supprimer ?')) {
+        return;
+      }
+    }
+    
     try {
       const { error } = await supabase
         .from('enrichment_queue')
@@ -351,6 +358,29 @@ export function EnrichmentProgressMonitor() {
       
       if (error) throw error;
       toast.success('✅ Tâches échouées supprimées');
+      loadTasks();
+    } catch (error: any) {
+      toast.error(`❌ Erreur: ${error.message}`);
+    }
+  };
+
+  // Supprimer toutes les tâches (tous statuts)
+  const deleteAllTasks = async () => {
+    if (!confirm(`⚠️ Voulez-vous vraiment supprimer TOUTES les ${tasks.length} tâches ?\n\nCeci inclut :\n- ${stats.pending} tâche(s) en attente\n- ${stats.processing} tâche(s) en cours\n- ${stats.completed} tâche(s) terminée(s)\n- ${stats.failed} tâche(s) échouée(s)\n\nCette action est irréversible.`)) {
+      return;
+    }
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('enrichment_queue')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      toast.success(`✅ ${tasks.length} tâche(s) supprimée(s)`);
       loadTasks();
     } catch (error: any) {
       toast.error(`❌ Erreur: ${error.message}`);
@@ -452,6 +482,16 @@ export function EnrichmentProgressMonitor() {
               >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Nettoyer les échecs ({stats.failed})
+              </Button>
+            )}
+            {tasks.length > 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={deleteAllTasks}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Tout Supprimer ({tasks.length})
               </Button>
             )}
             {stats.pending > 0 && (
@@ -627,18 +667,30 @@ export function EnrichmentProgressMonitor() {
                               ENRICHMENT_LABELS[type] || type
                             ).join(', ')}
                           </div>
-                          <Badge 
-                            variant="outline" 
-                            className={`${getStatusColor(task.status)} border flex items-center gap-1 ${
-                              task.status === 'processing' ? 'text-base px-3 py-1 animate-pulse font-bold' : ''
-                            }`}
-                          >
-                            {getStatusIcon(task.status)}
-                            {task.status === 'completed' && 'Terminé'}
-                            {task.status === 'processing' && '⚡ En cours'}
-                            {task.status === 'failed' && 'Échoué'}
-                            {task.status === 'pending' && 'En attente'}
-                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <Badge 
+                              variant="outline" 
+                              className={`${getStatusColor(task.status)} border flex items-center gap-1 ${
+                                task.status === 'processing' ? 'text-base px-3 py-1 animate-pulse font-bold' : ''
+                              }`}
+                            >
+                              {getStatusIcon(task.status)}
+                              {task.status === 'completed' && 'Terminé'}
+                              {task.status === 'processing' && '⚡ En cours'}
+                              {task.status === 'failed' && 'Échoué'}
+                              {task.status === 'pending' && 'En attente'}
+                            </Badge>
+                            
+                            {/* Bouton de suppression pour TOUTES les tâches */}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteTask(task.id, task.status)}
+                              className="text-red-600 hover:bg-red-50 opacity-50 hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
 
                         {/* Progress bar */}
@@ -672,7 +724,7 @@ export function EnrichmentProgressMonitor() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => deleteTask(task.id)}
+                                onClick={() => deleteTask(task.id, task.status)}
                                 className="text-red-600 hover:bg-red-50"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
