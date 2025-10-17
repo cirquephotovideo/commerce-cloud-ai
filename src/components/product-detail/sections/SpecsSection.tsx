@@ -8,10 +8,11 @@ interface SpecsSectionProps {
 }
 
 export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
-  const specs = analysis?.analysis_result?.specifications || {};
-  const dimensions = analysis?.analysis_result?.dimensions || {};
+  const specs = analysis?.specifications || analysis?.analysis_result?.specifications || {};
+  const dimensions = specs?.dimensions || analysis?.analysis_result?.dimensions || {};
   const battery = analysis?.analysis_result?.battery || {};
   const connectivity = analysis?.analysis_result?.connectivity || {};
+  const webSources = analysis?.analysis_result?._web_sources || [];
   
   const repairability = getRepairabilityData(analysis);
   const environmental = getEnvironmentalData(analysis);
@@ -117,17 +118,18 @@ export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
         </div>
 
         {/* Autres spécifications */}
-        {Object.keys(specs).length > 0 && (
+        {specs?.technical_details && (
           <div className="space-y-2 pt-2 border-t">
-            <div className="text-sm font-medium">Autres caractéristiques</div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              {Object.entries(specs).map(([key, value]) => (
-                <div key={key} className="flex justify-between">
-                  <span className="text-muted-foreground capitalize">{key}:</span>
-                  <span className="font-medium">{String(value)}</span>
-                </div>
-              ))}
-            </div>
+            <div className="text-sm font-medium">Détails techniques</div>
+            <p className="text-sm text-muted-foreground">{specs.technical_details}</p>
+          </div>
+        )}
+
+        {webSources.length > 0 && (
+          <div className="pt-2 border-t">
+            <Badge variant="outline" className="text-xs">
+              ✅ Enrichi avec Ollama Web Search
+            </Badge>
           </div>
         )}
       </CardContent>

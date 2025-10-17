@@ -13,8 +13,8 @@ interface RSGPSectionProps {
 
 export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
   const enrichMutation = useEnrichment(analysis.id, onEnrich);
-  const rsgpData = analysis?.rsgp_data;
-  const rsgpGeneratedAt = analysis?.rsgp_generated_at;
+  const rsgpData = analysis?.rsgp_data || analysis?.analysis_result?.rsgp_compliance;
+  const rsgpGeneratedAt = analysis?.rsgp_generated_at || analysis?.analysis_result?._web_search_timestamp;
 
   if (!rsgpData) {
     return (

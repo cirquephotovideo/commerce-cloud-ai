@@ -60,83 +60,47 @@ serve(async (req) => {
         });
     }
 
-    // ✅ Call enrichments sequentially to track progress
+    // ✅ Appel UNIQUE à la fonction d'enrichissement web Ollama
     const enrichments: Array<{ type: string; result: any }> = [];
 
-    // 1. Specifications
-    console.log('[ENRICH-ALL] 🔄 Starting specifications...');
-    await supabase
-      .from('enrichment_queue')
-      .update({ status: 'processing', started_at: new Date().toISOString() })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['specifications']);
+    console.log('[ENRICH-ALL] 🔄 Starting Ollama web enrichment...');
 
-    const specsResult = await supabase.functions.invoke('enrich-specifications', {
-      body: { analysisId, productData, preferred_model },
+    // Marquer toutes les tâches comme "processing"
+    for (const type of enrichmentTypes) {
+      await supabase
+        .from('enrichment_queue')
+        .update({ status: 'processing', started_at: new Date().toISOString() })
+        .eq('analysis_id', analysisId)
+        .contains('enrichment_type', [type]);
+    }
+
+    // Appel unique avec web search
+    const webEnrichResult = await supabase.functions.invoke('enrich-with-ollama-web', {
+      body: { analysisId, productData, purchasePrice },
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
 
-    await supabase
-      .from('enrichment_queue')
-      .update({ 
-        status: specsResult.error ? 'failed' : 'completed',
-        completed_at: new Date().toISOString(),
-        error_message: specsResult.error?.message || null
-      })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['specifications']);
+    // Mettre à jour le statut de toutes les tâches
+    const finalStatus = webEnrichResult.error ? 'failed' : 'completed';
+    for (const type of enrichmentTypes.filter(t => t !== 'rsgp')) {
+      await supabase
+        .from('enrichment_queue')
+        .update({ 
+          status: finalStatus,
+          completed_at: new Date().toISOString(),
+          error_message: webEnrichResult.error?.message || null
+        })
+        .eq('analysis_id', analysisId)
+        .contains('enrichment_type', [type]);
+    }
 
-    enrichments.push({ type: 'specifications', result: specsResult });
+    if (webEnrichResult.error) {
+      console.error('[ENRICH-ALL] ❌ Web enrichment failed:', webEnrichResult.error);
+    } else {
+      console.log('[ENRICH-ALL] ✅ Web enrichment completed successfully');
+    }
 
-    // 2. Technical Description
-    console.log('[ENRICH-ALL] 🔄 Starting technical_description...');
-    await supabase
-      .from('enrichment_queue')
-      .update({ status: 'processing', started_at: new Date().toISOString() })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['technical_description']);
-
-    const techResult = await supabase.functions.invoke('enrich-technical-description', {
-      body: { analysisId, productData, preferred_model },
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-
-    await supabase
-      .from('enrichment_queue')
-      .update({ 
-        status: techResult.error ? 'failed' : 'completed',
-        completed_at: new Date().toISOString(),
-        error_message: techResult.error?.message || null
-      })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['technical_description']);
-
-    enrichments.push({ type: 'technical_description', result: techResult });
-
-    // 3. Cost Analysis
-    console.log('[ENRICH-ALL] 🔄 Starting cost_analysis...');
-    await supabase
-      .from('enrichment_queue')
-      .update({ status: 'processing', started_at: new Date().toISOString() })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['cost_analysis']);
-
-    const costResult = await supabase.functions.invoke('enrich-cost-analysis', {
-      body: { analysisId, productData, purchasePrice, preferred_model },
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    });
-
-    await supabase
-      .from('enrichment_queue')
-      .update({ 
-        status: costResult.error ? 'failed' : 'completed',
-        completed_at: new Date().toISOString(),
-        error_message: costResult.error?.message || null
-      })
-      .eq('analysis_id', analysisId)
-      .eq('enrichment_type', ['cost_analysis']);
-
-    enrichments.push({ type: 'cost_analysis', result: costResult });
+    enrichments.push({ type: 'web_enrichment', result: webEnrichResult });
 
     // 4. RSGP (only if physical product)
     if (isPhysicalProduct) {

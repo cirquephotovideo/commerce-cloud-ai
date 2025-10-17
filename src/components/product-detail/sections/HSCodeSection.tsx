@@ -9,6 +9,7 @@ interface HSCodeSectionProps {
 
 export function HSCodeSection({ analysis }: HSCodeSectionProps) {
   const hsCodeData = getHSCodeData(analysis);
+  const webEnriched = analysis?.analysis_result?._enriched_with_ollama_web;
 
   if (!hsCodeData) {
     return (
@@ -43,6 +44,14 @@ export function HSCodeSection({ analysis }: HSCodeSectionProps) {
             <div className="space-y-2">
               <div className="text-sm font-medium">Description</div>
               <p className="text-sm text-muted-foreground">{hsCodeData.description}</p>
+            </div>
+          )}
+
+          {webEnriched && (
+            <div className="pt-2 border-t">
+              <Badge variant="outline" className="text-xs">
+                ✅ Enrichi avec Ollama Web Search
+              </Badge>
             </div>
           )}
         </CardContent>

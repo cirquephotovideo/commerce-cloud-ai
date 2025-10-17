@@ -62,10 +62,16 @@ export function SupplierCrossSearch({ product, open, onOpenChange }: SupplierCro
       let analysisId = analysis?.id;
 
       if (!analysisId) {
+        // Get user ID
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("User not authenticated");
+
         // Create a minimal product_analyses entry
         const { data: newAnalysis, error: analysisError } = await supabase
           .from("product_analyses")
           .insert([{
+            user_id: user.id,
+            product_url: '',
             analysis_result: { 
               name: product.product_name,
               ean: product.ean,

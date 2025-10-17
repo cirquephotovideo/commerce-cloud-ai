@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { FileText, Edit, Sparkles, CheckCircle2, XCircle, Loader2, Zap } from "lucide-react";
+import { FileText, Edit, Sparkles, CheckCircle2, XCircle, Loader2, Zap, ExternalLink } from "lucide-react";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { EnrichmentProgress } from "../EnrichmentProgress";
 import { useState } from "react";
@@ -30,14 +30,18 @@ export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionPro
     setShowProgress(true);
     enrichMutation.mutate({ enrichmentType: selectedEnrichments });
   };
+  
   // Gérer le cas où description est un objet ou une chaîne
-  const descriptionData = analysis?.analysis_result?.description;
+  const descriptionData = analysis?.long_description || analysis?.analysis_result?.description;
   const description = typeof descriptionData === 'string' 
     ? descriptionData 
     : descriptionData?.suggested_description || 
       analysis?.analysis_result?.product_description ||
       analysis?.description ||
       'Aucune description disponible';
+  
+  const webSources = analysis?.analysis_result?._web_sources || [];
+  const confidenceLevel = analysis?.analysis_result?._confidence_level;
   
   const strengths = analysis?.analysis_result?.strengths || 
                     analysis?.analysis_result?.pros || [];
@@ -56,6 +60,11 @@ export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionPro
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
             Description Complète
+            {confidenceLevel && (
+              <Badge variant={confidenceLevel === 'high' ? 'default' : 'secondary'} className="ml-auto">
+                Confiance : {confidenceLevel}
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -126,6 +135,30 @@ export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionPro
             )}
           </Button>
         </div>
+
+        {/* Sources Web */}
+        {webSources.length > 0 && (
+          <div className="pt-4 border-t">
+            <p className="text-sm font-medium mb-2">Sources web utilisées :</p>
+            <div className="space-y-1">
+              {webSources.slice(0, 3).map((url: string, idx: number) => (
+                <a 
+                  key={idx}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  {new URL(url).hostname}
+                </a>
+              ))}
+            </div>
+            <Badge variant="outline" className="mt-3">
+              ✅ Enrichi avec Ollama Web Search
+            </Badge>
+          </div>
+        )}
       </CardContent>
     </Card>
 
