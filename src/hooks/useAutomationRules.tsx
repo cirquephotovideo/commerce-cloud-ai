@@ -57,10 +57,10 @@ export const useAutomationRules = (category?: string) => {
 
   // Create automation rule
   const createRule = useMutation({
-    mutationFn: async (newRule: Partial<AutomationRule>) => {
+    mutationFn: async (newRule: Omit<AutomationRule, 'id' | 'created_at' | 'updated_at' | 'trigger_count' | 'success_count' | 'error_count' | 'last_triggered_at' | 'last_success_at' | 'last_error_at' | 'last_error_message'>) => {
       const { data, error } = await supabase
         .from('automation_master_rules')
-        .insert([newRule])
+        .insert([newRule as any])
         .select()
         .single();
 

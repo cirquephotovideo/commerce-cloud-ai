@@ -40,11 +40,7 @@ serve(async (req) => {
         console.log(`[ORCHESTRATOR] Evaluating rule: ${rule.rule_name} (${rule.rule_category})`);
 
         // Check if rule should be executed based on frequency
-        const { data: shouldExecute } = await supabase.rpc('should_execute_automation_rule', {
-          p_rule_id: rule.id,
-          p_trigger_config: rule.trigger_config,
-          p_last_triggered_at: rule.last_triggered_at,
-        });
+        const shouldExecute = checkIfShouldExecute(rule.trigger_config, rule.last_triggered_at);
 
         if (!shouldExecute) {
           console.log(`[ORCHESTRATOR] Rule ${rule.rule_name} not ready to execute yet`);
@@ -178,6 +174,39 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to check if rule should execute
+function checkIfShouldExecute(triggerConfig: any, lastTriggeredAt: string | null): boolean {
+  // If never executed, return true
+  if (!lastTriggeredAt) {
+    return true;
+  }
+
+  const frequency = triggerConfig?.frequency;
+  if (!frequency) {
+    return true;
+  }
+
+  const now = new Date();
+  const lastRun = new Date(lastTriggeredAt);
+  const diffMinutes = (now.getTime() - lastRun.getTime()) / (1000 * 60);
+
+  // Map frequency to minutes
+  const frequencyMap: Record<string, number> = {
+    'every_minute': 1,
+    'every_5_minutes': 5,
+    'every_15_minutes': 15,
+    'every_30_minutes': 30,
+    'hourly': 60,
+    'every_2_hours': 120,
+    'every_6_hours': 360,
+    'daily': 1440,
+    'weekly': 10080,
+  };
+
+  const requiredMinutes = frequencyMap[frequency] || 60;
+  return diffMinutes >= requiredMinutes;
+}
 
 // Helper functions for each action type
 async function executeImportAction(supabase: any, rule: any) {
