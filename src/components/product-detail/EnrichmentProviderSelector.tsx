@@ -188,7 +188,17 @@ export function EnrichmentProviderSelector({ open, onOpenChange, onSelect }: Enr
           </Button>
           <Button 
             onClick={() => {
-              onSelect(selected);
+              // Mapper les providers vers le format backend
+              const providerMap: Record<AIProvider, string> = {
+                'lovable': 'lovable',
+                'claude': 'claude',
+                'openai': 'openai',
+                'openrouter': 'openrouter',
+                'ollama_cloud': 'ollama_cloud',
+                'ollama_local': 'ollama_local'
+              };
+              const mappedProvider = providerMap[selected] || selected;
+              onSelect(mappedProvider as AIProvider);
               onOpenChange(false);
             }}
             disabled={!providers.find(p => p.id === selected)?.configured}

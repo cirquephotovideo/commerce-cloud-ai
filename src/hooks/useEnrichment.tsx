@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 export const useEnrichment = (productId: string, onSuccess?: () => void) => {
   return useMutation({
-    mutationFn: async ({ enrichmentType, provider = 'lovable-ai' }: { 
+    mutationFn: async ({ enrichmentType, provider = 'lovable' }: { 
       enrichmentType: string[]; 
       provider?: string;
     }) => {

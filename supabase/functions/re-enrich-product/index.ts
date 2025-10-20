@@ -42,6 +42,20 @@ serve(async (req) => {
 
     // Validation des entrées
     const rawBody = await req.json();
+    console.log('[RE-ENRICH] Raw body received:', JSON.stringify(rawBody, null, 2));
+    
+    try {
+      const validated = enrichmentSchema.parse(rawBody);
+      const { productId, enrichmentTypes, provider, model } = validated;
+      console.log('[RE-ENRICH] Validation successful:', { productId, enrichmentTypes, provider, model });
+    } catch (validationError: any) {
+      console.error('[RE-ENRICH] Validation error:', {
+        received: rawBody,
+        issues: validationError.issues || validationError.message
+      });
+      throw validationError;
+    }
+    
     const validated = enrichmentSchema.parse(rawBody);
     const { productId, enrichmentTypes, provider, model } = validated;
 
