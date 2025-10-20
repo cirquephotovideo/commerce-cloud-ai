@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import SubscriptionWelcome from "./pages/SubscriptionWelcome";
 import NotFound from "./pages/NotFound";
+import Demo from "./pages/Demo";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -46,6 +47,7 @@ const App = () => {
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/demo" element={<Demo />} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/dashboard/welcome" element={<ProtectedRoute><DashboardLayout><SubscriptionWelcome /></DashboardLayout></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><DashboardLayout><History /></DashboardLayout></ProtectedRoute>} />
