@@ -206,23 +206,17 @@ export function UnifiedMappingWizard({
     try {
       setSaving(true);
 
-      if (!profileName.trim()) {
-        toast({
-          title: "Nom requis",
-          description: "Veuillez entrer un nom pour ce profil",
-          variant: "destructive"
-        });
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
+
+      // Generate final profile name (use suggestion if empty)
+      const finalProfileName = profileName.trim() || `Profil ${new Date().toLocaleDateString('fr-FR')}`;
 
       // Prepare profile data
       const profileData = {
         user_id: user.id,
         supplier_id: supplierId,
-        profile_name: profileName,
+        profile_name: finalProfileName,
         source_type: sourceType,
         skip_config: {
           skip_rows_top: skipRowsTop,
