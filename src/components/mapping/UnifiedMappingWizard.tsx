@@ -295,8 +295,13 @@ export function UnifiedMappingWizard({
     );
   }
 
-  const validMapping = mapping.product_name !== null && mapping.purchase_price !== null;
+  const validMapping = mapping.product_name !== null && 
+                      mapping.purchase_price !== null && 
+                      (mapping.ean !== null || mapping.supplier_reference !== null);
   const previewData = getPreviewDataForMapper();
+  
+  // Suggest profile name if empty
+  const suggestedProfileName = profileName || `Profil ${new Date().toLocaleDateString('fr-FR')}`;
 
   return (
     <div className="space-y-6">
@@ -362,9 +367,22 @@ export function UnifiedMappingWizard({
               id="profile-name"
               value={profileName}
               onChange={(e) => setProfileName(e.target.value)}
-              placeholder="Ex: Feeder - Catalogue Général"
+              placeholder={suggestedProfileName}
             />
           </div>
+          
+          {!validMapping && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                <strong>⚠️ Champs manquants :</strong>
+                <ul className="text-xs mt-2 space-y-1">
+                  {!mapping.product_name && <li>• Nom du produit</li>}
+                  {!mapping.purchase_price && <li>• Prix d'achat</li>}
+                  {(!mapping.ean && !mapping.supplier_reference) && <li>• EAN ou Référence fournisseur</li>}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
           
           {validMapping && (
             <Alert>

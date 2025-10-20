@@ -2,10 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { Package, CheckCircle2, XCircle, Clock, TrendingUp } from "lucide-react";
+import { Package, CheckCircle2, XCircle, Clock, TrendingUp, StopCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export function ImportJobMonitor() {
   const { data: jobs } = useQuery({
@@ -49,9 +51,29 @@ export function ImportJobMonitor() {
                     {job.supplier_configurations?.supplier_name || 'Import'}
                   </span>
                 </div>
-                <Badge variant={job.status === 'queued' ? 'secondary' : 'default'}>
-                  {job.status === 'queued' ? 'En attente' : 'En cours'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant={job.status === 'queued' ? 'secondary' : 'default'}>
+                    {job.status === 'queued' ? 'En attente' : 'En cours'}
+                  </Badge>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={async () => {
+                      await supabase
+                        .from('import_jobs')
+                        .update({ 
+                          status: 'failed',
+                          error_message: 'Arrêté manuellement par l\'utilisateur',
+                          completed_at: new Date().toISOString()
+                        })
+                        .eq('id', job.id);
+                      
+                      toast.success('Import arrêté');
+                    }}
+                  >
+                    <StopCircle className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
               
               <Progress value={percentage} className="h-2" />

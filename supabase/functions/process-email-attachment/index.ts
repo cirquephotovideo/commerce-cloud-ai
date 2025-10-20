@@ -119,6 +119,15 @@ serve(async (req) => {
       has_excluded_columns: !!excluded_columns
     });
 
+    // ⚠️ DETAILED MAPPING VALIDATION LOG
+    console.log('[DISPATCHER] ⚠️ Mapping reçu:', JSON.stringify(custom_mapping, null, 2));
+    console.log('[DISPATCHER] ⚠️ Validation:', {
+      hasProductName: !!custom_mapping?.product_name,
+      hasPurchasePrice: !!custom_mapping?.purchase_price,
+      hasEanOrRef: !!(custom_mapping?.ean || custom_mapping?.supplier_reference),
+      allKeys: custom_mapping ? Object.keys(custom_mapping) : []
+    });
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

@@ -434,14 +434,40 @@ export function EmailInboxTable() {
     console.log('[EmailInboxTable] Confirming profile:', profile);
 
     // Convert column indices to ORIGINAL column names (not normalized) for backend
-    const nameMapping = Object.fromEntries(
-      Object.entries(profile.column_mapping).map(([key, idx]) => [
-        key,
-        idx === null ? null : (mappingValidation.originalColumns || mappingValidation.columns)[idx]
-      ])
-    );
+    const nameMapping: Record<string, string | null> = {
+      product_name: null,
+      purchase_price: null,
+      ean: null,
+      supplier_reference: null,
+      stock_quantity: null,
+      vat_rate: null,
+      brand: null,
+      category: null
+    };
+
+    // Map each field from column index to original column name
+    Object.entries(profile.column_mapping).forEach(([key, idx]) => {
+      nameMapping[key] = idx === null ? null : (mappingValidation.originalColumns || mappingValidation.columns)[idx];
+    });
 
     console.log('[EmailInboxTable] Name mapping (original headers):', nameMapping);
+
+    // Frontend validation - ensure required fields are mapped
+    if (!nameMapping.product_name || !nameMapping.purchase_price) {
+      toast.error("Mapping invalide : nom de produit et prix d'achat requis");
+      return;
+    }
+    if (!nameMapping.ean && !nameMapping.supplier_reference) {
+      toast.error("Mapping invalide : EAN ou référence fournisseur requis");
+      return;
+    }
+
+    console.log('[MAPPING-VALIDATION]', {
+      hasProductName: !!nameMapping.product_name,
+      hasPurchasePrice: !!nameMapping.purchase_price,
+      hasEanOrRef: !!(nameMapping.ean || nameMapping.supplier_reference),
+      fullMapping: nameMapping
+    });
 
     // Initialize progress dialog with realistic total
     setImportProgress({
