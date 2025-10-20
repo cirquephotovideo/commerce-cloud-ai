@@ -431,7 +431,6 @@ export default function Suppliers() {
           <Button
             variant="outline"
             onClick={handleManualImportRetry}
-            disabled={!runningJobs || runningJobs.length === 0}
           >
             🚀 Relancer imports
           </Button>
