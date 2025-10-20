@@ -348,13 +348,7 @@ serve(async (req) => {
       console.log(`[IMPORT-CSV] Batch ${i + 1} queued successfully`);
     }
     
-    // Clean up batch files after processing
-    console.log('[IMPORT-CSV] Cleaning up batch files...');
-    const batchPaths = sortedFiles.map(f => `${user.id}/${f.name}`);
-    await supabase.storage
-      .from('supplier-imports')
-      .remove(batchPaths);
-    console.log('[IMPORT-CSV] Batch files cleaned up');
+    console.log('[IMPORT-CSV] All batches queued for processing');
 
     // 6. Log the import
     await supabase.from('supplier_import_logs').insert({
