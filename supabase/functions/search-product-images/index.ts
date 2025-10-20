@@ -66,7 +66,58 @@ serve(async (req) => {
     const GOOGLE_CX = Deno.env.get('GOOGLE_SEARCH_CX');
 
     if (!GOOGLE_API_KEY || !GOOGLE_CX) {
-      console.log('Google Search API not configured, returning empty results');
+      console.log('[SEARCH-IMAGES] Google API not configured, trying AI generation fallback');
+      
+      try {
+        const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+        
+        if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+          console.log('[SEARCH-IMAGES] Supabase not configured for AI fallback');
+          return new Response(
+            JSON.stringify({ images: [], source: 'none' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-themed-image`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            prompt: `Professional product photography of ${productName}, high quality, commercial style, white background, 8K`,
+            productName 
+          })
+        });
+        
+        if (response.ok) {
+          const aiImageData = await response.json();
+          if (aiImageData?.imageUrl) {
+            console.log('[SEARCH-IMAGES] ✅ AI fallback successful');
+            return new Response(
+              JSON.stringify({ 
+                images: [{
+                  url: aiImageData.imageUrl,
+                  thumbnail: aiImageData.imageUrl,
+                  title: `AI Generated - ${productName}`,
+                  source: 'ai-generated',
+                  width: 1024,
+                  height: 1024
+                }], 
+                source: 'ai-fallback',
+                count: 1 
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        console.log('[SEARCH-IMAGES] AI fallback failed, returning empty results');
+      } catch (aiError) {
+        console.error('[SEARCH-IMAGES] AI fallback exception:', aiError);
+      }
+      
       return new Response(
         JSON.stringify({ images: [], source: 'none' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

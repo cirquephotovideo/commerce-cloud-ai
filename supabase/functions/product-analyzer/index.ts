@@ -493,19 +493,31 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     if (includeImages) {
       try {
         const productName = analysisResult.product_name || productInput;
-        console.log(`[PRODUCT-ANALYZER] Fetching images for: ${productName}`);
+        console.log(`[PRODUCT-ANALYZER] 📸 Fetching images for: "${productName}"`);
         
         const { data: imageData, error: imageError } = await supabaseClient.functions.invoke('search-product-images', {
           body: { productName }
         });
 
-        if (!imageError && imageData?.imageUrls) {
-          imageUrls = imageData.imageUrls;
-          console.log(`[PRODUCT-ANALYZER] Found ${imageUrls.length} images`);
+        console.log('[PRODUCT-ANALYZER] Image search response:', {
+          hasError: !!imageError,
+          error: imageError,
+          dataKeys: imageData ? Object.keys(imageData) : [],
+          imageCount: imageData?.images?.length || 0,
+          source: imageData?.source
+        });
+
+        if (!imageError && imageData?.images) {
+          imageUrls = imageData.images.map((img: any) => img.url);
+          console.log(`[PRODUCT-ANALYZER] ✅ Found ${imageUrls.length} images from ${imageData.source}`);
+        } else if (imageError) {
+          console.error('[PRODUCT-ANALYZER] ❌ Image search error:', imageError);
         }
       } catch (imageError) {
-        console.error('[PRODUCT-ANALYZER] Image search error:', imageError);
+        console.error('[PRODUCT-ANALYZER] ❌ Image search exception:', imageError);
       }
+    } else {
+      console.log('[PRODUCT-ANALYZER] ⏭️ Image search skipped (includeImages = false)');
     }
 
     // Phase 1: Flatten structure - return data directly, not wrapped in "analysis"
