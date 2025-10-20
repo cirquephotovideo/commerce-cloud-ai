@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { FileText, RefreshCw, Mail, Eye, TrendingUp, Trash2, Download, Package, FileCheck } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -84,7 +84,7 @@ export function EmailInboxTable() {
     refetchIntervalInBackground: false,
   });
 
-  // Group emails by supplier
+  // Group emails by supplier and limit to 3 most recent per supplier
   const emailsBySupplier = useMemo(() => {
     if (!emailInbox) return {};
     
@@ -97,12 +97,14 @@ export function EmailInboxTable() {
       return acc;
     }, {} as Record<string, typeof emailInbox>);
 
-    // Sort each group by date (most recent first)
-    Object.values(grouped).forEach(emails => {
+    // Sort each group by date (most recent first) AND limit to 3 emails per supplier
+    const limited: typeof grouped = {};
+    Object.entries(grouped).forEach(([supplier, emails]) => {
       emails.sort((a, b) => new Date(b.received_at).getTime() - new Date(a.received_at).getTime());
+      limited[supplier] = emails.slice(0, 3); // Keep only the 3 most recent
     });
 
-    return grouped;
+    return limited;
   }, [emailInbox]);
 
   // Poll import_jobs for active job
@@ -843,11 +845,18 @@ export function EmailInboxTable() {
                   <TableBody>
                     {emails.map((email) => (
                       <TableRow key={email.id}>
-                        <TableCell className="text-sm">
-                          {formatDistanceToNow(new Date(email.received_at), { 
-                            addSuffix: true, 
-                            locale: fr 
-                          })}
+                        <TableCell>
+                          <div className="text-sm">
+                            <div className="font-medium">
+                              {format(new Date(email.received_at), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(email.received_at), { 
+                                addSuffix: true, 
+                                locale: fr 
+                              })}
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div>

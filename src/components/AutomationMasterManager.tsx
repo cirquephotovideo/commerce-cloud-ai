@@ -5,10 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAutomationRules } from '@/hooks/useAutomationRules';
 import { useAutomationStats } from '@/hooks/useAutomationStats';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Play, Pause, Trash2, BarChart3, Settings } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { AutomationWizard } from './AutomationWizard';
 
 const categoryIcons: Record<string, string> = {
   import: '📥',
@@ -30,6 +30,7 @@ const categoryLabels: Record<string, string> = {
 
 export const AutomationMasterManager = () => {
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>();
+  const [wizardOpen, setWizardOpen] = useState(false);
   const { rules, isLoading, toggleActive, deleteRule } = useAutomationRules(selectedCategory);
   const { data: stats } = useAutomationStats();
 
@@ -125,25 +126,10 @@ export const AutomationMasterManager = () => {
                   Voir toutes
                 </Button>
               )}
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nouvelle règle
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Créer une automatisation</DialogTitle>
-                  </DialogHeader>
-                  <div className="p-6 text-center text-muted-foreground">
-                    <p>Wizard de création à implémenter</p>
-                    <p className="text-sm mt-2">
-                      Cette interface permettra de créer des règles d'automatisation en 5 étapes
-                    </p>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button onClick={() => setWizardOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nouvelle règle
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -249,6 +235,9 @@ export const AutomationMasterManager = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Automation Wizard */}
+      <AutomationWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </div>
   );
 };
