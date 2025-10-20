@@ -268,11 +268,8 @@ serve(async (req) => {
       reader.releaseLock();
     }
 
-    // 3. Concatenate all batches into final NDJSON
-    console.log('[IMPORT-CSV] Concatenating batches...');
-    const ndjsonPath = `${user.id}/${jobId}.ndjson`;
-    
-    // List all batch files
+    // 3. List batch files (no concatenation to save memory)
+    console.log('[IMPORT-CSV] Listing batch files...');
     const { data: files, error: listError } = await supabase.storage
       .from('supplier-imports')
       .list(user.id, { 
@@ -283,7 +280,6 @@ serve(async (req) => {
       throw new Error(`Failed to list batch files: ${listError.message}`);
     }
     
-    // Sort batch files by number
     const sortedFiles = (files || [])
       .filter(f => f.name.startsWith(`${jobId}_batch`))
       .sort((a, b) => {
@@ -293,47 +289,6 @@ serve(async (req) => {
       });
     
     console.log('[IMPORT-CSV] Found batches:', sortedFiles.length);
-    
-    // Concatenate batches
-    let finalNdjson = '';
-    for (const file of sortedFiles) {
-      const { data: batchData, error: downloadError } = await supabase.storage
-        .from('supplier-imports')
-        .download(`${user.id}/${file.name}`);
-      
-      if (downloadError || !batchData) {
-        throw new Error(`Failed to download batch ${file.name}: ${downloadError?.message}`);
-      }
-      
-      finalNdjson += await batchData.text();
-    }
-    
-    // Upload final NDJSON
-    console.log('[IMPORT-CSV] Uploading final NDJSON:', {
-      path: ndjsonPath,
-      size_mb: (finalNdjson.length / 1024 / 1024).toFixed(2),
-      products: processedCount
-    });
-    
-    const { error: uploadError } = await supabase.storage
-      .from('supplier-imports')
-      .upload(ndjsonPath, finalNdjson, {
-        contentType: 'application/x-ndjson',
-        upsert: true
-      });
-
-    if (uploadError) {
-      throw new Error(`Failed to upload final NDJSON: ${uploadError.message}`);
-    }
-    
-    // Clean up batch files
-    console.log('[IMPORT-CSV] Cleaning up batch files...');
-    const batchPaths = sortedFiles.map(f => `${user.id}/${f.name}`);
-    await supabase.storage
-      .from('supplier-imports')
-      .remove(batchPaths);
-    
-    console.log('[IMPORT-CSV] Batch files cleaned up');
 
     // 4. Create import job
     const { data: job, error: jobError } = await supabase
@@ -345,7 +300,7 @@ serve(async (req) => {
         status: 'processing',
         total_lines: processedCount,
         processed_lines: 0,
-        file_path: ndjsonPath,
+        file_path: sortedFiles[0] ? `${user.id}/${sortedFiles[0].name}` : null,
         source_type: 'csv_upload'
       })
       .select()
@@ -358,28 +313,48 @@ serve(async (req) => {
 
     console.log('[IMPORT-CSV] Import job created:', job.id);
 
-    // 5. Invoke email-import-chunk to process in chunks
-    const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
-      body: {
-        jobId: job.id,
-        filePath: ndjsonPath,
-        userId: user.id,
-        supplierId,
-        offset: 0,
-        limit: 100,
-        columnMapping
-      }
-    });
-
-    if (chunkError) {
-      console.error('[IMPORT-CSV] Chunk processing invocation error:', chunkError);
-      await supabase
-        .from('import_jobs')
-        .update({ status: 'failed', error_message: chunkError.message })
-        .eq('id', job.id);
+    // 5. Process each batch sequentially to avoid memory issues
+    let totalProcessed = 0;
+    for (let i = 0; i < sortedFiles.length; i++) {
+      const batchPath = `${user.id}/${sortedFiles[i].name}`;
+      console.log(`[IMPORT-CSV] Processing batch ${i + 1}/${sortedFiles.length}: ${batchPath}`);
       
-      throw new Error(`Failed to start chunk processing: ${chunkError.message}`);
+      const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
+        body: {
+          jobId: job.id,
+          filePath: batchPath,
+          userId: user.id,
+          supplierId,
+          offset: 0,
+          limit: 1000,
+          columnMapping
+        }
+      });
+
+      if (chunkError) {
+        console.error(`[IMPORT-CSV] Batch ${i + 1} processing error:`, chunkError);
+        await supabase
+          .from('import_jobs')
+          .update({ 
+            status: 'failed', 
+            error_message: `Failed at batch ${i + 1}: ${chunkError.message}` 
+          })
+          .eq('id', job.id);
+        
+        throw new Error(`Failed to process batch ${i + 1}: ${chunkError.message}`);
+      }
+      
+      totalProcessed += 1000;
+      console.log(`[IMPORT-CSV] Batch ${i + 1} queued successfully`);
     }
+    
+    // Clean up batch files after processing
+    console.log('[IMPORT-CSV] Cleaning up batch files...');
+    const batchPaths = sortedFiles.map(f => `${user.id}/${f.name}`);
+    await supabase.storage
+      .from('supplier-imports')
+      .remove(batchPaths);
+    console.log('[IMPORT-CSV] Batch files cleaned up');
 
     // 6. Log the import
     await supabase.from('supplier_import_logs').insert({
