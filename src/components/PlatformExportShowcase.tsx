@@ -32,15 +32,13 @@ export const PlatformExportShowcase = () => {
         {/* Export Menu Screenshot */}
         <div className="mb-12">
           <Card className="max-w-4xl mx-auto overflow-hidden border-2 border-primary/20 shadow-2xl">
-            <div className="aspect-video bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center p-8">
-              <div className="text-center space-y-4">
-                <Cloud className="h-24 w-24 mx-auto text-primary/40" />
-                <p className="text-muted-foreground">
-                  Capture d'écran : Menu d'export multi-plateformes
-                  <br />
-                  <span className="text-sm">avec synchronisation en 1 clic</span>
-                </p>
-              </div>
+            <div className="aspect-video overflow-hidden rounded-lg border">
+              <img 
+                src="/screenshots/export-platforms-menu.png" 
+                alt="Menu d'export multi-plateformes avec synchronisation en 1 clic vers Shopify, WooCommerce, PrestaShop..."
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </div>
           </Card>
         </div>

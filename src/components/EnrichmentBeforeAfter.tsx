@@ -48,10 +48,13 @@ export const EnrichmentBeforeAfter = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="aspect-video bg-muted/30 rounded-lg border mb-4 flex items-center justify-center">
-                <p className="text-muted-foreground text-center px-4">
-                  Screenshot : Fiche produit avant enrichissement
-                </p>
+              <div className="aspect-video rounded-lg border mb-4 overflow-hidden">
+                <img 
+                  src="/screenshots/product-before.png" 
+                  alt="Fiche produit avant enrichissement IA - données basiques"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               </div>
               <div className="space-y-2 text-sm">
                 {beforeFeatures.map((feature, index) => {
@@ -76,13 +79,13 @@ export const EnrichmentBeforeAfter = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="aspect-video bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg border mb-4 flex items-center justify-center">
-                <div className="text-center space-y-2">
-                  <Sparkles className="h-16 w-16 mx-auto text-primary/40" />
-                  <p className="text-muted-foreground text-sm px-4">
-                    Screenshot : Fiche produit après enrichissement
-                  </p>
-                </div>
+              <div className="aspect-video rounded-lg border mb-4 overflow-hidden bg-gradient-to-br from-primary/5 to-secondary/5">
+                <img 
+                  src="/screenshots/product-after.png" 
+                  alt="Fiche produit après enrichissement IA - 47 specs, 8 images HD, analyse complète"
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
               </div>
               <div className="space-y-2 text-sm">
                 {afterFeatures.map((feature, index) => {

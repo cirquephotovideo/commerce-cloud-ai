@@ -11,22 +11,26 @@ export const AutomationShowcase = () => {
     {
       number: "1️⃣",
       title: "Choisir le type d'import",
-      description: "Import Email, FTP, API ou Nettoyage automatique"
+      description: "Import Email, FTP, API ou Nettoyage automatique",
+      screenshot: "/screenshots/wizard-step1-type.png"
     },
     {
       number: "2️⃣",
       title: "Configurer la source",
-      description: "IMAP, POP3, FTP/SFTP ou webhook"
+      description: "IMAP, POP3, FTP/SFTP ou webhook",
+      screenshot: "/screenshots/wizard-step2-source.png"
     },
     {
       number: "3️⃣",
       title: "Définir la fréquence",
-      description: "Quotidien, hebdo, mensuel ou personnalisé"
+      description: "Quotidien, hebdo, mensuel ou personnalisé",
+      screenshot: "/screenshots/wizard-step3-trigger.png"
     },
     {
       number: "4️⃣",
       title: "Actions automatiques",
-      description: "Enrichissement IA + Export plateformes"
+      description: "Enrichissement IA + Export plateformes",
+      screenshot: "/screenshots/wizard-step4-actions.png"
     }
   ];
 
@@ -54,15 +58,13 @@ export const AutomationShowcase = () => {
                 <Badge variant="secondary">7 emails détectés</Badge>
               </div>
             </div>
-            <div className="aspect-video bg-muted/30 flex items-center justify-center p-8">
-              <div className="text-center space-y-4">
-                <Mail className="h-24 w-24 mx-auto text-primary/40" />
-                <p className="text-muted-foreground">
-                  Capture d'écran : Interface de gestion des emails fournisseurs
-                  <br />
-                  <span className="text-sm">avec détection automatique des pièces jointes</span>
-                </p>
-              </div>
+            <div className="aspect-video overflow-hidden rounded-lg border">
+              <img 
+                src="/screenshots/email-inbox-table.png" 
+                alt="Interface de gestion des emails fournisseurs avec détection automatique des pièces jointes"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </div>
             <CardFooter className="bg-muted/30 p-4">
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground w-full justify-center">
@@ -99,10 +101,13 @@ export const AutomationShowcase = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="aspect-video bg-muted/30 rounded-lg border flex items-center justify-center">
-                    <p className="text-muted-foreground text-center px-4">
-                      Screenshot : {step.title}
-                    </p>
+                  <div className="aspect-video rounded-lg border overflow-hidden">
+                    <img 
+                      src={step.screenshot} 
+                      alt={`Wizard étape ${index + 1}: ${step.title}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                   </div>
                   <p className="text-sm text-muted-foreground mt-4">
                     {step.description}
@@ -123,15 +128,13 @@ export const AutomationShowcase = () => {
                 <Badge variant="secondary">6 règles actives</Badge>
               </div>
             </div>
-            <div className="aspect-video bg-muted/30 flex items-center justify-center p-8">
-              <div className="text-center space-y-4">
-                <BarChart3 className="h-24 w-24 mx-auto text-secondary/40" />
-                <p className="text-muted-foreground">
-                  Capture d'écran : Dashboard de monitoring des automatisations
-                  <br />
-                  <span className="text-sm">avec statistiques en temps réel</span>
-                </p>
-              </div>
+            <div className="aspect-video overflow-hidden rounded-lg border">
+              <img 
+                src="/screenshots/automation-dashboard.png" 
+                alt="Dashboard de monitoring des automatisations avec statistiques en temps réel"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </div>
             <CardFooter className="bg-muted/30 p-4">
               <div className="grid grid-cols-3 gap-4 text-center w-full">

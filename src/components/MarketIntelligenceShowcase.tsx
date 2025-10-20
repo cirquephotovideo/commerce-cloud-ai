@@ -41,15 +41,13 @@ export const MarketIntelligenceShowcase = () => {
         {/* Dashboard Screenshot */}
         <div className="mb-12">
           <Card className="overflow-hidden border-2 border-secondary/20 shadow-2xl">
-            <div className="aspect-video bg-gradient-to-br from-secondary/10 to-accent/10 flex items-center justify-center p-8">
-              <div className="text-center space-y-4">
-                <TrendingUp className="h-24 w-24 mx-auto text-secondary/40" />
-                <p className="text-muted-foreground">
-                  Capture d'écran : Dashboard Market Intelligence
-                  <br />
-                  <span className="text-sm">avec surveillance des prix concurrents en temps réel</span>
-                </p>
-              </div>
+            <div className="aspect-video overflow-hidden rounded-lg border">
+              <img 
+                src="/screenshots/market-intelligence-dashboard.png" 
+                alt="Dashboard Market Intelligence avec surveillance des prix concurrents en temps réel"
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </div>
           </Card>
         </div>
