@@ -4384,6 +4384,10 @@ export type Database = {
         Args: { ean: string }
         Returns: boolean
       }
+      trigger_stuck_import_jobs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "super_admin" | "user" | "admin" | "moderator"
