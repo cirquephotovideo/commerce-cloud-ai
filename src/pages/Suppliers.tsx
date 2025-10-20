@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImportScheduler } from "@/components/ImportScheduler";
 import { AutomationRulesManager } from "@/components/AutomationRulesManager";
+import { AutomationMasterManager } from "@/components/AutomationMasterManager";
+import { AutomationMonitoringDashboard } from "@/components/AutomationMonitoringDashboard";
 import { OllamaHealthDashboard } from "@/components/OllamaHealthDashboard";
 import { LiveImportProgress } from "@/components/LiveImportProgress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -583,8 +585,8 @@ export default function Suppliers() {
             <TabsTrigger value="platforms">🔑 Plateformes</TabsTrigger>
           </TabsList>
           
-          {/* Ligne 2 - Monitoring & Historique (5 onglets) */}
-          <TabsList className="grid grid-cols-5 w-full">
+          {/* Ligne 2 - Monitoring & Historique (6 onglets) */}
+          <TabsList className="grid grid-cols-6 w-full">
             <TabsTrigger value="imports">
               📊 Imports Live
               {runningJobs && runningJobs.length > 0 && (
@@ -595,7 +597,8 @@ export default function Suppliers() {
             </TabsTrigger>
             <TabsTrigger value="logs">📈 Historique</TabsTrigger>
             <TabsTrigger value="scheduler">⏰ Planning</TabsTrigger>
-            <TabsTrigger value="automation">🤖 Auto</TabsTrigger>
+            <TabsTrigger value="automation">🤖 Automatisations</TabsTrigger>
+            <TabsTrigger value="monitoring">📡 Monitoring</TabsTrigger>
             <TabsTrigger value="templates">📋 Templates</TabsTrigger>
           </TabsList>
         </div>
@@ -967,7 +970,11 @@ export default function Suppliers() {
         </TabsContent>
 
         <TabsContent value="automation">
-          <AutomationRulesManager />
+          <AutomationMasterManager />
+        </TabsContent>
+
+        <TabsContent value="monitoring">
+          <AutomationMonitoringDashboard />
         </TabsContent>
 
         <TabsContent value="templates">
