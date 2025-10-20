@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -80,38 +81,32 @@ serve(async (req) => {
           );
         }
 
-        const response = await fetch(`${SUPABASE_URL}/functions/v1/generate-themed-image`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ 
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+        const { data: aiImageData, error: aiError } = await supabaseClient.functions.invoke('generate-themed-image', {
+          body: { 
             prompt: `Professional product photography of ${productName}, high quality, commercial style, white background, 8K`,
             productName 
-          })
+          }
         });
         
-        if (response.ok) {
-          const aiImageData = await response.json();
-          if (aiImageData?.imageUrl) {
-            console.log('[SEARCH-IMAGES] ✅ AI fallback successful');
-            return new Response(
-              JSON.stringify({ 
-                images: [{
-                  url: aiImageData.imageUrl,
-                  thumbnail: aiImageData.imageUrl,
-                  title: `AI Generated - ${productName}`,
-                  source: 'ai-generated',
-                  width: 1024,
-                  height: 1024
-                }], 
-                source: 'ai-fallback',
-                count: 1 
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
+        if (!aiError && aiImageData?.imageUrl) {
+          console.log('[SEARCH-IMAGES] ✅ AI fallback successful');
+          return new Response(
+            JSON.stringify({ 
+              images: [{
+                url: aiImageData.imageUrl,
+                thumbnail: aiImageData.imageUrl,
+                title: `AI Generated - ${productName}`,
+                source: 'ai-generated',
+                width: 1024,
+                height: 1024
+              }], 
+              source: 'ai-fallback',
+              count: 1 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
         console.log('[SEARCH-IMAGES] AI fallback failed, returning empty results');
       } catch (aiError) {
