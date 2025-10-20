@@ -112,6 +112,32 @@ export default function Suppliers() {
     }, 2000);
   };
 
+  // Manual import retry handler
+  const handleManualImportRetry = async () => {
+    toast.info("🚀 Relance des imports en attente...");
+    
+    const { data, error } = await supabase.functions.invoke('retry-pending-import-jobs');
+    
+    if (error) {
+      toast.error(`❌ Erreur : ${error.message}`);
+      console.error('Retry error:', error);
+      return;
+    }
+    
+    const processed = data?.processed || 0;
+    const results = data?.results || [];
+    
+    console.log('Retry results:', data);
+    
+    if (processed > 0) {
+      toast.success(`✅ ${processed} import(s) relancé(s) avec succès`);
+      refetchImportJobs();
+      refetchSuppliers();
+    } else {
+      toast.info("ℹ️ Aucun import en attente à relancer");
+    }
+  };
+
   // Mapping des types de fournisseurs
   const supplierTypeLabels: Record<string, string> = {
     file: "📁 Fichier CSV/XLSX",
@@ -402,6 +428,13 @@ export default function Suppliers() {
           </div>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleManualImportRetry}
+            disabled={!runningJobs || runningJobs.length === 0}
+          >
+            🚀 Relancer imports
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
