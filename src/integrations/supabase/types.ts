@@ -614,6 +614,137 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_master_rules: {
+        Row: {
+          actions: Json
+          archive_results: boolean | null
+          cleanup_after_days: number | null
+          conditions: Json | null
+          created_at: string | null
+          error_count: number | null
+          id: string
+          is_active: boolean | null
+          last_error_at: string | null
+          last_error_message: string | null
+          last_success_at: string | null
+          last_triggered_at: string | null
+          on_error_action: string | null
+          priority: number | null
+          retry_config: Json | null
+          rule_category: string
+          rule_description: string | null
+          rule_name: string
+          source_config: Json
+          success_count: number | null
+          trigger_config: Json
+          trigger_count: number | null
+          trigger_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          archive_results?: boolean | null
+          cleanup_after_days?: number | null
+          conditions?: Json | null
+          created_at?: string | null
+          error_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_success_at?: string | null
+          last_triggered_at?: string | null
+          on_error_action?: string | null
+          priority?: number | null
+          retry_config?: Json | null
+          rule_category: string
+          rule_description?: string | null
+          rule_name: string
+          source_config?: Json
+          success_count?: number | null
+          trigger_config?: Json
+          trigger_count?: number | null
+          trigger_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          actions?: Json
+          archive_results?: boolean | null
+          cleanup_after_days?: number | null
+          conditions?: Json | null
+          created_at?: string | null
+          error_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          last_error_at?: string | null
+          last_error_message?: string | null
+          last_success_at?: string | null
+          last_triggered_at?: string | null
+          on_error_action?: string | null
+          priority?: number | null
+          retry_config?: Json | null
+          rule_category?: string
+          rule_description?: string | null
+          rule_name?: string
+          source_config?: Json
+          success_count?: number | null
+          trigger_config?: Json
+          trigger_count?: number | null
+          trigger_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      automation_notifications: {
+        Row: {
+          config: Json
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sent_at: string | null
+          notification_type: string
+          rule_id: string | null
+          sent_count: number | null
+          trigger_conditions: Json | null
+          user_id: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          notification_type: string
+          rule_id?: string | null
+          sent_count?: number | null
+          trigger_conditions?: Json | null
+          user_id: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sent_at?: string | null
+          notification_type?: string
+          rule_id?: string | null
+          sent_count?: number | null
+          trigger_conditions?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_notifications_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_master_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_rules: {
         Row: {
           actions: Json
@@ -658,6 +789,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      automation_webhooks: {
+        Row: {
+          automation_rule_id: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          secret_token: string | null
+          trigger_count: number | null
+          updated_at: string | null
+          user_id: string
+          webhook_name: string
+          webhook_url: string
+        }
+        Insert: {
+          automation_rule_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          secret_token?: string | null
+          trigger_count?: number | null
+          updated_at?: string | null
+          user_id: string
+          webhook_name: string
+          webhook_url: string
+        }
+        Update: {
+          automation_rule_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          secret_token?: string | null
+          trigger_count?: number | null
+          updated_at?: string | null
+          user_id?: string
+          webhook_name?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_webhooks_automation_rule_id_fkey"
+            columns: ["automation_rule_id"]
+            isOneToOne: false
+            referencedRelation: "automation_master_rules"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       aws_credentials: {
         Row: {
@@ -4382,6 +4563,14 @@ export type Database = {
       }
       is_valid_ean13: {
         Args: { ean: string }
+        Returns: boolean
+      }
+      should_execute_automation_rule: {
+        Args: {
+          p_last_triggered_at: string
+          p_rule_id: string
+          p_trigger_config: Json
+        }
         Returns: boolean
       }
       trigger_stuck_import_jobs: {
