@@ -27,7 +27,11 @@ export function EmailMappingValidation({
   const [mapping, setMapping] = useState<Record<string, number | null>>(suggestedMapping);
   const [confidence, setConfidence] = useState<Record<string, number>>({});
 
-  const isValid = mapping.product_name !== null && mapping.purchase_price !== null;
+  // Validation stricte : nom + prix + (EAN OU référence fournisseur)
+  const isValid = 
+    mapping.product_name !== null && 
+    mapping.purchase_price !== null &&
+    (mapping.ean !== null || mapping.supplier_reference !== null);
 
   return (
     <Dialog open={true} onOpenChange={onCancel}>
@@ -62,7 +66,7 @@ export function EmailMappingValidation({
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                ⚠️ Au minimum, vous devez mapper : <strong>Nom du produit</strong> et <strong>Prix d'achat</strong>
+                ⚠️ Champs obligatoires : <strong>Nom du produit</strong>, <strong>Prix d'achat</strong> ET <strong>EAN ou Référence fournisseur</strong>
               </AlertDescription>
             </Alert>
           )}
