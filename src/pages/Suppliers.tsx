@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail, AlertCircle, Settings } from "lucide-react";
+import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail, AlertCircle, Settings, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImportScheduler } from "@/components/ImportScheduler";
 import { AutomationRulesManager } from "@/components/AutomationRulesManager";
 import { OllamaHealthDashboard } from "@/components/OllamaHealthDashboard";
+import { LiveImportProgress } from "@/components/LiveImportProgress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -468,113 +469,136 @@ export default function Suppliers() {
         </div>
       </div>
 
-      {/* Statistiques */}
-      <div className="grid grid-cols-6 gap-4">
+      {/* Statistiques consolidées */}
+      <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
-            <div className="text-3xl font-bold">{stats?.total_suppliers || 0}</div>
-            <p className="text-sm text-muted-foreground">Fournisseurs</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold text-green-500">{stats?.active_suppliers || 0}</div>
-            <p className="text-sm text-muted-foreground">Actifs</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-3xl font-bold">{stats?.total_products || 0}</div>
-            <p className="text-sm text-muted-foreground">Produits importés</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <Mail className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <div className="text-3xl font-bold">{imapStats || 0}</div>
-                <p className="text-sm text-muted-foreground">Emails IMAP (24h)</p>
+            <div className="flex items-center gap-3">
+              <Truck className="h-8 w-8 text-primary" />
+              <div className="flex-1">
+                <div className="text-3xl font-bold">{stats?.total_suppliers || 0}</div>
+                <p className="text-sm text-muted-foreground">Fournisseurs</p>
+                <div className="mt-2">
+                  <Progress value={stats?.total_suppliers ? (stats.active_suppliers / stats.total_suppliers) * 100 : 0} className="h-1" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stats?.active_suppliers || 0} actifs ({stats?.total_suppliers ? Math.round((stats.active_suppliers / stats.total_suppliers) * 100) : 0}%)
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
+        
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <Package className="h-8 w-8 text-green-600" />
+              <div className="flex-1">
+                <div className="text-3xl font-bold text-green-600">{stats?.total_products || 0}</div>
+                <p className="text-sm text-muted-foreground">Produits importés</p>
+                <div className="mt-2">
+                  <Progress value={stats?.enrichment_percentage || 0} className="h-1" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stats?.enrichment_percentage || 0}% enrichis
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Mail className="h-8 w-8 text-blue-600" />
+              <div className="flex-1">
+                <div className="text-3xl font-bold text-blue-600">{imapStats || 0}</div>
+                <p className="text-sm text-muted-foreground">Emails (24h)</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Reçus via IMAP/POP3
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
               {runningJobs && runningJobs.length > 0 ? (
                 <>
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                  <div>
-                    <div className="text-3xl font-bold text-blue-500">{runningJobs.length}</div>
-                    <p className="text-sm text-muted-foreground">Imports en cours</p>
-                    {runningJobs.length > 0 && runningJobs[0].progress_total > 0 && (
+                  <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+                  <div className="flex-1">
+                    <div className="text-3xl font-bold text-orange-600">{runningJobs.length}</div>
+                    <p className="text-sm text-muted-foreground">Imports actifs</p>
+                    <div className="mt-2">
                       <Progress 
-                        value={(runningJobs[0].progress_current / runningJobs[0].progress_total) * 100} 
-                        className="mt-2 h-1" 
+                        value={runningJobs[0]?.progress_total > 0 ? (runningJobs[0].progress_current / runningJobs[0].progress_total) * 100 : 0} 
+                        className="h-1" 
                       />
-                    )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {stats?.pending_enrichment || 0} en attente enrichissement
+                      </p>
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <CheckCircle className="h-5 w-5 text-muted-foreground" />
-                  <div>
+                  <CheckCircle className="h-8 w-8 text-muted-foreground" />
+                  <div className="flex-1">
                     <div className="text-3xl font-bold">0</div>
-                    <p className="text-sm text-muted-foreground">Imports en cours</p>
+                    <p className="text-sm text-muted-foreground">Imports actifs</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {stats?.pending_enrichment || 0} en attente enrichissement
+                    </p>
                   </div>
                 </>
               )}
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-orange-500" />
-              <div>
-                <div className="text-3xl font-bold text-orange-500">{stats?.pending_enrichment || 0}</div>
-                <p className="text-sm text-muted-foreground">
-                  En attente d'enrichissement ({100 - (stats?.enrichment_percentage || 0)}%)
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      {/* Alert for unconfigured FTP suppliers */}
-      {suppliers?.some(s => (s.supplier_type === 'ftp' || s.supplier_type === 'sftp') && !s.column_mapping) && (
-        <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950">
-          <AlertDescription className="text-orange-800 dark:text-orange-200">
-            ⚠️ Vous avez des fournisseurs FTP non configurés. Cliquez sur "🔧 Configurer FTP" pour activer la synchronisation automatique.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Alertes système */}
+      <div className="space-y-3">
+        {suppliers?.some(s => (s.supplier_type === 'ftp' || s.supplier_type === 'sftp') && !s.column_mapping) && (
+          <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-orange-800 dark:text-orange-200">
+              ⚠️ Vous avez des fournisseurs FTP non configurés. Cliquez sur "🔧 Configurer FTP" pour activer la synchronisation automatique.
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
 
       <Tabs defaultValue="list" className="w-full">
-        <TabsList>
-          <TabsTrigger value="list">Fournisseurs</TabsTrigger>
-          <TabsTrigger value="products">Produits</TabsTrigger>
-          <TabsTrigger value="mapping-setup">🗺️ Configuration Mapping</TabsTrigger>
-          <TabsTrigger value="inbox">📧 Boîte de réception</TabsTrigger>
-          <TabsTrigger value="email-setup">⚙️ Configuration Email</TabsTrigger>
-          <TabsTrigger value="platforms">🔑 Plateformes E-commerce</TabsTrigger>
-          <TabsTrigger value="imports">
-            📊 Imports
-            {runningJobs && runningJobs.length > 0 && (
-              <Badge variant="secondary" className="ml-2 animate-pulse">
-                {runningJobs.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="logs">Historique</TabsTrigger>
-          <TabsTrigger value="scheduler">⏰ Planification</TabsTrigger>
-          <TabsTrigger value="automation">🤖 Automatisations</TabsTrigger>
-          <TabsTrigger value="templates">📋 Templates</TabsTrigger>
-          <TabsTrigger value="stats">📈 Statistiques</TabsTrigger>
-          <TabsTrigger value="ollama">🧠 Ollama AI</TabsTrigger>
-        </TabsList>
+        <div className="space-y-2">
+          {/* Ligne 1 - Gestion principale (6 onglets) */}
+          <TabsList className="grid grid-cols-6 w-full">
+            <TabsTrigger value="list">📦 Fournisseurs</TabsTrigger>
+            <TabsTrigger value="products">🛍️ Produits</TabsTrigger>
+            <TabsTrigger value="mapping-setup">🗺️ Mapping</TabsTrigger>
+            <TabsTrigger value="inbox">📧 Inbox</TabsTrigger>
+            <TabsTrigger value="email-setup">⚙️ Email</TabsTrigger>
+            <TabsTrigger value="platforms">🔑 Plateformes</TabsTrigger>
+          </TabsList>
+          
+          {/* Ligne 2 - Monitoring & Historique (5 onglets) */}
+          <TabsList className="grid grid-cols-5 w-full">
+            <TabsTrigger value="imports">
+              📊 Imports Live
+              {runningJobs && runningJobs.length > 0 && (
+                <Badge variant="secondary" className="ml-2 animate-pulse">
+                  {runningJobs.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="logs">📈 Historique</TabsTrigger>
+            <TabsTrigger value="scheduler">⏰ Planning</TabsTrigger>
+            <TabsTrigger value="automation">🤖 Auto</TabsTrigger>
+            <TabsTrigger value="templates">📋 Templates</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="list">
           <Card>
@@ -866,111 +890,7 @@ export default function Suppliers() {
         </TabsContent>
 
         <TabsContent value="imports" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex justify-between items-center">
-                <span>📊 Historique des imports en temps réel</span>
-                {runningJobs && runningJobs.length > 0 && (
-                  <Badge variant="secondary" className="animate-pulse">
-                    {runningJobs.length} import(s) en cours
-                  </Badge>
-                )}
-              </CardTitle>
-              <CardDescription>
-                Suivez l'état de tous vos imports en temps réel (rafraîchissement automatique toutes les 5 secondes)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fournisseur</TableHead>
-                    <TableHead>Statut</TableHead>
-                    <TableHead>Progression</TableHead>
-                    <TableHead>Importés / Erreurs</TableHead>
-                    <TableHead>Démarré</TableHead>
-                    <TableHead>Durée</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {importJobs?.map((job) => {
-                    const duration = job.completed_at 
-                      ? Math.round((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000)
-                      : job.status === 'running' 
-                        ? Math.round((new Date().getTime() - new Date(job.started_at).getTime()) / 1000)
-                        : 0;
-                    
-                    return (
-                      <TableRow key={job.id}>
-                        <TableCell className="font-medium">
-                          {job.supplier_configurations?.supplier_name || 'Inconnu'}
-                        </TableCell>
-                        <TableCell>
-                          {job.status === 'running' && (
-                            <Badge variant="secondary" className="animate-pulse border-blue-500">
-                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              En cours
-                            </Badge>
-                          )}
-                          {job.status === 'completed' && (
-                            <Badge variant="default" className="border-green-500 bg-green-50 text-green-700">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Terminé
-                            </Badge>
-                          )}
-                          {job.status === 'failed' && (
-                            <Badge variant="destructive">
-                              ❌ Échoué
-                            </Badge>
-                          )}
-                          {job.status === 'pending' && (
-                            <Badge variant="outline">
-                              ⏳ En attente
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {job.status === 'running' && job.progress_total > 0 && (
-                            <div className="space-y-1 min-w-[150px]">
-                              <Progress value={(job.progress_current / job.progress_total) * 100} />
-                              <p className="text-xs text-muted-foreground">
-                                {job.progress_current} / {job.progress_total} ({Math.round((job.progress_current / job.progress_total) * 100)}%)
-                              </p>
-                            </div>
-                          )}
-                          {job.status === 'completed' && (
-                            <span className="text-sm text-muted-foreground">
-                              {job.progress_total} produits
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Badge variant="default">{job.products_imported}</Badge>
-                            {job.products_errors > 0 && (
-                              <Badge variant="destructive">{job.products_errors}</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {new Date(job.started_at).toLocaleString('fr-FR')}
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {duration > 0 ? `${duration}s` : '-'}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-              {!importJobs?.length && (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Clock className="h-12 w-12 mb-4" />
-                  <p>Aucun import effectué pour le moment</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <LiveImportProgress />
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
@@ -1052,14 +972,6 @@ export default function Suppliers() {
 
         <TabsContent value="templates">
           <MappingTemplatesManager />
-        </TabsContent>
-
-        <TabsContent value="stats">
-          <ImportStatsDashboard />
-        </TabsContent>
-
-        <TabsContent value="ollama">
-          <OllamaHealthDashboard />
         </TabsContent>
       </Tabs>
 
