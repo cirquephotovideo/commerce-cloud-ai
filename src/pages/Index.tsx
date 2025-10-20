@@ -1,8 +1,16 @@
 import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
+import { TrustBar } from "@/components/TrustBar";
 import { StatsSection } from "@/components/StatsSection";
-import { InteractiveDemo } from "@/components/InteractiveDemo";
+import { ProblemsToSolutions } from "@/components/ProblemsToSolutions";
 import { FeaturesSection } from "@/components/FeaturesSection";
+import { AutomationShowcase } from "@/components/AutomationShowcase";
+import { EnrichmentBeforeAfter } from "@/components/EnrichmentBeforeAfter";
+import { MarketIntelligenceShowcase } from "@/components/MarketIntelligenceShowcase";
+import { PlatformExportShowcase } from "@/components/PlatformExportShowcase";
+import { InteractiveDemo } from "@/components/InteractiveDemo";
+import { StatsCharts } from "@/components/StatsCharts";
+import { CaseStudies } from "@/components/CaseStudies";
 import { PricingSection } from "@/components/PricingSection";
 import { TestimonialsSection } from "@/components/TestimonialsSection";
 import { ComparisonSection } from "@/components/ComparisonSection";
@@ -16,11 +24,19 @@ const Index = () => {
     <main className="min-h-screen bg-background">
       <Header />
       <HeroSection />
+      <TrustBar />
       <StatsSection />
+      <ProblemsToSolutions />
+      <FeaturesSection />
+      <AutomationShowcase />
+      <EnrichmentBeforeAfter />
+      <MarketIntelligenceShowcase />
+      <PlatformExportShowcase />
       <div id="demo">
         <InteractiveDemo />
       </div>
-      <FeaturesSection />
+      <StatsCharts />
+      <CaseStudies />
       <PricingSection />
       <TestimonialsSection />
       <ComparisonSection />

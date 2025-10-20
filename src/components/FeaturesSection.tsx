@@ -8,18 +8,39 @@ export const FeaturesSection = () => {
   const features = [
     {
       icon: Globe,
-      titleKey: "features.webSearch",
-      descKey: "features.webSearchDesc"
+      title: "🔄 Automatisation Fournisseurs",
+      items: [
+        "Import automatique par email (IMAP/POP3)",
+        "Import auto FTP/SFTP planifié",
+        "Mapping intelligent des colonnes",
+        "Détection pièces jointes (Excel/CSV)",
+        "Historique des 3 derniers emails",
+        "Nettoyage automatique anciens emails"
+      ]
     },
     {
       icon: Brain,
-      titleKey: "features.advancedAI",
-      descKey: "features.advancedAIDesc"
+      title: "🤖 Enrichissement IA Intelligent",
+      items: [
+        "Analyse complète en 30 secondes",
+        "Génération descriptions SEO",
+        "Extraction specs techniques",
+        "Analyse marges & prix recommandés",
+        "Recherche images Amazon automatique",
+        "Compliance RSGP & certifications"
+      ]
     },
     {
       icon: BarChart3,
-      titleKey: "features.completeAnalysis",
-      descKey: "features.completeAnalysisDesc"
+      title: "🎯 Intelligence Marché & Export",
+      items: [
+        "Google Shopping comparaison temps réel",
+        "Surveillance prix concurrents 24/7",
+        "Alertes variations stock/prix",
+        "Export 1-clic vers 12 plateformes",
+        "Synchronisation bidirectionnelle",
+        "Dashboard analytics avancé"
+      ]
     }
   ];
 
@@ -46,8 +67,15 @@ export const FeaturesSection = () => {
                 <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-primary flex items-center justify-center">
                   <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-primary-foreground" />
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold">{t(feature.titleKey)}</h3>
-                <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{t(feature.descKey)}</p>
+                <h3 className="text-xl sm:text-2xl font-bold">{feature.title}</h3>
+                <ul className="space-y-2">
+                  {feature.items.map((item, itemIndex) => (
+                    <li key={itemIndex} className="flex items-start gap-2 text-sm sm:text-base text-muted-foreground">
+                      <span className="text-primary mt-1 flex-shrink-0">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
               </Card>
             );
           })}
