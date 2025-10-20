@@ -108,7 +108,7 @@ export const AutomationWizard = ({ open, onOpenChange }: AutomationWizardProps) 
             frequency: triggerFrequency,
             ...triggerConfig,
           },
-          action_config: actionConfig,
+          actions: actionConfig,
           source_config: sourceConfig,
           is_active: true,
           priority: 5,

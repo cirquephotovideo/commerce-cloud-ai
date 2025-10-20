@@ -563,11 +563,16 @@ export default function Suppliers() {
 
       {/* Alertes système */}
       <div className="space-y-3">
-        {suppliers?.some(s => (s.supplier_type === 'ftp' || s.supplier_type === 'sftp') && !s.column_mapping) && (
+        {suppliers?.some(s => {
+          const isFtpType = s.supplier_type === 'ftp' || s.supplier_type === 'sftp';
+          const config = s.connection_config as any;
+          const hasConnection = config && config.host && config.port;
+          return isFtpType && !hasConnection;
+        }) && (
           <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-orange-800 dark:text-orange-200">
-              ⚠️ Vous avez des fournisseurs FTP non configurés. Cliquez sur "🔧 Configurer FTP" pour activer la synchronisation automatique.
+              ⚠️ Vous avez des fournisseurs FTP/SFTP non configurés. Vérifiez que l'hôte et le port sont correctement renseignés dans la configuration.
             </AlertDescription>
           </Alert>
         )}
