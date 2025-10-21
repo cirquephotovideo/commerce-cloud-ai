@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useWizard } from '@/contexts/UniversalWizardContext';
-import { Upload, Download, Sparkles, BarChart3, Check } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Upload, Download, Sparkles, BarChart3, Check, Rocket } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const Step6Summary = () => {
   const { state, goToStep, launchOperation } = useWizard();
-  const { toast } = useToast();
 
   const getOperationIcon = () => {
     switch (state.operationType) {
@@ -30,11 +30,13 @@ export const Step6Summary = () => {
   };
 
   const handleLaunch = async () => {
-    await launchOperation();
-    toast({
-      title: '🚀 Opération lancée',
-      description: 'Le traitement a démarré avec succès',
-    });
+    try {
+      await launchOperation();
+      toast.success('🚀 Opération lancée avec succès !');
+    } catch (error) {
+      toast.error('Erreur lors du lancement de l\'opération');
+      console.error(error);
+    }
   };
 
   const Icon = getOperationIcon();
@@ -54,43 +56,85 @@ export const Step6Summary = () => {
           </CardTitle>
           <CardDescription>Récapitulatif de votre configuration</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Type d'opération</p>
               <p className="font-semibold">{getOperationLabel()}</p>
             </div>
             
-            <div>
-              <p className="text-sm text-muted-foreground">Produits sélectionnés</p>
-              <p className="font-semibold">{state.selectedProducts.length}</p>
-            </div>
-
-            {state.advancedOptions.autoEnrich && (
+            {state.operationType !== 'analysis' && (
               <div>
-                <p className="text-sm text-muted-foreground">Auto-enrichissement</p>
-                <Badge variant="default">Activé</Badge>
+                <p className="text-sm text-muted-foreground">Produits</p>
+                <p className="font-semibold">
+                  {state.selectedProducts.length} sélectionné{state.selectedProducts.length > 1 ? 's' : ''}
+                </p>
               </div>
             )}
 
-            {state.advancedOptions.exportPlatforms.length > 0 && (
+            {state.source && (
               <div>
-                <p className="text-sm text-muted-foreground">Export automatique</p>
-                <Badge variant="default">{state.advancedOptions.exportPlatforms.length} plateforme(s)</Badge>
+                <p className="text-sm text-muted-foreground">Source</p>
+                <p className="font-semibold capitalize">{state.source.type || 'Non spécifiée'}</p>
+              </div>
+            )}
+
+            {state.advancedOptions.aiProvider && (
+              <div>
+                <p className="text-sm text-muted-foreground">Provider IA</p>
+                <Badge variant="secondary">{state.advancedOptions.aiProvider}</Badge>
               </div>
             )}
           </div>
 
-          <div className="pt-4 border-t">
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={handleLaunch}
-            >
-              <Icon className="h-5 w-5 mr-2" />
-              🚀 Lancer Maintenant
-            </Button>
-          </div>
+          {state.advancedOptions.enrichmentTypes.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Types d'enrichissement</p>
+                <div className="flex flex-wrap gap-2">
+                  {state.advancedOptions.enrichmentTypes.map(type => (
+                    <Badge key={type} variant="outline">
+                      {type === 'amazon' && 'Amazon'}
+                      {type === 'specifications' && 'Spécifications'}
+                      {type === 'images' && 'Images'}
+                      {type === 'technical_description' && 'Description IA'}
+                      {type === 'rsgp' && 'RSGP'}
+                      {type === 'ai_analysis' && 'Analyse IA'}
+                      {type === 'cost_analysis' && 'Analyse coûts'}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {state.advancedOptions.exportPlatforms.length > 0 && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Plateformes d'export</p>
+                <div className="flex flex-wrap gap-2">
+                  {state.advancedOptions.exportPlatforms.map(platform => (
+                    <Badge key={platform} variant="default" className="capitalize">
+                      {platform}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          <Separator />
+
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={handleLaunch}
+          >
+            <Rocket className="h-5 w-5 mr-2" />
+            Lancer l'opération maintenant
+          </Button>
         </CardContent>
       </Card>
 
