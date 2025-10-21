@@ -10,6 +10,7 @@ import {
   LogOut,
   BarChart3,
   ArrowLeftRight,
+  Sparkles,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -122,6 +123,32 @@ export function AppSidebar() {
     <TooltipProvider delayDuration={300}>
       <Sidebar collapsible="icon" className="border-r">
         <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Actions</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive("/wizard")}>
+                        <NavLink to="/wizard">
+                          <Sparkles />
+                          <span>Wizard Universel</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">Wizard Universel</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Assistant intelligent pour importer, enrichir et exporter vos produits
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
           <SidebarGroup>
             <SidebarGroupLabel>Analyse</SidebarGroupLabel>
             <SidebarGroupContent>

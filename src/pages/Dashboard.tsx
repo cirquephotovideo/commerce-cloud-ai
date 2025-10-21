@@ -87,6 +87,10 @@ export default function Dashboard() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleOpenWizard = () => {
+    navigate('/wizard');
+  };
+
   const handleReEnrich = async (analysisId: string, provider: 'lovable-ai' | 'ollama' | 'openai') => {
     setEnrichingIds(prev => new Set(prev).add(analysisId));
     
@@ -591,6 +595,24 @@ export default function Dashboard() {
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="lg:col-span-1 space-y-4">
+            <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                  Wizard Universel
+                </CardTitle>
+                <CardDescription>
+                  Assistant intelligent pour importer, enrichir et exporter vos produits en quelques clics
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleOpenWizard} size="lg" className="w-full">
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  Démarrer le Wizard
+                </Button>
+              </CardContent>
+            </Card>
+
             <SubscriptionStatus />
             <UserAlertsWidget />
             <AIProviderManagement />
