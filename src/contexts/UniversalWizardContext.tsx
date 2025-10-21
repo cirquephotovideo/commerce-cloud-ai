@@ -10,7 +10,7 @@ interface WizardState {
     autoEnrich: boolean;
     exportPlatforms: string[];
     enrichmentTypes: string[];
-    aiProvider: 'lovable-ai' | 'ollama' | 'openai';
+    aiProvider: 'lovable-ai' | 'ollama' | 'openai' | 'anthropic' | 'ollama_cloud';
   };
   results: {
     preview: any | null;
