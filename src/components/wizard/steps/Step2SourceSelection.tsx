@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Database } from '@/integrations/supabase/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -7,13 +8,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useWizard } from '@/contexts/UniversalWizardContext';
-import { Mail, Server, Link as LinkIcon, FileText } from 'lucide-react';
+import { Mail, Server, Link as LinkIcon, FileText, Plus } from 'lucide-react';
+import { QuickSupplierDialog } from '../QuickSupplierDialog';
+
+type SupplierType = Database['public']['Enums']['supplier_type'];
 
 export const Step2SourceSelection = () => {
   const { state, updateSource, goToStep } = useWizard();
   const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [sourceType, setSourceType] = useState<'email' | 'ftp' | 'api' | 'file'>('email');
+  const [sourceType, setSourceType] = useState<SupplierType>('email');
   const [selectedSupplier, setSelectedSupplier] = useState('');
+  const [showQuickSupplierDialog, setShowQuickSupplierDialog] = useState(false);
 
   useEffect(() => {
     if (state.operationType === 'import') {
@@ -61,6 +66,14 @@ export const Step2SourceSelection = () => {
                 ))}
               </SelectContent>
             </Select>
+            <Button 
+              variant="ghost" 
+              className="w-full mt-2" 
+              onClick={() => setShowQuickSupplierDialog(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Créer un nouveau fournisseur
+            </Button>
           </div>
 
           <div>
@@ -115,6 +128,16 @@ export const Step2SourceSelection = () => {
           <Button variant="outline" onClick={() => goToStep(1)}>Précédent</Button>
           <Button onClick={handleContinue} disabled={!selectedSupplier}>Continuer</Button>
         </div>
+
+        <QuickSupplierDialog
+          open={showQuickSupplierDialog}
+          onOpenChange={setShowQuickSupplierDialog}
+          onSupplierCreated={(id, type) => {
+            setSelectedSupplier(id);
+            setSourceType(type);
+            fetchSuppliers();
+          }}
+        />
       </div>
     );
   }
