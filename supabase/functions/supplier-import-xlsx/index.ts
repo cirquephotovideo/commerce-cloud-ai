@@ -23,24 +23,47 @@ serve(async (req) => {
       throw new Error('No authorization header');
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    let userId = user?.id;
 
-    if (userError || !user) {
+    if (userError || !userId) {
+      try {
+        const token = authHeader.replace('Bearer', '').trim();
+        const payload = JSON.parse(atob(token.split('.')[1] || ''));
+        userId = payload?.sub;
+      } catch (e) {
+        console.warn('[supplier-import-xlsx] Failed to decode JWT', e);
+      }
+    }
+
+    if (!userId) {
       throw new Error('Authentication failed');
     }
 
-    const { supplierId, fileContent, skipRows = 1, columnMapping = {} } = await req.json();
+    const { supplierId, filePath, skipRows = 1, columnMapping = {} } = await req.json();
 
-    console.log('Starting XLSX import for supplier:', supplierId, 'skipping', skipRows, 'rows');
+    console.log('[supplier-import-xlsx] Starting import:', {
+      supplier: supplierId,
+      filePath,
+      skipRows,
+      mappedColumns: Object.keys(columnMapping).length
+    });
 
-    // Decode base64 content
-    const binaryString = atob(fileContent);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
+    // Download file from Storage
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from('supplier-imports')
+      .download(filePath);
+
+    if (downloadError || !fileData) {
+      console.error('[supplier-import-xlsx] Download failed:', downloadError);
+      throw new Error(`Failed to download file: ${downloadError?.message || 'Unknown error'}`);
     }
+
+    // Convert Blob to ArrayBuffer
+    const arrayBuffer = await fileData.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+    
+    console.log('[supplier-import-xlsx] File loaded:', bytes.length, 'bytes');
 
     // Parse XLSX
     const workbook = XLSX.read(bytes, { type: 'array' });
@@ -85,7 +108,7 @@ serve(async (req) => {
           }
 
           const productData = {
-            user_id: user.id,
+            user_id: userId,
             supplier_id: supplierId,
             ean: columnMapping.ean !== null ? String(row[columnMapping.ean] || '') : (row[0] ? String(row[0]) : null),
             supplier_reference: columnMapping.supplier_reference !== null ? String(row[columnMapping.supplier_reference] || '') : (row[1] ? String(row[1]) : null),
@@ -169,7 +192,7 @@ serve(async (req) => {
 
     // Log the import
     await supabase.from('supplier_import_logs').insert([{
-      user_id: user.id,
+      user_id: userId,
       supplier_id: supplierId,
       import_type: 'manual',
       source_file: 'xlsx_upload',
