@@ -177,18 +177,15 @@ export function ProductDetailModal({
 
       const enrichmentTypes = typeMap[type] || [type];
 
-      // Utiliser le supplier_product_id DIRECT depuis product
-      if (!product.supplier_product_id) {
-        toast.error("⚠️ Aucun produit fournisseur lié à cette analyse");
-        return;
-      }
-
+      // Note: supplier_product_id peut être NULL pour certaines analyses
+      // La fonction enrich-odoo-attributes utilisera les données de analysis_result en fallback
+      
       // Add task to queue
       const { error: insertError } = await supabase
         .from("enrichment_queue")
         .insert({
           user_id: user.id,
-          supplier_product_id: product.supplier_product_id,
+          supplier_product_id: product.supplier_product_id || null,
           analysis_id: product.id,
           enrichment_type: enrichmentTypes,
           priority: "high",
@@ -248,18 +245,15 @@ export function ProductDetailModal({
         return;
       }
 
-      // Utiliser le supplier_product_id DIRECT depuis product
-      if (!product.supplier_product_id) {
-        toast.error("⚠️ Aucun produit fournisseur lié à cette analyse");
-        return;
-      }
+      // Note: supplier_product_id peut être NULL pour certaines analyses
+      // La fonction enrich-odoo-attributes utilisera les données de analysis_result en fallback
 
       // Ajouter à la queue
       const { error: insertError } = await supabase
         .from("enrichment_queue")
         .insert({
           user_id: user.id,
-          supplier_product_id: product.supplier_product_id,
+          supplier_product_id: product.supplier_product_id || null,
           analysis_id: product.id,
           enrichment_type: ['odoo_attributes'],
           priority: "high",

@@ -63,16 +63,36 @@ serve(async (req) => {
 
     console.log(`[enrich-odoo-attributes] ${Object.keys(attributeSchema).length} types d'attributs trouvés`);
 
-    // 4. Préparer le contexte produit
+    // 4. Préparer le contexte produit (avec fallback sur analysis_result)
     const product = analysis.supplier_products;
+    
+    // Stratégie de fallback : utiliser supplier_products SI disponible, sinon analysis_result
+    const productName = product?.product_name 
+      || analysis.analysis_result?.title 
+      || analysis.analysis_result?.name
+      || analysis.product_url;
+
+    const productDescription = product?.description 
+      || analysis.analysis_result?.description 
+      || '';
+
+    const productBrand = analysis.analysis_result?.brand 
+      || product?.additional_data?.brand 
+      || '';
+
+    const productSpecs = product?.additional_data?.specs 
+      || analysis.analysis_result?.specifications 
+      || [];
+
     const productContext = `
-RÉFÉRENCE: ${product.supplier_reference || 'N/A'}
-MARQUE: ${analysis.analysis_result?.brand || product.additional_data?.brand || 'N/A'}
-NOM: ${product.product_name || 'N/A'}
-DESCRIPTION: ${product.description || 'N/A'}
-DIMENSIONS: ${product.additional_data?.dimensions || 'N/A'}
-PRIX: ${product.purchase_price || 'N/A'} EUR
-SPÉCIFICATIONS: ${JSON.stringify(product.additional_data?.specs || [])}
+RÉFÉRENCE: ${product?.supplier_reference || 'N/A'}
+MARQUE: ${productBrand}
+NOM: ${productName}
+DESCRIPTION: ${productDescription}
+URL: ${analysis.product_url || 'N/A'}
+DIMENSIONS: ${product?.additional_data?.dimensions || 'N/A'}
+PRIX: ${product?.purchase_price || 'N/A'} EUR
+SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
 `;
 
     // 5. Web search si activé

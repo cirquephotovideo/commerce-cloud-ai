@@ -204,16 +204,27 @@ export default function History() {
         return;
       }
 
-      // Filtrer celles qui ont un supplier_product_id
-      const validAnalyses = (analysesData || []).filter(a => a.supplier_product_id);
+      // Accepter TOUTES les analyses (avec ou sans supplier_product_id)
+      const validAnalyses = analysesData || [];
 
       if (validAnalyses.length === 0) {
         toast({
           title: "⚠️ Avertissement",
-          description: "Aucun produit fournisseur lié aux analyses sélectionnées",
+          description: "Aucune analyse sélectionnée",
           variant: "destructive",
         });
         return;
+      }
+
+      // Informer l'utilisateur sur le mix avec/sans supplier
+      const withSupplier = validAnalyses.filter(a => a.supplier_product_id).length;
+      const withoutSupplier = validAnalyses.length - withSupplier;
+
+      if (withoutSupplier > 0) {
+        toast({
+          title: "ℹ️ Info",
+          description: `${withoutSupplier} produit(s) seront enrichis depuis les données d'analyse`,
+        });
       }
 
       // Créer les tâches d'enrichissement
