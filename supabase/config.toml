@@ -257,11 +257,6 @@ verify_jwt = false
 [functions.receive-ecommerce-order]
 verify_jwt = false
 
-[functions.get-video-status]
-verify_jwt = true
-
-[functions.auto-link-products]
-verify_jwt = true
 
 [functions.enrich-all]
 verify_jwt = true
