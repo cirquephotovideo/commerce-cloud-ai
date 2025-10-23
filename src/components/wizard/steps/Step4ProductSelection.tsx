@@ -59,8 +59,9 @@ export const Step4ProductSelection = () => {
   };
 
   const filteredProducts = products.filter((p) =>
-    p.analysis_result?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.analysis_result?.ean?.includes(search)
+    p.analysis_result?.product_name?.toLowerCase().includes(search.toLowerCase()) ||
+    p.analysis_result?.ean_barcode?.includes(search) ||
+    p.analysis_result?.description?.toLowerCase().includes(search.toLowerCase())
   );
 
   // Pour l'analyse, passer directement à l'étape 5
@@ -162,15 +163,15 @@ export const Step4ProductSelection = () => {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <img
-                          src={product.image_urls?.[0] || '/placeholder.svg'}
+                          src={product.image_urls?.[0] || product.analysis_result?.imageUrls?.[0] || '/placeholder.svg'}
                           alt=""
                           className="h-10 w-10 rounded object-cover"
                         />
-                        <span className="font-medium">{product.analysis_result?.name || 'Sans nom'}</span>
+                        <span className="font-medium">{product.analysis_result?.product_name || 'Sans nom'}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {product.analysis_result?.ean || 'N/A'}
+                      {product.analysis_result?.ean_barcode || 'N/A'}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="secondary">Disponible</Badge>

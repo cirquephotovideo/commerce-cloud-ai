@@ -39,7 +39,17 @@ export const SystemTestsSuite = () => {
     setSummary(null);
 
     try {
+      // Récupérer la session pour l'authentification
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('Session expirée. Veuillez vous reconnecter.');
+      }
+
+      // Inclure le token d'authentification dans les headers
       const { data, error } = await supabase.functions.invoke('run-system-tests', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`
+        },
         body: { suites: ['edgeFunctions', 'businessLogic', 'userFlows'] }
       });
 
@@ -53,11 +63,11 @@ export const SystemTestsSuite = () => {
         title: "Tests terminés",
         description: `Score de santé: ${data.summary.health_score}%`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error running tests:', error);
       toast({
         title: "Erreur",
-        description: "Impossible d'exécuter les tests",
+        description: error.message || "Impossible d'exécuter les tests",
         variant: "destructive",
       });
     } finally {
