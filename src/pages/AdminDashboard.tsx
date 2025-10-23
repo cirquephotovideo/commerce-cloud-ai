@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell, TestTube2 } from "lucide-react";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
 import { BillingManagement } from "@/components/admin/BillingManagement";
@@ -76,7 +77,18 @@ const AdminDashboard = () => {
           <div className="grid gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>System Health & Metrics</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  <span>System Health & Metrics</span>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => window.location.href = '/admin/system-tests'}
+                    className="gap-2"
+                  >
+                    <TestTube2 className="h-4 w-4" />
+                    Tests Système Complets
+                  </Button>
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <SystemHealthCheck />

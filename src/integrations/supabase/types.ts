@@ -4170,6 +4170,72 @@ export type Database = {
           },
         ]
       }
+      test_execution_history: {
+        Row: {
+          created_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          executed_by: string | null
+          execution_id: string
+          id: string
+          metadata: Json | null
+          status: string
+          test_name: string
+          test_suite: string
+        }
+        Insert: {
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_by?: string | null
+          execution_id: string
+          id?: string
+          metadata?: Json | null
+          status: string
+          test_name: string
+          test_suite: string
+        }
+        Update: {
+          created_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          executed_by?: string | null
+          execution_id?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          test_name?: string
+          test_suite?: string
+        }
+        Relationships: []
+      }
+      test_suites_config: {
+        Row: {
+          created_at: string | null
+          enabled: boolean | null
+          id: string
+          suite_name: string
+          test_cases: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          suite_name: string
+          test_cases?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          suite_name?: string
+          test_cases?: Json
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       trial_conversions: {
         Row: {
           billing_interval: string | null

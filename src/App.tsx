@@ -16,6 +16,7 @@ import Pricing from "./pages/Pricing";
 import Contact from "./pages/Contact";
 import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminSystemTests from "./pages/AdminSystemTests";
 import SubscriptionWelcome from "./pages/SubscriptionWelcome";
 import NotFound from "./pages/NotFound";
 import Demo from "./pages/Demo";
@@ -60,6 +61,7 @@ const App = () => {
         <Route path="/import-export-dashboard" element={<ProtectedRoute><DashboardLayout><ImportExportDashboard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><DashboardLayout><Analytics /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
+        <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

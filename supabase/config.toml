@@ -264,3 +264,6 @@ verify_jwt = true
 [functions.enrich-odoo-attributes]
 verify_jwt = true
 
+[functions.run-system-tests]
+verify_jwt = true
+
