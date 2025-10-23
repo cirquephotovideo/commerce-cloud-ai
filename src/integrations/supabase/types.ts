@@ -2931,6 +2931,30 @@ export type Database = {
           },
         ]
       }
+      product_attribute_definitions: {
+        Row: {
+          attribute_name: string
+          attribute_value: string
+          category: string | null
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          attribute_name: string
+          attribute_value: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          attribute_name?: string
+          attribute_value?: string
+          category?: string | null
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       product_chat_contexts: {
         Row: {
           context_text: string
@@ -4519,14 +4543,8 @@ export type Database = {
       }
     }
     Functions: {
-      check_enrichment_timeouts: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_old_amazon_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      check_enrichment_timeouts: { Args: never; Returns: undefined }
+      cleanup_old_amazon_logs: { Args: never; Returns: undefined }
       decrypt_email_password: {
         Args: { encrypted_password: string }
         Returns: string
@@ -4540,7 +4558,7 @@ export type Database = {
         Returns: undefined
       }
       get_retryable_import_errors: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           error_type: string
           id: string
@@ -4550,10 +4568,7 @@ export type Database = {
           user_id: string
         }[]
       }
-      get_user_email: {
-        Args: { _user_id: string }
-        Returns: string
-      }
+      get_user_email: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -4561,10 +4576,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_valid_ean13: {
-        Args: { ean: string }
-        Returns: boolean
-      }
+      is_valid_ean13: { Args: { ean: string }; Returns: boolean }
       should_execute_automation_rule: {
         Args: {
           p_last_triggered_at: string
@@ -4573,10 +4585,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      trigger_stuck_import_jobs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      trigger_stuck_import_jobs: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "super_admin" | "user" | "admin" | "moderator"

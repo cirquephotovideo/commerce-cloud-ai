@@ -111,6 +111,16 @@ export const Step5AdvancedOptions = () => {
                   />
                   <Label htmlFor="ai_analysis">Analyse IA complète</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="odoo_attributes"
+                    checked={state.advancedOptions.enrichmentTypes.includes('odoo_attributes')}
+                    onCheckedChange={() => toggleEnrichmentType('odoo_attributes')}
+                  />
+                  <Label htmlFor="odoo_attributes" className="flex items-center gap-2">
+                    <span>📋 Attributs Odoo (IA + Web Search)</span>
+                  </Label>
+                </div>
               </div>
             </div>
           </CardContent>
