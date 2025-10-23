@@ -27,6 +27,12 @@ verify_jwt = true
 [functions.sync-odoo-categories]
 verify_jwt = true
 
+[functions.sync-shopify-categories]
+verify_jwt = true
+
+[functions.sync-enrichments-to-analysis-result]
+verify_jwt = false
+
 [functions.advanced-product-analyzer]
 verify_jwt = true
 
@@ -95,9 +101,6 @@ verify_jwt = true
 [functions.amazon-token-manager]
 verify_jwt = false
 
-[functions.test-amazon-mcp-connection]
-verify_jwt = true
-
 [functions.amazon-product-enrichment]
 verify_jwt = true
 
@@ -141,9 +144,6 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.supplier-sync-background]
-verify_jwt = true
-
-[functions.test-ftp-connection]
 verify_jwt = true
 
 [functions.supplier-sync-api]
@@ -227,9 +227,6 @@ verify_jwt = false
 [functions.retry-failed-imports]
 verify_jwt = false
 
-[functions.test-prestashop-connection]
-verify_jwt = true
-
 [functions.manage-api-keys]
 verify_jwt = true
 
@@ -264,6 +261,10 @@ verify_jwt = true
 [functions.enrich-odoo-attributes]
 verify_jwt = true
 
+[functions.sync-ollama-to-providers]
+verify_jwt = false
+
 [functions.run-system-tests]
 verify_jwt = true
+
 
