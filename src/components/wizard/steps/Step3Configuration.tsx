@@ -44,6 +44,10 @@ export const Step3Configuration = () => {
           toast.error('Veuillez charger un fichier');
           return false;
         }
+        if (!config.filePath) {
+          toast.error('Veuillez uploader le fichier (glissez-déposez à nouveau si nécessaire)');
+          return false;
+        }
       }
     }
 

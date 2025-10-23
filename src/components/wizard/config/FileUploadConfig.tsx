@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useWizard } from '@/contexts/UniversalWizardContext';
+import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ export const FileUploadConfig = () => {
     setFile(uploadedFile);
 
     try {
+      // 1. Lire et parser le fichier pour l'aperçu
       const data = await uploadedFile.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheetName = workbook.SheetNames[0];
@@ -53,14 +55,43 @@ export const FileUploadConfig = () => {
         });
         setMapping(autoMapping);
 
+        // 2. Upload immédiat vers Supabase Storage
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          toast.error('Utilisateur non authentifié');
+          return;
+        }
+
+        const timestamp = Date.now();
+        const fileExtension = uploadedFile.name.split('.').pop();
+        const filePath = `${user.id}/${timestamp}_${uploadedFile.name}`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('supplier-imports')
+          .upload(filePath, uploadedFile, {
+            upsert: false,
+            contentType: uploadedFile.type
+          });
+
+        if (uploadError) {
+          toast.error(`Erreur d'upload: ${uploadError.message}`);
+          console.error(uploadError);
+          return;
+        }
+
+        const fileType = uploadedFile.name.endsWith('.csv') ? 'csv' : 'xlsx';
+        const delimiter = fileType === 'csv' ? ',' : undefined;
+
         updateConfiguration({
-          fileType: uploadedFile.name.endsWith('.csv') ? 'csv' : 'xlsx',
+          fileType,
           fileName: uploadedFile.name,
+          filePath,
           columnMapping: autoMapping,
-          totalRows: jsonData.length
+          totalRows: jsonData.length,
+          ...(delimiter && { delimiter })
         });
 
-        toast.success(`✅ ${jsonData.length} lignes détectées`);
+        toast.success(`✅ ${jsonData.length} lignes détectées et fichier uploadé`);
       }
     } catch (error) {
       toast.error('Erreur lors de la lecture du fichier');
