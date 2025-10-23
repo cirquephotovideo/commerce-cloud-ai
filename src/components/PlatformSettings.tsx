@@ -14,6 +14,7 @@ const PLATFORMS = [
   { value: 'prestashop', label: '🛒 PrestaShop', icon: '🛒' },
   { value: 'magento', label: '📦 Magento', icon: '📦' },
   { value: 'odoo', label: '🟣 Odoo', icon: '🟣' },
+  { value: 'amazon-seller-mcp', label: '📦 Amazon Seller', icon: '📦' },
   { value: 'salesforce', label: '☁️ Salesforce', icon: '☁️' },
   { value: 'sap', label: '🏢 SAP', icon: '🏢' },
   { value: 'uber_eats', label: '🍔 Uber Eats', icon: '🍔' },
@@ -249,6 +250,57 @@ export const PlatformSettings = () => {
                 value={config.access_token_encrypted}
                 onChange={(e) => setConfig({ ...config, access_token_encrypted: e.target.value })}
               />
+            </div>
+          </>
+        );
+      case 'amazon-seller-mcp':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="platform_url">Amazon SP-API URL</Label>
+              <Input
+                id="platform_url"
+                placeholder="https://sellingpartnerapi-eu.amazon.com"
+                value={config.platform_url}
+                onChange={(e) => setConfig({ ...config, platform_url: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_key">Client ID</Label>
+              <Input
+                id="api_key"
+                placeholder="amzn1.application-oa2-client.xxxxx"
+                value={config.api_key_encrypted}
+                onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api_secret">Client Secret</Label>
+              <Input
+                id="api_secret"
+                type="password"
+                value={config.api_secret_encrypted}
+                onChange={(e) => setConfig({ ...config, api_secret_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access_token">Refresh Token</Label>
+              <Input
+                id="access_token"
+                type="password"
+                value={config.access_token_encrypted}
+                onChange={(e) => setConfig({ ...config, access_token_encrypted: e.target.value })}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground p-4 bg-muted rounded-md">
+              <p className="font-semibold mb-2">⚠️ Configuration complète requise</p>
+              <p>Pour utiliser Amazon MCP, vous devez également configurer dans Platform Configurations :</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>AWS Access Key & Secret Key</li>
+                <li>AWS Role ARN</li>
+                <li>Marketplace ID (ex: A13V1IB3VIYZZH pour FR)</li>
+                <li>AWS Region (ex: eu-west-1)</li>
+              </ul>
             </div>
           </>
         );

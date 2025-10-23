@@ -186,6 +186,38 @@ SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
 
     console.log('[enrich-odoo-attributes] Contexte produit:', productContext.slice(0, 500) + '...');
 
+    // 5.5 Enrichir avec Amazon MCP si EAN disponible
+    let amazonContext = '';
+    if (analysis.ean) {
+      try {
+        console.log(`[enrich-odoo-attributes] Tentative enrichissement Amazon MCP pour EAN: ${analysis.ean}`);
+        
+        const { data: amazonMCP, error: amazonError } = await supabaseClient.functions.invoke('mcp-proxy', {
+          body: {
+            packageId: 'amazon-seller-mcp',
+            toolName: 'search_catalog',
+            args: { keywords: analysis.ean }
+          }
+        });
+        
+        if (!amazonError && amazonMCP?.success && amazonMCP?.data?.items?.[0]) {
+          const amazonProduct = amazonMCP.data.items[0];
+          amazonContext = `\n\nDONNÉES AMAZON:
+- ASIN: ${amazonProduct.asin}
+- Titre: ${amazonProduct.summaries?.[0]?.itemName || 'N/A'}
+- Marque: ${amazonProduct.summaries?.[0]?.brand || 'N/A'}
+- Prix: ${amazonProduct.summaries?.[0]?.buyBoxPrices?.[0]?.listingPrice?.amount || 'N/A'} ${amazonProduct.summaries?.[0]?.buyBoxPrices?.[0]?.listingPrice?.currencyCode || ''}
+- Catégorie: ${amazonProduct.productTypes?.[0] || 'N/A'}
+- Sales Rank: ${amazonProduct.salesRanks?.[0]?.rank || 'N/A'}`;
+          console.log('[enrich-odoo-attributes] Données Amazon récupérées avec succès');
+        } else {
+          console.warn('[enrich-odoo-attributes] Amazon MCP: aucun résultat ou erreur', amazonError);
+        }
+      } catch (e) {
+        console.warn('[enrich-odoo-attributes] Amazon MCP non disponible:', e);
+      }
+    }
+
     // 6. Web search si activé
     let webContext = '';
     if (webSearchEnabled) {
@@ -231,6 +263,7 @@ ${JSON.stringify(attributeSchema, null, 2)}
 PRODUIT À ANALYSER :
 
 ${productContext}
+${amazonContext}
 ${webContext}
 
 RÈGLES STRICTES - AUCUNE HALLUCINATION TOLÉRÉE :

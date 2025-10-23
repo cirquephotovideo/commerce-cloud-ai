@@ -171,13 +171,49 @@ serve(async (req) => {
 
             switch (type) {
               case 'amazon':
-                if (supplierProduct.ean) {
-                  await supabase.functions.invoke('amazon-product-enrichment', {
-                    body: { 
-                      analysisId: analysis.id, 
-                      ean: supplierProduct.ean 
+                if (supplierProduct.ean || supplierProduct.product_name) {
+                  console.log('[ENRICHMENT-QUEUE] Using Amazon MCP for enrichment');
+                  
+                  // Utiliser le MCP Amazon au lieu de amazon-product-enrichment
+                  const { data: mcpResult, error: mcpError } = await supabase.functions.invoke('mcp-proxy', {
+                    body: {
+                      packageId: 'amazon-seller-mcp',
+                      toolName: 'search_catalog',
+                      args: { 
+                        keywords: supplierProduct.ean || supplierProduct.product_name 
+                      }
                     }
                   });
+                  
+                  if (mcpError) {
+                    console.error('[ENRICHMENT-QUEUE] MCP Amazon error:', mcpError);
+                  } else if (mcpResult?.success && mcpResult?.data?.items?.length > 0) {
+                    const amazonItem = mcpResult.data.items[0];
+                    console.log(`[ENRICHMENT-QUEUE] Found Amazon product: ${amazonItem.asin}`);
+                    
+                    // Insérer dans amazon_product_data
+                    try {
+                      await supabase.from('amazon_product_data').upsert({
+                        analysis_id: analysis.id,
+                        user_id: task.user_id,
+                        asin: amazonItem.asin,
+                        title: amazonItem.summaries?.[0]?.itemName,
+                        ean: supplierProduct.ean,
+                        brand: amazonItem.summaries?.[0]?.brand,
+                        manufacturer: amazonItem.summaries?.[0]?.manufacturer,
+                        product_type: amazonItem.productTypes?.[0],
+                        images: amazonItem.images || [],
+                        sales_rank: amazonItem.salesRanks?.[0],
+                        buy_box_price: amazonItem.summaries?.[0]?.buyBoxPrices?.[0]?.listingPrice?.amount,
+                        list_price: amazonItem.summaries?.[0]?.listPrice?.amount,
+                        marketplace: mcpResult.data.marketplaceId || 'A13V1IB3VIYZZH',
+                        raw_data: amazonItem
+                      });
+                      console.log('[ENRICHMENT-QUEUE] Amazon data saved successfully');
+                    } catch (upsertError) {
+                      console.error('[ENRICHMENT-QUEUE] Error saving Amazon data:', upsertError);
+                    }
+                  }
                 }
                 break;
 

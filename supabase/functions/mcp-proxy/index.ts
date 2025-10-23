@@ -301,12 +301,121 @@ async function callPrestaShopTool(toolName: string, args: any, credentials: any,
 
 async function callAmazonTool(toolName: string, args: any, credentials: any) {
   console.log(`[MCP-AMAZON] Calling ${toolName} with args:`, args);
+  const startTime = Date.now();
   
-  // Simuler un appel Amazon (à implémenter avec SP-API)
-  return {
-    success: true,
-    tool: toolName,
-    result: `Amazon tool ${toolName} executed successfully`,
-    data: args
-  };
+  try {
+    const marketplaceId = args.marketplaceId || credentials.SP_API_MARKETPLACE_ID || 'A13V1IB3VIYZZH';
+    const region = credentials.SP_API_REGION || 'eu-west-1';
+    
+    // Router vers les endpoints Amazon SP-API
+    let endpoint = '';
+    let method = 'GET';
+    let queryParams: Record<string, string> = {};
+    
+    switch (toolName) {
+      case 'search_catalog':
+        endpoint = `/catalog/2022-04-01/items`;
+        queryParams = {
+          keywords: args.keywords || args.search || '',
+          marketplaceIds: marketplaceId,
+          includedData: 'attributes,images,productTypes,salesRanks'
+        };
+        break;
+        
+      case 'get_catalog_item':
+        const asin = args.asin || args.id;
+        if (!asin) throw new Error('ASIN requis pour get_catalog_item');
+        endpoint = `/catalog/2022-04-01/items/${asin}`;
+        queryParams = {
+          marketplaceIds: marketplaceId,
+          includedData: 'attributes,images,productTypes,salesRanks,summaries'
+        };
+        break;
+        
+      case 'get_competitive_pricing':
+        const pricingAsin = args.asin || args.id;
+        if (!pricingAsin) throw new Error('ASIN requis pour get_competitive_pricing');
+        endpoint = `/products/pricing/v0/items/${pricingAsin}/offers`;
+        queryParams = {
+          MarketplaceId: marketplaceId,
+          ItemCondition: args.condition || 'New'
+        };
+        break;
+        
+      default:
+        throw new Error(`Amazon tool ${toolName} non supporté`);
+    }
+    
+    // Obtenir un access token via amazon-token-manager
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    const tokenResponse = await fetch(`${supabaseUrl}/functions/v1/amazon-token-manager`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`
+      },
+      body: JSON.stringify({
+        clientId: credentials.SP_API_CLIENT_ID,
+        clientSecret: credentials.SP_API_CLIENT_SECRET,
+        refreshToken: credentials.SP_API_REFRESH_TOKEN
+      })
+    });
+    
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      throw new Error(`Failed to get Amazon access token: ${tokenResponse.status} - ${errorText}`);
+    }
+    
+    const { accessToken } = await tokenResponse.json();
+    
+    // Construire l'URL complète
+    const baseUrl = `https://sellingpartnerapi-${region}.amazon.com`;
+    const queryString = new URLSearchParams(queryParams).toString();
+    const fullUrl = `${baseUrl}${endpoint}?${queryString}`;
+    
+    console.log(`[MCP-AMAZON] Calling ${fullUrl}`);
+    
+    // Appeler l'API Amazon
+    const response = await fetch(fullUrl, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'x-amz-access-token': accessToken
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Amazon SP-API error ${response.status}: ${errorText}`);
+    }
+    
+    const data = await response.json();
+    const latency = Date.now() - startTime;
+    
+    console.log(`[MCP-AMAZON] Successfully executed ${toolName} in ${latency}ms`);
+    
+    return {
+      success: true,
+      tool: toolName,
+      result: `Amazon tool ${toolName} executed successfully`,
+      data: data,
+      latency_ms: latency
+    };
+    
+  } catch (error) {
+    const latency = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[MCP-AMAZON] Error:`, error);
+    
+    return {
+      success: false,
+      tool: toolName,
+      result: `Failed to execute Amazon tool: ${errorMessage}`,
+      error: errorMessage,
+      latency_ms: latency
+    };
+  }
 }

@@ -704,21 +704,79 @@ export const MCP_LIBRARIES: MCPLibrary[] = [
     useCases: odooUseCases
   },
   {
-    id: 'amazon-seller-mcp-pixeeplay',
-    name: 'Amazon Seller MCP (Pixeeplay)',
-    npmPackage: 'amazon-mcp-server',
+    id: 'amazon-seller-mcp',
+    name: 'Amazon Seller MCP',
+    npmPackage: 'amazon-sp-api-mcp-server',
     version: '1.0.0',
-    description: 'Serveur MCP pour Amazon Seller API - Gestion marketplace',
+    description: 'Serveur MCP pour Amazon Selling Partner API - Catalogue, prix, inventaire, commandes',
     icon: '📦',
     category: 'integration',
-    requiredEnvVars: ['AMAZON_ACCESS_KEY', 'AMAZON_SECRET_KEY', 'AMAZON_REGION', 'AMAZON_MARKETPLACE_ID'],
+    requiredEnvVars: [
+      'SP_API_CLIENT_ID',
+      'SP_API_CLIENT_SECRET', 
+      'SP_API_REFRESH_TOKEN',
+      'SP_API_AWS_ACCESS_KEY',
+      'SP_API_AWS_SECRET_KEY',
+      'SP_API_ROLE_ARN',
+      'SP_API_MARKETPLACE_ID',
+      'SP_API_REGION'
+    ],
     defaultConfig: {
       server_url: 'https://sellingpartnerapi-eu.amazon.com',
-      auth_type: 'bearer'
+      auth_type: 'oauth'
     },
-    installCommand: 'npm install amazon-mcp-server',
-    setupInstructions: '1. S\'inscrire au programme Amazon Seller\n2. Générer Access Key et Secret Key\n3. Récupérer le Marketplace ID (ex: A13V1IB3VIYZZH pour FR)\n4. Configurer la région (eu-west-1, us-east-1, etc.)',
-    documentation: 'https://www.npmjs.com/package/amazon-mcp-server'
+    installCommand: 'npm install amazon-sp-api-mcp-server',
+    setupInstructions: `📋 Configuration Amazon Selling Partner API :
+
+1. Créer une application Seller Central :
+   • Accéder à Seller Central > Paramètres > Développeur
+   • Créer une nouvelle application SP-API
+   • Récupérer Client ID et Client Secret
+
+2. Configurer AWS IAM :
+   • Créer un utilisateur IAM avec accès programmatique
+   • Créer un rôle IAM avec la politique "SellingPartnerAPI"
+   • Noter l'ARN du rôle
+
+3. Obtenir le Refresh Token OAuth :
+   • Utiliser l'outil LWA (Login with Amazon) pour autoriser l'app
+   • Récupérer le refresh token
+
+4. Variables d'environnement requises :
+   • SP_API_CLIENT_ID : Client ID de l'application
+   • SP_API_CLIENT_SECRET : Client Secret de l'application
+   • SP_API_REFRESH_TOKEN : Token OAuth pour renouveler l'accès
+   • SP_API_AWS_ACCESS_KEY : AWS Access Key de l'utilisateur IAM
+   • SP_API_AWS_SECRET_KEY : AWS Secret Key de l'utilisateur IAM
+   • SP_API_ROLE_ARN : ARN du rôle IAM (arn:aws:iam::XXXXX:role/XXXXX)
+   • SP_API_MARKETPLACE_ID : ID du marketplace (A13V1IB3VIYZZH pour FR, ATVPDKIKX0DER pour US)
+   • SP_API_REGION : Région AWS (eu-west-1, us-east-1, etc.)
+
+🎯 Outils disponibles :
+   Catalogue : search_catalog, get_catalog_item
+   Prix : get_competitive_pricing
+   Inventaire : get_inventory_summary
+   Commandes : get_orders, get_order_items`,
+    documentation: 'https://github.com/mattcoatsworth/AmazonSeller-mcp-server',
+    tools: {
+      products: [
+        {
+          name: 'search_catalog',
+          description: 'Rechercher des produits dans le catalogue Amazon',
+          example: '{ "keywords": "iPhone 15", "marketplaceId": "A13V1IB3VIYZZH" }'
+        },
+        {
+          name: 'get_catalog_item',
+          description: 'Obtenir les détails d\'un produit par ASIN',
+          example: '{ "asin": "B0XXXXX", "marketplaceId": "A13V1IB3VIYZZH" }'
+        },
+        {
+          name: 'get_competitive_pricing',
+          description: 'Obtenir les prix concurrentiels pour un ASIN',
+          example: '{ "asin": "B0XXXXX", "marketplaceId": "A13V1IB3VIYZZH" }'
+        }
+      ]
+    }
   },
   {
     id: 'postgresql-mcp-pixeeplay',
