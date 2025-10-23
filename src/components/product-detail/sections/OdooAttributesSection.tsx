@@ -9,6 +9,7 @@ interface OdooAttributesSectionProps {
 
 export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSectionProps) => {
   const odooAttributes = analysis?.odoo_attributes;
+  const category = analysis?.category;
 
   if (!odooAttributes || Object.keys(odooAttributes).length === 0) {
     return (
@@ -29,5 +30,5 @@ export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSecti
     );
   }
 
-  return <OdooAttributesDisplay attributes={odooAttributes} />;
+  return <OdooAttributesDisplay attributes={odooAttributes} category={category} />;
 };

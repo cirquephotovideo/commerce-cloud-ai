@@ -10,7 +10,8 @@ export const enrichmentSchema = z.object({
       'technical_description',
       'images',
       'rsgp',
-      'ai_analysis'
+      'ai_analysis',
+      'odoo_attributes'
     ])
   ).min(1, "At least one enrichment type required").max(10, "Maximum 10 enrichment types allowed"),
   provider: z.enum([

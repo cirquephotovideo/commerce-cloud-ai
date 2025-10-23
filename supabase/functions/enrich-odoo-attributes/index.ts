@@ -39,18 +39,59 @@ serve(async (req) => {
 
     console.log(`[enrich-odoo-attributes] Produit: ${analysis.supplier_products?.product_name}`);
 
-    // 2. Récupérer le référentiel d'attributs
+    // 2. Détecter la catégorie du produit
+    const productNameForDetection = analysis.supplier_products?.product_name 
+      || analysis.analysis_result?.title 
+      || analysis.analysis_result?.name 
+      || '';
+    const productDescForDetection = String(analysis.analysis_result?.description || '');
+    
+    const { data: categories } = await supabase
+      .from('product_categories')
+      .select('*');
+
+    let detectedCategory = 'non_categorise';
+    let categoryDisplayName = 'Non catégorisé';
+    
+    if (categories && categories.length > 0) {
+      const searchText = `${productNameForDetection} ${productDescForDetection}`.toLowerCase();
+      
+      for (const cat of categories) {
+        const keywords = cat.detection_keywords || [];
+        if (keywords.some((kw: string) => searchText.includes(kw.toLowerCase()))) {
+          detectedCategory = cat.attribute_category;
+          categoryDisplayName = cat.display_name;
+          break;
+        }
+      }
+    }
+
+    console.log(`[enrich-odoo-attributes] Catégorie détectée: ${detectedCategory} (${categoryDisplayName})`);
+
+    // 3. Récupérer le référentiel d'attributs pour cette catégorie
     const { data: attributeDefinitions, error: attrError } = await supabase
       .from('product_attribute_definitions')
       .select('*')
-      .eq('category', 'hottes');
+      .eq('category', detectedCategory);
 
     if (attrError) {
       console.error('[enrich-odoo-attributes] Erreur fetch attributs:', attrError);
       throw attrError;
     }
 
-    // 3. Grouper les attributs par nom
+    if (!attributeDefinitions || attributeDefinitions.length === 0) {
+      console.warn(`[enrich-odoo-attributes] Aucun attribut trouvé pour la catégorie "${detectedCategory}"`);
+      return new Response(
+        JSON.stringify({ 
+          error: `Aucun référentiel d'attributs pour la catégorie "${categoryDisplayName}"`,
+          category: detectedCategory,
+          categoryDisplayName
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 4. Grouper les attributs par nom
     const attributeSchema: Record<string, string[]> = {};
     for (const attr of attributeDefinitions || []) {
       if (!attributeSchema[attr.attribute_name]) {
@@ -61,9 +102,9 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[enrich-odoo-attributes] ${Object.keys(attributeSchema).length} types d'attributs trouvés`);
+    console.log(`[enrich-odoo-attributes] ${Object.keys(attributeSchema).length} types d'attributs trouvés pour "${categoryDisplayName}"`);
 
-    // 4. Préparer le contexte produit (avec fallback intelligent)
+    // 5. Préparer le contexte produit (avec fallback intelligent)
     const product = analysis.supplier_products;
     
     // Stratégie de fallback intelligente
@@ -129,7 +170,7 @@ SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
 
     console.log('[enrich-odoo-attributes] Contexte produit:', productContext.slice(0, 500) + '...');
 
-    // 5. Web search si activé
+    // 6. Web search si activé
     let webContext = '';
     if (webSearchEnabled) {
       try {
@@ -164,9 +205,17 @@ SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
       }
     }
 
-    // 6. Construire le prompt IA
-    const systemPrompt = `Tu es un expert en classification de produits électroménagers pour Odoo.
-Ta mission : extraire TOUS les attributs Odoo d'un produit à partir de sa description.
+    // 7. Construire le prompt IA
+    const systemPrompt = `Tu es un expert en classification de produits pour Odoo.
+
+Voici les définitions d'attributs Odoo pour la catégorie ${categoryDisplayName.toUpperCase()} :
+
+${JSON.stringify(attributeSchema, null, 2)}
+
+PRODUIT À ANALYSER :
+
+${productContext}
+${webContext}
 
 RÈGLES STRICTES :
 1. Tu DOIS choisir UNIQUEMENT des valeurs présentes dans le référentiel fourni
@@ -175,24 +224,11 @@ RÈGLES STRICTES :
 4. Traite TOUS les attributs du référentiel, ne saute aucun attribut
 5. Sois cohérent avec les dimensions et spécifications du produit
 
-RÉFÉRENTIEL D'ATTRIBUTS AUTORISÉS :
-${JSON.stringify(attributeSchema, null, 2)}
-
-PRODUIT À ANALYSER :
-${productContext}
-${webContext}
-
-Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référentiel.
-Format exact :
-{
-  "Type de hotte": "valeur du référentiel",
-  "Mode de fonctionnement": "valeur du référentiel",
-  ...
-}`;
+Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référentiel.`;
 
     console.log('[enrich-odoo-attributes] Appel IA...');
 
-    // 7. Appel IA selon le provider
+    // 8. Appel IA selon le provider
     let aiResponse;
     
     if (provider === 'lovable' || provider === 'lovable-ai') {
@@ -251,7 +287,7 @@ Format exact :
     const aiData = await aiResponse.json();
     console.log('[enrich-odoo-attributes] Réponse IA reçue');
 
-    // 8. Parser la réponse JSON
+    // 9. Parser la réponse JSON
     let extractedAttributes: Record<string, string> = {};
     try {
       const responseText = aiData.choices?.[0]?.message?.content || aiData.response || '{}';
@@ -268,7 +304,7 @@ Format exact :
 
     console.log(`[enrich-odoo-attributes] ${Object.keys(extractedAttributes).length} attributs extraits`);
 
-    // 9. Validation stricte des valeurs
+    // 10. Validation stricte des valeurs
     const validatedAttributes: Record<string, string> = {};
     let validCount = 0;
     let invalidCount = 0;
@@ -287,11 +323,12 @@ Format exact :
 
     console.log(`[enrich-odoo-attributes] Validation: ${validCount} valides, ${invalidCount} invalides`);
 
-    // 10. Sauvegarder dans product_analyses
+    // 11. Sauvegarder dans product_analyses
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({ 
         odoo_attributes: validatedAttributes,
+        category: detectedCategory,
         updated_at: new Date().toISOString()
       })
       .eq('id', analysisId);
@@ -307,6 +344,8 @@ Format exact :
       JSON.stringify({ 
         success: true,
         attributes: validatedAttributes,
+        category: detectedCategory,
+        categoryDisplayName,
         stats: {
           total: Object.keys(validatedAttributes).length,
           valid: validCount,

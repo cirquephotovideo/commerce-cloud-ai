@@ -2791,6 +2791,7 @@ export type Database = {
           amazon_last_attempt: string | null
           analysis_result: Json
           auto_enrichment_count: number | null
+          category: string | null
           competitive_cons: Json | null
           competitive_pros: Json | null
           cost_analysis: Json | null
@@ -2829,6 +2830,7 @@ export type Database = {
           amazon_last_attempt?: string | null
           analysis_result: Json
           auto_enrichment_count?: number | null
+          category?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           cost_analysis?: Json | null
@@ -2867,6 +2869,7 @@ export type Database = {
           amazon_last_attempt?: string | null
           analysis_result?: Json
           auto_enrichment_count?: number | null
+          category?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           cost_analysis?: Json | null
@@ -2952,6 +2955,33 @@ export type Database = {
           category?: string | null
           created_at?: string | null
           id?: string
+        }
+        Relationships: []
+      }
+      product_categories: {
+        Row: {
+          attribute_category: string
+          created_at: string | null
+          detection_keywords: string[] | null
+          display_name: string
+          id: string
+          name: string
+        }
+        Insert: {
+          attribute_category: string
+          created_at?: string | null
+          detection_keywords?: string[] | null
+          display_name: string
+          id?: string
+          name: string
+        }
+        Update: {
+          attribute_category?: string
+          created_at?: string | null
+          detection_keywords?: string[] | null
+          display_name?: string
+          id?: string
+          name?: string
         }
         Relationships: []
       }

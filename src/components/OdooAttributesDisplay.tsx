@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Tag } from 'lucide-react';
 
 interface OdooAttributesDisplayProps {
   attributes: Record<string, string>;
+  category?: string;
 }
 
-export const OdooAttributesDisplay = ({ attributes }: OdooAttributesDisplayProps) => {
+export const OdooAttributesDisplay = ({ attributes, category }: OdooAttributesDisplayProps) => {
   if (!attributes || Object.keys(attributes).length === 0) {
     return null;
   }
@@ -14,16 +15,33 @@ export const OdooAttributesDisplay = ({ attributes }: OdooAttributesDisplayProps
   const determinedCount = Object.values(attributes).filter(v => v !== "Non déterminé").length;
   const totalCount = Object.keys(attributes).length;
 
+  // Mapping des catégories pour l'affichage
+  const categoryLabels: Record<string, string> = {
+    'hottes': 'Hottes de cuisine',
+    'logiciels': 'Logiciels & Licences',
+    'electromenager': 'Électroménager',
+    'informatique': 'Matériel Informatique',
+    'non_categorise': 'Non catégorisé'
+  };
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2">
             📋 Attributs Odoo
           </CardTitle>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span>{determinedCount}/{totalCount} déterminés</span>
+          <div className="flex items-center gap-3">
+            {category && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                {categoryLabels[category] || category}
+              </Badge>
+            )}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span>{determinedCount}/{totalCount} déterminés</span>
+            </div>
           </div>
         </div>
       </CardHeader>
