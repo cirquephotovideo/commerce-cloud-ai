@@ -177,13 +177,31 @@ export function ProductDetailModal({
 
       const enrichmentTypes = typeMap[type] || [type];
 
+      // Récupérer le supplier_product_id via product_links
+      const { data: linkData, error: linkError } = await supabase
+        .from('product_links')
+        .select('supplier_product_id')
+        .eq('analysis_id', product.id)
+        .maybeSingle();
+
+      if (linkError) {
+        console.error('[ProductDetail] Link fetch error:', linkError);
+        toast.error(`Erreur: ${linkError.message}`);
+        return;
+      }
+
+      if (!linkData?.supplier_product_id) {
+        toast.error("⚠️ Aucun produit fournisseur lié à cette analyse");
+        return;
+      }
+
       // Add task to queue
       const { error: insertError } = await supabase
         .from("enrichment_queue")
         .insert({
           user_id: user.id,
-          supplier_product_id: product.id,
-          analysis_id: analysis?.id,
+          supplier_product_id: linkData.supplier_product_id,
+          analysis_id: product.id,
           enrichment_type: enrichmentTypes,
           priority: "high",
           status: "pending",
@@ -242,13 +260,31 @@ export function ProductDetailModal({
         return;
       }
 
+      // Récupérer le supplier_product_id via product_links
+      const { data: linkData, error: linkError } = await supabase
+        .from('product_links')
+        .select('supplier_product_id')
+        .eq('analysis_id', product.id)
+        .maybeSingle();
+
+      if (linkError) {
+        console.error('[ProductDetail] Link fetch error:', linkError);
+        toast.error(`Erreur: ${linkError.message}`);
+        return;
+      }
+
+      if (!linkData?.supplier_product_id) {
+        toast.error("⚠️ Aucun produit fournisseur lié à cette analyse");
+        return;
+      }
+
       // Ajouter à la queue
       const { error: insertError } = await supabase
         .from("enrichment_queue")
         .insert({
           user_id: user.id,
-          supplier_product_id: product.id,
-          analysis_id: analysis?.id,
+          supplier_product_id: linkData.supplier_product_id,
+          analysis_id: product.id,
           enrichment_type: ['odoo_attributes'],
           priority: "high",
           status: "pending",
