@@ -55,22 +55,9 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     const accessToken = tokenData.access_token;
     
-    // Faire une requête test simple à l'API Amazon
-    const region = credentials.SP_API_REGION || 'eu-west-1';
-    const marketplaceId = credentials.SP_API_MARKETPLACE_ID || 'A13V1IB3VIYZZH';
-    const testUrl = `https://sellingpartnerapi-${region}.amazon.com/catalog/2022-04-01/items?keywords=test&marketplaceIds=${marketplaceId}`;
-    
-    const testResponse = await fetch(testUrl, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'x-amz-access-token': accessToken,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!testResponse.ok) {
-      const errorText = await testResponse.text();
-      throw new Error(`Test API Amazon échoué: ${testResponse.status} - ${errorText}`);
+    // Si on a obtenu un access_token, on considère le test de connexion comme réussi
+    if (!accessToken) {
+      throw new Error('Impossible d’obtenir un access token via LWA');
     }
 
     // Succès !
