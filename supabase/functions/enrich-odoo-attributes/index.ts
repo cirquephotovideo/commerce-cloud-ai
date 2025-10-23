@@ -40,11 +40,27 @@ serve(async (req) => {
     console.log(`[enrich-odoo-attributes] Produit: ${analysis.supplier_products?.product_name}`);
 
     // 2. Détecter la catégorie du produit
+    // Extraire le nom du produit de manière robuste
     const productNameForDetection = analysis.supplier_products?.product_name 
       || analysis.analysis_result?.title 
       || analysis.analysis_result?.name 
+      || analysis.product_url
       || '';
-    const productDescForDetection = String(analysis.analysis_result?.description || '');
+    
+    // Extraire la description complète (suggested_description + key_features)
+    let productDescForDetection = '';
+    const analysisDesc = analysis.analysis_result?.description;
+    if (analysisDesc && typeof analysisDesc === 'object') {
+      productDescForDetection = [
+        analysisDesc.suggested_description || '',
+        Array.isArray(analysisDesc.key_features) ? analysisDesc.key_features.join(' ') : ''
+      ].filter(Boolean).join(' ');
+    } else {
+      productDescForDetection = String(analysisDesc || '');
+    }
+
+    console.log(`[enrich-odoo-attributes] Texte pour détection: "${(productNameForDetection + ' ' + productDescForDetection).slice(0, 200)}..."`);
+
     
     const { data: categories } = await supabase
       .from('product_categories')
@@ -217,12 +233,15 @@ PRODUIT À ANALYSER :
 ${productContext}
 ${webContext}
 
-RÈGLES STRICTES :
-1. Tu DOIS choisir UNIQUEMENT des valeurs présentes dans le référentiel fourni
-2. Si une valeur n'existe pas exactement, choisis la plus proche sémantiquement
-3. Si tu ne peux absolument pas déterminer un attribut, mets "Non déterminé"
-4. Traite TOUS les attributs du référentiel, ne saute aucun attribut
-5. Sois cohérent avec les dimensions et spécifications du produit
+RÈGLES STRICTES - AUCUNE HALLUCINATION TOLÉRÉE :
+1. Tu DOIS choisir UNIQUEMENT des valeurs présentes dans le référentiel fourni ci-dessus
+2. Si une valeur n'existe pas exactement, choisis la valeur la plus proche sémantiquement parmi celles du référentiel
+3. Si tu ne peux absolument pas déterminer un attribut avec certitude, mets "Non déterminé"
+4. NE GÉNÈRE AUCUN ATTRIBUT qui n'est pas dans le référentiel fourni
+5. Si le référentiel est vide pour un attribut, retourne "Non déterminé" pour cet attribut
+6. Traite TOUS les attributs du référentiel, ne saute aucun attribut
+7. Sois cohérent avec les dimensions et spécifications du produit
+8. INTERDIT d'inventer des valeurs qui ne sont pas explicitement listées dans le référentiel
 
 Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référentiel.`;
 
