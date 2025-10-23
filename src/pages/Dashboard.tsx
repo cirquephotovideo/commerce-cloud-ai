@@ -82,10 +82,6 @@ export default function Dashboard() {
     setIsModalOpen(true);
   };
 
-  const handleShowDetails = (analysis: ProductAnalysis) => {
-    setSelectedAnalysis(analysis);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const handleOpenWizard = () => {
     navigate('/wizard');
@@ -878,19 +874,23 @@ export default function Dashboard() {
                                       "Produit sans nom";
               
               return (
-                <Card key={analysis.id} className="hover:shadow-lg transition-shadow">
+                <Card 
+                  key={analysis.id} 
+                  className="hover:shadow-xl hover:border-primary/50 transition-all duration-200 cursor-pointer"
+                  onClick={() => handleOpenDetail(analysis)}
+                >
                   <CardHeader className="pb-3 sm:pb-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <Checkbox
                           checked={selectedIds.has(analysis.id)}
                           onCheckedChange={() => toggleSelect(analysis.id)}
+                          onClick={(e) => e.stopPropagation()}
                           className="mt-1 shrink-0"
                         />
                         <div className="flex-1 min-w-0">
                           <CardTitle 
-                            className="text-sm sm:text-base md:text-lg line-clamp-2 cursor-pointer hover:text-primary transition-colors"
-                            onClick={() => handleShowDetails(analysis)}
+                            className="text-sm sm:text-base md:text-lg line-clamp-2"
                           >
                             {productName}
                           </CardTitle>
@@ -900,7 +900,10 @@ export default function Dashboard() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => toggleFavorite(analysis.id, analysis.is_favorite)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(analysis.id, analysis.is_favorite);
+                        }}
                         className="shrink-0 h-8 w-8 sm:h-10 sm:w-10"
                       >
                         <Star className={`h-4 w-4 sm:h-5 sm:w-5 ${analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
@@ -928,81 +931,109 @@ export default function Dashboard() {
                      <div className="space-y-2">
                        {/* Main Actions Row */}
                        <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenDetail(analysis);
+                            }}
+                            className="text-xs sm:text-sm"
+                          >
+                            Détails
+                          </Button>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <ProductSummaryDialog 
+                              analysis={analysis}
+                              productName={productName}
+                            />
+                          </div>
+                          {hasPermission('single_export') && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <ProductExportMenu analysisId={analysis.id} productName={productName} />
+                            </div>
+                          )}
+                         
+                          {/* Quick Enrich Dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled={enrichingIds.has(analysis.id)}
+                                className="text-xs sm:text-sm"
+                              >
+                                {enrichingIds.has(analysis.id) ? (
+                                  <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
+                                    <span className="hidden sm:inline">Enrichir</span>
+                                    <ChevronDown className="w-3 h-3 sm:ml-1" />
+                                  </>
+                                )}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-background z-50">
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickEnrich(analysis.id, 'amazon');
+                              }}>
+                                <Package className="w-4 h-4 mr-2" />
+                                Données Amazon
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickEnrich(analysis.id, 'heygen');
+                              }}>
+                                <Video className="w-4 h-4 mr-2" />
+                                Vidéo HeyGen
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickEnrich(analysis.id, 'rsgp');
+                              }}>
+                                <FileCheck className="w-4 h-4 mr-2" />
+                                Conformité RSGP
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleQuickEnrich(analysis.id, 'all');
+                              }}>
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Tout régénérer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                       </div>
+                       {/* Secondary Actions Row */}
+                       <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+                         {analysis.image_urls && analysis.image_urls.length > 0 && (
+                           <div onClick={(e) => e.stopPropagation()}>
+                             <ProductImageGallery images={analysis.image_urls} productName={productName} />
+                           </div>
+                         )}
+                         {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
+                           <div onClick={(e) => e.stopPropagation()}>
+                             <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
+                           </div>
+                         )}
+                         <div onClick={(e) => e.stopPropagation()}>
+                           <JsonViewer data={analysis.analysis_result} />
+                         </div>
                          <Button 
                            variant="outline" 
-                           size="sm"
-                           onClick={() => handleOpenDetail(analysis)}
-                           className="text-xs sm:text-sm"
+                           size="sm" 
+                           onClick={(e) => {
+                             e.stopPropagation();
+                             deleteAnalysis(analysis.id);
+                           }}
+                           className="h-8 w-8 p-0"
                          >
-                           Détails
+                           <Trash2 className="w-4 h-4" />
                          </Button>
-                         <ProductSummaryDialog 
-                           analysis={analysis}
-                           productName={productName}
-                         />
-                         {hasPermission('single_export') && (
-                           <ProductExportMenu analysisId={analysis.id} productName={productName} />
-                         )}
-                         
-                         {/* Quick Enrich Dropdown */}
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button 
-                               variant="outline" 
-                               size="sm"
-                               disabled={enrichingIds.has(analysis.id)}
-                               className="text-xs sm:text-sm"
-                             >
-                               {enrichingIds.has(analysis.id) ? (
-                                 <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
-                               ) : (
-                                 <>
-                                   <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
-                                   <span className="hidden sm:inline">Enrichir</span>
-                                   <ChevronDown className="w-3 h-3 sm:ml-1" />
-                                 </>
-                               )}
-                             </Button>
-                           </DropdownMenuTrigger>
-                           <DropdownMenuContent align="end" className="bg-background z-50">
-                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'amazon')}>
-                               <Package className="w-4 h-4 mr-2" />
-                               Données Amazon
-                             </DropdownMenuItem>
-                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'heygen')}>
-                               <Video className="w-4 h-4 mr-2" />
-                               Vidéo HeyGen
-                             </DropdownMenuItem>
-                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'rsgp')}>
-                               <FileCheck className="w-4 h-4 mr-2" />
-                               Conformité RSGP
-                             </DropdownMenuItem>
-                             <DropdownMenuSeparator />
-                             <DropdownMenuItem onClick={() => handleQuickEnrich(analysis.id, 'all')}>
-                               <Sparkles className="w-4 h-4 mr-2" />
-                               Tout régénérer
-                             </DropdownMenuItem>
-                           </DropdownMenuContent>
-                         </DropdownMenu>
                        </div>
-                      {/* Secondary Actions Row */}
-                      <div className="flex gap-1.5 sm:gap-2 flex-wrap">
-                        {analysis.image_urls && analysis.image_urls.length > 0 && (
-                          <ProductImageGallery images={analysis.image_urls} productName={productName} />
-                        )}
-                        {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
-                          <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
-                        )}
-                        <JsonViewer data={analysis.analysis_result} />
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => deleteAnalysis(analysis.id)}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
