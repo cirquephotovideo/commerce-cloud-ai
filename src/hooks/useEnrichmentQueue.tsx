@@ -30,6 +30,33 @@ export const useEnrichmentQueue = (analysisId: string) => {
     };
   }, [analysisId, queryClient]);
 
+  // Polling every 10 seconds to trigger processing if pending tasks exist
+  useEffect(() => {
+    if (!analysisId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: pendingTasks } = await supabase
+          .from('enrichment_queue')
+          .select('id')
+          .eq('analysis_id', analysisId)
+          .eq('status', 'pending')
+          .limit(1);
+
+        if (pendingTasks && pendingTasks.length > 0) {
+          console.log('[useEnrichmentQueue] Pending tasks detected, triggering processing...');
+          await supabase.functions.invoke('process-enrichment-queue', {
+            body: { maxItems: 10, parallel: 3 }
+          });
+        }
+      } catch (error) {
+        console.error('[useEnrichmentQueue] Error checking pending tasks:', error);
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [analysisId]);
+
   return useQuery({
     queryKey: ['enrichment-queue', analysisId],
     queryFn: async () => {
