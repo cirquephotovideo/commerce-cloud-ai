@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, Star, Download, BarChart3 } from "lucide-react";
+import { Loader2, Trash2, Star, Download, BarChart3, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -169,6 +169,107 @@ export default function History() {
       toast({
         title: "Erreur",
         description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleBulkEnrichOdoo = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "❌ Erreur",
+          description: "Non authentifié",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const ids = Array.from(selectedAnalyses);
+      
+      // Pour chaque analyse, récupérer le supplier_product_id via product_links
+      const { data: linksData, error: linksError } = await supabase
+        .from('product_links')
+        .select('supplier_product_id, analysis_id')
+        .in('analysis_id', ids);
+
+      if (linksError) {
+        console.error('[History] Links fetch error:', linksError);
+        toast({
+          title: "❌ Erreur",
+          description: linksError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!linksData || linksData.length === 0) {
+        toast({
+          title: "⚠️ Avertissement",
+          description: "Aucun produit fournisseur lié aux analyses sélectionnées",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Créer les tâches d'enrichissement pour chaque produit lié
+      const enrichmentTasks = linksData.map(link => ({
+        user_id: user.id,
+        supplier_product_id: link.supplier_product_id,
+        analysis_id: link.analysis_id,
+        enrichment_type: ['odoo_attributes'],
+        priority: 'high',
+        status: 'pending',
+      }));
+
+      const { error: insertError } = await supabase
+        .from('enrichment_queue')
+        .insert(enrichmentTasks);
+
+      if (insertError) {
+        console.error('[History] Queue insert error:', insertError);
+        toast({
+          title: "❌ Erreur",
+          description: insertError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "✨ Enrichissement lancé",
+        description: `${linksData.length} produit(s) ajouté(s) à la file d'enrichissement Odoo`,
+      });
+
+      // Déclencher le traitement
+      const { error: processError } = await supabase.functions.invoke(
+        'process-enrichment-queue',
+        { body: { maxItems: linksData.length } }
+      );
+
+      if (processError) {
+        console.error('[History] Processing error:', processError);
+        toast({
+          title: "⏳ En file d'attente",
+          description: "Les enrichissements seront traités automatiquement",
+        });
+      } else {
+        toast({
+          title: "🚀 Traitement démarré !",
+          description: `Enrichissement des attributs Odoo en cours...`,
+        });
+      }
+
+      // Réinitialiser la sélection et recharger
+      setSelectedAnalyses(new Set());
+      setTimeout(() => loadAnalyses(), 3000);
+
+    } catch (error: any) {
+      console.error("[History] Odoo enrichment error:", error);
+      toast({
+        title: "❌ Erreur",
+        description: "Erreur lors de l'enrichissement des attributs",
         variant: "destructive",
       });
     }
@@ -406,6 +507,16 @@ export default function History() {
               >
                 <Download className="w-4 h-4 mr-2" />
                 Exporter CSV
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleBulkEnrichOdoo}
+                className="bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30"
+              >
+                <Database className="w-4 h-4 mr-2" />
+                Enrichir Attributs Odoo
               </Button>
               
               <Button 
