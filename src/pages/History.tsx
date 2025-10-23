@@ -238,7 +238,7 @@ export default function History() {
           body: { 
             analysisId: analysis.id,
             provider: 'lovable',
-            webSearchEnabled: false
+            webSearchEnabled: true
           }
         })
       );

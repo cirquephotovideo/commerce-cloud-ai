@@ -63,30 +63,62 @@ serve(async (req) => {
 
     console.log(`[enrich-odoo-attributes] ${Object.keys(attributeSchema).length} types d'attributs trouvés`);
 
-    // 4. Préparer le contexte produit (avec fallback sur analysis_result)
+    // 4. Préparer le contexte produit (avec fallback intelligent)
     const product = analysis.supplier_products;
     
-    // Stratégie de fallback : utiliser supplier_products SI disponible, sinon analysis_result
+    // Stratégie de fallback intelligente
     const productName = product?.product_name 
       || analysis.analysis_result?.title 
       || analysis.analysis_result?.name
-      || analysis.product_url;
+      || analysis.product_url
+      || 'Produit inconnu';
 
-    const productDescription = product?.description 
-      || analysis.analysis_result?.description 
-      || '';
+    // Parser la description si c'est un objet JSON
+    let productDescription = product?.description || '';
+    if (!productDescription && analysis.analysis_result?.description) {
+      const desc = analysis.analysis_result.description;
+      if (typeof desc === 'object') {
+        // Extraire suggested_description ou key_features
+        productDescription = desc.suggested_description 
+          || (desc.key_features ? desc.key_features.join(' • ') : '') 
+          || JSON.stringify(desc);
+      } else {
+        productDescription = String(desc);
+      }
+    }
 
-    const productBrand = analysis.analysis_result?.brand 
-      || product?.additional_data?.brand 
-      || '';
+    // Extraire le brand depuis key_features ou suggested_description
+    let productBrand = analysis.analysis_result?.brand || product?.additional_data?.brand || '';
+    if (!productBrand && productDescription) {
+      // Essayer de détecter la marque dans la description
+      const brandPatterns = [
+        { pattern: /iPhone|iPad|MacBook/i, brand: 'Apple' },
+        { pattern: /Galaxy|Samsung/i, brand: 'Samsung' },
+        { pattern: /Pixel/i, brand: 'Google' },
+        { pattern: /ThinkPad|Lenovo/i, brand: 'Lenovo' },
+        { pattern: /Surface/i, brand: 'Microsoft' },
+        { pattern: /Dell/i, brand: 'Dell' },
+        { pattern: /HP|Hewlett/i, brand: 'HP' },
+      ];
+      for (const { pattern, brand } of brandPatterns) {
+        if (pattern.test(productDescription) || pattern.test(productName)) {
+          productBrand = brand;
+          break;
+        }
+      }
+    }
 
-    const productSpecs = product?.additional_data?.specs 
+    // Extraire les specs depuis key_features
+    let productSpecs = product?.additional_data?.specs 
       || analysis.analysis_result?.specifications 
       || [];
+    if (productSpecs.length === 0 && analysis.analysis_result?.description?.key_features) {
+      productSpecs = analysis.analysis_result.description.key_features;
+    }
 
     const productContext = `
 RÉFÉRENCE: ${product?.supplier_reference || 'N/A'}
-MARQUE: ${productBrand}
+MARQUE: ${productBrand || 'Marque inconnue'}
 NOM: ${productName}
 DESCRIPTION: ${productDescription}
 URL: ${analysis.product_url || 'N/A'}
@@ -94,6 +126,8 @@ DIMENSIONS: ${product?.additional_data?.dimensions || 'N/A'}
 PRIX: ${product?.purchase_price || 'N/A'} EUR
 SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
 `;
+
+    console.log('[enrich-odoo-attributes] Contexte produit:', productContext.slice(0, 500) + '...');
 
     // 5. Web search si activé
     let webContext = '';

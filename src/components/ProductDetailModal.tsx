@@ -251,11 +251,11 @@ export function ProductDetailModal({
       const { data, error } = await supabase.functions.invoke(
         'enrich-odoo-attributes',
         { 
-          body: { 
-            analysisId: product.id,
-            provider: 'lovable',
-            webSearchEnabled: false
-          } 
+        body: { 
+          analysisId: product.id,
+          provider: 'lovable',
+          webSearchEnabled: true
+        }
         }
       );
 
