@@ -125,8 +125,8 @@ export async function callAIWithFallback(
         body: JSON.stringify({
           model: options.model || 'google/gemini-2.5-flash',
           messages: options.messages,
-          temperature: options.temperature,
-          max_tokens: options.max_tokens
+          temperature: options.temperature ?? 0.7,
+          max_tokens: options.max_tokens ?? 2000
         }),
       });
 
