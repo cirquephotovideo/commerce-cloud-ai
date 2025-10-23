@@ -227,53 +227,35 @@ export default function History() {
         });
       }
 
-      // Créer les tâches d'enrichissement
-      const enrichmentTasks = validAnalyses.map(analysis => ({
-        user_id: user.id,
-        supplier_product_id: analysis.supplier_product_id,
-        analysis_id: analysis.id,
-        enrichment_type: ['odoo_attributes'],
-        priority: 'high',
-        status: 'pending',
-      }));
-
-      const { error: insertError } = await supabase
-        .from('enrichment_queue')
-        .insert(enrichmentTasks);
-
-      if (insertError) {
-        console.error('[History] Queue insert error:', insertError);
-        toast({
-          title: "❌ Erreur",
-          description: insertError.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
+      // Appel direct à enrich-odoo-attributes pour chaque analyse (en parallèle)
       toast({
-        title: "✨ Enrichissement lancé",
-        description: `${validAnalyses.length} produit(s) ajouté(s) à la file d'enrichissement Odoo`,
+        title: "⏳ Enrichissement en cours...",
+        description: `Traitement de ${validAnalyses.length} produit(s)...`,
       });
 
-      // Déclencher le traitement
-      const { error: processError } = await supabase.functions.invoke(
-        'process-enrichment-queue',
-        { body: { maxItems: validAnalyses.length } }
+      const enrichmentPromises = validAnalyses.map(analysis => 
+        supabase.functions.invoke('enrich-odoo-attributes', {
+          body: { 
+            analysisId: analysis.id,
+            provider: 'lovable',
+            webSearchEnabled: false
+          }
+        })
       );
 
-      if (processError) {
-        console.error('[History] Processing error:', processError);
-        toast({
-          title: "⏳ En file d'attente",
-          description: "Les enrichissements seront traités automatiquement",
-        });
-      } else {
-        toast({
-          title: "🚀 Traitement démarré !",
-          description: `Enrichissement des attributs Odoo en cours...`,
-        });
-      }
+      const results = await Promise.allSettled(enrichmentPromises);
+
+      // Compter les succès/échecs
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      console.log('[History] Bulk enrichment results:', results);
+
+      toast({
+        title: succeeded > 0 ? "✨ Enrichissement terminé" : "❌ Erreur",
+        description: `${succeeded} réussi(s), ${failed} échoué(s)`,
+        variant: succeeded > 0 ? "default" : "destructive",
+      });
 
       // Réinitialiser la sélection et recharger
       setSelectedAnalyses(new Set());

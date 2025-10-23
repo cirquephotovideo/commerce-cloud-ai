@@ -245,44 +245,31 @@ export function ProductDetailModal({
         return;
       }
 
-      // Note: supplier_product_id peut être NULL pour certaines analyses
-      // La fonction enrich-odoo-attributes utilisera les données de analysis_result en fallback
+      // Appel direct à enrich-odoo-attributes (pas de queue intermédiaire)
+      toast.loading("⏳ Enrichissement des attributs Odoo en cours...");
 
-      // Ajouter à la queue
-      const { error: insertError } = await supabase
-        .from("enrichment_queue")
-        .insert({
-          user_id: user.id,
-          supplier_product_id: product.supplier_product_id || null,
-          analysis_id: product.id,
-          enrichment_type: ['odoo_attributes'],
-          priority: "high",
-          status: "pending",
-        });
+      const { data, error } = await supabase.functions.invoke(
+        'enrich-odoo-attributes',
+        { 
+          body: { 
+            analysisId: product.id,
+            provider: 'lovable',
+            webSearchEnabled: false
+          } 
+        }
+      );
 
-      if (insertError) {
-        console.error('[ProductDetail] Queue insert error:', insertError);
-        toast.error(`Erreur: ${insertError.message}`);
+      if (error) {
+        console.error('[ProductDetail] Odoo enrichment error:', error);
+        toast.error(`❌ Erreur: ${error.message}`);
         return;
       }
 
-      toast.success('✨ Enrichissement Attributs Odoo ajouté à la file');
+      toast.success('✨ Attributs Odoo enrichis avec succès !');
+      console.log('[ProductDetail] Odoo attributes enriched:', data);
 
-      // Déclencher le traitement
-      const { error: processError } = await supabase.functions.invoke(
-        'process-enrichment-queue',
-        { body: { maxItems: 1 } }
-      );
-
-      if (processError) {
-        console.error('[ProductDetail] Processing error:', processError);
-        toast.warning("⏳ Enrichissement en file, vérifiez le Dashboard");
-      } else {
-        toast.success("🚀 Enrichissement Attributs Odoo démarré !");
-      }
-
-      // Rafraîchir après 3 secondes
-      setTimeout(() => handleRefresh(), 3000);
+      // Rafraîchir après 1 seconde
+      setTimeout(() => handleRefresh(), 1000);
     } catch (error: any) {
       console.error("[ProductDetail] Odoo Attributes enrichment error:", error);
       toast.error("❌ Erreur lors de l'enrichissement des attributs");
