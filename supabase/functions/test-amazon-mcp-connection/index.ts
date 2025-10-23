@@ -30,29 +30,30 @@ serve(async (req) => {
       throw new Error(`Credentials manquants: ${missingFields.join(', ')}`);
     }
 
-    // Obtenir un access token via amazon-token-manager
-    const tokenResponse = await fetch(
-      `${Deno.env.get('SUPABASE_URL')}/functions/v1/amazon-token-manager`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({
-          clientId: credentials.SP_API_CLIENT_ID,
-          clientSecret: credentials.SP_API_CLIENT_SECRET,
-          refreshToken: credentials.SP_API_REFRESH_TOKEN
-        })
-      }
-    );
+    // Obtenir un access token directement via l'API Amazon LWA
+    const tokenEndpoint = 'https://api.amazon.com/auth/o2/token';
+    const tokenBody = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: credentials.SP_API_REFRESH_TOKEN,
+      client_id: credentials.SP_API_CLIENT_ID,
+      client_secret: credentials.SP_API_CLIENT_SECRET
+    });
+
+    const tokenResponse = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: tokenBody.toString()
+    });
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       throw new Error(`Échec de l'authentification Amazon: ${tokenResponse.status} - ${errorText}`);
     }
 
-    const { accessToken } = await tokenResponse.json();
+    const tokenData = await tokenResponse.json();
+    const accessToken = tokenData.access_token;
     
     // Faire une requête test simple à l'API Amazon
     const region = credentials.SP_API_REGION || 'eu-west-1';
