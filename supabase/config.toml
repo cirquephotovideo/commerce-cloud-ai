@@ -39,8 +39,6 @@ verify_jwt = true
 [functions.export-to-shopify]
 verify_jwt = true
 
-[functions.sync-shopify-categories]
-verify_jwt = true
 
 [functions.export-to-woocommerce]
 verify_jwt = true
@@ -84,8 +82,6 @@ verify_jwt = true
 [functions.export-single-product]
 verify_jwt = true
 
-[functions.verify-api-keys]
-verify_jwt = true
 
 [functions.generate-themed-image]
 verify_jwt = true
@@ -105,8 +101,6 @@ verify_jwt = true
 [functions.amazon-product-enrichment]
 verify_jwt = true
 
-[functions.test-aws-sigv4]
-verify_jwt = true
 
 [functions.claude-proxy]
 verify_jwt = true
