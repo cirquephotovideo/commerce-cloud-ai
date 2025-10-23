@@ -1,8 +1,9 @@
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign } from "lucide-react";
+import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, Database } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import { SpecsSection } from "./product-detail/sections/SpecsSectionUpdated";
 import { RepairabilitySection } from "./product-detail/sections/RepairabilitySection";
 import { EnvironmentalSection } from "./product-detail/sections/EnvironmentalSection";
 import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
+import { OdooAttributesSection } from "./product-detail/sections/OdooAttributesSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
@@ -232,6 +234,55 @@ export function ProductDetailModal({
     setShowVideoWizard(true);
   };
 
+  const handleEnrichOdooAttributes = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Non authentifié");
+        return;
+      }
+
+      // Ajouter à la queue
+      const { error: insertError } = await supabase
+        .from("enrichment_queue")
+        .insert({
+          user_id: user.id,
+          supplier_product_id: product.id,
+          analysis_id: analysis?.id,
+          enrichment_type: ['odoo_attributes'],
+          priority: "high",
+          status: "pending",
+        });
+
+      if (insertError) {
+        console.error('[ProductDetail] Queue insert error:', insertError);
+        toast.error(`Erreur: ${insertError.message}`);
+        return;
+      }
+
+      toast.success('✨ Enrichissement Attributs Odoo ajouté à la file');
+
+      // Déclencher le traitement
+      const { error: processError } = await supabase.functions.invoke(
+        'process-enrichment-queue',
+        { body: { maxItems: 1 } }
+      );
+
+      if (processError) {
+        console.error('[ProductDetail] Processing error:', processError);
+        toast.warning("⏳ Enrichissement en file, vérifiez le Dashboard");
+      } else {
+        toast.success("🚀 Enrichissement Attributs Odoo démarré !");
+      }
+
+      // Rafraîchir après 3 secondes
+      setTimeout(() => handleRefresh(), 3000);
+    } catch (error: any) {
+      console.error("[ProductDetail] Odoo Attributes enrichment error:", error);
+      toast.error("❌ Erreur lors de l'enrichissement des attributs");
+    }
+  };
+
   if (!product) return null;
 
   // Calculer le statut d'enrichissement
@@ -256,6 +307,10 @@ export function ProductDetailModal({
   const hasRepairabilityData = Boolean(getRepairabilityData(analysis));
   const hasEnvironmentalData = Boolean(getEnvironmentalData(analysis));
   const hasHSCodeData = Boolean(getHSCodeData(analysis));
+  const hasOdooAttributes = Boolean(
+    analysis?.odoo_attributes && 
+    Object.keys(analysis.odoo_attributes).length > 0
+  );
 
   // Compter les fournisseurs
   const supplierCount = product.supplier_count || 0;
@@ -267,7 +322,8 @@ export function ProductDetailModal({
     amazon: { status: hasAmazonData ? 'available' : 'missing' } as const,
     description: { status: hasDescription ? 'available' : 'missing' } as const,
     rsgp: { status: hasRSGPData ? 'available' : 'missing' } as const,
-    specs: { status: hasSpecs ? 'available' : 'missing' } as const
+    specs: { status: hasSpecs ? 'available' : 'missing' } as const,
+    odoo_attributes: { status: hasOdooAttributes ? 'available' : 'missing', count: hasOdooAttributes ? Object.keys(analysis?.odoo_attributes || {}).length : undefined } as const
   };
 
   return (
@@ -339,6 +395,14 @@ export function ProductDetailModal({
               >
                 <Video className="h-4 w-4 mr-2" />
                 Générer Vidéo HeyGen
+              </Button>
+              <Button
+                onClick={handleEnrichOdooAttributes}
+                variant="outline"
+                className="bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30"
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Enrichir Attributs Odoo
               </Button>
               {onExport && (
                 <Button
@@ -568,6 +632,26 @@ export function ProductDetailModal({
                         isLoading={enrichmentMutation.isPending}
                       />
                     )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Attributs Odoo - TOUJOURS AFFICHER */}
+                <AccordionItem value="odoo_attributes" id="section-odoo_attributes">
+                  <AccordionTrigger className="hover:bg-accent px-4 py-3 rounded-lg transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-5 w-5" />
+                      <span className="font-semibold">Attributs Odoo</span>
+                      {hasOdooAttributes && analysis?.odoo_attributes ? (
+                        <Badge variant="default" className="ml-2">
+                          {Object.keys(analysis.odoo_attributes).length} attributs
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="ml-2">Non enrichi</Badge>
+                      )}
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    <OdooAttributesSection product={product} analysis={analysis} />
                   </AccordionContent>
                 </AccordionItem>
 

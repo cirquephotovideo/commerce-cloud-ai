@@ -241,6 +241,17 @@ serve(async (req) => {
                   }
                 });
                 break;
+
+              case 'odoo_attributes':
+                console.log('[ENRICHMENT-QUEUE] Enriching Odoo attributes');
+                await supabase.functions.invoke('enrich-odoo-attributes', {
+                  body: { 
+                    analysisId: analysis.id,
+                    provider: 'lovable',
+                    webSearchEnabled: true
+                  }
+                });
+                break;
             }
           } catch (enrichError) {
             console.error(`[ENRICHMENT-QUEUE] Error in ${type} enrichment:`, enrichError);

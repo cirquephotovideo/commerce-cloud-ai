@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ImageIcon, Video, Package, FileText, ShieldCheck, Wrench } from "lucide-react";
+import { Loader2, ImageIcon, Video, Package, FileText, ShieldCheck, Wrench, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface EnrichmentData {
@@ -15,6 +15,7 @@ interface EnrichmentBadgesProps {
     description?: EnrichmentData;
     rsgp?: EnrichmentData;
     specs?: EnrichmentData;
+    odoo_attributes?: EnrichmentData;
   };
   onBadgeClick?: (type: string) => void;
   compact?: boolean;
@@ -61,6 +62,12 @@ export const EnrichmentBadges = ({
       icon: Wrench,
       label: 'Specs',
       data: enrichmentStatus.specs
+    },
+    {
+      key: 'odoo_attributes',
+      icon: Database,
+      label: 'Attributs Odoo',
+      data: enrichmentStatus.odoo_attributes
     }
   ];
 
