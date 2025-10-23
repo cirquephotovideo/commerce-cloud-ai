@@ -238,8 +238,7 @@ export const ProviderSelector = ({ selected, onSelect, onConfigure }: ProviderSe
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {providers.map((provider) => (
           <Card
             key={provider.id}
@@ -306,7 +305,6 @@ export const ProviderSelector = ({ selected, onSelect, onConfigure }: ProviderSe
             </CardContent>
           </Card>
         ))}
-      </div>
       
       {configDialogProvider && configDialogProvider !== 'lovable' && 
        configDialogProvider !== 'ollama_cloud' && configDialogProvider !== 'ollama_local' && (

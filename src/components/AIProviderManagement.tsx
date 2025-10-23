@@ -1,19 +1,20 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Brain, Activity, TestTube, RefreshCw, Download, ArrowUpDown, Save, Loader2 } from "lucide-react";
+import { Brain, Activity, RefreshCw, Download, ArrowUpDown, Save, Loader2, ChevronDown } from "lucide-react";
 import { useAIProvider, AIProvider } from "@/hooks/useAIProvider";
 import { ProviderSelector } from "./admin/ProviderSelector";
 import { ImportExportButtons } from "./admin/ImportExportButtons";
-import { useOllamaHealth } from "@/hooks/useOllamaHealth";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 type ProviderStatus = 'online' | 'offline' | 'degraded';
 
@@ -40,7 +41,6 @@ export default function AIProviderManagement() {
   const { toast } = useToast();
   const { provider: currentProvider, updateProvider, fallbackEnabled, updateFallback } = useAIProvider();
   
-  const [activeTab, setActiveTab] = useState<string>("selector");
   const [providerHealth, setProviderHealth] = useState<ProviderHealth[]>([]);
   const [recentLogs, setRecentLogs] = useState<AIRequestLog[]>([]);
   const [stats, setStats] = useState<Record<string, { total: number; success: number }>>({});
@@ -50,6 +50,11 @@ export default function AIProviderManagement() {
   const [userPreferences, setUserPreferences] = useState<any[]>([]);
   const [providerConfigs, setProviderConfigs] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Collapsible states
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+  const [monitoringOpen, setMonitoringOpen] = useState(false);
 
   useEffect(() => {
     loadProviderHealth();
@@ -145,7 +150,6 @@ export default function AIProviderManagement() {
     setIsSaving(true);
 
     try {
-      // Vérifier si un enregistrement existe
       const { data: existing } = await supabase
         .from('user_provider_preferences')
         .select('id')
@@ -153,7 +157,6 @@ export default function AIProviderManagement() {
         .maybeSingle();
 
       if (existing) {
-        // UPDATE
         const { error } = await supabase
           .from('user_provider_preferences')
           .update({
@@ -166,7 +169,6 @@ export default function AIProviderManagement() {
 
         if (error) throw error;
       } else {
-        // INSERT
         const { error } = await supabase
           .from('user_provider_preferences')
           .insert({
@@ -184,7 +186,6 @@ export default function AIProviderManagement() {
         description: "Ordre de fallback mis à jour",
       });
 
-      // Recharger
       await Promise.all([
         loadConfig(),
         loadFallbackOrder(),
@@ -212,36 +213,17 @@ export default function AIProviderManagement() {
   };
 
   const handleConfigureProvider = (provider: AIProvider) => {
-    // Navigate to the API Keys tab
-    const tabMap: Record<AIProvider, string> = {
-      'lovable': 'selector',
-      'claude': 'selector',
-      'openai': 'selector',
-      'openrouter': 'selector',
-      'ollama_cloud': 'selector',
-      'ollama_local': 'selector',
-    };
-    setActiveTab(tabMap[provider]);
-    
     toast({
       title: "Configuration",
-      description: `Veuillez configurer ${provider} dans l'onglet "API Keys" (accessible depuis le menu Administration)`,
+      description: `Configurer ${provider} dans l'onglet API Keys`,
     });
   };
 
-  const { data: ollamaHealthData } = useOllamaHealth();
-
   const getStatusBadge = (provider: AIProvider) => {
-    // Lovable AI toujours en ligne
     if (provider === 'lovable') {
-      return (
-        <Badge variant="default">
-          🟢 Online
-        </Badge>
-      );
+      return <Badge variant="default">🟢 Online</Badge>;
     }
 
-    // Pour Ollama, lire depuis provider='ollama' dans la DB
     if (provider === 'ollama_cloud' || provider === 'ollama_local') {
       const ollamaHealth = providerHealth.find(h => h.provider === 'ollama' as any);
       const hasConfig = providerConfigs.find(c => c.provider === 'ollama' as any && c.api_key_encrypted);
@@ -270,7 +252,6 @@ export default function AIProviderManagement() {
       }
     }
 
-    // Pour les autres providers, utiliser providerHealth
     const health = providerHealth.find(h => h.provider === provider);
     if (!health) return <Badge variant="secondary">Non configuré</Badge>;
 
@@ -324,6 +305,15 @@ export default function AIProviderManagement() {
     'ollama_local': 'Ollama Local',
   };
 
+  const providerIcons: Record<AIProvider, string> = {
+    'lovable': '🚀',
+    'claude': '🤖',
+    'openai': '🔥',
+    'openrouter': '🌐',
+    'ollama_cloud': '☁️',
+    'ollama_local': '💻',
+  };
+
   const handleImport = async (data: any) => {
     if (!data.providers || !Array.isArray(data.providers)) {
       throw new Error('Format invalide: providers attendu');
@@ -345,11 +335,12 @@ export default function AIProviderManagement() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-start">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
         <div>
           <h2 className="text-2xl font-bold">Gestion des Fournisseurs IA</h2>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Configurez vos fournisseurs IA et gérez les priorités
           </p>
         </div>
@@ -360,55 +351,80 @@ export default function AIProviderManagement() {
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
-          <TabsTrigger value="selector" className="flex flex-col gap-1 p-3">
-            <div className="flex items-center gap-2">
-              🎯 <span className="font-semibold">Sélection</span>
+      {/* Current Provider Summary Card - Always Visible */}
+      <Card className="border-primary/50 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Brain className="h-5 w-5 text-primary" />
+            Provider IA Principal
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Provider actuellement utilisé pour toutes les requêtes IA
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-lg bg-background border-2 border-primary">
+            <div className="flex items-center gap-4">
+              <div className="text-4xl">
+                {providerIcons[currentProvider]}
+              </div>
+              <div>
+                <div className="font-bold text-xl">{providerNames[currentProvider]}</div>
+                <div className="text-sm text-muted-foreground">Provider actif</div>
+              </div>
             </div>
-            <span className="text-xs text-muted-foreground">Choisir le provider principal</span>
-          </TabsTrigger>
-          <TabsTrigger value="fallback" className="flex flex-col gap-1 p-3">
-            <div className="flex items-center gap-2">
-              🔄 <span className="font-semibold">Fallback</span>
+            <div className="self-start sm:self-auto">
+              {getStatusBadge(currentProvider)}
             </div>
-            <span className="text-xs text-muted-foreground">Ordre de secours</span>
-          </TabsTrigger>
-          <TabsTrigger value="monitoring" className="flex flex-col gap-1 p-3">
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              <span className="font-semibold">Monitoring</span>
-            </div>
-            <span className="text-xs text-muted-foreground">Statistiques et logs</span>
-          </TabsTrigger>
-        </TabsList>
+          </div>
+        </CardContent>
+      </Card>
 
-        <TabsContent value="selector" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>🎯 Sélectionnez votre Provider IA Principal</CardTitle>
-              <CardDescription>
-                Cliquez sur un provider pour le sélectionner comme principal
+      {/* Provider Selection - Collapsible */}
+      <Collapsible open={selectionOpen} onOpenChange={setSelectionOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">🎯 Sélection du Provider</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform ${selectionOpen ? 'rotate-180' : ''}`} />
+              </div>
+              <CardDescription className="text-xs">
+                Choisissez le provider IA principal pour vos enrichissements
               </CardDescription>
             </CardHeader>
-            <CardContent>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
               <ProviderSelector
                 selected={currentProvider}
                 onSelect={updateProvider}
                 onConfigure={handleConfigureProvider}
               />
             </CardContent>
-          </Card>
-        </TabsContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-        <TabsContent value="fallback" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>🔄 Configuration du Fallback Automatique</CardTitle>
-              <CardDescription>
+      {/* Fallback Configuration - Collapsible */}
+      <Collapsible open={fallbackOpen} onOpenChange={setFallbackOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-lg">🔄 Configuration Fallback</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform ${fallbackOpen ? 'rotate-180' : ''}`} />
+              </div>
+              <CardDescription className="text-xs">
                 Définissez l'ordre de priorité en cas d'échec du provider principal
               </CardDescription>
             </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
                 <div className="flex items-center space-x-2">
@@ -429,13 +445,13 @@ export default function AIProviderManagement() {
                   {fallbackOrder.map((provider, index) => (
                     <div
                       key={provider}
-                      className="flex items-center justify-between p-3 rounded-lg border"
+                      className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-lg border"
                     >
                       <div className="flex items-center gap-3">
                         <span className="font-bold text-lg">{index + 1}️⃣</span>
                         <span className="font-medium">{providerNames[provider]}</span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
                         {getStatusBadge(provider)}
                         <div className="flex gap-1">
                           <Button
@@ -479,17 +495,30 @@ export default function AIProviderManagement() {
                 )}
               </Button>
             </CardContent>
-          </Card>
-        </TabsContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
-        <TabsContent value="monitoring" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>📊 Logs & Monitoring</CardTitle>
-              <CardDescription>Statistiques d'utilisation (7 derniers jours)</CardDescription>
+      {/* Monitoring & Logs - Collapsible */}
+      <Collapsible open={monitoringOpen} onOpenChange={setMonitoringOpen}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  <CardTitle className="text-lg">Monitoring & Logs</CardTitle>
+                </div>
+                <ChevronDown className={`h-5 w-5 transition-transform ${monitoringOpen ? 'rotate-180' : ''}`} />
+              </div>
+              <CardDescription className="text-xs">
+                Statistiques d'utilisation (7 derniers jours)
+              </CardDescription>
             </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {Object.entries(stats).map(([provider, data]) => (
                   <Card key={provider}>
                     <CardHeader className="pb-2">
@@ -506,7 +535,7 @@ export default function AIProviderManagement() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                   <Label>Dernières requêtes</Label>
                   <div className="flex gap-2">
                     <Button onClick={exportLogs} variant="outline" size="sm">
@@ -523,69 +552,30 @@ export default function AIProviderManagement() {
                 <div className="space-y-2">
                   {recentLogs.map(log => (
                     <div key={log.id} className="p-3 rounded-lg border">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           {log.success ? '✅' : '❌'}
-                          <span className="font-medium">{new Date(log.created_at).toLocaleTimeString()}</span>
-                          <Badge variant="outline">{providerNames[log.provider]}</Badge>
+                          <span className="font-medium text-sm">{new Date(log.created_at).toLocaleTimeString()}</span>
+                          <Badge variant="outline" className="text-xs">{providerNames[log.provider]}</Badge>
                         </div>
                         {log.latency_ms && (
                           <span className="text-sm text-muted-foreground">{log.latency_ms}ms</span>
                         )}
                       </div>
                       {log.model && (
-                        <p className="text-sm text-muted-foreground mt-1">model: {log.model}</p>
+                        <p className="text-xs text-muted-foreground mt-1">model: {log.model}</p>
                       )}
                       {log.error_message && (
-                        <p className="text-sm text-destructive mt-1">error: {log.error_message}</p>
+                        <p className="text-xs text-destructive mt-1 break-all">error: {log.error_message}</p>
                       )}
                     </div>
                   ))}
                 </div>
               </div>
             </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Carte Provider IA Principal - Résumé du choix */}
-      <Card className="border-primary/50 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-primary" />
-            Provider IA Principal Sélectionné
-          </CardTitle>
-          <CardDescription>
-            Ce provider est actuellement utilisé pour toutes les requêtes IA
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between p-4 rounded-lg bg-background border-2 border-primary">
-            <div className="flex items-center gap-4">
-              <div className="text-4xl">
-                {(() => {
-                  const providerIcons: Record<AIProvider, string> = {
-                    'lovable': '🚀',
-                    'claude': '🤖',
-                    'openai': '🔥',
-                    'openrouter': '🌐',
-                    'ollama_cloud': '☁️',
-                    'ollama_local': '💻',
-                  };
-                  return providerIcons[currentProvider];
-                })()}
-              </div>
-              <div>
-                <div className="font-bold text-xl">{providerNames[currentProvider]}</div>
-                <div className="text-sm text-muted-foreground">Provider actif</div>
-              </div>
-            </div>
-            <div className="text-right">
-              {getStatusBadge(currentProvider)}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     </div>
   );
 }
