@@ -188,23 +188,26 @@ export default function History() {
 
       const ids = Array.from(selectedAnalyses);
       
-      // Pour chaque analyse, récupérer le supplier_product_id via product_links
-      const { data: linksData, error: linksError } = await supabase
-        .from('product_links')
-        .select('supplier_product_id, analysis_id')
-        .in('analysis_id', ids);
+      // Récupérer supplier_product_id DIRECT depuis product_analyses
+      const { data: analysesData, error: analysesError } = await supabase
+        .from('product_analyses')
+        .select('id, supplier_product_id')
+        .in('id', ids);
 
-      if (linksError) {
-        console.error('[History] Links fetch error:', linksError);
+      if (analysesError) {
+        console.error('[History] Analyses fetch error:', analysesError);
         toast({
           title: "❌ Erreur",
-          description: linksError.message,
+          description: analysesError.message,
           variant: "destructive",
         });
         return;
       }
 
-      if (!linksData || linksData.length === 0) {
+      // Filtrer celles qui ont un supplier_product_id
+      const validAnalyses = (analysesData || []).filter(a => a.supplier_product_id);
+
+      if (validAnalyses.length === 0) {
         toast({
           title: "⚠️ Avertissement",
           description: "Aucun produit fournisseur lié aux analyses sélectionnées",
@@ -213,11 +216,11 @@ export default function History() {
         return;
       }
 
-      // Créer les tâches d'enrichissement pour chaque produit lié
-      const enrichmentTasks = linksData.map(link => ({
+      // Créer les tâches d'enrichissement
+      const enrichmentTasks = validAnalyses.map(analysis => ({
         user_id: user.id,
-        supplier_product_id: link.supplier_product_id,
-        analysis_id: link.analysis_id,
+        supplier_product_id: analysis.supplier_product_id,
+        analysis_id: analysis.id,
         enrichment_type: ['odoo_attributes'],
         priority: 'high',
         status: 'pending',
@@ -239,13 +242,13 @@ export default function History() {
 
       toast({
         title: "✨ Enrichissement lancé",
-        description: `${linksData.length} produit(s) ajouté(s) à la file d'enrichissement Odoo`,
+        description: `${validAnalyses.length} produit(s) ajouté(s) à la file d'enrichissement Odoo`,
       });
 
       // Déclencher le traitement
       const { error: processError } = await supabase.functions.invoke(
         'process-enrichment-queue',
-        { body: { maxItems: linksData.length } }
+        { body: { maxItems: validAnalyses.length } }
       );
 
       if (processError) {
