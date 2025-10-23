@@ -99,6 +99,9 @@ verify_jwt = true
 [functions.amazon-token-manager]
 verify_jwt = false
 
+[functions.test-amazon-mcp-connection]
+verify_jwt = true
+
 [functions.amazon-product-enrichment]
 verify_jwt = true
 

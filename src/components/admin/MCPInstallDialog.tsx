@@ -51,40 +51,48 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
     setTestResult(null);
 
     try {
-      // Simuler un test de connexion
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
       // Vérifier que toutes les variables requises sont remplies
       const missingVars = library.requiredEnvVars.filter(v => !envVars[v]);
       if (missingVars.length > 0) {
         throw new Error(`Variables manquantes: ${missingVars.join(', ')}`);
       }
 
-      // Simuler la détection de version serveur
-      const detectedServerVersion = library.version; // En réalité, cela serait récupéré du serveur
-      const compatible = detectedServerVersion === library.version;
-      
-      setVersionInfo({
-        client: library.version,
-        server: detectedServerVersion,
-        compatible: compatible
-      });
+      // Test spécifique pour Amazon MCP
+      if (library.id === 'amazon-seller-mcp') {
+        const { data, error } = await supabase.functions.invoke('test-amazon-mcp-connection', {
+          body: { credentials: envVars }
+        });
 
-      setTestResult('success');
-      toast.success("Connexion réussie !");
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error);
+
+        setVersionInfo({
+          client: library.version,
+          server: data.serverVersion || library.version,
+          compatible: true
+        });
+
+        setTestResult('success');
+        toast.success("Connexion Amazon réussie !");
+      } else {
+        // Test générique pour les autres MCP (simulation)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        setVersionInfo({
+          client: library.version,
+          server: library.version,
+          compatible: true
+        });
+
+        setTestResult('success');
+        toast.success("Connexion réussie !");
+      }
     } catch (error) {
       setTestResult('error');
       toast.error(error instanceof Error ? error.message : "Échec du test");
     } finally {
       setTesting(false);
     }
-  };
-
-  // Extraire le platform_type de l'ID de la librairie
-  const extractPlatformType = (libraryId: string): string => {
-    // Extraire le nom de base de la plateforme (ex: "odoo-mcp-pixeeplay" -> "odoo")
-    const match = libraryId.match(/^([a-z]+)/i);
-    return match ? match[1] : libraryId;
   };
 
   const handleSaveAndActivate = async () => {
@@ -94,7 +102,7 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
-      const platformType = extractPlatformType(library.id);
+      const platformType = library.id;
 
       // Vérifier les doublons existants
       const { data: existing, error: checkError } = await supabase
@@ -106,24 +114,29 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
 
       if (checkError) throw checkError;
 
+      const configData = {
+        name: library.name,
+        platform_url: library.defaultConfig.server_url || library.npmPackage,
+        is_active: true,
+        additional_config: {
+          npm_package: library.npmPackage,
+          version: library.version,
+          auth_type: library.defaultConfig.auth_type,
+          credentials: envVars
+        },
+        mcp_version_client: versionInfo.client,
+        mcp_version_server: versionInfo.server,
+        mcp_chat_enabled: true,
+        mcp_allowed_tools: Object.keys(library.tools || {}).flatMap(cat => 
+          library.tools[cat]?.map(t => t.name) || []
+        )
+      };
+
       if (existing) {
         // Mettre à jour la configuration existante
         const { error: updateError } = await supabase
           .from('platform_configurations')
-          .update({
-            platform_url: library.defaultConfig.server_url || library.npmPackage,
-            is_active: true,
-            additional_config: {
-              npm_package: library.npmPackage,
-              version: library.version,
-              auth_type: library.defaultConfig.auth_type,
-              credentials: envVars
-            },
-            mcp_version_client: versionInfo.client,
-            mcp_version_server: versionInfo.server,
-            mcp_chat_enabled: true,
-            mcp_allowed_tools: []
-          })
+          .update(configData)
           .eq('id', existing.id);
 
         if (updateError) throw updateError;
@@ -133,18 +146,7 @@ export function MCPInstallDialog({ library, open, onOpenChange, onInstallComplet
         const { error: insertError } = await supabase.from('platform_configurations').insert({
           user_id: user.id,
           platform_type: platformType,
-          platform_url: library.defaultConfig.server_url || library.npmPackage,
-          is_active: true,
-          additional_config: {
-            npm_package: library.npmPackage,
-            version: library.version,
-            auth_type: library.defaultConfig.auth_type,
-            credentials: envVars
-          },
-          mcp_version_client: versionInfo.client,
-          mcp_version_server: versionInfo.server,
-          mcp_chat_enabled: true,
-          mcp_allowed_tools: []
+          ...configData
         });
 
         if (insertError) throw insertError;

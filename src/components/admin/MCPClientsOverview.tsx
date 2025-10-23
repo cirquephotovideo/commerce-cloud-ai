@@ -14,6 +14,7 @@ const PLATFORM_ICONS: Record<string, string> = {
   shopify: "🛍️",
   woocommerce: "🌐",
   magento: "🎁",
+  "amazon-seller-mcp": "📦",
   gmail: "📧",
   salesforce: "☁️",
   sap: "💼",
