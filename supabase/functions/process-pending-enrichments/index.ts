@@ -93,7 +93,10 @@ serve(async (req) => {
 
           const enrichmentData = await analyzerResponse.json();
 
-          if (enrichmentData?.product_name) {
+          if (!enrichmentData?.product_name) {
+            throw new Error('Invalid enrichment data structure');
+          }
+
           // Create product_analyses
           const { data: newAnalysis, error: insertError } = await supabaseClient
             .from('product_analyses')
@@ -134,11 +137,8 @@ serve(async (req) => {
           console.log(`✅ Successfully enriched ${product.product_name}`);
           enriched++;
           success = true;
-        } else {
-          throw new Error('Invalid enrichment data structure');
-        }
 
-      } catch (error) {
+        } catch (error) {
         retries++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error(`❌ Error enriching ${product.id} (attempt ${retries}/${maxRetries}):`, errorMessage);
