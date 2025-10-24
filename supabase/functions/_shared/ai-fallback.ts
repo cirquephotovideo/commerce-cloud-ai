@@ -24,6 +24,57 @@ export interface AIResponse {
   errorCode?: 'PAYMENT_REQUIRED' | 'RATE_LIMIT' | 'PROVIDER_DOWN' | 'AUTH_ERROR' | 'UNKNOWN';
 }
 
+/**
+ * Traduit un modèle Ollama vers un modèle compatible avec le provider cible
+ */
+function getProviderCompatibleModel(
+  requestedModel: string | undefined, 
+  provider: string
+): string {
+  // Modèles compatibles avec Lovable AI
+  const lovableModels = [
+    'openai/gpt-5-mini', 'openai/gpt-5', 'openai/gpt-5-nano',
+    'google/gemini-2.5-pro', 'google/gemini-2.5-flash', 
+    'google/gemini-2.5-flash-lite'
+  ];
+  
+  // Si pas de modèle spécifié, utiliser les défauts par provider
+  if (!requestedModel) {
+    return provider === 'lovable_ai' ? 'google/gemini-2.5-flash' :
+           provider === 'openai' ? 'gpt-4o-mini' :
+           provider === 'openrouter' ? 'google/gemini-2.5-flash' :
+           'gpt-oss:120b-cloud'; // Ollama par défaut
+  }
+
+  // Si déjà compatible avec Lovable AI, le retourner tel quel
+  if (lovableModels.includes(requestedModel)) {
+    return requestedModel;
+  }
+
+  // Traduction des modèles Ollama vers équivalents Lovable AI
+  const ollamaToLovableMap: Record<string, string> = {
+    'gpt-oss:120b-cloud': 'google/gemini-2.5-pro',       // Grand modèle → Pro
+    'gpt-oss:20b-cloud': 'google/gemini-2.5-flash',      // Moyen → Flash
+    'qwen3-coder:480b-cloud': 'google/gemini-2.5-pro',   // Code → Pro
+    'deepseek-v3.1:671b-cloud': 'google/gemini-2.5-pro',
+    'kimi-k2:1t-cloud': 'google/gemini-2.5-flash',
+    'glm-4.6:cloud': 'google/gemini-2.5-flash'
+  };
+
+  // Pour les providers non-Ollama, traduire les modèles Ollama
+  if (provider !== 'ollama' && ollamaToLovableMap[requestedModel]) {
+    console.log(`[AI-FALLBACK] Translating model ${requestedModel} → ${ollamaToLovableMap[requestedModel]} for ${provider}`);
+    return ollamaToLovableMap[requestedModel];
+  }
+
+  // Pour Ollama avec modèle non-Ollama, utiliser le défaut
+  if (provider === 'ollama' && !requestedModel.includes(':')) {
+    return 'gpt-oss:120b-cloud';
+  }
+
+  return requestedModel;
+}
+
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
   { provider: 'ollama', priority: 1, isActive: true },
   { provider: 'lovable_ai', priority: 2, isActive: true },
@@ -123,7 +174,7 @@ export async function callAIWithFallback(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: options.model || 'google/gemini-2.5-flash',
+          model: getProviderCompatibleModel(options.model, providerConfig.provider),
           messages: options.messages,
           temperature: options.temperature ?? 0.7,
           max_tokens: options.max_tokens ?? 2000
@@ -161,7 +212,14 @@ export async function callAIWithFallback(
       };
 
     } catch (err) {
-      console.error(`[AI-FALLBACK] Error with ${providerConfig.provider}:`, err);
+      const errorDetails = {
+        provider: providerConfig.provider,
+        requestedModel: options.model,
+        translatedModel: getProviderCompatibleModel(options.model, providerConfig.provider),
+        error: err.message || String(err),
+        status: err.status
+      };
+      console.error(`[AI-FALLBACK] Error with ${providerConfig.provider}:`, errorDetails);
       lastError = err;
       continue;
     }
