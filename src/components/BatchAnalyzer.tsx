@@ -33,6 +33,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [autoExport, setAutoExport] = useState(false);
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(false);
+  const [autoOdooAttributes, setAutoOdooAttributes] = useState(false);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
@@ -251,6 +252,37 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               }
             }
 
+            // Phase 4: Enrichissement des attributs Odoo si activé
+            if (autoOdooAttributes && insertedAnalysis?.id) {
+              console.log('[BATCH] 📋 Triggering Odoo attributes enrichment for:', product);
+              
+              try {
+                const { data: odooData, error: odooError } = await supabase.functions.invoke('enrich-odoo-attributes', {
+                  body: { 
+                    analysisId: insertedAnalysis.id,
+                    provider: 'lovable',
+                    webSearchEnabled: false
+                  }
+                });
+                
+                if (odooError) {
+                  console.error('[BATCH] Odoo attributes enrichment error:', {
+                    status: odooError.status,
+                    message: odooError.message,
+                    product
+                  });
+                  
+                  toast.error(`Enrichissement attributs Odoo échoué pour ${product}`);
+                } else if (odooData?.success) {
+                  console.log('[BATCH] ✅ Odoo attributes enriched:', odooData);
+                  toast.success(`📋 ${odooData.stats?.valid || 0} attributs Odoo déterminés pour ${product}`);
+                }
+              } catch (err) {
+                console.error('[BATCH] Odoo attributes enrichment failed:', err);
+                toast.warning(`Impossible d'enrichir les attributs Odoo pour ${product}`);
+              }
+            }
+
             results.push({
               product,
               analysis: data.analysis,
@@ -447,29 +479,41 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                 </Label>
               </div>
               
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="auto-advanced"
-                  checked={autoAdvancedEnrich}
-                  onCheckedChange={setAutoAdvancedEnrich}
-                  disabled={isAnalyzing}
-                />
-                <Label htmlFor="auto-advanced" className="cursor-pointer">
-                  ✨ Enrichissements avancés (Specs, Desc. technique, Coûts, RSGP)
-                </Label>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="auto-export"
-                  checked={autoExport}
-                  onCheckedChange={setAutoExport}
-                  disabled={isAnalyzing}
-                />
-                <Label htmlFor="auto-export" className="cursor-pointer">
-                  Export automatique après l'analyse
-                </Label>
-              </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto-advanced"
+                checked={autoAdvancedEnrich}
+                onCheckedChange={setAutoAdvancedEnrich}
+                disabled={isAnalyzing}
+              />
+              <Label htmlFor="auto-advanced" className="cursor-pointer">
+                ✨ Enrichissements avancés (Specs, Desc. technique, Coûts, RSGP)
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto-odoo-attributes"
+                checked={autoOdooAttributes}
+                onCheckedChange={setAutoOdooAttributes}
+                disabled={isAnalyzing}
+              />
+              <Label htmlFor="auto-odoo-attributes" className="cursor-pointer">
+                📋 Enrichissement attributs Odoo (catégorie auto-détectée)
+              </Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="auto-export"
+                checked={autoExport}
+                onCheckedChange={setAutoExport}
+                disabled={isAnalyzing}
+              />
+              <Label htmlFor="auto-export" className="cursor-pointer">
+                Export automatique après l'analyse
+              </Label>
+            </div>
               
               {autoExport && (
                 <div className="space-y-2 ml-8">
