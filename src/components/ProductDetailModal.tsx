@@ -397,6 +397,48 @@ export function ProductDetailModal({
                 <Database className="h-4 w-4 mr-2" />
                 Enrichir Attributs Odoo
               </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) {
+                      toast.error("Non authentifié");
+                      return;
+                    }
+
+                    toast.loading("🌐 Recherche Web (Ollama) démarrée...");
+
+                    const analysisData = analysis?.analysis_result as any;
+                    const productData = {
+                      name: product.product_name || analysisData?.name,
+                      brand: analysisData?.brand || null,
+                      supplier_reference: analysisData?.sku || analysisData?.mpn || product.supplier_reference || null,
+                      ean: product.ean || analysisData?.ean || analysisData?.barcode || null,
+                      category: product.mapped_category_name || analysisData?.category || null
+                    };
+
+                    const purchasePrice = product.purchase_price || analysisData?.purchase_price || null;
+
+                    const { data: sessionData } = await supabase.auth.getSession();
+                    const { error } = await supabase.functions.invoke('enrich-all', {
+                      headers: sessionData.session ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {},
+                      body: { analysisId: product.id, productData, purchasePrice }
+                    });
+
+                    if (error) throw error;
+
+                    toast.success('✨ Recherche Web démarrée !');
+                    setTimeout(() => handleRefresh(), 2000);
+                  } catch (error: any) {
+                    toast.error(`❌ Erreur: ${error.message}`);
+                  }
+                }}
+                variant="outline"
+                className="bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Recherche Web (Ollama)
+              </Button>
               {onExport && (
                 <Button
                   onClick={() => onExport('shopify')}

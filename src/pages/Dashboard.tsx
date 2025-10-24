@@ -469,6 +469,84 @@ export default function Dashboard() {
     }
   };
 
+  const handleBulkWebEnrichment = async () => {
+    if (selectedIds.size === 0) return;
+    
+    const selectedAnalyses = analyses.filter(a => selectedIds.has(a.id));
+    let completed = 0;
+    
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast({
+          title: "Authentification requise",
+          description: "Votre session a expiré.",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
+      }
+
+      toast({
+        title: "🌐 Enrichissement Web démarré",
+        description: `Traitement de ${selectedIds.size} produit(s)...`,
+      });
+
+      // Process in batches of 3
+      const batch = 3;
+      for (let i = 0; i < selectedAnalyses.length; i += batch) {
+        const batchAnalyses = selectedAnalyses.slice(i, i + batch);
+        
+        await Promise.allSettled(
+          batchAnalyses.map(async (analysis) => {
+            const productData = {
+              name: analysis.analysis_result?.name || analysis.analysis_result?.product_name,
+              brand: analysis.analysis_result?.brand || null,
+              supplier_reference: analysis.analysis_result?.sku || analysis.analysis_result?.mpn || null,
+              ean: analysis.analysis_result?.ean || analysis.analysis_result?.barcode || null,
+              category: analysis.mapped_category_name || analysis.analysis_result?.category || null
+            };
+
+            const purchasePrice = analysis.analysis_result?.purchase_price || null;
+
+            await supabase.functions.invoke('enrich-all', {
+              headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+              body: { analysisId: analysis.id, productData, purchasePrice }
+            });
+
+            completed++;
+          })
+        );
+
+        // Small delay between batches
+        if (i + batch < selectedAnalyses.length) {
+          await new Promise(resolve => setTimeout(resolve, 700));
+        }
+      }
+
+      toast({
+        title: "✅ Enrichissement Web lancé",
+        description: `${completed} produit(s) envoyés. Suivez la progression ci-dessous.`,
+      });
+
+      setTimeout(() => loadAnalyses(), 3000);
+    } catch (error: any) {
+      let description = error.message || "Une erreur est survenue";
+      
+      if (error.message?.includes('429')) {
+        description = "Limite de taux dépassée. Réessayez dans quelques minutes.";
+      } else if (error.message?.includes('402')) {
+        description = "Crédits Lovable AI insuffisants.";
+      }
+
+      toast({
+        title: "Erreur d'enrichissement Web",
+        description,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleQuickEnrich = async (analysisId: string, type: 'amazon' | 'heygen' | 'rsgp' | 'all') => {
     setEnrichingIds(prev => new Set(prev).add(analysisId));
     
@@ -530,9 +608,19 @@ export default function Dashboard() {
   const getEnrichmentBadges = (analysis: ProductAnalysis) => {
     const status = analysis.enrichment_status || {};
     const amazonStatus = status.amazon || analysis.amazon_enrichment_status;
+    const hasWebEnrichment = analysis.analysis_result?._enriched_with_ollama_web || 
+                             (analysis.description_long && analysis.analysis_result?.specifications);
     
     return (
       <div className="flex gap-1 flex-wrap mt-1">
+        {/* Web Search Badge */}
+        {hasWebEnrichment && (
+          <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+            <Sparkles className="w-3 h-3 mr-1" />
+            Web
+          </Badge>
+        )}
+        
         {/* Amazon Badge */}
         {amazonStatus === 'completed' && (
           <Badge variant="secondary" className="text-xs">
@@ -809,7 +897,17 @@ export default function Dashboard() {
                 </label>
               </div>
               {selectedIds.size > 0 && (
-                <div className="flex gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                  <Button
+                    onClick={handleBulkWebEnrichment}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 sm:flex-none bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30"
+                  >
+                    <Sparkles className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Web Search ({selectedIds.size})</span>
+                    <span className="sm:hidden">Web</span>
+                  </Button>
                   <Button
                     onClick={exportToOdoo}
                     disabled={isExporting}
