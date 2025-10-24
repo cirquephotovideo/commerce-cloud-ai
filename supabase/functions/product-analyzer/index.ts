@@ -384,16 +384,26 @@ serve(async (req) => {
           role: 'system',
           content: `Tu es un expert en analyse e-commerce.
 
-RÈGLES ABSOLUES:
-1. Tu dois retourner UNIQUEMENT un objet JSON valide
-2. PAS de texte markdown (pas de \`\`\`json)
-3. PAS de balises de code
-4. PAS d'explications avant ou après
-5. UNIQUEMENT le JSON pur qui commence par { et se termine par }
-6. Le JSON DOIT être complet et valide
-7. TOUS les champs requis doivent être présents
+RÈGLES ABSOLUES - JSON STRICT RFC 8259:
+1. Retourne UNIQUEMENT un objet JSON valide
+2. TOUS les strings DOIVENT être entre guillemets doubles "..."
+3. ÉCHAPPE les guillemets internes avec \\"
+4. ÉCHAPPE les retours à la ligne avec \\n
+5. FERME TOUS les guillemets, accolades, crochets
+6. PAS de virgule après le dernier élément d'un objet/array
+7. PAS de texte markdown (pas de \`\`\`json), commentaires, ou explications
+8. Le JSON DOIT commencer par { et finir par }
 
-Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A" ou des valeurs par défaut, mais retourne TOUJOURS un JSON valide et complet.`
+VALIDATION CRITIQUE:
+- Vérifie que chaque " ouvert est fermé
+- Vérifie que chaque { a son }
+- Vérifie que chaque [ a son ]
+- Si une description est trop longue, COUPE-LA à 500 caractères et ajoute "..." plutôt que de casser le JSON
+
+Exemple de string valide avec retours à la ligne:
+"description": "Produit de haute qualité\\navec garantie\\n\\nCaractéristiques:\\n- Point 1\\n- Point 2"
+
+TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu, mais retourne TOUJOURS un JSON valide et complet.`
         },
         {
           role: 'user',
@@ -419,10 +429,36 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     console.log(`[PRODUCT-ANALYZER] ✅ Analysis completed with provider: ${aiResponse.provider || 'unknown'}`);
     console.log(`[PRODUCT-ANALYZER] Model used: ${preferredModel || 'default'}`);
     
-    let analysisContent = aiResponse.content;
+    // Fonction de réparation JSON stricte
+    const repairJSON = (content: string): string => {
+      let repaired = content.trim();
+      
+      // 1. Retirer markdown
+      repaired = repaired.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      
+      // 2. Réparer les guillemets non fermés dans les valeurs
+      repaired = repaired.replace(/"([^"]+)":\s*"([^"]*?)(?=\n\s*"[^"]+":)/gs, (match, key, value) => {
+        return `"${key}": "${value.replace(/\n/g, '\\n')}"`;
+      });
+      
+      // 3. Fermer le dernier string si non fermé
+      const lastQuoteIndex = repaired.lastIndexOf('"');
+      const lastBraceIndex = repaired.lastIndexOf('}');
+      if (lastQuoteIndex > lastBraceIndex) {
+        repaired += '"';
+      }
+      
+      // 4. Compléter les accolades manquantes
+      const openBraces = (repaired.match(/{/g) || []).length;
+      const closeBraces = (repaired.match(/}/g) || []).length;
+      if (openBraces > closeBraces) {
+        repaired += '}'.repeat(openBraces - closeBraces);
+      }
+      
+      return repaired;
+    };
     
-    // Clean up the response to extract pure JSON
-    analysisContent = analysisContent.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    let analysisContent = aiResponse.content.trim();
     
     // Phase 3: Improved JSON extraction for complex objects and arrays
     const extractField = (content: string, field: string): any => {
@@ -442,9 +478,10 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
 
     let analysisResult;
     try {
-      analysisResult = JSON.parse(analysisContent);
+      const repairedContent = repairJSON(analysisContent);
+      analysisResult = JSON.parse(repairedContent);
       
-      // Phase 4: Debug logs to trace data structure
+      console.log('[PRODUCT-ANALYZER] ✅ JSON parsed successfully on first attempt');
       console.log('[PRODUCT-ANALYZER] 🔍 Parsed analysis structure:', {
         has_product_name: !!analysisResult.product_name,
         has_images: !!analysisResult.images,
@@ -453,47 +490,46 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
         top_level_keys: Object.keys(analysisResult).slice(0, 10)
       });
     } catch (parseError) {
-      console.error('[PRODUCT-ANALYZER] JSON parse failed, attempting cleanup...', parseError);
+      console.error('[PRODUCT-ANALYZER] ❌ JSON parse failed after repair, attempting cleanup...', parseError);
       
-      let cleanedContent = analysisContent.trim();
-      
-      const openBraces = (cleanedContent.match(/{/g) || []).length;
-      const closeBraces = (cleanedContent.match(/}/g) || []).length;
-      if (openBraces > closeBraces) {
-        cleanedContent += '}'.repeat(openBraces - closeBraces);
-      }
-      
-      try {
-        analysisResult = JSON.parse(cleanedContent);
-        console.log('[PRODUCT-ANALYZER] Successfully repaired JSON');
-      } catch (secondError) {
-        console.error('[PRODUCT-ANALYZER] Second parse failed, extracting partial data');
-        
-        // Phase 3: Better fallback extraction
-        analysisResult = {
-          product_name: extractField(cleanedContent, 'product_name') || productInput,
-          description: extractField(cleanedContent, 'description') || 'N/A',
-          description_long: extractField(cleanedContent, 'description_long') || extractField(cleanedContent, 'description') || 'Description non disponible',
-          images: extractField(cleanedContent, 'images') || [],
-          seo: {
-            score: 50,
-            keywords: extractField(cleanedContent, 'keywords') || []
-          },
-          pricing: {
-            estimated_price: extractField(cleanedContent, 'estimated_price') || 'N/A'
-          },
-          global_report: {
-            overall_score: 50
-          },
-          raw_analysis: cleanedContent,
-          parsing_error: true
-        };
-        
-        console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
-          product_name: analysisResult.product_name,
-          has_description: !!analysisResult.description,
-          has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
-        });
+      // Try to extract JSON from the response
+      const jsonMatch = analysisContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const repairedMatch = repairJSON(jsonMatch[0]);
+          analysisResult = JSON.parse(repairedMatch);
+          console.log('[PRODUCT-ANALYZER] ✅ Successfully parsed extracted JSON');
+        } catch (secondError) {
+          console.error('[PRODUCT-ANALYZER] ❌ Second parse failed, extracting partial data');
+          
+          // Phase 3: Better fallback extraction
+          analysisResult = {
+            product_name: extractField(analysisContent, 'product_name') || productInput,
+            description: extractField(analysisContent, 'description') || 'N/A',
+            description_long: extractField(analysisContent, 'description_long') || extractField(analysisContent, 'description') || 'Description non disponible',
+            images: extractField(analysisContent, 'images') || [],
+            seo: {
+              score: 50,
+              keywords: extractField(analysisContent, 'keywords') || []
+            },
+            pricing: {
+              estimated_price: extractField(analysisContent, 'estimated_price') || 'N/A'
+            },
+            global_report: {
+              overall_score: 50
+            },
+            raw_analysis: analysisContent,
+            parsing_error: true
+          };
+          
+          console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
+            product_name: analysisResult.product_name,
+            has_description: !!analysisResult.description,
+            has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
+          });
+        }
+      } else {
+        throw new Error('No valid JSON found in AI response');
       }
     }
 
@@ -553,7 +589,11 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     });
 
     return new Response(
-      JSON.stringify(responseData),
+      JSON.stringify({
+        success: true,
+        analysis: responseData,
+        provider: aiResponse.provider,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

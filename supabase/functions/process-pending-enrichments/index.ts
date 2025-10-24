@@ -93,7 +93,12 @@ serve(async (req) => {
 
           const enrichmentData = await analyzerResponse.json();
 
-          if (!enrichmentData?.product_name) {
+          // Support des 2 formats (ancien flat + nouveau wrapped)
+          const analysisData = enrichmentData.success 
+            ? enrichmentData.analysis 
+            : enrichmentData;
+
+          if (!analysisData?.product_name) {
             throw new Error('Invalid enrichment data structure');
           }
 
@@ -103,8 +108,8 @@ serve(async (req) => {
             .insert({
               user_id: product.user_id,
               product_url: product.product_name,
-              analysis_result: enrichmentData.analysis,
-              image_urls: enrichmentData.imageUrls || [],
+              analysis_result: analysisData,
+              image_urls: analysisData.imageUrls || enrichmentData.imageUrls || [],
               ean: product.ean,
               purchase_price: product.purchase_price,
               purchase_currency: product.currency,

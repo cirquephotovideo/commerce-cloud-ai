@@ -115,17 +115,22 @@ export const AnalyzerSection = () => {
 
       if (error) throw error;
 
-      setResults(data);
+      // Support des 2 formats de réponse (legacy flat + nouveau wrapped)
+      const finalAnalysis = data?.success && data?.analysis 
+        ? data.analysis 
+        : data;
+
+      setResults(finalAnalysis);
 
       // Auto-save if user is logged in
-      if (user && data.success) {
+      if (user) {
         try {
           const { error: saveError } = await supabase
             .from("product_analyses")
             .insert({
               user_id: user.id,
               product_url: productInput,
-              analysis_result: data.analysis,
+              analysis_result: finalAnalysis,
             });
 
           if (saveError) throw saveError;

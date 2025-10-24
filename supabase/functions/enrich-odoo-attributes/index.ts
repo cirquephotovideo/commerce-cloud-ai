@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, provider = 'lovable', webSearchEnabled = false } = await req.json();
+    const { analysisId, provider = 'lovable', webSearchEnabled = true } = await req.json();
     
     if (!analysisId) {
       throw new Error("analysisId est requis");
