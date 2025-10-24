@@ -78,8 +78,8 @@ function getProviderCompatibleModel(
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
   { provider: 'ollama', priority: 1, isActive: true },
   { provider: 'lovable_ai', priority: 2, isActive: true },
-  { provider: 'openai', priority: 3, isActive: true },
-  { provider: 'openrouter', priority: 4, isActive: true },
+  { provider: 'openai', priority: 3, isActive: false },
+  { provider: 'openrouter', priority: 4, isActive: false },
 ];
 
 /**
@@ -92,7 +92,9 @@ export async function callAIWithFallback(
   console.log('[AI-FALLBACK] Starting AI call with fallback...');
   console.log('[AI-FALLBACK] Preferred model:', options.model || 'auto');
   
-  const providers = DEFAULT_PROVIDERS.filter(p => !skipProviders.includes(p.provider));
+  const providers = DEFAULT_PROVIDERS
+    .filter(p => p.isActive)
+    .filter(p => !skipProviders.includes(p.provider));
   let lastError: any = null;
 
   for (const providerConfig of providers) {

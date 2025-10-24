@@ -33,11 +33,11 @@ export async function callAIWithFallback(
   options: { skipProviders?: string[] } = {}
 ): Promise<AIResponse> {
   const providers: AIProviderConfig[] = [
-    { provider: 'lovable_ai' as const, priority: 1, isActive: true },
-    { provider: 'openai' as const, priority: 2, isActive: true },
-    { provider: 'openrouter' as const, priority: 3, isActive: true },
-    { provider: 'ollama' as const, priority: 4, isActive: true },
-  ].filter(p => !options.skipProviders?.includes(p.provider));
+    { provider: 'ollama' as const, priority: 1, isActive: true },
+    { provider: 'lovable_ai' as const, priority: 2, isActive: true },
+    { provider: 'openai' as const, priority: 3, isActive: false },
+    { provider: 'openrouter' as const, priority: 4, isActive: false },
+  ].filter(p => p.isActive && !options.skipProviders?.includes(p.provider));
 
   let lastError: any = null;
 
