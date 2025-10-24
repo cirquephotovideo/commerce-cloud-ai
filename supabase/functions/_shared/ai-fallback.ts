@@ -166,50 +166,78 @@ export async function callAIWithFallback(
       console.log(`[AI-FALLBACK] Trying provider: ${providerConfig.provider}`);
 
       const endpoint = apiUrl;
+      const startTime = Date.now();
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: getProviderCompatibleModel(options.model, providerConfig.provider),
-          messages: options.messages,
-          temperature: options.temperature ?? 0.7,
-          max_tokens: options.max_tokens ?? 2000
-        }),
-      });
+      // Timeout spécial pour Ollama (15s) pour éviter les timeouts réseau
+      const isOllama = providerConfig.provider === 'ollama';
+      const controller = new AbortController();
+      const timeoutId = isOllama ? setTimeout(() => controller.abort(), 15000) : undefined;
 
-      if (!response.ok) {
-        lastError = { status: response.status, message: await response.text() };
-        
-        // Check for specific error codes that should trigger fallback
-        const shouldFallback = 
-          response.status === 402 || // Payment required
-          response.status === 429 || // Rate limit
-          response.status === 503;   // Service unavailable
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: getProviderCompatibleModel(options.model, providerConfig.provider),
+            messages: options.messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.max_tokens ?? 2000,
+            stream: false // Forcer non-streaming pour éviter les flux partiels
+          }),
+          signal: isOllama ? controller.signal : undefined,
+        });
 
-        if (shouldFallback) {
-          console.warn(`[AI-FALLBACK] Provider ${providerConfig.provider} failed (${response.status}), trying next...`);
-          continue;
+        if (timeoutId) clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        console.log(`[AI-FALLBACK] ${providerConfig.provider} responded in ${duration}ms`);
+
+        if (!response.ok) {
+          lastError = { status: response.status, message: await response.text() };
+          
+          // Check for specific error codes that should trigger fallback
+          const shouldFallback = 
+            response.status === 402 || // Payment required
+            response.status === 429 || // Rate limit
+            response.status === 503;   // Service unavailable
+
+          if (shouldFallback) {
+            console.warn(`[AI-FALLBACK] Provider ${providerConfig.provider} failed (${response.status}), trying next...`);
+            continue;
+          }
+
+          // For other errors (401, 400), throw immediately
+          throw lastError;
         }
 
-        // For other errors (401, 400), throw immediately
-        throw lastError;
-      }
+        // Success!
+        const data = await response.json();
+        const content = data.message?.content || data.choices?.[0]?.message?.content || data;
+        
+        console.log(`[AI-FALLBACK] ✅ Success with provider: ${providerConfig.provider}`);
+        
+        return {
+          success: true,
+          content,
+          provider: providerConfig.provider
+        };
 
-      // Success!
-      const data = await response.json();
-      const content = data.message?.content || data.choices?.[0]?.message?.content || data;
-      
-      console.log(`[AI-FALLBACK] ✅ Success with provider: ${providerConfig.provider}`);
-      
-      return {
-        success: true,
-        content,
-        provider: providerConfig.provider
-      };
+      } catch (fetchErr) {
+        // Cleanup timeout
+        if (timeoutId) clearTimeout(timeoutId);
+        
+        // Si timeout Ollama, essayer le prochain provider
+        if (fetchErr.name === 'AbortError') {
+          console.warn(`[AI-FALLBACK] ${providerConfig.provider} timeout (15s), trying next...`);
+          lastError = { message: 'Request timeout', status: 408 };
+          continue;
+        }
+        
+        // Re-throw pour être attrapé par le catch externe
+        throw fetchErr;
+      }
 
     } catch (err) {
       const errorDetails = {
