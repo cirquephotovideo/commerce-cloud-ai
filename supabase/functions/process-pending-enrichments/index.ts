@@ -41,35 +41,59 @@ serve(async (req) => {
     let errors = 0;
 
     for (const product of pendingProducts) {
-      try {
-        console.log(`🔍 Enriching product: ${product.product_name} (${product.id})`);
+      let retries = 0;
+      const maxRetries = 3;
+      let success = false;
+      
+      while (retries < maxRetries && !success) {
+        try {
+          console.log(`🔍 Enriching product (attempt ${retries + 1}/${maxRetries}): "${product.product_name}" (${product.id})`);
 
-        // Update status to enriching
-        await supabaseClient
-          .from('supplier_products')
-          .update({ 
-            enrichment_status: 'enriching',
-            enrichment_progress: 10
-          })
-          .eq('id', product.id);
+          // Update status to enriching
+          await supabaseClient
+            .from('supplier_products')
+            .update({ 
+              enrichment_status: 'enriching',
+              enrichment_progress: 10
+            })
+            .eq('id', product.id);
 
-        // Call product analyzer
-        const { data: enrichmentData, error: enrichError } = await supabaseClient.functions.invoke(
-          'product-analyzer',
-          {
-            body: {
-              productInput: product.product_name || product.ean,
-              includeImages: true,
+          // Call product analyzer
+          const analyzerResponse = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/product-analyzer`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+              },
+              body: JSON.stringify({
+                productInput: product.product_name || product.ean,
+                includeImages: true,
+              })
             }
+          );
+
+          await supabaseClient
+            .from('supplier_products')
+            .update({ enrichment_progress: 60 })
+            .eq('id', product.id);
+
+          if (!analyzerResponse.ok) {
+            let errorMessage = 'Enrichment failed';
+            try {
+              const errorBody = await analyzerResponse.json();
+              errorMessage = errorBody?.error?.message || errorBody?.error || errorMessage;
+              console.error(`❌ Analyzer error for ${product.id} (attempt ${retries + 1}):`, errorBody);
+            } catch {
+              errorMessage = `HTTP ${analyzerResponse.status}: ${await analyzerResponse.text()}`;
+            }
+            throw new Error(errorMessage);
           }
-        );
 
-        await supabaseClient
-          .from('supplier_products')
-          .update({ enrichment_progress: 60 })
-          .eq('id', product.id);
+          const enrichmentData = await analyzerResponse.json();
 
-        if (!enrichError && enrichmentData?.success) {
+          if (enrichmentData?.product_name) {
           // Create product_analyses
           const { data: newAnalysis, error: insertError } = await supabaseClient
             .from('product_analyses')
@@ -109,22 +133,37 @@ serve(async (req) => {
 
           console.log(`✅ Successfully enriched ${product.product_name}`);
           enriched++;
+          success = true;
         } else {
-          throw new Error(enrichError?.message || 'Enrichment failed');
+          throw new Error('Invalid enrichment data structure');
         }
 
       } catch (error) {
-        console.error(`❌ Error enriching ${product.id}:`, error);
-        await supabaseClient
-          .from('supplier_products')
-          .update({ 
-            enrichment_status: 'failed',
-            enrichment_progress: 0
-          })
-          .eq('id', product.id);
-        errors++;
+        retries++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`❌ Error enriching ${product.id} (attempt ${retries}/${maxRetries}):`, errorMessage);
+        
+        if (retries < maxRetries) {
+          // Backoff exponentiel : 2s, 4s, 8s
+          const waitTime = Math.pow(2, retries) * 1000;
+          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        } else {
+          // Dernier retry échoué
+          console.error(`❌ All retries failed for ${product.id}`);
+          await supabaseClient
+            .from('supplier_products')
+            .update({ 
+              enrichment_status: 'failed',
+              enrichment_progress: 0,
+              error_message: errorMessage
+            })
+            .eq('id', product.id);
+          errors++;
+        }
       }
-    }
+      } // Ferme le while loop
+    } // Ferme le for loop
 
     console.log(`🎯 Processing complete: ${enriched} enriched, ${errors} errors`);
 

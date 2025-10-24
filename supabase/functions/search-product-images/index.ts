@@ -126,9 +126,53 @@ serve(async (req) => {
     const response = await fetch(searchUrl);
     
     if (!response.ok) {
-      console.error('Google Search API error:', response.status, await response.text());
+      const errorText = await response.text();
+      console.error('Google Search API error:', response.status, errorText);
+      
+      // Si quota exceeded (429) ou autre erreur Google, fallback sur AI
+      if (response.status === 429 || response.status >= 500) {
+        console.log('[SEARCH-IMAGES] Google API error, trying AI generation fallback');
+        
+        try {
+          const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+          const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+          
+          if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+            const { data: aiImageData, error: aiError } = await supabaseClient.functions.invoke('generate-themed-image', {
+              body: { 
+                prompt: `Professional product photography of ${productName}, high quality, commercial style, white background, 8K`,
+                productName 
+              }
+            });
+            
+            if (!aiError && aiImageData?.imageUrl) {
+              console.log('[SEARCH-IMAGES] ✅ AI fallback successful after Google error');
+              return new Response(
+                JSON.stringify({ 
+                  images: [{
+                    url: aiImageData.imageUrl,
+                    thumbnail: aiImageData.imageUrl,
+                    title: `AI Generated - ${productName}`,
+                    source: 'ai-generated',
+                    width: 1024,
+                    height: 1024
+                  }], 
+                  source: 'ai-fallback-quota',
+                  count: 1 
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+        } catch (aiError) {
+          console.error('[SEARCH-IMAGES] AI fallback exception:', aiError);
+        }
+      }
+      
       return new Response(
-        JSON.stringify({ images: [], source: 'error' }),
+        JSON.stringify({ images: [], source: 'error', errorCode: response.status }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

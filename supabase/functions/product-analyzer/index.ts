@@ -362,7 +362,16 @@ serve(async (req) => {
     }
 
     console.log('[PRODUCT-ANALYZER] Searching web for:', searchQuery);
-    const searchResults = await searchWeb(searchQuery);
+    let searchResults: SearchResult[] = [];
+    try {
+      const startTime = Date.now();
+      searchResults = await searchWeb(searchQuery);
+      const duration = Date.now() - startTime;
+      console.log(`[PRODUCT-ANALYZER] Web search completed in ${duration}ms (${searchResults.length} results)`);
+    } catch (searchError) {
+      console.error('[PRODUCT-ANALYZER] ⚠️ Web search failed, continuing without search results:', searchError);
+      searchResults = [];
+    }
     console.log('[PRODUCT-ANALYZER] Found', searchResults.length, 'search results');
 
     // Use shared AI fallback logic
@@ -549,6 +558,27 @@ Si tu ne peux pas analyser complètement, remplis les champs manquants avec "N/A
     );
 
   } catch (error) {
-    return handleError(error, 'PRODUCT-ANALYZER', corsHeaders);
+    console.error('[PRODUCT-ANALYZER] Critical error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
+    
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: 'ANALYSIS_FAILED',
+          message: error instanceof Error ? error.message : 'Erreur lors de l\'analyse du produit',
+          details: {
+            timestamp: new Date().toISOString(),
+            context: 'product-analyzer'
+          }
+        }
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 });
