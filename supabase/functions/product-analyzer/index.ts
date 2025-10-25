@@ -434,17 +434,14 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       let repaired = content.trim();
       
       // 1. Retirer markdown
-      repaired = repaired.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      repaired = repaired.replace(/```json/g, '').replace(/```/g, '');
       
-      // 2. Réparer les guillemets non fermés dans les valeurs
-      repaired = repaired.replace(/"([^"]+)":\s*"([^"]*?)(?=\n\s*"[^"]+":)/gs, (match, key, value) => {
-        return `"${key}": "${value.replace(/\n/g, '\\n')}"`;
-      });
+      // 2. Échapper les nouvelles lignes dans les strings
+      repaired = repaired.replace(/\n/g, ' ');
       
       // 3. Fermer le dernier string si non fermé
-      const lastQuoteIndex = repaired.lastIndexOf('"');
-      const lastBraceIndex = repaired.lastIndexOf('}');
-      if (lastQuoteIndex > lastBraceIndex) {
+      const quotes = repaired.split('"').length - 1;
+      if (quotes % 2 !== 0) {
         repaired += '"';
       }
       
