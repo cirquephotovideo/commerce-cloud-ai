@@ -298,10 +298,15 @@ serve(async (req) => {
         user_id: user.id,
         supplier_id: supplierId,
         status: 'processing',
-        total_lines: processedCount,
-        processed_lines: 0,
-        file_path: sortedFiles[0] ? `${user.id}/${sortedFiles[0].name}` : null,
-        source_type: 'csv_upload'
+        progress_total: processedCount,
+        progress_current: 0,
+        metadata: {
+          batches: sortedFiles.map(f => f.name),
+          source_file: filePath,
+          delimiter: delimiter,
+          skip_rows: skipRows,
+          column_mapping: columnMapping
+        }
       })
       .select()
       .single();
