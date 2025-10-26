@@ -278,65 +278,28 @@ RÈGLES STRICTES - AUCUNE HALLUCINATION TOLÉRÉE :
 
 Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référentiel.`;
 
-    console.log('[enrich-odoo-attributes] Appel IA...');
+    console.log('[enrich-odoo-attributes] Appel IA avec fallback automatique...');
 
-    // 8. Appel IA selon le provider
-    let aiResponse;
+    // 8. Appel IA avec fallback automatique (Ollama prioritaire)
+    const { callAIWithFallback } = await import('../_shared/ai-fallback.ts');
+
+    const fallbackResponse = await callAIWithFallback({
+      model: 'gpt-oss:120b-cloud',
+      messages: [
+        { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
+        { role: 'user', content: systemPrompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 4000
+    });
+
+    if (!fallbackResponse.success) {
+      throw new Error(`Tous les providers IA ont échoué: ${fallbackResponse.error}`);
+    }
+
+    console.log(`[enrich-odoo-attributes] ✅ Réponse IA reçue via provider: ${fallbackResponse.provider}`);
     
-    if (provider === 'lovable' || provider === 'lovable-ai') {
-      const lovableKey = Deno.env.get('LOVABLE_API_KEY');
-      if (!lovableKey) {
-        throw new Error('LOVABLE_API_KEY non configurée');
-      }
-      
-      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lovableKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
-            { role: 'user', content: systemPrompt }
-          ],
-          temperature: 0.3
-        })
-      });
-    } else if (provider === 'ollama_cloud') {
-      const ollamaKey = Deno.env.get('OLLAMA_API_KEY');
-      if (!ollamaKey) {
-        throw new Error('OLLAMA_API_KEY non configurée');
-      }
-      
-      aiResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/ollama-proxy`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          action: 'chat',
-          model: 'google/gemini-2.5-flash',
-          messages: [
-            { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
-            { role: 'user', content: systemPrompt }
-          ],
-          temperature: 0.3
-        })
-      });
-    } else {
-      throw new Error(`Provider non supporté: ${provider}`);
-    }
-
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('[enrich-odoo-attributes] Erreur IA:', errorText);
-      throw new Error(`Erreur IA: ${aiResponse.status} - ${errorText}`);
-    }
-
-    const aiData = await aiResponse.json();
+    const aiData = fallbackResponse.content;
     console.log('[enrich-odoo-attributes] Réponse IA reçue');
 
     // 9. Parser la réponse JSON
