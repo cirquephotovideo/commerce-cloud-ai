@@ -170,10 +170,10 @@ export async function callAIWithFallback(
       const endpoint = apiUrl;
       const startTime = Date.now();
 
-      // Timeout spécial pour Ollama (15s) pour éviter les timeouts réseau
+      // Timeout spécial pour Ollama (45s) pour les gros modèles cloud
       const isOllama = providerConfig.provider === 'ollama';
       const controller = new AbortController();
-      const timeoutId = isOllama ? setTimeout(() => controller.abort(), 15000) : undefined;
+      const timeoutId = isOllama ? setTimeout(() => controller.abort(), 45000) : undefined;
 
       try {
         const response = await fetch(endpoint, {

@@ -284,7 +284,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
     const { callAIWithFallback } = await import('../_shared/ai-fallback.ts');
 
     const fallbackResponse = await callAIWithFallback({
-      model: 'gpt-oss:120b-cloud',
+      model: 'qwen3-coder:480b-cloud', // Modèle plus rapide que gpt-oss:120b
       messages: [
         { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
         { role: 'user', content: systemPrompt }
