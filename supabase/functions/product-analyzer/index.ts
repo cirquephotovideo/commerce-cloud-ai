@@ -378,7 +378,7 @@ serve(async (req) => {
     console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → Lovable AI → OpenAI → OpenRouter)');
     
     const aiResponse = await callAIWithFallback({
-      model: preferredModel || 'gpt-oss:120b-cloud',
+      model: preferredModel || 'gpt-oss:20b-cloud',
       messages: [
         {
           role: 'system',
@@ -410,7 +410,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
           content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
         }
       ],
-    });
+    }, ['lovable_ai']);
 
     if (!aiResponse.success) {
       return new Response(

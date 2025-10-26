@@ -78,8 +78,8 @@ function getProviderCompatibleModel(
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
   { provider: 'ollama', priority: 1, isActive: true },
   { provider: 'lovable_ai', priority: 2, isActive: true },
-  { provider: 'openai', priority: 3, isActive: false },
-  { provider: 'openrouter', priority: 4, isActive: false },
+  { provider: 'openai', priority: 3, isActive: true },
+  { provider: 'openrouter', priority: 4, isActive: true },
 ];
 
 /**
@@ -231,8 +231,8 @@ export async function callAIWithFallback(
         if (timeoutId) clearTimeout(timeoutId);
         
         // Si timeout Ollama, essayer le prochain provider
-        if (fetchErr.name === 'AbortError') {
-          console.warn(`[AI-FALLBACK] ${providerConfig.provider} timeout (15s), trying next...`);
+        if ((fetchErr as any).name === 'AbortError') {
+          console.warn(`[AI-FALLBACK] ${providerConfig.provider} timeout (45s), trying next...`);
           lastError = { message: 'Request timeout', status: 408 };
           continue;
         }
