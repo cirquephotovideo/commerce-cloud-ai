@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -92,102 +93,35 @@ Réponds uniquement avec un JSON suivant ce format exact:
   "confidence_score": score entre 0 et 1
 }`;
 
-    // Phase B.7: AI with fallback support
-    const aiProviders = ['lovable_ai', 'openai', 'openrouter'];
-    let aiResponse = null;
+    // Use shared AI fallback - skip Lovable AI to avoid 429s
+    console.log('[TAXONOMY] Calling AI with fallback (skipping Lovable AI)');
     
-    for (const provider of aiProviders) {
-      const apiKey = Deno.env.get(
-        provider === 'lovable_ai' ? 'LOVABLE_API_KEY' :
-        provider === 'openai' ? 'OPENAI_API_KEY' :
-        'OPENROUTER_API_KEY'
-      );
+    const aiResponse = await callAIWithFallback({
+      model: 'gpt-oss:20b-cloud',
+      messages: [{ role: 'user', content: prompt }],
+    }, ['lovable_ai']); // Skip Lovable AI to avoid rate limits
 
-      if (!apiKey) {
-        console.log(`[TAXONOMY] Skipping ${provider} (no API key)`);
-        continue;
-      }
-
-      try {
-        const endpoint = 
-          provider === 'lovable_ai' ? 'https://ai.gateway.lovable.dev/v1/chat/completions' :
-          provider === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-          'https://openrouter.ai/api/v1/chat/completions';
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: provider === 'lovable_ai' ? 'google/gemini-2.5-flash' : 
-                   provider === 'openai' ? 'gpt-5-nano-2025-08-07' : 
-                   'anthropic/claude-3.5-sonnet',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[TAXONOMY] ${provider} API error:`, response.status, errorText);
-          
-          // Retry on retriable errors
-          if (response.status === 402 || response.status === 429 || response.status === 503) {
-            console.warn(`[TAXONOMY] ${provider} failed (${response.status}), trying next provider...`);
-            continue;
-          }
-          
-          // Non-retriable error (401, 400, etc.)
-          if (response.status === 402) {
-            return new Response(
-              JSON.stringify({ 
-                error: 'Payment required', 
-                code: 'PAYMENT_REQUIRED',
-                message: 'Crédits API insuffisants sur tous les providers'
-              }),
-              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-          
-          if (response.status === 429) {
-            return new Response(
-              JSON.stringify({ 
-                error: 'Rate limit exceeded', 
-                code: 'RATE_LIMIT',
-                message: 'Limite de requêtes atteinte sur tous les providers'
-              }),
-              { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-          
-          throw new Error(`AI API error: ${response.status}`);
-        }
-
-        aiResponse = await response.json();
-        console.log(`[TAXONOMY] Success with ${provider}`);
-        break;
-        
-      } catch (err: any) {
-        console.error(`[TAXONOMY] Exception with ${provider}:`, err);
-        continue;
-      }
-    }
-
-    if (!aiResponse) {
+    if (!aiResponse.success) {
+      console.error('[TAXONOMY] ❌ All providers failed:', aiResponse.errorCode);
       return new Response(
         JSON.stringify({ 
-          error: 'All AI providers failed',
-          code: 'PROVIDER_DOWN',
-          message: 'Tous les providers IA sont indisponibles'
+          success: false,
+          code: aiResponse.errorCode || 'PROVIDER_DOWN',
+          http_status: 503,
+          message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.',
+          provider: aiResponse.provider,
+          details: aiResponse.error
         }),
-        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 200, // Normalize to 200 for structured errors
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
-    const aiData = aiResponse;
-    const aiContent = aiData.choices[0]?.message?.content || '';
+    console.log(`[TAXONOMY] ✅ Success with provider: ${aiResponse.provider || 'unknown'}`);
+    
+    const aiContent = aiResponse.content || '';
     const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
     const result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
 
@@ -222,18 +156,13 @@ Réponds uniquement avec un JSON suivant ce format exact:
     // Try secondary taxonomy (best effort, don't fail if it errors)
     try {
       console.log('[TAXONOMY] Attempting secondary taxonomy...');
-      const secondaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: otherPrompt }],
-        }),
-      });
+      const secondaryAiResponse = await callAIWithFallback({
+        model: 'gpt-oss:20b-cloud',
+        messages: [{ role: 'user', content: otherPrompt }],
+      }, ['lovable_ai']); // Skip Lovable AI
 
-      if (secondaryResponse.ok) {
-        const secondaryData = await secondaryResponse.json();
-        const secondaryContent = secondaryData.choices[0]?.message?.content || '';
+      if (secondaryAiResponse.success) {
+        const secondaryContent = secondaryAiResponse.content || '';
         const secondaryMatch = secondaryContent.match(/\{[\s\S]*\}/);
         const secondaryResult = secondaryMatch ? JSON.parse(secondaryMatch[0]) : null;
 
@@ -258,9 +187,9 @@ Réponds uniquement avec un JSON suivant ce format exact:
     );
 
   } catch (error: any) {
-    console.error('Taxonomy categorization error:', error);
+    console.error('[TAXONOMY] Critical error:', error);
     
-    // Return 200 with structured error
+    // Normalize error response to 200 with structured payload
     return new Response(
       JSON.stringify({ 
         success: false,
