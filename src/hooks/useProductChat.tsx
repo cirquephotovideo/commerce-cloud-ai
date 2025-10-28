@@ -78,16 +78,41 @@ export function useProductChat(productId?: string): UseProductChatReturn {
       if (error) {
         console.error('Erreur product-chat:', error);
         
-        // Gérer les erreurs spécifiques
-        if (error.message?.includes('429')) {
-          toast.error('⏱️ Trop de requêtes. Attendez quelques instants.');
-        } else if (error.message?.includes('402')) {
-          toast.error('💳 Crédits insuffisants. Rechargez votre compte.');
-        } else {
+        // Si c'est une erreur structurée du serveur (success:false)
+        if (data?.success === false) {
+          const errorMsg = data.code === 'RATE_LIMIT'
+            ? '⏱️ Trop de requêtes. Attendez quelques instants.'
+            : data.code === 'PAYMENT_REQUIRED'
+            ? '💳 Crédits insuffisants. Rechargez votre compte.'
+            : data.code === 'PROVIDER_DOWN'
+            ? '🔌 Tous les providers IA sont indisponibles. Réessayez plus tard.'
+            : 'Erreur lors de l\'envoi du message';
+          
+          toast.error(errorMsg);
+          console.log('Provider utilisé:', data.provider);
+        } 
+        // Sinon, erreur générique
+        else {
           toast.error('Erreur lors de l\'envoi du message');
         }
         
-        // Retirer le message utilisateur en cas d'erreur
+        setMessages(prev => prev.slice(0, -1));
+        setIsLoading(false);
+        return;
+      }
+
+      // Vérifier si c'est un payload d'erreur structuré (200 + success:false)
+      if (data?.success === false) {
+        const errorMsg = data.code === 'RATE_LIMIT'
+          ? '⏱️ Trop de requêtes. Attendez quelques instants.'
+          : data.code === 'PAYMENT_REQUIRED'
+          ? '💳 Crédits insuffisants. Rechargez votre compte.'
+          : data.code === 'PROVIDER_DOWN'
+          ? '🔌 Tous les providers IA sont indisponibles. Réessayez plus tard.'
+          : 'Erreur lors de l\'envoi du message';
+        
+        toast.error(errorMsg);
+        console.log('Provider utilisé:', data.provider);
         setMessages(prev => prev.slice(0, -1));
         setIsLoading(false);
         return;
@@ -100,6 +125,11 @@ export function useProductChat(productId?: string): UseProductChatReturn {
       };
 
       setMessages(prev => [...prev, assistantMsg]);
+      
+      // Log du provider utilisé pour debug
+      if (data.provider) {
+        console.log('✅ Réponse reçue depuis provider:', data.provider);
+      }
     } catch (error) {
       console.error('Erreur sendMessage:', error);
       toast.error('Erreur de connexion');

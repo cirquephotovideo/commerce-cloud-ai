@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { callAIWithFallback, type AICallOptions } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -332,64 +333,58 @@ Réponds aux questions en t'appuyant sur ces informations. Sois concis et orient
       }
     }
 
-    // Appeler Lovable AI
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY non configuré');
-    }
-
-    console.log('📤 Appel Lovable AI:', { 
+    // Appeler AI avec fallback automatique (Ollama → Lovable AI → OpenAI → OpenRouter)
+    console.log('🤖 Appel AI avec fallback automatique (Ollama local → Lovable AI → OpenAI → OpenRouter)');
+    console.log('📤 Context:', { 
       mode: productId ? `produit ${productId}` : 'général',
       systemPromptLength: systemPrompt.length,
       messageLength: message.length
     });
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ]
-      }),
-    });
+    const aiCallOptions: AICallOptions = {
+      model: 'gpt-oss:20b-cloud', // Modèle Ollama par défaut (sera traduit pour autres providers)
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500
+    };
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('Erreur Lovable AI:', aiResponse.status, errorText);
+    const aiResult = await callAIWithFallback(aiCallOptions);
+
+    if (!aiResult.success) {
+      console.error('❌ AI call failed:', aiResult.error, aiResult.errorCode);
       
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Limite de requêtes atteinte. Réessayez dans quelques instants.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Crédits insuffisants. Veuillez recharger votre compte Lovable AI.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      throw new Error(`Erreur API: ${aiResponse.status}`);
+      // Retourner 200 avec payload structuré au lieu de 4xx/5xx pour éviter "non-2xx status code"
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          code: aiResult.errorCode || 'PROVIDER_DOWN',
+          message: aiResult.errorCode === 'RATE_LIMIT' 
+            ? 'Limite de requêtes atteinte. Réessayez dans quelques instants.'
+            : aiResult.errorCode === 'PAYMENT_REQUIRED'
+            ? 'Crédits insuffisants. Veuillez recharger votre compte.'
+            : 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.',
+          provider: aiResult.provider,
+          details: aiResult.error
+        }),
+        { 
+          status: 200, // ⚠️ Toujours 200 pour éviter "non-2xx status code"
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
-    const data = await aiResponse.json();
-    const assistantMessage = data.choices?.[0]?.message?.content;
-
-    if (!assistantMessage) {
-      throw new Error('Réponse IA vide');
-    }
-
-    console.log('✅ Réponse IA générée');
+    const assistantMessage = aiResult.content;
+    console.log('✅ Réponse IA générée depuis provider:', aiResult.provider);
 
     return new Response(
-      JSON.stringify({ message: assistantMessage }),
+      JSON.stringify({ 
+        success: true,
+        message: assistantMessage,
+        provider: aiResult.provider
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
