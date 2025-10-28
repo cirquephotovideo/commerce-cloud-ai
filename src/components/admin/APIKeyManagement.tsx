@@ -94,16 +94,52 @@ export const APIKeyManagement = () => {
       
       if (error) throw error;
       
+      // Parser les erreurs normalisées
+      if (data && !data.success && data.code) {
+        let userMessage = data.error;
+        let suggestion = '';
+        
+        switch (data.code) {
+          case 'INVALID_CLIENT':
+            suggestion = '\n\n💡 Vérifiez votre Client ID et Client Secret dans Amazon Seller Central (Apps & Services → Develop Apps).';
+            break;
+          case 'INVALID_GRANT':
+            suggestion = '\n\n💡 Votre Refresh Token a expiré. Générez-en un nouveau depuis Amazon Seller Central.';
+            break;
+          case 'UNAUTHORIZED_CLIENT':
+            suggestion = '\n\n💡 Votre application Amazon n\'est PAS autorisée :\n' +
+                        '1. Vérifiez que l\'application est "Published" (pas Draft)\n' +
+                        '2. Vérifiez que le scope "refresh_token" est activé\n' +
+                        '3. Générez un NOUVEAU Refresh Token après avoir corrigé';
+            break;
+          case 'CREDENTIALS_MISSING':
+          case 'CREDENTIALS_INCOMPLETE':
+            suggestion = '\n\n💡 Remplissez tous les champs : Client ID, Client Secret et Refresh Token.';
+            break;
+          case 'OAUTH_ERROR':
+            suggestion = '\n\n💡 Erreur OAuth générique. Vérifiez les logs pour plus de détails.';
+            break;
+        }
+        
+        toast({
+          title: "❌ Erreur Amazon",
+          description: userMessage + suggestion,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Succès
       if (data?.access_token) {
         toast({
-          title: "Connexion Amazon réussie",
-          description: "Token d'accès généré avec succès",
+          title: "✅ Connexion Amazon réussie",
+          description: "Token généré avec succès. Configuration valide.",
         });
       }
     } catch (error) {
       console.error('Amazon test error:', error);
       toast({
-        title: "Erreur de test Amazon",
+        title: "❌ Erreur de test Amazon",
         description: error instanceof Error ? error.message : "Erreur inconnue",
         variant: "destructive",
       });

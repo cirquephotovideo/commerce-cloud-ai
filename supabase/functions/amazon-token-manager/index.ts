@@ -6,6 +6,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const createErrorResponse = (
+  code: string, 
+  message: string, 
+  httpStatus: number = 500, 
+  details?: any
+) => {
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: message,
+      code,
+      http_status: httpStatus,
+      details,
+      timestamp: new Date().toISOString()
+    }),
+    { 
+      status: 200, // ✅ Toujours 200 pour éviter les erreurs non-2xx
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    }
+  );
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -51,7 +73,12 @@ serve(async (req) => {
         .single();
 
       if (credError || !credentials) {
-        throw new Error('Amazon credentials not configured in environment or database');
+        console.log('[AMAZON-TOKEN] No credentials found in database');
+        return createErrorResponse(
+          'CREDENTIALS_MISSING',
+          'Credentials Amazon non configurés. Veuillez les ajouter dans Admin.',
+          400
+        );
       }
 
       clientId = credentials.client_id;
@@ -96,7 +123,12 @@ serve(async (req) => {
 
     // 4. Vérifier que toutes les credentials sont présentes
     if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error('Missing required Amazon credentials');
+      console.log('[AMAZON-TOKEN] Incomplete credentials');
+      return createErrorResponse(
+        'CREDENTIALS_INCOMPLETE',
+        'Credentials Amazon incomplètes (Client ID, Secret ou Refresh Token manquant).',
+        400
+      );
     }
 
     // 5. Générer un nouveau token
@@ -134,15 +166,41 @@ serve(async (req) => {
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
       console.error('[AMAZON-TOKEN] OAuth error:', errorText);
+      
+      let parsedError: any = {};
+      try {
+        parsedError = JSON.parse(errorText);
+      } catch {
+        parsedError = { error: 'parse_error', error_description: errorText };
+      }
+      
       await logToDatabase('error', 'OAuthError', `Erreur OAuth Amazon: ${errorText}`, {
-        response: {
-          status: tokenResponse.status,
-          statusText: tokenResponse.statusText,
+        response: { 
+          status: tokenResponse.status, 
+          statusText: tokenResponse.statusText, 
           headers: responseHeaders,
-          body: errorText
+          body: parsedError 
         }
       });
-      throw new Error(`Amazon OAuth failed: ${errorText}`);
+      
+      // Mapper les codes d'erreur Amazon
+      let errorCode = 'OAUTH_ERROR';
+      let userMessage = parsedError.error_description || 'Échec authentification Amazon';
+      
+      if (parsedError.error === 'invalid_client') {
+        errorCode = 'INVALID_CLIENT';
+        userMessage = 'Client ID ou Client Secret invalide';
+      } else if (parsedError.error === 'invalid_grant') {
+        errorCode = 'INVALID_GRANT';
+        userMessage = 'Refresh Token expiré ou révoqué';
+      } else if (parsedError.error === 'unauthorized_client') {
+        errorCode = 'UNAUTHORIZED_CLIENT';
+        userMessage = 'Application non autorisée pour cette opération';
+      }
+      
+      return createErrorResponse(errorCode, userMessage, tokenResponse.status, { 
+        amazonError: parsedError 
+      });
     }
 
     const tokenData = await tokenResponse.json();
@@ -209,12 +267,22 @@ serve(async (req) => {
       metadata: { stack: error.stack }
     });
     
-    return new Response(
-      JSON.stringify({ error: error.message || 'Unknown error' }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
+    // Déterminer le code d'erreur
+    let errorCode = 'UNKNOWN_ERROR';
+    let httpStatus = 500;
+    
+    if (error.message?.includes('not configured')) {
+      errorCode = 'CREDENTIALS_MISSING';
+      httpStatus = 400;
+    } else if (error.message?.includes('Missing required')) {
+      errorCode = 'CREDENTIALS_INCOMPLETE';
+      httpStatus = 400;
+    }
+    
+    return createErrorResponse(
+      errorCode,
+      error.message || 'Une erreur inconnue est survenue',
+      httpStatus
     );
   }
 });
