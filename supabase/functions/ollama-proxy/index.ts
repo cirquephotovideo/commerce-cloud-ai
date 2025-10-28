@@ -66,8 +66,10 @@ serve(async (req) => {
 
     const targetUrl = ollama_url || config?.ollama_url;
     const isCloudMode = targetUrl === 'https://ollama.com';
+    const isNgrokTunnel = targetUrl?.includes('ngrok');
     
     // For cloud mode, use OLLAMA_API_KEY from secrets
+    // For ngrok or local, use provided API key or none
     const targetApiKey = isCloudMode 
       ? Deno.env.get('OLLAMA_API_KEY')
       : (api_key || config?.api_key_encrypted);
@@ -76,7 +78,8 @@ serve(async (req) => {
       throw new Error('Ollama URL not configured');
     }
 
-    console.log(`[OLLAMA-PROXY] Mode: ${isCloudMode ? 'Cloud' : 'Local'}, URL: ${targetUrl}`);
+    const mode = isCloudMode ? 'Cloud' : (isNgrokTunnel ? 'Ngrok Tunnel' : 'Local');
+    console.log(`[OLLAMA-PROXY] Mode: ${mode}, URL: ${targetUrl}`);
 
     if (action === 'test') {
       // Test connection and list models
