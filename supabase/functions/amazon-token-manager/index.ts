@@ -111,6 +111,7 @@ serve(async (req) => {
       await logToDatabase('info', 'Success', `Token valide trouvé, expire à ${existingToken.expires_at}`);
       return new Response(
         JSON.stringify({ 
+          success: true,
           access_token: existingToken.access_token,
           expires_at: existingToken.expires_at
         }),
@@ -245,6 +246,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
+        success: true,
         access_token: tokenData.access_token,
         expires_at: expiresAt.toISOString(),
         generated: true
