@@ -8,6 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AmazonHealthStatus } from "./AmazonHealthStatus";
+import { AmazonSetupGuide } from "./AmazonSetupGuide";
+import { AmazonErrorTester } from "./AmazonErrorTester";
 
 export const APIKeyManagement = () => {
   const { toast } = useToast();
@@ -24,6 +27,7 @@ export const APIKeyManagement = () => {
   const [showAmazonSecrets, setShowAmazonSecrets] = useState(false);
   const [secretExpiresAt, setSecretExpiresAt] = useState<string | null>(null);
   const [lastRotationAt, setLastRotationAt] = useState<string | null>(null);
+  const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
 
   const fetchAmazonData = async () => {
     try {
@@ -96,6 +100,7 @@ export const APIKeyManagement = () => {
       
       // Parser les erreurs normalisées
       if (data && !data.success && data.code) {
+        setLastErrorCode(data.code); // Capturer le code d'erreur
         let userMessage = data.error;
         let suggestion = '';
         
@@ -234,6 +239,8 @@ export const APIKeyManagement = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <AmazonHealthStatus />
+            <AmazonSetupGuide errorCode={lastErrorCode} />
             {clientId && (
               <div className="space-y-2">
                 <Alert>
@@ -356,6 +363,8 @@ export const APIKeyManagement = () => {
           </CardContent>
         </Card>
       )}
+
+      {process.env.NODE_ENV === 'development' && <AmazonErrorTester />}
     </div>
   );
 };

@@ -267,4 +267,10 @@ verify_jwt = false
 [functions.run-system-tests]
 verify_jwt = true
 
+[functions.validate-amazon-credentials]
+verify_jwt = false
+
+[functions.test-amazon-errors]
+verify_jwt = false
+
 
