@@ -76,10 +76,10 @@ function getProviderCompatibleModel(
   return requestedModel;
 }
 
-// FORCE OLLAMA ONLY FOR PRODUCT ENRICHMENT - No fallback to other providers
+// Provider priority: Ollama first (with web search), Lovable AI as fallback
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
   { provider: 'ollama', priority: 1, isActive: true },
-  { provider: 'lovable_ai', priority: 2, isActive: false },
+  { provider: 'lovable_ai', priority: 2, isActive: true },  // Fallback when Ollama fails
   { provider: 'openai', priority: 3, isActive: false },
   { provider: 'openrouter', priority: 4, isActive: false },
 ];
