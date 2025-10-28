@@ -86,11 +86,19 @@ serve(async (req) => {
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
       };
+      
+      // Add ngrok-specific header if needed
+      if (isNgrokTunnel) {
+        headers['ngrok-skip-browser-warning'] = 'true';
+      }
+      
       if (targetApiKey) {
         headers['Authorization'] = `Bearer ${targetApiKey}`;
       }
 
-      const testEndpoint = isCloudMode ? `${targetUrl}/api/tags` : `${targetUrl}/api/tags`;
+      const testEndpoint = `${targetUrl}/api/tags`;
+      console.log(`[OLLAMA-PROXY] Testing ${mode} connection to: ${testEndpoint}`);
+      
       const response = await fetch(testEndpoint, {
         headers,
       });
@@ -118,13 +126,17 @@ serve(async (req) => {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
     };
+    
+    // Add ngrok-specific header if needed
+    if (isNgrokTunnel) {
+      headers['ngrok-skip-browser-warning'] = 'true';
+    }
+    
     if (targetApiKey) {
       headers['Authorization'] = `Bearer ${targetApiKey}`;
     }
 
-    const endpoint = isCloudMode 
-      ? `${targetUrl}/api/chat`
-      : `${targetUrl}/api/chat`;
+    const endpoint = `${targetUrl}/api/chat`;
 
     const requestBody = isCloudMode
       ? {

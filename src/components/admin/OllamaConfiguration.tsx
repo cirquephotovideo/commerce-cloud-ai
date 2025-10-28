@@ -90,21 +90,48 @@ export const OllamaConfiguration = () => {
   };
 
   const testConnection = async () => {
-    if (!config.api_key_encrypted) {
-      toast.error("Entrez votre clé API Ollama");
+    const isNgrokTunnel = config.ollama_url?.includes('ngrok');
+    
+    // API key obligatoire seulement pour Cloud
+    if (isCloudMode && !config.api_key_encrypted) {
+      toast.error("Entrez votre clé API Ollama Cloud");
       return;
     }
 
     setIsTesting(true);
     try {
-      // Mode Local : test direct depuis le navigateur (bypass edge function)
-      if (!isCloudMode) {
+      // Toujours utiliser l'edge function pour Cloud et Ngrok
+      // Test direct seulement pour localhost
+      if (isCloudMode || isNgrokTunnel) {
+        const { data, error } = await supabase.functions.invoke('ollama-proxy', {
+          body: {
+            action: 'test',
+            ollama_url: config.ollama_url,
+            api_key: config.api_key_encrypted || undefined,
+          }
+        });
+
+        if (error) throw error;
+
+        if (data?.error) {
+          toast.error(`Échec: ${data.error}`);
+        } else if (data?.success) {
+          const mode = isCloudMode ? 'Cloud' : 'Ngrok Tunnel';
+          toast.success(`Connexion ${mode} réussie !`);
+          if (data.models) {
+            setConfig(prev => ({ ...prev, available_models: data.models }));
+          }
+        } else {
+          toast.error("Échec de la connexion");
+        }
+      } else {
+        // Test direct pour localhost uniquement
         try {
           const response = await fetch(`${config.ollama_url}/api/tags`, {
             method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${config.api_key_encrypted}`,
-            },
+            headers: config.api_key_encrypted 
+              ? { 'Authorization': `Bearer ${config.api_key_encrypted}` }
+              : {},
           });
 
           if (!response.ok) {
@@ -116,39 +143,15 @@ export const OllamaConfiguration = () => {
           
           toast.success("Connexion locale réussie !");
           setConfig(prev => ({ ...prev, available_models: models }));
-          return;
         } catch (error) {
           console.error("Local test error:", error);
-          toast.error("Impossible de se connecter à Ollama local. Vérifiez que Ollama est démarré sur votre Mac Mini M4.");
-          return;
+          toast.error("Impossible de se connecter. Vérifiez que Ollama est démarré.");
         }
-      }
-
-      // Mode Cloud : test via edge function
-      const { data, error } = await supabase.functions.invoke('ollama-proxy', {
-        body: {
-          action: 'test',
-          ollama_url: config.ollama_url,
-          api_key: config.api_key_encrypted,
-        }
-      });
-
-      if (error) throw error;
-
-      if (data?.error) {
-        toast.error(`Échec de la connexion: ${data.error}`);
-      } else if (data?.success) {
-        toast.success("Connexion Cloud réussie !");
-        if (data.models) {
-          setConfig(prev => ({ ...prev, available_models: data.models }));
-        }
-      } else {
-        toast.error("Échec de la connexion");
       }
     } catch (error) {
       console.error("Error testing connection:", error);
       const message = error instanceof Error ? error.message : "Erreur inconnue";
-      toast.error(`Erreur de test de connexion: ${message}`);
+      toast.error(`Erreur: ${message}`);
     } finally {
       setIsTesting(false);
     }
@@ -342,18 +345,22 @@ export const OllamaConfiguration = () => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="api_key">Clé API Ollama *</Label>
+          <Label htmlFor="api_key">
+            Clé API Ollama {isCloudMode ? '*' : '(optionnelle)'}
+          </Label>
           <Input
             id="api_key"
             type="password"
-            placeholder="Collez votre clé API ici"
+            placeholder={isCloudMode ? "Clé API obligatoire" : "Clé API (si nécessaire)"}
             value={config.api_key_encrypted}
             onChange={(e) => setConfig({ ...config, api_key_encrypted: e.target.value })}
           />
           <p className="text-sm text-muted-foreground">
             {isCloudMode 
               ? "Créez une clé sur ollama.com/settings/keys"
-              : "Cette clé sera utilisée pour authentifier les requêtes"
+              : config.ollama_url?.includes('ngrok')
+              ? "Pour ngrok, la clé est optionnelle selon votre configuration"
+              : "Pour un serveur local, la clé est généralement non nécessaire"
             }
           </p>
         </div>
@@ -390,12 +397,15 @@ export const OllamaConfiguration = () => {
                 <Label htmlFor="ollama_url">URL personnalisée</Label>
                 <Input
                   id="ollama_url"
-                  placeholder="http://localhost:11434"
+                  placeholder="http://localhost:11434 ou https://xxx.ngrok-free.app"
                   value={config.ollama_url}
                   onChange={(e) => setConfig({ ...config, ollama_url: e.target.value })}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Par défaut : http://localhost:11434 (modifiez uniquement si nécessaire)
+                  {config.ollama_url?.includes('ngrok') 
+                    ? "🌐 Tunnel ngrok détecté - utilisera l'edge function"
+                    : "Par défaut : http://localhost:11434"
+                  }
                 </p>
               </div>
             </CollapsibleContent>
