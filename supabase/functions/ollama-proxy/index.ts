@@ -96,7 +96,11 @@ serve(async (req) => {
         headers['Authorization'] = `Bearer ${targetApiKey}`;
       }
 
-      const testEndpoint = `${targetUrl}/api/tags`;
+      // Construct endpoint - use URL as-is if it starts with http:// or https://
+      const testEndpoint = targetUrl.startsWith('http://') || targetUrl.startsWith('https://')
+        ? `${targetUrl}/api/tags`
+        : `http://${targetUrl}/api/tags`;
+      
       console.log(`[OLLAMA-PROXY] Testing ${mode} connection to: ${testEndpoint}`);
       
       const response = await fetch(testEndpoint, {
@@ -136,7 +140,10 @@ serve(async (req) => {
       headers['Authorization'] = `Bearer ${targetApiKey}`;
     }
 
-    const endpoint = `${targetUrl}/api/chat`;
+    // Construct endpoint - use URL as-is if it starts with http:// or https://
+    const endpoint = targetUrl.startsWith('http://') || targetUrl.startsWith('https://')
+      ? `${targetUrl}/api/chat`
+      : `http://${targetUrl}/api/chat`;
 
     const requestBody = isCloudMode
       ? {
