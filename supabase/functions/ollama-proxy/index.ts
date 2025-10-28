@@ -192,12 +192,19 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in ollama-proxy:', error);
+    console.error('[OLLAMA-PROXY] ❌ Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Normalize error to 200 with structured payload
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        success: false,
+        error: errorMessage,
+        code: 'PROVIDER_ERROR',
+        http_status: 500
+      }),
       {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

@@ -76,11 +76,12 @@ function getProviderCompatibleModel(
   return requestedModel;
 }
 
+// FORCE OLLAMA ONLY FOR PRODUCT ENRICHMENT - No fallback to other providers
 const DEFAULT_PROVIDERS: AIProviderConfig[] = [
   { provider: 'ollama', priority: 1, isActive: true },
-  { provider: 'lovable_ai', priority: 2, isActive: true },
-  { provider: 'openai', priority: 3, isActive: true },
-  { provider: 'openrouter', priority: 4, isActive: true },
+  { provider: 'lovable_ai', priority: 2, isActive: false },
+  { provider: 'openai', priority: 3, isActive: false },
+  { provider: 'openrouter', priority: 4, isActive: false },
 ];
 
 /**

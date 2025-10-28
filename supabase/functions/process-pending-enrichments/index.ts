@@ -40,10 +40,17 @@ serve(async (req) => {
     let enriched = 0;
     let errors = 0;
 
-    for (const product of pendingProducts) {
-      let retries = 0;
-      const maxRetries = 3;
-      let success = false;
+    // ✅ CONCURRENCY CONTROL: Process 2 products at a time to avoid overwhelming Ollama
+    const CONCURRENCY_LIMIT = 2;
+    
+    for (let i = 0; i < pendingProducts.length; i += CONCURRENCY_LIMIT) {
+      const batch = pendingProducts.slice(i, i + CONCURRENCY_LIMIT);
+      console.log(`🔄 Processing batch ${Math.floor(i / CONCURRENCY_LIMIT) + 1} (${batch.length} products)`);
+      
+      await Promise.all(batch.map(async (product) => {
+        let retries = 0;
+        const maxRetries = 3;
+        let success = false;
       
       while (retries < maxRetries && !success) {
         try {
@@ -206,7 +213,8 @@ serve(async (req) => {
         }
       }
       } // Ferme le while loop
-    } // Ferme le for loop
+      })); // Ferme Promise.all et map
+    } // Ferme le for loop des batchs
 
     console.log(`🎯 Processing complete: ${enriched} enriched, ${errors} errors`);
 

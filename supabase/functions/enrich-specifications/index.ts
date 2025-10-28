@@ -63,15 +63,16 @@ Fournis les spécifications suivantes en JSON structuré:
   "operating_conditions": ""
 }`;
 
-    // ✅ Use callAIWithFallback instead of direct Lovable AI call
+    // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
-      model: preferred_model || 'google/gemini-2.5-flash',
+      model: preferred_model || 'gpt-oss:120b-cloud',
       messages: [
         { role: 'system', content: 'Tu es un expert en spécifications techniques de produits.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.3,
-      max_tokens: 2000
+      max_tokens: 2000,
+      web_search: true  // Enable Ollama native web search
     });
 
     if (!aiResponse.success) {

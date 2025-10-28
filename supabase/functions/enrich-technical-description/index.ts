@@ -58,15 +58,16 @@ La description doit inclure:
 
 Format: Texte structuré en paragraphes avec sous-titres.`;
 
-    // ✅ Use callAIWithFallback
+    // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
-      model: preferred_model || 'google/gemini-2.5-flash',
+      model: preferred_model || 'gpt-oss:120b-cloud',
       messages: [
         { role: 'system', content: 'Tu es un rédacteur technique expert spécialisé dans les descriptions produits B2B.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.4,
-      max_tokens: 3000
+      max_tokens: 3000,
+      web_search: true  // Enable Ollama native web search
     });
 
     if (!aiResponse.success) {

@@ -94,9 +94,12 @@ async function callAIAnalysis(
   promptContent: string, 
   analysisType: string
 ): Promise<any> {
+  console.log(`[ADVANCED-ANALYZER] Calling AI for ${analysisType} with Ollama web search`);
+  
   const aiResponse = await callAIWithFallback({
-    model: 'llama3.2', // Default Ollama model
+    model: 'gpt-oss:120b-cloud', // Ollama model
     messages: [{ role: 'user', content: promptContent }],
+    web_search: true  // Enable Ollama native web search
   });
 
   if (!aiResponse.success) {
@@ -435,13 +438,15 @@ Utilise les données spécifiques à cette plateforme pour l'analyse.`;
       type: error?.constructor?.name
     });
     
+    // ✅ Normalize error response to 200 with structured payload
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
-      code: 'INTERNAL_ERROR',
+      code: 'ANALYSIS_FAILED',
+      http_status: 500,
       details: error instanceof Error ? error.stack?.split('\n').slice(0, 3).join('\n') : undefined
     } as ErrorResponse), {
-      status: 500,
+      status: 200,  // Return 200 to avoid "non-2xx" errors in UI
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
