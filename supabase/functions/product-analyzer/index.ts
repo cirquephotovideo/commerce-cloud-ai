@@ -8,99 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SearchResult {
-  title: string;
-  url: string;
-  description: string;
-  content?: string;
-}
-
-async function searchWeb(query: string): Promise<SearchResult[]> {
-  // 1. Try Google Custom Search Engine first (if configured)
-  const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
-  const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
-  
-  if (GOOGLE_SEARCH_API_KEY && GOOGLE_SEARCH_CX) {
-    try {
-      console.log('[WEB-SEARCH] Trying Google CSE...');
-      const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(query)}&num=5`;
-      const response = await fetch(url);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.items && data.items.length > 0) {
-          console.log('[WEB-SEARCH] ✅ Google CSE success');
-          return data.items.map((item: any) => ({
-            title: item.title,
-            url: item.link,
-            description: item.snippet || '',
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('[WEB-SEARCH] Google CSE error:', error);
-    }
-  }
-
-  // 2. Try Serper API
-  const SERPER_API_KEY = Deno.env.get('SERPER_API_KEY');
-  if (SERPER_API_KEY) {
-    try {
-      const response = await fetch('https://google.serper.dev/search', {
-        method: 'POST',
-        headers: {
-          'X-API-KEY': SERPER_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ q: query, num: 5 })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[WEB-SEARCH] Serper API success');
-        return data.organic?.slice(0, 5).map((r: any) => ({
-          title: r.title,
-          url: r.link,
-          description: r.snippet,
-        })) || [];
-      }
-    } catch (error) {
-      console.error('[WEB-SEARCH] Serper API error:', error);
-    }
-  }
-  
-  // Fallback to Brave Search
-  try {
-    const BRAVE_API_KEY = Deno.env.get('BRAVE_SEARCH_API_KEY');
-    if (!BRAVE_API_KEY) {
-      console.log('[WEB-SEARCH] No search API available, continuing without web search');
-      return [];
-    }
-    
-    const response = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'Accept': 'application/json',
-        'X-Subscription-Token': BRAVE_API_KEY
-      }
-    });
-    
-    if (!response.ok) {
-      console.log('[WEB-SEARCH] Brave API not available, continuing without web search');
-      return [];
-    }
-    
-    const data = await response.json();
-    console.log('[WEB-SEARCH] Brave API success');
-    return data.web?.results?.slice(0, 5).map((r: any) => ({
-      title: r.title,
-      url: r.url,
-      description: r.description,
-    })) || [];
-  } catch (error) {
-    console.log('[WEB-SEARCH] Error, continuing without web search:', error);
-    return [];
-  }
-}
 
 function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
   if (input.match(/^https?:\/\//i)) {
@@ -114,11 +21,7 @@ function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
   return 'product_name';
 }
 
-const analysisPrompt = (productInfo: string, inputType: string, searchResults: SearchResult[], categories: any[], additionalData?: any) => {
-  const searchContext = searchResults.length > 0 
-    ? `\n\nInformations trouvées sur le web:\n${searchResults.map(r => `- ${r.title}: ${r.description}`).join('\n')}`
-    : '';
-
+const analysisPrompt = (productInfo: string, inputType: string, categories: any[], additionalData?: any) => {
   const categoriesContext = categories.length > 0
     ? `\n\nCatégories Odoo disponibles:\n${categories.map(c => `- ${c.full_path} (ID: ${c.odoo_category_id})`).join('\n')}`
     : '';
@@ -133,14 +36,13 @@ const analysisPrompt = (productInfo: string, inputType: string, searchResults: S
        - Référence fournisseur: ${additionalData.supplier_reference || 'N/A'}`
     : '';
 
-  return `Analyse complète du produit e-commerce.
+  return `Analyse complète du produit e-commerce en utilisant la recherche web pour obtenir des informations à jour.
 
 Type d'entrée: ${inputType}
 ${inputType === 'url' ? `URL du produit: ${productInfo}` : 
   inputType === 'barcode' ? `Code-barres: ${productInfo}` : 
   `Nom du produit: ${productInfo}`}
 ${additionalContext}
-${searchContext}
 ${categoriesContext}
 
 IMPORTANT: 
@@ -334,28 +236,8 @@ serve(async (req) => {
     const inputType = detectInputType(productInput);
     console.log('[PRODUCT-ANALYZER] Input type detected:', inputType);
 
-    let searchQuery = productInput;
-    if (inputType === 'barcode') {
-      searchQuery = `produit code-barres ${productInput} prix avis`;
-    } else if (inputType === 'product_name') {
-      searchQuery = `${productInput} acheter prix avis e-commerce`;
-    }
-
-    console.log('[PRODUCT-ANALYZER] Searching web for:', searchQuery);
-    let searchResults: SearchResult[] = [];
-    try {
-      const startTime = Date.now();
-      searchResults = await searchWeb(searchQuery);
-      const duration = Date.now() - startTime;
-      console.log(`[PRODUCT-ANALYZER] Web search completed in ${duration}ms (${searchResults.length} results)`);
-    } catch (searchError) {
-      console.error('[PRODUCT-ANALYZER] ⚠️ Web search failed, continuing without search results:', searchError);
-      searchResults = [];
-    }
-    console.log('[PRODUCT-ANALYZER] Found', searchResults.length, 'search results');
-
-    // Use shared AI fallback logic - skip Lovable AI to avoid 429s
-    console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → OpenAI → OpenRouter, skipping Lovable AI)');
+    // Use shared AI fallback logic with Ollama native web search - skip Lovable AI to avoid 429s
+    console.log('[PRODUCT-ANALYZER] Calling AI with Ollama native web search (skipping Lovable AI)');
     
     const aiResponse = await callAIWithFallback({
       model: preferredModel || 'gpt-oss:20b-cloud',
@@ -387,9 +269,10 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
         },
         {
           role: 'user',
-          content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
+          content: analysisPrompt(productInput, inputType, categories, additionalData)
         }
       ],
+      web_search: true, // Enable Ollama native web search
     }, ['lovable_ai']); // Skip Lovable AI to avoid 429 rate limits
 
     if (!aiResponse.success) {

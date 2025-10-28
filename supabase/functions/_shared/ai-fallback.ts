@@ -14,6 +14,7 @@ export interface AICallOptions {
   messages: Array<{ role: string; content: string }>;
   temperature?: number;
   max_tokens?: number;
+  web_search?: boolean;
 }
 
 export interface AIResponse {
@@ -192,16 +193,24 @@ export async function callAIWithFallback(
           headers['ngrok-skip-browser-warning'] = 'true';
         }
         
+        const requestBody: any = {
+          model: getProviderCompatibleModel(options.model, providerConfig.provider),
+          messages: options.messages,
+          temperature: options.temperature ?? 0.7,
+          max_tokens: options.max_tokens ?? 2000,
+          stream: false
+        };
+
+        // Add web_search for Ollama if requested
+        if (isOllama && options.web_search) {
+          requestBody.web_search = true;
+          console.log('[AI-FALLBACK] Enabling Ollama native web search');
+        }
+        
         const response = await fetch(endpoint, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            model: getProviderCompatibleModel(options.model, providerConfig.provider),
-            messages: options.messages,
-            temperature: options.temperature ?? 0.7,
-            max_tokens: options.max_tokens ?? 2000,
-            stream: false // Forcer non-streaming pour éviter les flux partiels
-          }),
+          body: JSON.stringify(requestBody),
           signal: isOllama ? controller.signal : undefined,
         });
 
