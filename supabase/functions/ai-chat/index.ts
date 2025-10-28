@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,81 +50,50 @@ serve(async (req) => {
       L'utilisateur peut utiliser la commande /mcp <package> <tool> [args] pour appeler ces outils directement.`;
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    console.log('[AI-CHAT] LOVABLE_API_KEY present:', !!LOVABLE_API_KEY);
-    
-    if (!LOVABLE_API_KEY) {
-      console.error('[AI-CHAT] LOVABLE_API_KEY not configured');
-      throw new Error('LOVABLE_API_KEY not configured');
-    }
-
     const conversationHistory = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
+      { role: 'system', content: systemPrompt },
       ...messages,
       { role: 'user', content: message }
     ];
 
-    console.log('[AI-CHAT] Calling Lovable AI Gateway...');
+    console.log('[AI-CHAT] Calling AI with fallback (Ollama → Lovable AI → OpenAI → OpenRouter)');
     console.log('[AI-CHAT] Conversation history length:', conversationHistory.length);
-    
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: conversationHistory,
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
+
+    const aiResult = await callAIWithFallback({
+      model: 'gpt-oss:20b-cloud',
+      messages: conversationHistory,
+      temperature: 0.7,
+      max_tokens: 2000,
     });
 
-    console.log('[AI-CHAT] Response status:', response.status);
-    console.log('[AI-CHAT] Response ok:', response.ok);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[AI-CHAT] AI API error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Limite de requêtes atteinte. Veuillez réessayer plus tard.' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 429,
-          }
-        );
-      }
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Crédits insuffisants. Veuillez recharger votre compte.' }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 402,
-          }
-        );
-      }
-      
-      throw new Error(`AI API error: ${response.status} - ${errorText}`);
+    if (!aiResult.success) {
+      console.error('[AI-CHAT] ❌ All providers failed:', aiResult.errorCode, aiResult.error);
+      // Normalize to 200 to avoid generic non-2xx errors in clients
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: aiResult.errorCode || 'PROVIDER_DOWN',
+          message: aiResult.errorCode === 'RATE_LIMIT'
+            ? 'Limite de requêtes atteinte. Veuillez réessayer plus tard.'
+            : aiResult.errorCode === 'PAYMENT_REQUIRED'
+            ? 'Crédits insuffisants. Veuillez recharger votre compte.'
+            : 'Tous les providers IA sont indisponibles. Réessayez plus tard.',
+          provider: aiResult.provider,
+          details: aiResult.error,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
     }
 
-    const data = await response.json();
-    console.log('[AI-CHAT] AI response received successfully');
-    
-    const aiResponse = data.choices[0].message.content;
+    const content = typeof aiResult.content === 'string' 
+      ? aiResult.content 
+      : (aiResult.content?.choices?.[0]?.message?.content || String(aiResult.content));
+
+    console.log('[AI-CHAT] ✅ AI response received from provider:', aiResult.provider);
 
     return new Response(
-      JSON.stringify({ response: aiResponse }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      JSON.stringify({ success: true, response: content, provider: aiResult.provider }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error) {

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { callAIWithFallback, type AICallOptions } from '../_shared/ai-fallback.ts';
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -341,7 +341,7 @@ Réponds aux questions en t'appuyant sur ces informations. Sois concis et orient
       messageLength: message.length
     });
 
-    const aiCallOptions: AICallOptions = {
+    const aiCallOptions = {
       model: 'gpt-oss:20b-cloud', // Modèle Ollama par défaut (sera traduit pour autres providers)
       messages: [
         { role: 'system', content: systemPrompt },
