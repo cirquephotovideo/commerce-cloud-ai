@@ -107,10 +107,11 @@ async function callAIAnalysis(
     };
   }
 
-  const data = aiResponse.content;
+  // callAIWithFallback returns content as a string, not an object
+  const content = aiResponse.content;
   
-  if (!data.choices || !data.choices[0]) {
-    console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response structure`);
+  if (!content || typeof content !== 'string') {
+    console.error(`[ADVANCED-ANALYZER] Invalid ${analysisType} response: content is not a string`);
     return {
       error: 'Invalid response structure',
       code: 'INVALID_RESPONSE',
@@ -120,7 +121,7 @@ async function callAIAnalysis(
 
   console.log(`[ADVANCED-ANALYZER] ${analysisType} success with ${aiResponse.provider}`);
   return {
-    ...safeParseAIResponse(data.choices[0].message.content, analysisType),
+    ...safeParseAIResponse(content, analysisType),
     _provider: aiResponse.provider
   };
 }
