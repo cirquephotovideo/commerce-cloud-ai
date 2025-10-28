@@ -100,7 +100,7 @@ async function searchWithSerper(productName: string, maxResults: number, apiKey:
 }
 
 // Fonction pour extraire les données depuis une URL directe
-async function extractFromUrl(url: string, supabaseUrl: string, supabaseKey: string): Promise<ProductResult[]> {
+async function extractFromUrl(url: string): Promise<ProductResult[]> {
   console.log('Direct URL - Extraction depuis:', url);
   
   try {
@@ -197,21 +197,16 @@ Extrait au format JSON:
   "availability": "in_stock|out_of_stock|unknown"
 }`;
 
-      const aiResult = await callAIWithFallback(
-        'google-shopping-scraper',
-        supabaseUrl,
-        supabaseKey,
-        {
-          model: 'google/gemini-2.5-flash',
-          messages: [{ role: 'user', content: aiPrompt }],
-          temperature: 0.3,
-          max_tokens: 500
-        }
-      );
+      const aiResult = await callAIWithFallback({
+        model: 'google/gemini-2.5-flash',
+        messages: [{ role: 'user', content: aiPrompt }],
+        temperature: 0.3,
+        max_tokens: 500
+      });
 
       if (aiResult.success && aiResult.content) {
-        const content = aiResult.content;
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const contentStr = typeof aiResult.content === 'string' ? aiResult.content : JSON.stringify(aiResult.content);
+        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
         
         if (jsonMatch) {
           const extracted = JSON.parse(jsonMatch[0]);
@@ -242,7 +237,7 @@ Extrait au format JSON:
 }
 
 // Fonction pour parser les résultats Google Custom Search avec IA
-async function parseGoogleResults(items: any[], supabaseUrl: string, supabaseKey: string): Promise<ProductResult[]> {
+async function parseGoogleResults(items: any[]): Promise<ProductResult[]> {
   const analysisPrompt = `Analyse ces résultats de recherche Google et extrais les informations produit de manière structurée.
 
 Résultats: ${JSON.stringify(items)}
@@ -275,17 +270,12 @@ Format JSON strict:
   }]
 }`;
 
-  const aiResult = await callAIWithFallback(
-    'google-shopping-scraper',
-    supabaseUrl,
-    supabaseKey,
-    {
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: analysisPrompt }],
-      temperature: 0.3,
-      max_tokens: 1500
-    }
-  );
+  const aiResult = await callAIWithFallback({
+    model: 'google/gemini-2.5-flash',
+    messages: [{ role: 'user', content: analysisPrompt }],
+    temperature: 0.3,
+    max_tokens: 1500
+  });
 
   if (!aiResult.success || !aiResult.content) {
     console.error('AI fallback failed:', aiResult.error);
@@ -401,7 +391,7 @@ serve(async (req) => {
     if (productUrl) {
       provider = 'Direct URL';
       console.log('📍 Mode Direct URL:', productUrl);
-      results = await extractFromUrl(productUrl, supabaseUrl, supabaseKey);
+      results = await extractFromUrl(productUrl);
     }
     // MODE 2: Recherche par nom de produit
     else if (productName) {
@@ -438,7 +428,7 @@ serve(async (req) => {
           }
         } else if (searchData.items && searchData.items.length > 0) {
           console.log('✅ Google CSE - Résultats trouvés:', searchData.items.length);
-          results = await parseGoogleResults(searchData.items, supabaseUrl, supabaseKey);
+          results = await parseGoogleResults(searchData.items);
         } else {
           console.log('⚠️ Google CSE - Aucun résultat');
           if (SERPER_API_KEY) {

@@ -73,24 +73,26 @@ serve(async (req) => {
             }]
           }`;
 
-          const aiResult = await callAIWithFallback(
-            'market-intelligence',
-            supabaseUrl,
-            supabaseKey,
-            {
-              model: 'google/gemini-2.5-flash',
-              messages: [{ role: 'user', content: analysisPrompt }],
-              temperature: 0.3,
-              max_tokens: 1000
-            }
-          );
+          const aiResult = await callAIWithFallback({
+            model: 'google/gemini-2.5-flash',
+            messages: [{ role: 'user', content: analysisPrompt }],
+            temperature: 0.3,
+            max_tokens: 1000
+          });
 
           if (!aiResult.success || !aiResult.content) {
             console.error(`AI failed for ${site.site_name}:`, aiResult.error);
             continue;
           }
 
-          const extractedData = JSON.parse(aiResult.content);
+          let extractedData: any;
+          try {
+            const contentStr = typeof aiResult.content === 'string' ? aiResult.content : JSON.stringify(aiResult.content);
+            extractedData = JSON.parse(contentStr);
+          } catch (e) {
+            console.error('Failed to parse AI response JSON:', e);
+            continue;
+          }
 
           // Sauvegarder les données de monitoring
           for (const product of extractedData.products || []) {
