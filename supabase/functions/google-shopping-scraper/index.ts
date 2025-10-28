@@ -202,7 +202,7 @@ Extrait au format JSON:
         messages: [{ role: 'user', content: aiPrompt }],
         temperature: 0.3,
         max_tokens: 500
-      });
+      }, ['lovable_ai']); // Skip Lovable AI to avoid 429s
 
       if (aiResult.success && aiResult.content) {
         const contentStr = typeof aiResult.content === 'string' ? aiResult.content : JSON.stringify(aiResult.content);
@@ -275,7 +275,7 @@ Format JSON strict:
     messages: [{ role: 'user', content: analysisPrompt }],
     temperature: 0.3,
     max_tokens: 1500
-  });
+  }, ['lovable_ai']); // Skip Lovable AI to avoid 429s
 
   if (!aiResult.success || !aiResult.content) {
     console.error('AI fallback failed:', aiResult.error);

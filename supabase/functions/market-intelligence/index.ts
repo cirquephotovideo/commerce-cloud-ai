@@ -78,7 +78,7 @@ serve(async (req) => {
             messages: [{ role: 'user', content: analysisPrompt }],
             temperature: 0.3,
             max_tokens: 1000
-          });
+          }, ['lovable_ai']); // Skip Lovable AI to avoid 429s
 
           if (!aiResult.success || !aiResult.content) {
             console.error(`AI failed for ${site.site_name}:`, aiResult.error);

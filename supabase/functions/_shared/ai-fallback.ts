@@ -121,9 +121,10 @@ export async function callAIWithFallback(
           
           if (ollamaConfig) {
             const isCloudMode = ollamaConfig.ollama_url === 'https://ollama.com';
+            // CRITICAL: Local Ollama uses /api/chat, Cloud uses /v1/chat/completions
             apiUrl = isCloudMode 
               ? `${ollamaConfig.ollama_url}/v1/chat/completions`
-              : `${ollamaConfig.ollama_url}/v1/chat/completions`;
+              : `${ollamaConfig.ollama_url}/api/chat`;
             apiKey = isCloudMode 
               ? (Deno.env.get('OLLAMA_API_KEY') || '')
               : (ollamaConfig.api_key_encrypted || '');
@@ -176,12 +177,24 @@ export async function callAIWithFallback(
       const timeoutId = isOllama ? setTimeout(() => controller.abort(), 45000) : undefined;
 
       try {
+        // Build headers conditionally
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        
+        // Only add Authorization if we have an API key (some local Ollama don't need it)
+        if (apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+        }
+        
+        // Add ngrok header if URL contains ngrok (prevents browser warning page)
+        if (endpoint.includes('ngrok')) {
+          headers['ngrok-skip-browser-warning'] = 'true';
+        }
+        
         const response = await fetch(endpoint, {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             model: getProviderCompatibleModel(options.model, providerConfig.provider),
             messages: options.messages,

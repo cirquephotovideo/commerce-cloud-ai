@@ -15,51 +15,31 @@ interface SearchResult {
   content?: string;
 }
 
-async function searchWebWithOllama(query: string): Promise<SearchResult[]> {
-  const OLLAMA_API_KEY = Deno.env.get('OLLAMA_API_KEY');
-  if (!OLLAMA_API_KEY) {
-    console.log('[WEB-SEARCH] No Ollama API key, skipping');
-    return [];
-  }
-
-  try {
-    console.log('[WEB-SEARCH] Trying Ollama Cloud...');
-    const response = await fetch('https://ollama.com/api/web_search', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OLLAMA_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        query,
-        max_results: 5
-      })
-    });
-
-    if (!response.ok) {
-      console.error(`[WEB-SEARCH] Ollama API error: ${response.status}`);
-      return [];
-    }
-
-    const data = await response.json();
-    console.log('[WEB-SEARCH] ✅ Ollama Cloud success');
-    
-    return data.results?.map((r: any) => ({
-      title: r.title,
-      url: r.url,
-      description: r.content || '',
-    })) || [];
-  } catch (error) {
-    console.error('[WEB-SEARCH] Ollama error:', error);
-    return [];
-  }
-}
-
 async function searchWeb(query: string): Promise<SearchResult[]> {
-  // 1. Try Ollama Cloud Web Search (PRIORITY)
-  const ollamaResults = await searchWebWithOllama(query);
-  if (ollamaResults.length > 0) {
-    return ollamaResults;
+  // 1. Try Google Custom Search Engine first (if configured)
+  const GOOGLE_SEARCH_API_KEY = Deno.env.get('GOOGLE_SEARCH_API_KEY');
+  const GOOGLE_SEARCH_CX = Deno.env.get('GOOGLE_SEARCH_CX');
+  
+  if (GOOGLE_SEARCH_API_KEY && GOOGLE_SEARCH_CX) {
+    try {
+      console.log('[WEB-SEARCH] Trying Google CSE...');
+      const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_SEARCH_API_KEY}&cx=${GOOGLE_SEARCH_CX}&q=${encodeURIComponent(query)}&num=5`;
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          console.log('[WEB-SEARCH] ✅ Google CSE success');
+          return data.items.map((item: any) => ({
+            title: item.title,
+            url: item.link,
+            description: item.snippet || '',
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('[WEB-SEARCH] Google CSE error:', error);
+    }
   }
 
   // 2. Try Serper API
@@ -374,8 +354,8 @@ serve(async (req) => {
     }
     console.log('[PRODUCT-ANALYZER] Found', searchResults.length, 'search results');
 
-    // Use shared AI fallback logic
-    console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → Lovable AI → OpenAI → OpenRouter)');
+    // Use shared AI fallback logic - skip Lovable AI to avoid 429s
+    console.log('[PRODUCT-ANALYZER] Calling AI with automatic fallback (Ollama → OpenAI → OpenRouter, skipping Lovable AI)');
     
     const aiResponse = await callAIWithFallback({
       model: preferredModel || 'gpt-oss:20b-cloud',
@@ -410,7 +390,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
           content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
         }
       ],
-    });
+    }, ['lovable_ai']); // Skip Lovable AI to avoid 429 rate limits
 
     if (!aiResponse.success) {
       console.error('[PRODUCT-ANALYZER] ❌ All providers failed:', aiResponse.errorCode);
