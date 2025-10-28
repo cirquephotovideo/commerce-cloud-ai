@@ -209,7 +209,7 @@ Réponds uniquement avec un JSON suivant ce format exact:
       onConflict: 'analysis_id,taxonomy_type'
     });
 
-    // Also categorize with the other taxonomy
+    // Also categorize with the other taxonomy (only if primary succeeded)
     const otherTaxonomyType = taxonomyType === 'google' ? 'amazon' : 'google';
     const otherTaxonomyData = otherTaxonomyType === 'google' ? GOOGLE_TAXONOMY : AMAZON_TAXONOMY;
     
@@ -219,41 +219,37 @@ Réponds uniquement avec un JSON suivant ce format exact:
 
     const otherPrompt = `${prompt.split('Catégories disponibles:')[0]}Catégories disponibles:\n${otherCategoriesText}`;
 
-    const otherAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [{ role: 'user', content: otherPrompt }],
-        temperature: 0.3,
-      }),
-    });
+    // Try secondary taxonomy (best effort, don't fail if it errors)
+    try {
+      console.log('[TAXONOMY] Attempting secondary taxonomy...');
+      const secondaryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [{ role: 'user', content: otherPrompt }],
+        }),
+      });
 
-    if (otherAiResponse.ok) {
-      const otherAiData = await otherAiResponse.json();
-      const otherAiContent = otherAiData.choices[0]?.message?.content || '';
-      const otherJsonMatch = otherAiContent.match(/\{[\s\S]*\}/);
-      const otherResult = otherJsonMatch ? JSON.parse(otherJsonMatch[0]) : null;
+      if (secondaryResponse.ok) {
+        const secondaryData = await secondaryResponse.json();
+        const secondaryContent = secondaryData.choices[0]?.message?.content || '';
+        const secondaryMatch = secondaryContent.match(/\{[\s\S]*\}/);
+        const secondaryResult = secondaryMatch ? JSON.parse(secondaryMatch[0]) : null;
 
-      if (otherResult && otherResult.category_id) {
-        console.log(`[TAXONOMY] Inserting secondary taxonomy: ${otherTaxonomyType}, category_id: ${otherResult.category_id}`);
-        
-        // Use upsert to handle duplicate entries gracefully
-        await supabase.from('product_taxonomy_mappings').upsert({
-          analysis_id,
-          taxonomy_type: otherTaxonomyType,
-          category_id: otherResult.category_id,
-          category_path: otherResult.category_path,
-          confidence_score: otherResult.confidence_score,
-        }, {
-          onConflict: 'analysis_id,taxonomy_type'
-        });
-      } else {
-        console.warn(`[TAXONOMY] Skipping secondary taxonomy - invalid category_id from AI`);
+        if (secondaryResult?.category_id) {
+          await supabase.from('product_taxonomy_mappings').upsert({
+            analysis_id,
+            taxonomy_type: otherTaxonomyType,
+            category_id: secondaryResult.category_id,
+            category_path: secondaryResult.category_path,
+            confidence_score: secondaryResult.confidence_score,
+          }, { onConflict: 'analysis_id,taxonomy_type' });
+          console.log(`[TAXONOMY] ✅ Secondary taxonomy added`);
+        }
       }
+    } catch (err) {
+      console.warn('[TAXONOMY] Secondary taxonomy failed (non-critical):', err);
     }
 
     return new Response(
@@ -263,9 +259,17 @@ Réponds uniquement avec un JSON suivant ce format exact:
 
   } catch (error: any) {
     console.error('Taxonomy categorization error:', error);
+    
+    // Return 200 with structured error
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: false,
+        code: 'INTERNAL_ERROR',
+        http_status: 500,
+        message: error.message || 'Erreur lors de la catégorisation',
+        details: error.toString()
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

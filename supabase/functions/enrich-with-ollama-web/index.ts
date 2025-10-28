@@ -111,18 +111,21 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
     let finalData = ollamaData;
     let usedFallback = false;
 
-    // ✅ FALLBACK vers Lovable AI si Ollama échoue
+    // ✅ CRITICAL FIX: Use callAIWithFallback for proper provider management
     if (ollamaError || !ollamaData?.success || !ollamaData?.response) {
-      console.warn('[ENRICH-OLLAMA-WEB] ⚠️ Ollama failed, trying Lovable AI fallback...', {
+      console.warn('[ENRICH-OLLAMA-WEB] ⚠️ Ollama failed, using automatic fallback (Lovable AI → OpenAI → OpenRouter)...', {
         ollamaError: ollamaError?.message,
         ollamaDataValid: !!ollamaData?.success
       });
 
-      // Mettre à jour enrichment_queue avec l'erreur Ollama
+      // Import shared AI fallback
+      const { callAIWithFallback } = await import('../_shared/ai-fallback.ts');
+
+      // Mettre à jour enrichment_queue
       await supabase
         .from('enrichment_queue')
         .update({
-          error_message: `Ollama Cloud error: ${ollamaError?.message || 'Invalid response'}. Falling back to Lovable AI...`,
+          error_message: `Ollama Cloud error: ${ollamaError?.message || 'Invalid response'}. Using fallback providers...`,
           last_error: {
             timestamp: new Date().toISOString(),
             provider: 'ollama-cloud',
@@ -134,41 +137,55 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
         .in('enrichment_type', [['specifications'], ['cost_analysis'], ['technical_description']]);
 
       try {
-        const { data: lovableData, error: lovableError } = await supabase.functions.invoke('openai-proxy', {
-          body: {
-            model: 'google/gemini-2.5-pro',
-            messages: [
-              { 
-                role: 'system', 
-                content: 'Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide. Utilise tes connaissances pour enrichir les données produit.' 
-              },
-              { role: 'user', content: prompt }
-            ]
-          },
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
+        const fallbackResponse = await callAIWithFallback({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide. Utilise tes connaissances pour enrichir les données produit.' 
+            },
+            { role: 'user', content: prompt }
+          ]
+        }, { skipProviders: ['ollama'] }); // Skip Ollama since it already failed
 
-        if (lovableError) {
-          throw new Error(`Lovable AI fallback also failed: ${lovableError.message}`);
+        if (!fallbackResponse.success) {
+          throw new Error(`All fallback providers failed: ${fallbackResponse.error}`);
         }
 
-        console.log('[ENRICH-OLLAMA-WEB] ✅ Lovable AI fallback succeeded');
-        finalData = lovableData;
+        console.log(`[ENRICH-OLLAMA-WEB] ✅ Fallback succeeded with provider: ${fallbackResponse.provider}`);
+        // Transform response to match expected format
+        finalData = {
+          success: true,
+          choices: fallbackResponse.content ? [{ message: { content: fallbackResponse.content } }] : []
+        };
         usedFallback = true;
       } catch (fallbackError: any) {
-        console.error('[ENRICH-OLLAMA-WEB] ❌ Both Ollama and Lovable AI failed:', fallbackError);
+        console.error('[ENRICH-OLLAMA-WEB] ❌ All providers failed:', fallbackError);
         
         // Marquer comme failed dans enrichment_queue
         await supabase
           .from('enrichment_queue')
           .update({
             status: 'failed',
-            error_message: `All AI providers failed. Ollama: ${ollamaError?.message}. Lovable AI: ${fallbackError.message}`,
+            error_message: `All AI providers failed. Ollama: ${ollamaError?.message}. Fallback: ${fallbackError.message}`,
             completed_at: new Date().toISOString()
           })
           .eq('analysis_id', analysisId);
 
-        throw new Error(`All AI providers failed: ${fallbackError.message}`);
+        // Return 200 with structured error
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            code: 'PROVIDER_DOWN',
+            http_status: 503,
+            message: 'Tous les providers IA sont indisponibles',
+            details: fallbackError.message
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+          }
+        );
       }
     }
 

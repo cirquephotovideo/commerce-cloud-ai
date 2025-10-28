@@ -81,14 +81,34 @@ serve(async (req) => {
 
           if (!analyzerResponse.ok) {
             let errorMessage = 'Enrichment failed';
+            let structuredError = null;
+            
             try {
               const errorBody = await analyzerResponse.json();
-              errorMessage = errorBody?.error?.message || errorBody?.error || errorMessage;
-              console.error(`❌ Analyzer error for ${product.id} (attempt ${retries + 1}):`, errorBody);
+              
+              // Parse structured error from product-analyzer
+              if (errorBody.success === false && errorBody.code) {
+                structuredError = {
+                  code: errorBody.code,
+                  http_status: errorBody.http_status,
+                  provider: errorBody.provider,
+                  message: errorBody.message
+                };
+                errorMessage = `[${errorBody.code}] ${errorBody.message}`;
+                if (errorBody.provider) errorMessage += ` (provider: ${errorBody.provider})`;
+              } else {
+                errorMessage = errorBody?.error?.message || errorBody?.error || errorMessage;
+              }
+              
+              console.error(`❌ Analyzer error for ${product.id} (attempt ${retries + 1}):`, structuredError || errorBody);
             } catch {
               errorMessage = `HTTP ${analyzerResponse.status}: ${await analyzerResponse.text()}`;
             }
-            throw new Error(errorMessage);
+            
+            // Store structured error for better debugging
+            const error = new Error(errorMessage);
+            (error as any).structuredError = structuredError;
+            throw error;
           }
 
           const enrichmentData = await analyzerResponse.json();
@@ -146,22 +166,40 @@ serve(async (req) => {
         } catch (error) {
         retries++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`❌ Error enriching ${product.id} (attempt ${retries}/${maxRetries}):`, errorMessage);
+        const structuredError = (error as any)?.structuredError;
+        
+        console.error(`❌ Error enriching ${product.id} (attempt ${retries}/${maxRetries}):`, {
+          message: errorMessage,
+          structured: structuredError
+        });
         
         if (retries < maxRetries) {
-          // Backoff exponentiel : 2s, 4s, 8s
-          const waitTime = Math.pow(2, retries) * 1000;
-          console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+          // Backoff exponentiel avec jitter : 2s±20%, 4s±20%, 8s±20%
+          const baseWaitTime = Math.pow(2, retries) * 1000;
+          const jitter = baseWaitTime * 0.2 * (Math.random() - 0.5); // ±20% jitter
+          const waitTime = Math.floor(baseWaitTime + jitter);
+          console.log(`⏳ Waiting ${waitTime}ms before retry (base: ${baseWaitTime}ms)...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
         } else {
-          // Dernier retry échoué
+          // Dernier retry échoué - store detailed error
           console.error(`❌ All retries failed for ${product.id}`);
+          
+          let finalErrorMessage = errorMessage;
+          if (structuredError) {
+            finalErrorMessage = JSON.stringify({
+              message: errorMessage,
+              code: structuredError.code,
+              provider: structuredError.provider,
+              http_status: structuredError.http_status
+            });
+          }
+          
           await supabaseClient
             .from('supplier_products')
             .update({ 
               enrichment_status: 'failed',
               enrichment_progress: 0,
-              error_message: errorMessage
+              error_message: finalErrorMessage
             })
             .eq('id', product.id);
           errors++;

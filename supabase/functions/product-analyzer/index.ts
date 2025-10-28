@@ -410,18 +410,23 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
           content: analysisPrompt(productInput, inputType, searchResults, categories, additionalData)
         }
       ],
-    }, ['lovable_ai']);
+    });
 
     if (!aiResponse.success) {
+      console.error('[PRODUCT-ANALYZER] ❌ All providers failed:', aiResponse.errorCode);
+      // Return 200 with structured error for better client UX
       return new Response(
         JSON.stringify({ 
-          error: aiResponse.error || 'All AI providers failed',
+          success: false,
           code: aiResponse.errorCode || 'PROVIDER_DOWN',
-          message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.'
+          http_status: 503,
+          message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.',
+          provider: aiResponse.provider,
+          details: aiResponse.error
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 503,
+          status: 200, // Normalize to 200 for structured errors
         }
       );
     }

@@ -372,13 +372,27 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
 
   } catch (error: any) {
     console.error('[enrich-odoo-attributes] Erreur globale:', error);
+    
+    // Determine error code
+    let errorCode = 'INTERNAL_ERROR';
+    let httpStatus = 500;
+    
+    if (error.message?.includes('provider') || error.message?.includes('AI')) {
+      errorCode = 'PROVIDER_DOWN';
+      httpStatus = 503;
+    }
+    
+    // Return 200 with structured error for better client UX
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        success: false,
+        code: errorCode,
+        http_status: httpStatus,
+        message: error.message || 'Erreur lors de l\'enrichissement des attributs',
         details: error.toString()
       }),
       { 
-        status: 500, 
+        status: 200, // Normalize to 200
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
