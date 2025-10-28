@@ -43,8 +43,8 @@ serve(async (req) => {
 
     const { analysisIds } = await req.json();
 
-    console.log('[EXPORT-SHOPIFY] Starting export for user:', user.id);
-    console.log('[EXPORT-SHOPIFY] Analysis IDs:', analysisIds);
+  console.log('[EXPORT-SHOPIFY] Starting Shopify export for user:', user.id);
+  console.log('[EXPORT-SHOPIFY] Analysis IDs to export:', analysisIds);
 
     // Get Shopify configuration
     const { data: config, error: configError } = await supabase
