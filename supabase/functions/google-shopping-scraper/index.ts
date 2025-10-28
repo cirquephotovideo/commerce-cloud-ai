@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -99,7 +100,7 @@ async function searchWithSerper(productName: string, maxResults: number, apiKey:
 }
 
 // Fonction pour extraire les données depuis une URL directe
-async function extractFromUrl(url: string, lovableApiKey: string): Promise<ProductResult[]> {
+async function extractFromUrl(url: string, supabaseUrl: string, supabaseKey: string): Promise<ProductResult[]> {
   console.log('Direct URL - Extraction depuis:', url);
   
   try {
@@ -196,27 +197,28 @@ Extrait au format JSON:
   "availability": "in_stock|out_of_stock|unknown"
 }`;
 
-      const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lovableApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const aiResult = await callAIWithFallback(
+        'google-shopping-scraper',
+        supabaseUrl,
+        supabaseKey,
+        {
           model: 'google/gemini-2.5-flash',
           messages: [{ role: 'user', content: aiPrompt }],
-        }),
-      });
+          temperature: 0.3,
+          max_tokens: 500
+        }
+      );
 
-      const aiData = await aiResponse.json();
-      const content = aiData.choices[0].message.content;
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      
-      if (jsonMatch) {
-        const extracted = JSON.parse(jsonMatch[0]);
-        price = price || extracted.price;
-        currency = currency || extracted.currency || 'EUR';
-        availability = availability === 'unknown' ? (extracted.availability || 'unknown') : availability;
+      if (aiResult.success && aiResult.content) {
+        const content = aiResult.content;
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        
+        if (jsonMatch) {
+          const extracted = JSON.parse(jsonMatch[0]);
+          price = price || extracted.price;
+          currency = currency || extracted.currency || 'EUR';
+          availability = availability === 'unknown' ? (extracted.availability || 'unknown') : availability;
+        }
       }
     }
 
@@ -240,7 +242,7 @@ Extrait au format JSON:
 }
 
 // Fonction pour parser les résultats Google Custom Search avec IA
-async function parseGoogleResults(items: any[], lovableApiKey: string): Promise<ProductResult[]> {
+async function parseGoogleResults(items: any[], supabaseUrl: string, supabaseKey: string): Promise<ProductResult[]> {
   const analysisPrompt = `Analyse ces résultats de recherche Google et extrais les informations produit de manière structurée.
 
 Résultats: ${JSON.stringify(items)}
@@ -273,22 +275,25 @@ Format JSON strict:
   }]
 }`;
 
-  const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${lovableApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  const aiResult = await callAIWithFallback(
+    'google-shopping-scraper',
+    supabaseUrl,
+    supabaseKey,
+    {
       model: 'google/gemini-2.5-flash',
       messages: [{ role: 'user', content: analysisPrompt }],
-    }),
-  });
+      temperature: 0.3,
+      max_tokens: 1500
+    }
+  );
 
-  const aiData = await aiResponse.json();
+  if (!aiResult.success || !aiResult.content) {
+    console.error('AI fallback failed:', aiResult.error);
+    return [];
+  }
   
   try {
-    const content = aiData.choices[0].message.content;
+    const content = aiResult.content;
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     const extractedData = jsonMatch ? JSON.parse(jsonMatch[0]) : { products: [] };
     return extractedData.products || [];
@@ -396,7 +401,7 @@ serve(async (req) => {
     if (productUrl) {
       provider = 'Direct URL';
       console.log('📍 Mode Direct URL:', productUrl);
-      results = await extractFromUrl(productUrl, LOVABLE_API_KEY!);
+      results = await extractFromUrl(productUrl, supabaseUrl, supabaseKey);
     }
     // MODE 2: Recherche par nom de produit
     else if (productName) {
@@ -433,7 +438,7 @@ serve(async (req) => {
           }
         } else if (searchData.items && searchData.items.length > 0) {
           console.log('✅ Google CSE - Résultats trouvés:', searchData.items.length);
-          results = await parseGoogleResults(searchData.items, LOVABLE_API_KEY!);
+          results = await parseGoogleResults(searchData.items, supabaseUrl, supabaseKey);
         } else {
           console.log('⚠️ Google CSE - Aucun résultat');
           if (SERPER_API_KEY) {
@@ -599,6 +604,7 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     });
     
+    // Return 200 with structured error to avoid "non-2xx status code" errors in UI
     return new Response(JSON.stringify({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Erreur inconnue',
@@ -606,7 +612,7 @@ serve(async (req) => {
       provider,
       response_time_ms: elapsed,
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

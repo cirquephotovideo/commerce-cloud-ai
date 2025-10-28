@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0';
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,20 +73,24 @@ serve(async (req) => {
             }]
           }`;
 
-          const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
+          const aiResult = await callAIWithFallback(
+            'market-intelligence',
+            supabaseUrl,
+            supabaseKey,
+            {
               model: 'google/gemini-2.5-flash',
               messages: [{ role: 'user', content: analysisPrompt }],
-            }),
-          });
+              temperature: 0.3,
+              max_tokens: 1000
+            }
+          );
 
-          const aiData = await aiResponse.json();
-          const extractedData = JSON.parse(aiData.choices[0].message.content);
+          if (!aiResult.success || !aiResult.content) {
+            console.error(`AI failed for ${site.site_name}:`, aiResult.error);
+            continue;
+          }
+
+          const extractedData = JSON.parse(aiResult.content);
 
           // Sauvegarder les données de monitoring
           for (const product of extractedData.products || []) {
@@ -146,11 +151,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Erreur market intelligence:', error);
+    // Return 200 with structured error to avoid "non-2xx status code" errors in UI
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error instanceof Error ? error.message : 'Erreur inconnue' 
+      error: error instanceof Error ? error.message : 'Erreur inconnue',
+      code: 'INTERNAL_ERROR'
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
