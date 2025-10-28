@@ -35,6 +35,8 @@ export const APIKeyManagement = () => {
         .from('amazon_credentials')
         .select('*')
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (credData) {
