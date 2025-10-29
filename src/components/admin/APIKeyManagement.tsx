@@ -3,11 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Package, CheckCircle, RefreshCw, AlertCircle, Eye, EyeOff, Save } from "lucide-react";
+import { Package, CheckCircle, RefreshCw, AlertCircle, Eye, EyeOff, Save, ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AmazonHealthStatus } from "./AmazonHealthStatus";
 import { AmazonSetupGuide } from "./AmazonSetupGuide";
 import { AmazonErrorTester } from "./AmazonErrorTester";
@@ -20,6 +21,7 @@ export const APIKeyManagement = () => {
   const [amazonLoading, setAmazonLoading] = useState(false);
   const [amazonTesting, setAmazonTesting] = useState(false);
   const [amazonRotating, setAmazonRotating] = useState(false);
+  const [amazonAuthorizing, setAmazonAuthorizing] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
@@ -28,6 +30,10 @@ export const APIKeyManagement = () => {
   const [secretExpiresAt, setSecretExpiresAt] = useState<string | null>(null);
   const [lastRotationAt, setLastRotationAt] = useState<string | null>(null);
   const [lastErrorCode, setLastErrorCode] = useState<string | null>(null);
+  
+  // OAuth state
+  const [appId, setAppId] = useState('');
+  const [region, setRegion] = useState<'EU' | 'NA' | 'FE'>('EU');
 
   const fetchAmazonData = async () => {
     try {
@@ -54,6 +60,31 @@ export const APIKeyManagement = () => {
 
   useEffect(() => {
     fetchAmazonData();
+    
+    // Vérifier les paramètres URL pour succès/erreur OAuth
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('amazon_success');
+    const error = params.get('amazon_error');
+    
+    if (success) {
+      toast({
+        title: "✅ Autorisation réussie",
+        description: success,
+      });
+      // Nettoyer l'URL
+      window.history.replaceState({}, '', '/admin');
+      fetchAmazonData();
+    }
+    
+    if (error) {
+      toast({
+        title: "❌ Erreur d'autorisation",
+        description: error,
+        variant: "destructive",
+      });
+      // Nettoyer l'URL
+      window.history.replaceState({}, '', '/admin');
+    }
   }, []);
 
   const handleSaveAmazon = async () => {
@@ -190,6 +221,39 @@ export const APIKeyManagement = () => {
     }
   };
 
+  const handleAuthorizeAmazon = async () => {
+    if (!appId) {
+      toast({
+        title: "❌ App ID requis",
+        description: "Veuillez saisir votre SP-API App ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAmazonAuthorizing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('amazon-oauth-start', {
+        body: { appId, region }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.authUrl) {
+        // Ouvrir la page de consentement Amazon
+        window.location.href = data.authUrl;
+      }
+    } catch (error) {
+      console.error('Amazon authorization error:', error);
+      toast({
+        title: "❌ Erreur d'autorisation",
+        description: error instanceof Error ? error.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+      setAmazonAuthorizing(false);
+    }
+  };
+
   const getDaysUntilExpiry = () => {
     if (!secretExpiresAt) return null;
     const expiryDate = new Date(secretExpiresAt);
@@ -242,7 +306,64 @@ export const APIKeyManagement = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <AmazonHealthStatus />
+            
+            {/* Section OAuth recommandée */}
+            <Alert className="border-primary">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Méthode recommandée :</strong> Utilisez le bouton "Autoriser avec Amazon" ci-dessous pour configurer automatiquement vos credentials via OAuth.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+              <h3 className="font-semibold flex items-center gap-2">
+                <ExternalLink className="h-4 w-4" />
+                Autorisation OAuth Amazon
+              </h3>
+              
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="app-id">SP-API App ID *</Label>
+                  <Input
+                    id="app-id"
+                    type="text"
+                    value={appId}
+                    onChange={(e) => setAppId(e.target.value)}
+                    placeholder="amzn1.sp.solution.xxx"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Depuis Seller Central → Apps & Services → Develop Apps
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="region">Région</Label>
+                  <Select value={region} onValueChange={(value: 'EU' | 'NA' | 'FE') => setRegion(value)}>
+                    <SelectTrigger id="region">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EU">Europe (EU)</SelectItem>
+                      <SelectItem value="NA">Amérique du Nord (NA)</SelectItem>
+                      <SelectItem value="FE">Extrême-Orient (FE)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAuthorizeAmazon}
+                disabled={amazonAuthorizing || !appId}
+                className="w-full"
+                size="lg"
+              >
+                <ExternalLink className={`mr-2 h-4 w-4 ${amazonAuthorizing ? 'animate-pulse' : ''}`} />
+                {amazonAuthorizing ? "Redirection en cours..." : "🔐 Autoriser avec Amazon"}
+              </Button>
+            </div>
+
             <AmazonSetupGuide errorCode={lastErrorCode} />
+            
             {clientId && (
               <div className="space-y-2">
                 <Alert>
