@@ -274,7 +274,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.amazon-oauth-start]
-verify_jwt = true
+verify_jwt = false
 
 [functions.amazon-oauth-callback]
 verify_jwt = false
