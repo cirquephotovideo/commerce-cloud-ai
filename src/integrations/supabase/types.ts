@@ -2716,6 +2716,7 @@ export type Database = {
           description: string | null
           id: string
           image_url: string | null
+          is_active: boolean
           previous_price: number | null
           price_change_percent: number | null
           price_trend: number | null
@@ -2739,6 +2740,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          is_active?: boolean
           previous_price?: number | null
           price_change_percent?: number | null
           price_trend?: number | null
@@ -2762,6 +2764,7 @@ export type Database = {
           description?: string | null
           id?: string
           image_url?: string | null
+          is_active?: boolean
           previous_price?: number | null
           price_change_percent?: number | null
           price_trend?: number | null
