@@ -40,6 +40,7 @@ export const AnalyzerSection = () => {
   const [inputType, setInputType] = useState<"url" | "name" | "barcode">("name");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [analysisId, setAnalysisId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const { canUseFeature } = useSubscription();
 
@@ -125,15 +126,22 @@ export const AnalyzerSection = () => {
       // Auto-save if user is logged in
       if (user) {
         try {
-          const { error: saveError } = await supabase
+          const { data: savedAnalysis, error: saveError } = await supabase
             .from("product_analyses")
             .insert({
               user_id: user.id,
               product_url: productInput,
               analysis_result: finalAnalysis,
-            });
+            })
+            .select()
+            .single();
 
           if (saveError) throw saveError;
+
+          // Save the analysis ID for Deep Research
+          if (savedAnalysis) {
+            setAnalysisId(savedAnalysis.id);
+          }
 
           // Track usage
           await trackUsage("product_analyses");
@@ -274,6 +282,7 @@ export const AnalyzerSection = () => {
               analysis={results.analysis} 
               productInput={results.productInput}
               inputType={results.inputType}
+              analysisId={analysisId}
             />
           </div>
         )}

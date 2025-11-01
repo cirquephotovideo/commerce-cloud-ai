@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ImageOptimization } from "./ImageOptimization";
+import { DeepResearchButton } from "./DeepResearchButton";
 import { 
   Search, 
   TrendingUp, 
@@ -20,9 +21,10 @@ interface AnalysisResultsProps {
   analysis: any;
   productInput: string;
   inputType: string;
+  analysisId?: string | null;
 }
 
-export const AnalysisResults = ({ analysis, productInput, inputType }: AnalysisResultsProps) => {
+export const AnalysisResults = ({ analysis, productInput, inputType, analysisId }: AnalysisResultsProps) => {
   if (!analysis || analysis.error || analysis.raw_analysis) {
     return (
       <Card className="bg-card border-border backdrop-blur-sm shadow-card p-6">
@@ -49,13 +51,32 @@ export const AnalysisResults = ({ analysis, productInput, inputType }: AnalysisR
     <div className="space-y-6">
       {/* Header */}
       <Card className="bg-gradient-primary border-border backdrop-blur-sm shadow-card p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2 flex-1">
             <Badge variant="secondary" className="mb-2">
               {inputType === 'url' ? 'URL' : inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}
             </Badge>
             <h2 className="text-3xl font-bold">{analysis.product_name || productInput}</h2>
             <p className="text-muted-foreground">{productInput}</p>
+            
+            {/* Deep Research Button */}
+            {analysisId && (
+              <div className="mt-4">
+                <DeepResearchButton
+                  analysisId={analysisId}
+                  productData={{
+                    name: analysis.product_name || productInput,
+                    brand: analysis.brand,
+                    supplier_reference: analysis.supplier_reference,
+                    ean: analysis.ean || analysis.barcode,
+                  }}
+                  purchasePrice={analysis.pricing?.estimated_price ? 
+                    parseFloat(analysis.pricing.estimated_price.replace(/[^0-9.]/g, '')) : 
+                    undefined
+                  }
+                />
+              </div>
+            )}
           </div>
           {analysis.global_report?.overall_score && (
             <div className="text-center">
