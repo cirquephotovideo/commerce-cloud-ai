@@ -279,3 +279,6 @@ verify_jwt = false
 [functions.amazon-oauth-callback]
 verify_jwt = false
 
+[functions.deep-research-enrichment]
+verify_jwt = true
+
