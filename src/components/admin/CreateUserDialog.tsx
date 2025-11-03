@@ -28,59 +28,32 @@ export const CreateUserDialog = ({ open, onOpenChange, onSuccess }: CreateUserDi
     setLoading(true);
 
     try {
-      // Vérifier que l'utilisateur connecté est super_admin
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Non authentifié");
-      
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (roleData?.role !== "super_admin") {
-        toast({
-          title: "Accès refusé",
-          description: "Seuls les super admins peuvent créer des utilisateurs",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-      // Créer l'utilisateur via l'API Supabase Auth Admin
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: formData.fullName
-        }
+      // Call the secure server-side edge function
+      const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.fullName,
+          role: formData.role,
+        },
       });
 
-      if (authError) throw authError;
-
-      if (authData.user) {
-        // Attribuer le rôle si différent de 'user'
-        if (formData.role !== "user") {
-          const { error: roleError } = await supabase
-            .from("user_roles")
-            .insert({
-              user_id: authData.user.id,
-              role: formData.role as any
-            });
-
-          if (roleError) throw roleError;
-        }
-
-        toast({
-          title: "Succès",
-          description: "Utilisateur créé avec succès",
-        });
-
-        onSuccess();
-        onOpenChange(false);
-        setFormData({ email: "", password: "", fullName: "", role: "user" });
+      if (error) {
+        throw new Error(error.message || "Erreur lors de la création de l'utilisateur");
       }
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Erreur lors de la création de l'utilisateur");
+      }
+
+      toast({
+        title: "Succès",
+        description: `Utilisateur ${data.user.email} créé avec succès`,
+      });
+
+      onSuccess();
+      onOpenChange(false);
+      setFormData({ email: "", password: "", fullName: "", role: "user" });
     } catch (error: any) {
       console.error("Error creating user:", error);
       toast({

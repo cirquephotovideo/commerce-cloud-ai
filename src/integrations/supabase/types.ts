@@ -4667,6 +4667,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_supplier_password: {
+        Args: { p_supplier_id: string }
+        Returns: string
+      }
       get_user_email: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
@@ -4676,6 +4680,10 @@ export type Database = {
         Returns: boolean
       }
       is_valid_ean13: { Args: { ean: string }; Returns: boolean }
+      migrate_supplier_password_to_vault: {
+        Args: { p_plain_password: string; p_supplier_id: string }
+        Returns: string
+      }
       should_execute_automation_rule: {
         Args: {
           p_last_triggered_at: string
