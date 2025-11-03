@@ -36,7 +36,8 @@ serve(async (req) => {
       .single();
 
     if (!mcpConfig) {
-      throw new Error(`Package MCP ${packageId} non configuré ou désactivé`);
+      console.error(`[MCP-PROXY] Config not found for user ${user.id}, package ${packageId}`);
+      throw new Error(`Package MCP "${packageId}" non configuré, inactif ou désactivé pour cet utilisateur`);
     }
 
     // Vérifier si l'outil est autorisé

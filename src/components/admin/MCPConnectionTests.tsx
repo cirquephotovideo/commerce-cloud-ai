@@ -64,13 +64,16 @@ export const MCPConnectionTests = () => {
         throw new Error(`Aucun outil de test disponible pour ${platform.platform_type}`);
       }
 
+      console.log(`[TEST] Testing platform: ${platform.platform_type} (ID: ${platformId})`);
+      console.log(`[TEST] Test config:`, testConfig);
+
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
 
       // Appeler l'edge function mcp-proxy
       const { data, error } = await supabase.functions.invoke('mcp-proxy', {
         body: {
-          packageId: platformId,
+          packageId: platform.platform_type,
           toolName: testConfig.tool,
           args: testConfig.args,
         },
