@@ -4017,6 +4017,7 @@ export type Database = {
           delivery_time_days: number | null
           description: string | null
           ean: string | null
+          enrichment_error_message: string | null
           enrichment_progress: number | null
           enrichment_status: string | null
           id: string
@@ -4038,6 +4039,7 @@ export type Database = {
           delivery_time_days?: number | null
           description?: string | null
           ean?: string | null
+          enrichment_error_message?: string | null
           enrichment_progress?: number | null
           enrichment_status?: string | null
           id?: string
@@ -4059,6 +4061,7 @@ export type Database = {
           delivery_time_days?: number | null
           description?: string | null
           ean?: string | null
+          enrichment_error_message?: string | null
           enrichment_progress?: number | null
           enrichment_status?: string | null
           id?: string
