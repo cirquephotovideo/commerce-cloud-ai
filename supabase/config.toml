@@ -4,7 +4,7 @@ project_id = "ayjdtstugbqoadgipzon"
 verify_jwt = false
 
 [functions.ai-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-email-campaign]
 verify_jwt = true
@@ -13,10 +13,10 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.product-analyzer]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.export-to-odoo]
 verify_jwt = true
