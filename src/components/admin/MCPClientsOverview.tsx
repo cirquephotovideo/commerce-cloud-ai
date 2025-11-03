@@ -3,9 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Activity, CheckCircle2, XCircle, Settings } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Activity, CheckCircle2, XCircle, Settings, FileText, TestTube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { MCPCallLogs } from "./MCPCallLogs";
+import { MCPConnectionTests } from "./MCPConnectionTests";
 
 // Types de plateformes avec icônes
 const PLATFORM_ICONS: Record<string, string> = {
@@ -105,123 +108,153 @@ export const MCPClientsOverview = () => {
         </p>
       </div>
 
-      {/* Cartes de statistiques */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Plateformes</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Toutes les intégrations
-            </p>
-          </CardContent>
-        </Card>
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Vue d'ensemble
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Logs d'appels
+          </TabsTrigger>
+          <TabsTrigger value="tests" className="flex items-center gap-2">
+            <TestTube className="h-4 w-4" />
+            Tests
+          </TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actives</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.active}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              En service
-            </p>
-          </CardContent>
-        </Card>
+        {/* Onglet Vue d'ensemble */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* Cartes de statistiques */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Plateformes</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.total}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Toutes les intégrations
+                </p>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Inactives</CardTitle>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">{stats.inactive}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Hors service
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Actives</CardTitle>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">{stats.active}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  En service
+                </p>
+              </CardContent>
+            </Card>
 
-      {/* Tableau des plateformes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Plateformes Configurées</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {platforms && platforms.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Plateforme</TableHead>
-                  <TableHead>URL</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Dernière MAJ</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {platforms.map((platform) => (
-                  <TableRow key={platform.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <span>{PLATFORM_ICONS[platform.platform_type] || "🔌"}</span>
-                        <span className="capitalize">{platform.platform_type.replace('_', ' ')}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
-                      {platform.platform_url || "Non configuré"}
-                    </TableCell>
-                    <TableCell>
-                      {platform.is_active ? (
-                        <Badge className="bg-green-500 hover:bg-green-600">
-                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">
-                          <XCircle className="h-3 w-3 mr-1" />
-                          Inactive
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(platform.updated_at).toLocaleDateString('fr-FR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => togglePlatformStatus(platform.id, platform.is_active)}
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-medium">Aucune plateforme configurée</p>
-              <p className="text-sm">Configurez vos premières intégrations pour commencer</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Inactives</CardTitle>
+                <XCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-muted-foreground">{stats.inactive}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Hors service
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tableau des plateformes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Plateformes Configurées</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {platforms && platforms.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Plateforme</TableHead>
+                      <TableHead>URL</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Dernière MAJ</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {platforms.map((platform) => (
+                      <TableRow key={platform.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{PLATFORM_ICONS[platform.platform_type] || "🔌"}</span>
+                            <span className="capitalize">{platform.platform_type.replace('_', ' ')}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                          {platform.platform_url || "Non configuré"}
+                        </TableCell>
+                        <TableCell>
+                          {platform.is_active ? (
+                            <Badge className="bg-green-500 hover:bg-green-600">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Inactive
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(platform.updated_at).toLocaleDateString('fr-FR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => togglePlatformStatus(platform.id, platform.is_active)}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p className="text-lg font-medium">Aucune plateforme configurée</p>
+                  <p className="text-sm">Configurez vos premières intégrations pour commencer</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Onglet Logs d'appels */}
+        <TabsContent value="logs">
+          <MCPCallLogs />
+        </TabsContent>
+
+        {/* Onglet Tests de connexion */}
+        <TabsContent value="tests">
+          <MCPConnectionTests />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
