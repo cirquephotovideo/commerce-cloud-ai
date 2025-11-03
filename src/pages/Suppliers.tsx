@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SupplierSyncHealth } from "@/components/supplier/SupplierSyncHealth";
+import { SupplierLogsPanel } from "@/components/supplier/SupplierLogsPanel";
 
 // Progress cell component
 function SupplierProgressCell({ supplierId }: { supplierId: string }) {
@@ -564,6 +565,9 @@ export default function Suppliers() {
 
       {/* Dashboard de synchronisation */}
       <SupplierSyncHealth />
+      
+      {/* Panel de logs en direct */}
+      <SupplierLogsPanel />
 
       {/* Alertes système */}
       <div className="space-y-3">
