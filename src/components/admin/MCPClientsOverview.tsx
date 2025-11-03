@@ -4,11 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, CheckCircle2, XCircle, Settings, FileText, TestTube } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, Settings, FileText, TestTube, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { MCPCallLogs } from "./MCPCallLogs";
 import { MCPConnectionTests } from "./MCPConnectionTests";
+import { MCPMonitoringWidget } from "./MCPMonitoringWidget";
+import { MCPDocumentation } from "./MCPDocumentation";
+import { MCPRateLimitDisplay } from "./MCPRateLimitDisplay";
 
 // Types de plateformes avec icônes
 const PLATFORM_ICONS: Record<string, string> = {
@@ -109,23 +112,36 @@ export const MCPClientsOverview = () => {
       </div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-[600px]">
+        <TabsList className="grid w-full grid-cols-5 lg:w-[900px]">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             Vue d'ensemble
           </TabsTrigger>
           <TabsTrigger value="logs" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Logs d'appels
+            Logs
           </TabsTrigger>
           <TabsTrigger value="tests" className="flex items-center gap-2">
             <TestTube className="h-4 w-4" />
             Tests
           </TabsTrigger>
+          <TabsTrigger value="monitoring" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Monitoring
+          </TabsTrigger>
+          <TabsTrigger value="documentation" className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            Documentation
+          </TabsTrigger>
         </TabsList>
 
         {/* Onglet Vue d'ensemble */}
         <TabsContent value="overview" className="space-y-6">
+          {/* Rate Limits Display */}
+          {platforms && platforms.length > 0 && (
+            <MCPRateLimitDisplay platforms={platforms} />
+          )}
+
           {/* Cartes de statistiques */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -253,6 +269,16 @@ export const MCPClientsOverview = () => {
         {/* Onglet Tests de connexion */}
         <TabsContent value="tests">
           <MCPConnectionTests />
+        </TabsContent>
+
+        {/* Onglet Monitoring */}
+        <TabsContent value="monitoring">
+          <MCPMonitoringWidget />
+        </TabsContent>
+
+        {/* Onglet Documentation */}
+        <TabsContent value="documentation">
+          <MCPDocumentation />
         </TabsContent>
       </Tabs>
     </div>

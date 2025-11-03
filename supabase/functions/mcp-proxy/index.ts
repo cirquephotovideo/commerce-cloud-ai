@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { getCachedOrFetch } from '../_shared/mcp-cache.ts';
+import { retryWithBackoff } from '../_shared/retry-with-backoff.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,22 +48,70 @@ serve(async (req) => {
       throw new Error(`Outil ${toolName} non autorisé pour ce package`);
     }
 
+    // ===== RATE LIMITING CHECK =====
+    const { data: rateLimitCheck, error: rateLimitError } = await supabaseClient.rpc(
+      'check_and_update_rate_limit',
+      { p_user_id: user.id, p_package_id: packageId }
+    );
+
+    if (rateLimitError) {
+      console.error(`[MCP-PROXY] Rate limit check error:`, rateLimitError);
+    }
+
+    if (rateLimitCheck && !rateLimitCheck.allowed) {
+      console.warn(`[MCP-PROXY] Rate limit exceeded for user ${user.id}, package ${packageId}`);
+      console.warn(`[MCP-PROXY] Current: ${rateLimitCheck.current_count}/${rateLimitCheck.limit}`);
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Rate limit exceeded',
+          message: `Limite de ${rateLimitCheck.limit} appels/heure atteinte pour ${packageId}`,
+          retry_after: rateLimitCheck.retry_after_seconds,
+          reset_at: rateLimitCheck.reset_at,
+          current_count: rateLimitCheck.current_count,
+          limit: rateLimitCheck.limit
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json',
+            'X-RateLimit-Limit': rateLimitCheck.limit.toString(),
+            'X-RateLimit-Remaining': (rateLimitCheck.limit - rateLimitCheck.current_count).toString(),
+            'X-RateLimit-Reset': rateLimitCheck.reset_at,
+            'Retry-After': rateLimitCheck.retry_after_seconds.toString()
+          }
+        }
+      );
+    }
+
+    console.log(`[MCP-PROXY] Rate limit OK: ${rateLimitCheck?.current_count || 0}/${rateLimitCheck?.limit || 'N/A'}`);
+
     // Extraire les credentials depuis additional_config
     const additionalConfig = mcpConfig.additional_config as any;
     const credentials = additionalConfig?.credentials || {};
 
-    // Router vers le bon endpoint selon le package
-    let result;
-    
-    if (packageId.includes('odoo')) {
-      result = await callOdooTool(toolName, args, credentials, mcpConfig.platform_url);
-    } else if (packageId.includes('prestashop')) {
-      result = await callPrestaShopTool(toolName, args, credentials, mcpConfig.platform_url);
-    } else if (packageId.includes('amazon')) {
-      result = await callAmazonTool(toolName, args, credentials);
-    } else {
-      throw new Error(`Package ${packageId} non supporté`);
-    }
+    // ===== CACHE INTEGRATION =====
+    const cacheKey = `mcp:${packageId}:${toolName}:${JSON.stringify(args)}`;
+    const cacheTTL = packageId.includes('amazon') ? 10 : packageId.includes('odoo') ? 5 : 2;
+
+    const { data: result, cached } = await getCachedOrFetch(
+      supabaseClient,
+      cacheKey,
+      async () => {
+        if (packageId.includes('odoo')) {
+          return await callOdooTool(toolName, args, credentials, mcpConfig.platform_url);
+        } else if (packageId.includes('prestashop')) {
+          return await callPrestaShopTool(toolName, args, credentials, mcpConfig.platform_url);
+        } else if (packageId.includes('amazon')) {
+          return await callAmazonTool(toolName, args, credentials);
+        } else {
+          throw new Error(`Package ${packageId} non supporté`);
+        }
+      },
+      cacheTTL
+    );
 
     // Logger l'appel dans mcp_call_logs et audit_logs
     await supabaseClient.from('mcp_call_logs').insert({
@@ -69,10 +119,10 @@ serve(async (req) => {
       package_id: packageId,
       tool_name: toolName,
       request_args: args,
-      response_data: result,
+      response_data: { ...result, _cached: cached },
       success: result.success,
       error_message: ('error' in result ? result.error : null) as string | null,
-      latency_ms: ('latency_ms' in result ? result.latency_ms : null) as number | null
+      latency_ms: cached ? 0 : (('latency_ms' in result ? result.latency_ms : null) as number | null)
     });
 
     await supabaseClient.from('audit_logs').insert({
@@ -84,12 +134,44 @@ serve(async (req) => {
         package: packageId,
         tool: toolName,
         args: args,
-        success: result.success
+        success: result.success,
+        cached: cached
       }
     });
 
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    // ===== WEBHOOK NOTIFICATION ON FAILURE =====
+    if (!result.success) {
+      const { data: recentFailures } = await supabaseClient
+        .from('mcp_call_logs')
+        .select('success')
+        .eq('user_id', user.id)
+        .eq('package_id', packageId)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      const consecutiveFailures = recentFailures?.filter(f => !f.success).length || 0;
+
+      if (consecutiveFailures >= 3) {
+        console.log(`[MCP-PROXY] 3 consecutive failures detected, triggering webhook`);
+        
+        supabaseClient.functions.invoke('mcp-webhook-notifier', {
+          body: {
+            user_id: user.id,
+            event: 'error_threshold',
+            package_id: packageId,
+            message: `3 échecs consécutifs détectés pour ${packageId}`,
+            metadata: { tool_name: toolName, last_error: result.error }
+          }
+        }).catch(err => console.error('[WEBHOOK] Failed to notify:', err));
+      }
+    }
+
+    return new Response(JSON.stringify({ ...result, _cached: cached }), {
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'X-Cache-Status': cached ? 'HIT' : 'MISS'
+      },
     });
   } catch (error) {
     console.error('Error in mcp-proxy:', error);
@@ -106,11 +188,12 @@ async function callOdooTool(toolName: string, args: any, credentials: any, serve
   const startTime = Date.now();
   
   try {
-    // Étape 1: Authentification Odoo via XML-RPC
-    const authResponse = await fetch(`${serverUrl}/xmlrpc/2/common`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml' },
-      body: `<?xml version="1.0"?>
+    // Étape 1: Authentification Odoo via XML-RPC avec retry
+    const authResponse = await retryWithBackoff(
+      () => fetch(`${serverUrl}/xmlrpc/2/common`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml' },
+        body: `<?xml version="1.0"?>
 <methodCall>
   <methodName>authenticate</methodName>
   <params>
@@ -120,7 +203,11 @@ async function callOdooTool(toolName: string, args: any, credentials: any, serve
     <param><value><struct></struct></value></param>
   </params>
 </methodCall>`
-    });
+      }),
+      3,
+      1000,
+      'Odoo Authentication'
+    );
 
     if (!authResponse.ok) {
       throw new Error(`Odoo authentication failed: ${authResponse.status}`);

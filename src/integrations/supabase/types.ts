@@ -2155,6 +2155,30 @@ export type Database = {
         }
         Relationships: []
       }
+      mcp_cache: {
+        Row: {
+          cache_key: string
+          cache_value: Json
+          created_at: string | null
+          expires_at: string
+          id: string
+        }
+        Insert: {
+          cache_key: string
+          cache_value: Json
+          created_at?: string | null
+          expires_at: string
+          id?: string
+        }
+        Update: {
+          cache_key?: string
+          cache_value?: Json
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+        }
+        Relationships: []
+      }
       mcp_call_logs: {
         Row: {
           created_at: string | null
@@ -2191,6 +2215,96 @@ export type Database = {
           success?: boolean
           tool_name?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_health_checks: {
+        Row: {
+          consecutive_failures: number | null
+          created_at: string | null
+          id: string
+          is_healthy: boolean | null
+          last_check_at: string | null
+          last_error_message: string | null
+          package_id: string
+        }
+        Insert: {
+          consecutive_failures?: number | null
+          created_at?: string | null
+          id?: string
+          is_healthy?: boolean | null
+          last_check_at?: string | null
+          last_error_message?: string | null
+          package_id: string
+        }
+        Update: {
+          consecutive_failures?: number | null
+          created_at?: string | null
+          id?: string
+          is_healthy?: boolean | null
+          last_check_at?: string | null
+          last_error_message?: string | null
+          package_id?: string
+        }
+        Relationships: []
+      }
+      mcp_rate_limits: {
+        Row: {
+          call_count: number | null
+          created_at: string | null
+          id: string
+          package_id: string
+          user_id: string
+          window_start: string | null
+        }
+        Insert: {
+          call_count?: number | null
+          created_at?: string | null
+          id?: string
+          package_id: string
+          user_id: string
+          window_start?: string | null
+        }
+        Update: {
+          call_count?: number | null
+          created_at?: string | null
+          id?: string
+          package_id?: string
+          user_id?: string
+          window_start?: string | null
+        }
+        Relationships: []
+      }
+      mcp_webhooks: {
+        Row: {
+          created_at: string | null
+          events: string[]
+          id: string
+          is_active: boolean | null
+          last_triggered_at: string | null
+          secret_token: string
+          user_id: string
+          webhook_url: string
+        }
+        Insert: {
+          created_at?: string | null
+          events?: string[]
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          secret_token: string
+          user_id: string
+          webhook_url: string
+        }
+        Update: {
+          created_at?: string | null
+          events?: string[]
+          id?: string
+          is_active?: boolean | null
+          last_triggered_at?: string | null
+          secret_token?: string
+          user_id?: string
+          webhook_url?: string
         }
         Relationships: []
       }
@@ -4642,6 +4756,10 @@ export type Database = {
       }
     }
     Functions: {
+      check_and_update_rate_limit: {
+        Args: { p_package_id: string; p_user_id: string }
+        Returns: Json
+      }
       check_enrichment_timeouts: { Args: never; Returns: undefined }
       cleanup_old_amazon_logs: { Args: never; Returns: undefined }
       decrypt_email_password: {
