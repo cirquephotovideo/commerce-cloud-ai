@@ -69,11 +69,21 @@ export const PriceMonitoring = () => {
     setIsSearching(true);
     
     try {
+      // Ensure the user's JWT is forwarded to the edge function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
       const { data, error } = await supabase.functions.invoke('dual-search-engine', {
         body: {
           productName,
           competitorSiteIds: selectedSites,
-        }
+        },
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            }
+          : undefined,
       });
 
       if (error) {
