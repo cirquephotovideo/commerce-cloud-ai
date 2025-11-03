@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       .from('supplier_products')
       .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
-      .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+      .lt('last_updated', new Date(Date.now() - 10 * 60 * 1000).toISOString())
       .limit(100);
 
     if (stuckError) throw stuckError;
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
         .update({ 
           enrichment_status: 'pending',
           enrichment_error_message: null,
-          updated_at: new Date().toISOString()
+          last_updated: new Date().toISOString()
         })
         .eq('id', product.id);
 

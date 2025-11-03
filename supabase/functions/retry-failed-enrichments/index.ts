@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
         .update({ 
           enrichment_status: 'pending',
           enrichment_error_message: null,
-          updated_at: new Date().toISOString()
+          last_updated: new Date().toISOString()
         })
         .eq('id', product.id);
 

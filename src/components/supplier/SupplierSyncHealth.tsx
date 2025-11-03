@@ -80,7 +80,7 @@ export function SupplierSyncHealth() {
         .from('supplier_products')
         .select('*', { count: 'exact', head: true })
         .eq('enrichment_status', 'enriching')
-        .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+        .lt('last_updated', new Date(Date.now() - 10 * 60 * 1000).toISOString());
 
       // Get enrichment queue status with exact counts
       const [
@@ -537,6 +537,35 @@ export function SupplierSyncHealth() {
                       Relancer le processeur
                     </Button>
                   </>
+                )}
+                
+                {healthData.statusCounts.skipped > 0 && (
+                  <Button
+                    onClick={async () => {
+                      toast.info('🔄 Réactivation des produits ignorés...');
+                      try {
+                        const { error } = await supabase
+                          .from('supplier_products')
+                          .update({ enrichment_status: 'pending' })
+                          .eq('enrichment_status', 'skipped');
+                        
+                        if (error) throw error;
+                        
+                        toast.success('✅ Produits ignorés réactivés', {
+                          description: `${healthData.statusCounts.skipped} produits remis en file d'attente`
+                        });
+                        refetch();
+                        queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
+                      } catch (err: any) {
+                        toast.error('Erreur', { description: err.message });
+                      }
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Réactiver {healthData.statusCounts.skipped} ignorés
+                  </Button>
                 )}
               </div>
             </div>

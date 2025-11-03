@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
         .from('supplier_products')
         .update({ 
           enrichment_status: 'pending',
-          updated_at: new Date().toISOString()
+          last_updated: new Date().toISOString()
         })
         .in('id', productIdsToReset);
 
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
       .from('supplier_products')
       .select('id, user_id')
       .eq('enrichment_status', 'enriching')
-      .lt('updated_at', tenMinutesAgo)
+      .lt('last_updated', tenMinutesAgo)
       .limit(1000);
 
     if (stuckError) {
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
 
         await supabaseClient
           .from('supplier_products')
-          .update({ enrichment_status: 'pending', updated_at: new Date().toISOString() })
+          .update({ enrichment_status: 'pending', last_updated: new Date().toISOString() })
           .in('id', stuckOrphans.map(p => p.id));
 
         productsReset += stuckOrphans.length;
