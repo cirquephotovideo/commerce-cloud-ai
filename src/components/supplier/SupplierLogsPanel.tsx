@@ -2,10 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AlertCircle, CheckCircle2, Clock, TrendingUp, Mail } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useState } from "react";
 
 type LogEntry = {
   id: string;
@@ -17,6 +19,8 @@ type LogEntry = {
 };
 
 export function SupplierLogsPanel() {
+  const [filterSeverity, setFilterSeverity] = useState<'all' | 'errors' | 'success'>('all');
+  
   const { data: logs, isLoading } = useQuery({
     queryKey: ['supplier-logs'],
     queryFn: async () => {
@@ -106,6 +110,16 @@ export function SupplierLogsPanel() {
     refetchInterval: 5000, // Refresh every 5 seconds
   });
 
+  // Filtrer les logs selon la sévérité
+  const filteredLogs = logs?.filter(log => {
+    if (filterSeverity === 'errors') return log.type === 'error';
+    if (filterSeverity === 'success') return log.type === 'success';
+    return true;
+  });
+
+  const errorCount = logs?.filter(l => l.type === 'error').length || 0;
+  const successCount = logs?.filter(l => l.type === 'success').length || 0;
+
   const getLogColor = (type: LogEntry['type']) => {
     switch (type) {
       case 'error': return 'text-destructive';
@@ -149,10 +163,35 @@ export function SupplierLogsPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Filtres */}
+        <div className="flex gap-2 mb-4">
+          <Button 
+            size="sm" 
+            variant={filterSeverity === 'all' ? 'default' : 'outline'}
+            onClick={() => setFilterSeverity('all')}
+          >
+            Tout ({logs?.length || 0})
+          </Button>
+          <Button 
+            size="sm" 
+            variant={filterSeverity === 'errors' ? 'default' : 'outline'}
+            onClick={() => setFilterSeverity('errors')}
+          >
+            🔴 Erreurs ({errorCount})
+          </Button>
+          <Button 
+            size="sm" 
+            variant={filterSeverity === 'success' ? 'default' : 'outline'}
+            onClick={() => setFilterSeverity('success')}
+          >
+            ✅ Succès ({successCount})
+          </Button>
+        </div>
+
         <ScrollArea className="h-[400px] pr-4">
           <div className="space-y-3">
-            {logs && logs.length > 0 ? (
-              logs.map((log) => (
+            {filteredLogs && filteredLogs.length > 0 ? (
+              filteredLogs.map((log) => (
                 <div
                   key={log.id}
                   className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"

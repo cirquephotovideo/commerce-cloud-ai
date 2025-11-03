@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Clock, Loader2, Package, TrendingUp, Users, Play, Pause, SkipForward, RefreshCw } from "lucide-react";
+import { AlertCircle, Clock, Loader2, Package, TrendingUp, Users, Play, Pause, SkipForward, RefreshCw, HelpCircle } from "lucide-react";
 import { useSupplierSync } from "@/hooks/useSupplierSync";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export function SupplierSyncHealth() {
   const { 
@@ -21,6 +23,8 @@ export function SupplierSyncHealth() {
     isPausing, 
     isSkipping 
   } = useSupplierSync();
+  
+  const [isRunningDiagnostic, setIsRunningDiagnostic] = useState(false);
 
   // Check if enrichments are paused
   const { data: systemSettings } = useQuery({
@@ -132,6 +136,38 @@ export function SupplierSyncHealth() {
     ? ((healthData.recentJobs.success / healthData.recentJobs.total) * 100).toFixed(0)
     : '0';
 
+  const runDiagnostic = async () => {
+    setIsRunningDiagnostic(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('system-diagnostic');
+      
+      if (error) throw error;
+      
+      const { diagnosis } = data;
+      
+      if (diagnosis.severity === 'critical') {
+        toast.error(
+          `🚨 Problèmes critiques détectés`,
+          { description: diagnosis.issues.join(' • ') }
+        );
+      } else if (diagnosis.severity === 'warning') {
+        toast.warning(
+          `⚠️ Attention requise`,
+          { description: diagnosis.issues.join(' • ') }
+        );
+      } else {
+        toast.success('✅ Système en bonne santé');
+      }
+      
+      console.log('📊 Diagnostic complet:', diagnosis);
+    } catch (error) {
+      console.error('Erreur diagnostic:', error);
+      toast.error('Erreur lors du diagnostic système');
+    } finally {
+      setIsRunningDiagnostic(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {isPaused && (
@@ -153,6 +189,67 @@ export function SupplierSyncHealth() {
         </Alert>
       )}
 
+      {/* Alerte critique si nécessaire */}
+      {healthData && (healthData.statusCounts.failed > 0 || healthData.statusCounts.enriching > 1000) && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>🚨 Intervention requise</AlertTitle>
+          <AlertDescription className="space-y-3">
+            {healthData.statusCounts.failed > 0 && (
+              <p>• <strong>{healthData.statusCounts.failed} produits en erreur</strong> nécessitent une action</p>
+            )}
+            {healthData.statusCounts.enriching > 1000 && (
+              <p>• <strong>{healthData.statusCounts.enriching} produits bloqués</strong> en statut "enriching"</p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Button 
+                size="sm" 
+                variant="destructive" 
+                onClick={() => fixStuckEnrichments.mutate()}
+                disabled={isFixing}
+              >
+                {isFixing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Débloquer tout ({healthData.statusCounts.enriching})
+              </Button>
+              {healthData.statusCounts.failed > 0 && (
+                <>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => retryFailedEnrichments.mutate()}
+                    disabled={isRetrying}
+                  >
+                    {isRetrying ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      '🔄'
+                    )}
+                    Réessayer les erreurs ({healthData.statusCounts.failed})
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    onClick={() => skipFailedProducts.mutate()}
+                    disabled={isSkipping}
+                  >
+                    {isSkipping ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      '⏭️'
+                    )}
+                    Ignorer les erreurs
+                  </Button>
+                </>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className={hasIssues ? "border-amber-500" : ""}>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -170,6 +267,19 @@ export function SupplierSyncHealth() {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={runDiagnostic}
+                disabled={isRunningDiagnostic}
+              >
+                {isRunningDiagnostic ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  '🔍'
+                )}
+                Diagnostic complet
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -331,22 +441,112 @@ export function SupplierSyncHealth() {
             </div>
           )}
 
-          {/* Import Success Rate */}
+          {/* Section d'aide au diagnostic */}
           {healthData && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-medium">Taux de réussite (24h)</span>
-                </div>
-                <Badge>{successRate}%</Badge>
-              </div>
-              <Progress value={parseInt(successRate)} className="h-2" />
-              <p className="text-xs text-muted-foreground">
-                {healthData.recentJobs.success} réussis / {healthData.recentJobs.failed} échoués sur{' '}
-                {healthData.recentJobs.total} imports
-              </p>
-            </div>
+            healthData.statusCounts.enriching > 1000 || 
+            healthData.statusCounts.failed > 0 || 
+            (healthData.queuePending === 0 && healthData.queueProcessing === 0 && (healthData.stuckProducts > 0 || healthData.statusCounts.failed > 0))
+          ) && (
+            <Card className="border-blue-500 bg-blue-50/50">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <HelpCircle className="h-4 w-4" />
+                  Que faire maintenant ?
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {healthData.statusCounts.enriching > 1000 && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0">1️⃣</span>
+                    <div className="flex-1">
+                      <strong className="block mb-1">Débloquer les {healthData.statusCounts.enriching} produits bloqués</strong>
+                      <p className="text-muted-foreground text-xs mb-2">
+                        Ces produits sont en statut "enriching" mais n'ont pas de tâche dans la queue. Cliquez sur "Débloquer tout" pour créer les tâches manquantes.
+                      </p>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={() => fixStuckEnrichments.mutate()}
+                        disabled={isFixing}
+                      >
+                        {isFixing ? (
+                          <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        ) : (
+                          '🔓'
+                        )}
+                        Débloquer maintenant
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {healthData.statusCounts.failed > 0 && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0">2️⃣</span>
+                    <div className="flex-1">
+                      <strong className="block mb-1">Gérer les {healthData.statusCounts.failed} produits en erreur</strong>
+                      <p className="text-muted-foreground text-xs mb-2">
+                        Consultez les logs pour comprendre les erreurs, puis réessayez l'enrichissement ou ignorez-les définitivement.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => retryFailedEnrichments.mutate()}
+                          disabled={isRetrying}
+                        >
+                          {isRetrying ? (
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                          ) : (
+                            '🔄'
+                          )}
+                          Réessayer
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="secondary" 
+                          onClick={() => skipFailedProducts.mutate()}
+                          disabled={isSkipping}
+                        >
+                          {isSkipping ? (
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                          ) : (
+                            '⏭️'
+                          )}
+                          Ignorer
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {healthData.queuePending === 0 && healthData.queueProcessing === 0 && (healthData.stuckProducts > 0 || healthData.statusCounts.failed > 0) && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl shrink-0">3️⃣</span>
+                    <div className="flex-1">
+                      <strong className="block mb-1">Relancer le processeur de queue</strong>
+                      <p className="text-muted-foreground text-xs mb-2">
+                        La file d'enrichissement est vide. Relancez le processeur après avoir débloqué les produits.
+                      </p>
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        onClick={async () => {
+                          try {
+                            await supabase.functions.invoke('process-enrichment-queue');
+                            toast.success('Processeur relancé');
+                          } catch (error) {
+                            toast.error('Erreur lors du relancement');
+                          }
+                        }}
+                      >
+                        ▶️ Relancer le processeur
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Suppliers to Sync */}

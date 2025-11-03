@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('🔍 Recherche des produits bloqués...');
+    console.log('🔍 Recherche des produits bloqués et en erreur...');
 
     // 1. Trouver tous les produits en statut "enriching" depuis plus de 10 minutes
     const { data: stuckProducts, error: stuckError } = await supabaseClient
@@ -27,24 +27,36 @@ Deno.serve(async (req) => {
 
     if (stuckError) throw stuckError;
 
-    console.log(`📦 ${stuckProducts?.length || 0} produits bloqués trouvés`);
+    // 2. Trouver tous les produits en statut "failed"
+    const { data: failedProducts, error: failedError } = await supabaseClient
+      .from('supplier_products')
+      .select('id, supplier_id, user_id, ean, product_name')
+      .eq('enrichment_status', 'failed')
+      .limit(1000);
 
-    if (!stuckProducts || stuckProducts.length === 0) {
+    if (failedError) throw failedError;
+
+    console.log(`📦 ${stuckProducts?.length || 0} produits bloqués trouvés`);
+    console.log(`❌ ${failedProducts?.length || 0} produits en erreur trouvés`);
+
+    const allProductsToFix = [...(stuckProducts || []), ...(failedProducts || [])];
+
+    if (allProductsToFix.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: true, 
           fixed: 0, 
-          message: 'Aucun produit bloqué détecté' 
+          message: 'Aucun produit bloqué ou en erreur détecté' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 2. Pour chaque produit bloqué, vérifier s'il a une tâche dans la queue
+    // 3. Pour chaque produit (bloqué ou en erreur), vérifier s'il a une tâche dans la queue
     let fixedCount = 0;
     let createdTasks = 0;
 
-    for (const product of stuckProducts) {
+    for (const product of allProductsToFix) {
       // Vérifier si une tâche existe déjà
       const { data: existingTask } = await supabaseClient
         .from('enrichment_queue')
@@ -73,11 +85,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Réinitialiser le statut du produit
+      // Réinitialiser le statut du produit et effacer le message d'erreur
       const { error: updateError } = await supabaseClient
         .from('supplier_products')
         .update({ 
           enrichment_status: 'pending',
+          enrichment_error_message: null,
           updated_at: new Date().toISOString()
         })
         .eq('id', product.id);
@@ -89,9 +102,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`✅ ${fixedCount} produits débloqués, ${createdTasks} tâches créées`);
+    console.log(`✅ ${fixedCount} produits débloqués/réinitialisés, ${createdTasks} tâches créées`);
 
-    // 3. Déclencher le traitement de la queue
+    // 4. Déclencher le traitement de la queue
     if (createdTasks > 0) {
       console.log('🚀 Déclenchement du traitement de la queue...');
       const { error: processError } = await supabaseClient.functions.invoke(
@@ -111,8 +124,8 @@ Deno.serve(async (req) => {
         success: true,
         fixed: fixedCount,
         tasks_created: createdTasks,
-        total_stuck: stuckProducts.length,
-        message: `${fixedCount} produits débloqués et ${createdTasks} tâches créées`,
+        total_processed: allProductsToFix.length,
+        message: `${fixedCount} produits débloqués/réinitialisés et ${createdTasks} tâches créées`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
