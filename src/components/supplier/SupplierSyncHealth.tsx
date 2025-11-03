@@ -45,27 +45,32 @@ export function SupplierSyncHealth() {
   const { data: healthData, isLoading } = useQuery({
     queryKey: ['supplier-sync-health'],
     queryFn: async () => {
-      // Get enrichment status breakdown
-      const { data: statusBreakdown } = await supabase
-        .from('supplier_products')
-        .select('enrichment_status');
+      console.log('📊 [HEALTH] Fetching system health data...');
+      
+      // Get exact counts for each status using head count
+      const [
+        { count: countCompleted },
+        { count: countEnriching },
+        { count: countFailed },
+        { count: countPending },
+        { count: countSkipped },
+        { count: totalProducts },
+      ] = await Promise.all([
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }).eq('enrichment_status', 'completed'),
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }).eq('enrichment_status', 'enriching'),
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }).eq('enrichment_status', 'failed'),
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }).eq('enrichment_status', 'pending'),
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }).eq('enrichment_status', 'skipped'),
+        supabase.from('supplier_products').select('*', { count: 'exact', head: true }),
+      ]);
 
       const statusCounts = {
-        enriching: 0,
-        completed: 0,
-        failed: 0,
-        pending: 0,
-        skipped: 0,
+        completed: countCompleted || 0,
+        enriching: countEnriching || 0,
+        failed: countFailed || 0,
+        pending: countPending || 0,
+        skipped: countSkipped || 0,
       };
-
-      statusBreakdown?.forEach(product => {
-        const status = product.enrichment_status as keyof typeof statusCounts;
-        if (status in statusCounts) {
-          statusCounts[status]++;
-        }
-      });
-
-      const totalProducts = statusBreakdown?.length || 0;
 
       // Get stuck products (enriching for more than 10 minutes)
       const { count: stuckCount } = await supabase
@@ -74,14 +79,16 @@ export function SupplierSyncHealth() {
         .eq('enrichment_status', 'enriching')
         .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
 
-      // Get enrichment queue status
-      const { data: queueStats } = await supabase
-        .from('enrichment_queue')
-        .select('status')
-        .in('status', ['pending', 'processing']);
+      // Get enrichment queue status with exact counts
+      const [
+        { count: queuePending },
+        { count: queueProcessing },
+      ] = await Promise.all([
+        supabase.from('enrichment_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('enrichment_queue').select('*', { count: 'exact', head: true }).eq('status', 'processing'),
+      ]);
 
-      const queuePending = queueStats?.filter(q => q.status === 'pending').length || 0;
-      const queueProcessing = queueStats?.filter(q => q.status === 'processing').length || 0;
+      const totalQueue = (queuePending || 0) + (queueProcessing || 0);
 
       // Get recent import jobs success rate
       const { data: recentJobs } = await supabase
@@ -101,12 +108,15 @@ export function SupplierSyncHealth() {
         .order('last_sync_at', { ascending: true })
         .limit(5);
 
+      console.log('📊 [HEALTH] Stats:', { statusCounts, stuckCount, queuePending, queueProcessing, totalQueue });
+
       return {
         statusCounts,
-        totalProducts,
+        totalProducts: totalProducts || 0,
         stuckProducts: stuckCount || 0,
-        queuePending,
-        queueProcessing,
+        queuePending: queuePending || 0,
+        queueProcessing: queueProcessing || 0,
+        totalQueue,
         recentJobs: {
           success: successJobs,
           failed: failedJobs,
@@ -115,7 +125,16 @@ export function SupplierSyncHealth() {
         suppliersToSync: suppliers || [],
       };
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: (data) => {
+      // Refresh every 5 seconds if there's activity, otherwise 30 seconds
+      const hasActivity = data && (
+        data.queuePending > 0 || 
+        data.queueProcessing > 0 || 
+        data.stuckProducts > 0 ||
+        data.statusCounts.failed > 0
+      );
+      return hasActivity ? 5000 : 30000;
+    },
   });
 
   if (isLoading) {
@@ -139,30 +158,42 @@ export function SupplierSyncHealth() {
   const runDiagnostic = async () => {
     setIsRunningDiagnostic(true);
     try {
+      console.log('🔍 [DIAGNOSTIC] Calling system-diagnostic...');
       const { data, error } = await supabase.functions.invoke('system-diagnostic');
       
-      if (error) throw error;
-      
-      const { diagnosis } = data;
-      
-      if (diagnosis.severity === 'critical') {
-        toast.error(
-          `🚨 Problèmes critiques détectés`,
-          { description: diagnosis.issues.join(' • ') }
-        );
-      } else if (diagnosis.severity === 'warning') {
-        toast.warning(
-          `⚠️ Attention requise`,
-          { description: diagnosis.issues.join(' • ') }
-        );
-      } else {
-        toast.success('✅ Système en bonne santé');
+      if (error) {
+        console.error('🔍 [DIAGNOSTIC] Error:', error);
+        toast.error('Erreur diagnostic', { 
+          description: error.message || 'Impossible d\'exécuter le diagnostic' 
+        });
+        return;
       }
       
-      console.log('📊 Diagnostic complet:', diagnosis);
-    } catch (error) {
-      console.error('Erreur diagnostic:', error);
-      toast.error('Erreur lors du diagnostic système');
+      const { diagnosis } = data;
+      console.log('🔍 [DIAGNOSTIC] Results:', diagnosis);
+      
+      if (diagnosis.severity === 'critical') {
+        toast.error('🚨 Problèmes critiques détectés', {
+          description: diagnosis.issues?.slice(0, 2).join(' • ') || 'Voir console pour détails',
+        });
+      } else if (diagnosis.severity === 'warning') {
+        toast.warning('⚠️ Attention requise', {
+          description: diagnosis.issues?.slice(0, 2).join(' • ') || 'Voir console pour détails',
+        });
+      } else {
+        toast.success('✅ Système en bonne santé', {
+          description: 'Aucun problème détecté',
+        });
+      }
+      
+      if (diagnosis.recommendations?.length > 0) {
+        console.log('💡 Recommandations:', diagnosis.recommendations);
+      }
+    } catch (error: any) {
+      console.error('🔍 [DIAGNOSTIC] Exception:', error);
+      toast.error('Erreur diagnostic', { 
+        description: error?.message || 'Erreur inconnue' 
+      });
     } finally {
       setIsRunningDiagnostic(false);
     }
@@ -420,21 +451,38 @@ export function SupplierSyncHealth() {
           {/* Enrichment Queue */}
           {healthData && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-blue-500" />
-                <span className="text-sm font-medium">File d'enrichissement</span>
+              <div className="flex items-center gap-2 justify-between">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm font-medium">File d'enrichissement</span>
+                  {(healthData.queuePending > 0 || healthData.queueProcessing > 0) && (
+                    <Badge variant="outline" className="animate-pulse">
+                      🔴 Live
+                    </Badge>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    console.log('🔄 [HEALTH] Manual refresh triggered');
+                    window.location.reload();
+                  }}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{healthData.statusCounts.pending}</div>
+                  <div className="text-2xl font-bold text-amber-500">{healthData.queuePending}</div>
                   <div className="text-xs text-muted-foreground">En attente</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{healthData.queueProcessing}</div>
+                  <div className="text-2xl font-bold text-blue-500">{healthData.queueProcessing}</div>
                   <div className="text-xs text-muted-foreground">En cours</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{healthData.queuePending}</div>
+                  <div className="text-2xl font-bold">{healthData.totalQueue}</div>
                   <div className="text-xs text-muted-foreground">Dans la queue</div>
                 </div>
               </div>
