@@ -22,7 +22,7 @@ export interface AIResponse {
   content?: any;
   provider?: string;
   error?: string;
-  errorCode?: 'PAYMENT_REQUIRED' | 'RATE_LIMIT' | 'PROVIDER_DOWN' | 'AUTH_ERROR' | 'UNKNOWN';
+  errorCode?: 'PAYMENT_REQUIRED' | 'RATE_LIMIT' | 'PROVIDER_DOWN' | 'AUTH_ERROR' | 'UNKNOWN' | 'TOKEN_EXPIRED' | 'PROVIDER_CONFIG_MISSING';
 }
 
 /**
@@ -101,7 +101,7 @@ export async function callAIWithFallback(
 
   for (const providerConfig of providers) {
     let apiKey: string | undefined;
-    let apiUrl: string;
+    let apiUrl: string | undefined;
 
     // Special handling for Ollama - try DB config first
     if (providerConfig.provider === 'ollama') {
@@ -170,6 +170,10 @@ export async function callAIWithFallback(
     try {
       console.log(`[AI-FALLBACK] Trying provider: ${providerConfig.provider}`);
 
+      if (!apiUrl) {
+        console.log('[AI-FALLBACK] Missing apiUrl, skipping provider');
+        continue;
+      }
       const endpoint = apiUrl;
       const startTime = Date.now();
 
@@ -265,15 +269,16 @@ export async function callAIWithFallback(
       }
 
     } catch (err) {
+      const e = err as any;
       const errorDetails = {
         provider: providerConfig.provider,
         requestedModel: options.model,
         translatedModel: getProviderCompatibleModel(options.model, providerConfig.provider),
-        error: err.message || String(err),
-        status: err.status
+        error: (e && e.message) ? e.message : String(err),
+        status: e?.status
       };
       console.error(`[AI-FALLBACK] Error with ${providerConfig.provider}:`, errorDetails);
-      lastError = err;
+      lastError = e;
       continue;
     }
   }
