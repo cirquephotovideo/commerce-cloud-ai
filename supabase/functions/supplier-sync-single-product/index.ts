@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
 
     console.log('✅ Produit synchronisé avec succès !');
 
-    // 4. Si le produit est lié à une analyse, on peut optionnellement la re-enrichir
+    // 4. Mettre à jour supplier_price_variants si le produit est lié à une analyse
     const { data: linkedAnalysis } = await supabaseClient
       .from('product_links')
       .select('analysis_id')
@@ -127,10 +127,61 @@ Deno.serve(async (req) => {
 
     if (linkedAnalysis?.analysis_id) {
       console.log(`🔗 Produit lié à l'analyse ${linkedAnalysis.analysis_id}`);
-      // Optionnel : déclencher re-enrichissement
-      // await supabaseClient.functions.invoke('re-enrich-product', {
-      //   body: { productId, enrichmentTypes: ['ai_analysis'] }
-      // });
+      
+      // Mettre à jour supplier_price_variants
+      const { data: existingVariant } = await supabaseClient
+        .from('supplier_price_variants')
+        .select('id, purchase_price')
+        .eq('analysis_id', linkedAnalysis.analysis_id)
+        .eq('supplier_id', product.supplier_id)
+        .maybeSingle();
+
+      if (existingVariant) {
+        const priceChanged = existingVariant.purchase_price !== updated.purchase_price;
+        
+        await supabaseClient
+          .from('supplier_price_variants')
+          .update({
+            purchase_price: updated.purchase_price,
+            currency: updated.currency || 'EUR',
+            stock_quantity: updated.stock_quantity,
+            last_updated: new Date().toISOString(),
+          })
+          .eq('id', existingVariant.id);
+
+        console.log(`💰 Prix variant mis à jour: ${existingVariant.purchase_price}€ → ${updated.purchase_price}€`);
+
+        // Si changement de prix > 10%, déclencher re-enrichissement
+        if (priceChanged && existingVariant.purchase_price > 0) {
+          const changePercent = Math.abs(
+            ((updated.purchase_price - existingVariant.purchase_price) / existingVariant.purchase_price) * 100
+          );
+          
+          if (changePercent > 10) {
+            console.log(`🔄 Changement de prix significatif (${changePercent.toFixed(1)}%), re-enrichissement...`);
+            await supabaseClient.functions.invoke('re-enrich-product', {
+              body: { 
+                productId: linkedAnalysis.analysis_id, 
+                enrichmentTypes: ['ai_analysis', 'cost_analysis'] 
+              }
+            });
+          }
+        }
+      } else {
+        // Créer un nouveau variant si absent
+        await supabaseClient
+          .from('supplier_price_variants')
+          .insert({
+            analysis_id: linkedAnalysis.analysis_id,
+            supplier_id: product.supplier_id,
+            purchase_price: updated.purchase_price,
+            currency: updated.currency || 'EUR',
+            stock_quantity: updated.stock_quantity,
+            last_updated: new Date().toISOString(),
+          });
+        
+        console.log(`✨ Nouveau variant créé pour l'analyse ${linkedAnalysis.analysis_id}`);
+      }
     }
 
     return new Response(

@@ -37,6 +37,7 @@ import { UnifiedMappingDialog } from "@/components/mapping/UnifiedMappingDialog"
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { SupplierSyncHealth } from "@/components/supplier/SupplierSyncHealth";
 
 // Progress cell component
 function SupplierProgressCell({ supplierId }: { supplierId: string }) {
@@ -560,6 +561,9 @@ export default function Suppliers() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dashboard de synchronisation */}
+      <SupplierSyncHealth />
 
       {/* Alertes système */}
       <div className="space-y-3">
