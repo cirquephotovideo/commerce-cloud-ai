@@ -91,6 +91,9 @@ verify_jwt = false
 [functions.retry-failed-enrichments]
 verify_jwt = false
 
+[functions.auto-fix-enrichment-queue]
+verify_jwt = false
+
 [functions.ollama-proxy]
 verify_jwt = true
 

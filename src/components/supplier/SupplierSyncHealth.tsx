@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Clock, Loader2, Package, TrendingUp, Users, Play, Pause, SkipForward, RefreshCw, HelpCircle } from "lucide-react";
+import { AlertCircle, Clock, Loader2, Package, TrendingUp, Users, Play, Pause, SkipForward, RefreshCw, HelpCircle, AlertTriangle, PlayCircle } from "lucide-react";
 import { useSupplierSync } from "@/hooks/useSupplierSync";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function SupplierSyncHealth() {
   const { 
@@ -25,6 +26,7 @@ export function SupplierSyncHealth() {
   } = useSupplierSync();
   
   const [isRunningDiagnostic, setIsRunningDiagnostic] = useState(false);
+  const queryClient = useQueryClient();
 
   // Check if enrichments are paused
   const { data: systemSettings } = useQuery({
@@ -41,8 +43,9 @@ export function SupplierSyncHealth() {
   });
 
   const isPaused = (systemSettings?.value as any)?.paused || false;
+  const [isEmergencyRecovery, setIsEmergencyRecovery] = useState(false);
 
-  const { data: healthData, isLoading } = useQuery({
+  const { data: healthData, isLoading, refetch } = useQuery({
     queryKey: ['supplier-sync-health'],
     queryFn: async () => {
       console.log('📊 [HEALTH] Fetching system health data...');
@@ -125,8 +128,9 @@ export function SupplierSyncHealth() {
         suppliersToSync: suppliers || [],
       };
     },
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Refresh every 5 seconds if there's activity, otherwise 30 seconds
+      const data = query.state.data;
       const hasActivity = data && (
         data.queuePending > 0 || 
         data.queueProcessing > 0 || 
@@ -277,6 +281,76 @@ export function SupplierSyncHealth() {
                 </>
               )}
             </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Emergency Recovery Alert */}
+      {healthData && healthData.statusCounts.enriching > 10000 && healthData.totalQueue === 0 && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>🚨 Situation critique détectée</AlertTitle>
+          <AlertDescription>
+            <p className="mb-3">
+              {healthData.statusCounts.enriching.toLocaleString()} produits bloqués avec une file d'enrichissement vide.
+              Cette situation nécessite une récupération d'urgence immédiate.
+            </p>
+            <Button 
+              variant="destructive" 
+              size="lg"
+              onClick={async () => {
+                setIsEmergencyRecovery(true);
+                toast.info('🚨 Récupération d\'urgence en cours...', {
+                  description: 'Déblocage des produits et création des tâches manquantes'
+                });
+                
+                try {
+                  const { data: fixData, error: fixError } = await supabase.functions.invoke('fix-stuck-enrichments');
+                  
+                  if (fixError) throw fixError;
+                  
+                  toast.success('✅ Étape 1/2 : Déblocage terminé', {
+                    description: `${fixData?.fixed || 0} produits débloqués, ${fixData?.tasks_created || 0} tâches créées`
+                  });
+                  
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  
+                  const { error: processError } = await supabase.functions.invoke('process-enrichment-queue', {
+                    body: { maxItems: 100, parallel: true }
+                  });
+                  
+                  if (processError) throw processError;
+                  
+                  toast.success('🚀 Étape 2/2 : Traitement démarré', {
+                    description: 'L\'enrichissement a repris, consultez la progression ci-dessous'
+                  });
+                  
+                  refetch();
+                  queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
+                } catch (err: any) {
+                  console.error('Emergency recovery error:', err);
+                  toast.error('❌ Erreur lors de la récupération', {
+                    description: err.message || 'Réessayez ou contactez le support'
+                  });
+                } finally {
+                  setIsEmergencyRecovery(false);
+                }
+              }}
+              disabled={isEmergencyRecovery || isFixing}
+              className="w-full sm:w-auto"
+            >
+              {isEmergencyRecovery ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Récupération en cours...
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  🚨 RÉCUPÉRATION D'URGENCE
+                </>
+              )}
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -441,6 +515,26 @@ export function SupplierSyncHealth() {
                       {isSkipping && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                       <SkipForward className="mr-2 h-4 w-4" />
                       Ignorer les erreurs
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        toast.info('🚀 Relancement du processeur...');
+                        try {
+                          const { error } = await supabase.functions.invoke('process-enrichment-queue', {
+                            body: { maxItems: 100, parallel: true }
+                          });
+                          if (error) throw error;
+                          toast.success('✅ Processeur relancé');
+                          refetch();
+                        } catch (err: any) {
+                          toast.error('Erreur', { description: err.message });
+                        }
+                      }}
+                    >
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      Relancer le processeur
                     </Button>
                   </>
                 )}

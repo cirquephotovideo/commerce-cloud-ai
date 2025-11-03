@@ -29,9 +29,9 @@ export function SupplierLogsPanel() {
       // Fetch recent enrichment errors
       const { data: enrichmentErrors } = await supabase
         .from('supplier_products')
-        .select('id, product_name, updated_at, supplier_id, supplier_configurations(supplier_name)')
+        .select('id, product_name, last_updated, supplier_id, supplier_configurations(supplier_name)')
         .eq('enrichment_status', 'failed')
-        .order('updated_at', { ascending: false })
+        .order('last_updated', { ascending: false })
         .limit(10);
 
       enrichmentErrors?.forEach(error => {
@@ -40,7 +40,7 @@ export function SupplierLogsPanel() {
           type: 'error',
           icon: <AlertCircle className="h-4 w-4" />,
           message: `Erreur enrichissement: "${error.product_name}"`,
-          timestamp: new Date(error.updated_at),
+          timestamp: new Date(error.last_updated),
           details: 'Enrichissement échoué'
         });
       });

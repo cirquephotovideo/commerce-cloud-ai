@@ -18,16 +18,44 @@ Deno.serve(async (req) => {
 
     console.log('🔍 Recherche des produits bloqués et en erreur...');
 
-    // 1. Trouver tous les produits en statut "enriching" depuis plus de 10 minutes
+    // 1. Trouver TOUS les produits en statut "enriching" (orphelins potentiels)
+    const { data: allEnrichingProducts, error: enrichingError } = await supabaseClient
+      .from('supplier_products')
+      .select('id, supplier_id, user_id, ean, product_name')
+      .eq('enrichment_status', 'enriching')
+      .limit(2000);
+
+    if (enrichingError) throw enrichingError;
+
+    console.log(`📦 ${allEnrichingProducts?.length || 0} produits en statut enriching trouvés`);
+
+    // Vérifier lesquels n'ont PAS de tâche dans la queue (orphelins)
+    let orphanProducts = [];
+    if (allEnrichingProducts && allEnrichingProducts.length > 0) {
+      const productIds = allEnrichingProducts.map(p => p.id);
+      const { data: existingTasks } = await supabaseClient
+        .from('enrichment_queue')
+        .select('supplier_product_id')
+        .in('supplier_product_id', productIds)
+        .in('status', ['pending', 'processing']);
+
+      const existingIds = new Set(existingTasks?.map(t => t.supplier_product_id) || []);
+      orphanProducts = allEnrichingProducts.filter(p => !existingIds.has(p.id));
+      
+      console.log(`🔍 Trouvé ${orphanProducts.length} produits orphelins sans tâche`);
+    }
+
+    // 2. Trouver les produits vraiment bloqués (>10 min)
     const { data: stuckProducts, error: stuckError } = await supabaseClient
       .from('supplier_products')
       .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
-      .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString());
+      .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+      .limit(100);
 
     if (stuckError) throw stuckError;
 
-    // 2. Trouver tous les produits en statut "failed"
+    // 3. Trouver tous les produits en statut "failed"
     const { data: failedProducts, error: failedError } = await supabaseClient
       .from('supplier_products')
       .select('id, supplier_id, user_id, ean, product_name')
@@ -36,23 +64,29 @@ Deno.serve(async (req) => {
 
     if (failedError) throw failedError;
 
-    console.log(`📦 ${stuckProducts?.length || 0} produits bloqués trouvés`);
+    console.log(`⏰ ${stuckProducts?.length || 0} produits vraiment bloqués (>10 min)`);
     console.log(`❌ ${failedProducts?.length || 0} produits en erreur trouvés`);
 
-    const allProductsToFix = [...(stuckProducts || []), ...(failedProducts || [])];
+    // Combiner tous les produits à corriger (priorité aux orphelins)
+    const allProductsToFix = [
+      ...orphanProducts,
+      ...(stuckProducts || []).filter(s => !orphanProducts.some(o => o.id === s.id)),
+      ...(failedProducts || []),
+    ];
 
     if (allProductsToFix.length === 0) {
       return new Response(
         JSON.stringify({ 
           success: true, 
           fixed: 0, 
-          message: 'Aucun produit bloqué ou en erreur détecté' 
+          tasks_created: 0,
+          message: 'Aucun produit à corriger détecté' 
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // 3. Pour chaque produit (bloqué ou en erreur), vérifier s'il a une tâche dans la queue
+    // 4. Pour chaque produit, vérifier s'il a une tâche et la créer si nécessaire
     let fixedCount = 0;
     let createdTasks = 0;
 
