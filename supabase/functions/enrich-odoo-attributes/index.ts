@@ -66,8 +66,8 @@ serve(async (req) => {
       .from('product_categories')
       .select('*');
 
-    let detectedCategory = 'non_categorise';
-    let categoryDisplayName = 'Non catégorisé';
+    let detectedCategory = 'generic';
+    let categoryDisplayName = 'Produits Génériques';
     
     if (categories && categories.length > 0) {
       const searchText = `${productNameForDetection} ${productDescForDetection}`.toLowerCase();
@@ -85,7 +85,7 @@ serve(async (req) => {
     console.log(`[enrich-odoo-attributes] Catégorie détectée: ${detectedCategory} (${categoryDisplayName})`);
 
     // 3. Récupérer le référentiel d'attributs pour cette catégorie
-    const { data: attributeDefinitions, error: attrError } = await supabase
+    let { data: attributeDefinitions, error: attrError } = await supabase
       .from('product_attribute_definitions')
       .select('*')
       .eq('category', detectedCategory);
@@ -95,16 +95,32 @@ serve(async (req) => {
       throw attrError;
     }
 
+    // Fallback automatique vers "generic" si aucun attribut trouvé
     if (!attributeDefinitions || attributeDefinitions.length === 0) {
-      console.warn(`[enrich-odoo-attributes] Aucun attribut trouvé pour la catégorie "${detectedCategory}"`);
-      return new Response(
-        JSON.stringify({ 
-          error: `Aucun référentiel d'attributs pour la catégorie "${categoryDisplayName}"`,
-          category: detectedCategory,
-          categoryDisplayName
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.warn(`[enrich-odoo-attributes] Aucun attribut pour "${detectedCategory}", fallback vers "generic"`);
+      
+      detectedCategory = 'generic';
+      categoryDisplayName = 'Produits Génériques';
+      
+      const { data: genericAttrs, error: genericError } = await supabase
+        .from('product_attribute_definitions')
+        .select('*')
+        .eq('category', 'generic');
+      
+      if (genericError || !genericAttrs || genericAttrs.length === 0) {
+        return new Response(
+          JSON.stringify({ 
+            error: `Catégorie "${categoryDisplayName}" sans attributs ET catégorie générique introuvable. Veuillez configurer des attributs.`,
+            category: detectedCategory,
+            categoryDisplayName,
+            suggestedAction: 'Importer des attributs via l\'admin ou contacter le support'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      attributeDefinitions = genericAttrs;
+      console.log(`[enrich-odoo-attributes] ✅ Fallback réussi: ${genericAttrs.length} attributs génériques chargés`);
     }
 
     // 4. Grouper les attributs par nom

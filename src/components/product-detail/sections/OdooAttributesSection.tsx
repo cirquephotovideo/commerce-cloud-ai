@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Database, AlertCircle } from "lucide-react";
 import { OdooAttributesDisplay } from "@/components/OdooAttributesDisplay";
 
@@ -10,6 +11,7 @@ interface OdooAttributesSectionProps {
 export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSectionProps) => {
   const odooAttributes = analysis?.odoo_attributes;
   const category = analysis?.category;
+  const isGenericCategory = category === 'generic';
 
   if (!odooAttributes || Object.keys(odooAttributes).length === 0) {
     return (
@@ -30,5 +32,20 @@ export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSecti
     );
   }
 
-  return <OdooAttributesDisplay attributes={odooAttributes} category={category} />;
+  return (
+    <div className="space-y-2">
+      {isGenericCategory && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Catégorie générique utilisée</AlertTitle>
+          <AlertDescription>
+            Ce produit a été enrichi avec des attributs génériques car sa catégorie spécifique n'a pas encore été configurée.
+            Contactez votre administrateur pour ajouter des attributs spécifiques.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <OdooAttributesDisplay attributes={odooAttributes} category={category} />
+    </div>
+  );
 };

@@ -36,6 +36,7 @@ const FUNCTION_GROUPS = {
   'ai-chat': { label: '💬 Chat IA', icon: '💬' },
   'heygen-video-generator': { label: '🎥 Vidéos HeyGen', icon: '🎥' },
   'rsgp-compliance-generator': { label: '📋 Conformité RSGP', icon: '📋' },
+  'enrich-odoo-attributes': { label: '🏭 Attributs Odoo', icon: '🏭' },
 };
 
 const AVAILABLE_MODELS = [

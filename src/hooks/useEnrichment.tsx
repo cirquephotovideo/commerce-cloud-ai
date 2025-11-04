@@ -27,7 +27,15 @@ export const useEnrichment = (productId: string, onSuccess?: () => void) => {
           }
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('[useEnrichment] Erreur Odoo attributes:', error);
+          throw new Error(error.message || 'Erreur lors de l\'enrichissement des attributs Odoo');
+        }
+        
+        if (data && !data.success && data.error) {
+          throw new Error(data.error + (data.suggestedAction ? `\n\n💡 ${data.suggestedAction}` : ''));
+        }
+        
         return data;
       }
 
@@ -56,7 +64,10 @@ export const useEnrichment = (productId: string, onSuccess?: () => void) => {
       if (onSuccess) onSuccess();
     },
     onError: (error: Error) => {
-      toast.error(`❌ Erreur : ${error.message}`);
+      toast.error('❌ Erreur d\'enrichissement', { 
+        description: error.message,
+        duration: 8000
+      });
     }
   });
 };
