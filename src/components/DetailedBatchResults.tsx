@@ -562,8 +562,14 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                               <div className="space-y-2">
                                 <h4 className="font-semibold text-sm">📝 Description Optimisée</h4>
                                 <div className="space-y-1 text-sm bg-muted p-3 rounded">
-                                  <p>{result.analysis.description.suggested_description}</p>
-                                  {result.analysis.description.key_features && (
+                                  <div className="whitespace-pre-wrap">
+                                    {typeof result.analysis.description.suggested_description === 'string'
+                                      ? result.analysis.description.suggested_description
+                                      : typeof result.analysis.description.suggested_description === 'object'
+                                      ? JSON.stringify(result.analysis.description.suggested_description, null, 2)
+                                      : String(result.analysis.description.suggested_description || '')}
+                                  </div>
+                                  {result.analysis.description.key_features && Array.isArray(result.analysis.description.key_features) && (
                                     <div className="mt-2">
                                       <strong>Caractéristiques clés:</strong>
                                       <ul className="list-disc list-inside mt-1">
@@ -594,7 +600,11 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                         {baseDescription && (
                                           <div>
                                             <strong className="text-primary">Description de base:</strong>
-                                            <p className="mt-1 text-muted-foreground">{baseDescription}</p>
+                                            <pre className="mt-1 text-muted-foreground whitespace-pre-wrap text-sm">
+                                              {typeof baseDescription === 'string'
+                                                ? baseDescription
+                                                : JSON.stringify(baseDescription, null, 2)}
+                                            </pre>
                                           </div>
                                         )}
                                         {enrichedDescription && (
@@ -610,7 +620,11 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                         {technicalDescription && (
                                           <div>
                                             <strong className="text-primary">Description technique:</strong>
-                                            <p className="mt-1 text-muted-foreground whitespace-pre-wrap">{technicalDescription}</p>
+                                            <pre className="mt-1 text-muted-foreground whitespace-pre-wrap text-sm">
+                                              {typeof technicalDescription === 'string'
+                                                ? technicalDescription
+                                                : JSON.stringify(technicalDescription, null, 2)}
+                                            </pre>
                                           </div>
                                         )}
                                       </div>
