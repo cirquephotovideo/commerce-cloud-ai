@@ -512,13 +512,13 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                               <ChevronDown className="h-4 w-4" />
                                             </Button>
                                           </CollapsibleTrigger>
-                                          <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
-                                            {typeof costAnalysis === 'string' ? (
-                                              <p className="text-sm whitespace-pre-wrap">{costAnalysis}</p>
-                                            ) : (
-                                              <pre className="text-xs overflow-auto">{JSON.stringify(costAnalysis, null, 2)}</pre>
-                                            )}
-                                          </CollapsibleContent>
+              <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                <pre className="text-xs overflow-auto whitespace-pre-wrap">
+                  {typeof costAnalysis === 'string' 
+                    ? costAnalysis 
+                    : JSON.stringify(costAnalysis, null, 2)}
+                </pre>
+              </CollapsibleContent>
                                         </Collapsible>
                                       )}
                                       
@@ -600,7 +600,11 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                         {enrichedDescription && (
                                           <div>
                                             <strong className="text-primary">Description enrichie:</strong>
-                                            <p className="mt-1 text-muted-foreground whitespace-pre-wrap">{enrichedDescription}</p>
+                                            <pre className="mt-1 text-muted-foreground whitespace-pre-wrap text-sm">
+                                              {typeof enrichedDescription === 'string' 
+                                                ? enrichedDescription 
+                                                : JSON.stringify(enrichedDescription, null, 2)}
+                                            </pre>
                                           </div>
                                         )}
                                         {technicalDescription && (
@@ -711,15 +715,17 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                       </div>
                                     )}
                                     
-                                    {/* Résumé enrichi */}
-                                    {advancedEnrichment?.summary && (
-                                      <div className="bg-muted p-3 rounded">
-                                        <strong className="text-sm">✨ Résumé enrichi IA:</strong>
-                                        <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
-                                          {advancedEnrichment.summary}
-                                        </p>
-                                      </div>
-                                    )}
+          {/* Résumé enrichi */}
+          {advancedEnrichment?.summary && (
+            <div className="bg-muted p-3 rounded">
+              <strong className="text-sm">✨ Résumé enrichi IA:</strong>
+              <pre className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                {typeof advancedEnrichment.summary === 'string'
+                  ? advancedEnrichment.summary
+                  : JSON.stringify(advancedEnrichment.summary, null, 2)}
+              </pre>
+            </div>
+          )}
                                     
                                     {/* Web enrichment */}
                                     {advancedEnrichment?.web_enrichment && (
