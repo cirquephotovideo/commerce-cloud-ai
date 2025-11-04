@@ -8,11 +8,13 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { Separator } from "./ui/separator";
 import { ProductImageGallery } from "./ProductImageGallery";
+import { ProductAIChat } from "./ProductAIChat";
 import { supabase } from "@/integrations/supabase/client";
 
 interface BatchResult {
   product: string;
   analysis?: any;
+  enrichments?: any;
   imageUrls?: string[];
   error?: string;
   success: boolean | 'partial';
@@ -231,6 +233,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
 
                       {/* Quick Summary */}
                       {result.success && result.analysis && (
+                        <>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           {result.analysis.pricing?.estimated_price && (
                             <div className="p-3 bg-muted rounded-lg">
@@ -240,6 +243,67 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                               </p>
                             </div>
                           )}
+
+                          {/* Enrichments Summary */}
+                          {result.enrichments?.categories && (
+                            <div className="p-3 bg-muted rounded-lg">
+                              <p className="text-muted-foreground text-xs">Catégories</p>
+                              <Badge variant="secondary" className="text-xs mt-1">
+                                🏷️ {result.enrichments.categories.google?.name || 'Mappée'}
+                              </Badge>
+                            </div>
+                          )}
+
+                          {result.enrichments?.images?.urls?.length > 0 && (
+                            <div className="p-3 bg-muted rounded-lg">
+                              <p className="text-muted-foreground text-xs">Images</p>
+                              <p className="font-semibold flex items-center gap-1">
+                                <ImageIcon className="w-4 h-4" />
+                                {result.enrichments.images.urls.length}
+                              </p>
+                            </div>
+                          )}
+
+                          {result.enrichments?.shopping && (
+                            <div className="p-3 bg-muted rounded-lg">
+                              <p className="text-muted-foreground text-xs">Google Shopping</p>
+                              <p className="font-semibold flex items-center gap-1">
+                                <ShoppingCart className="w-4 h-4" />
+                                {result.enrichments.shopping.competitors || 0}
+                              </p>
+                            </div>
+                          )}
+
+                          {result.enrichments?.advanced && (
+                            <div className="col-span-2 p-3 bg-muted rounded-lg">
+                              <p className="text-muted-foreground text-xs mb-2">Enrichissements</p>
+                              <div className="flex flex-wrap gap-1">
+                                {result.enrichments.advanced.specifications && (
+                                  <Badge variant="secondary" className="text-xs">📋 Specs</Badge>
+                                )}
+                                {result.enrichments.advanced.technical_description && (
+                                  <Badge variant="secondary" className="text-xs">📝 Tech</Badge>
+                                )}
+                                {result.enrichments.advanced.cost_analysis && (
+                                  <Badge variant="secondary" className="text-xs">💰 Coûts</Badge>
+                                )}
+                                {result.enrichments.advanced.rsgp_compliance && (
+                                  <Badge variant="secondary" className="text-xs">✅ RGPD</Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {result.enrichments?.odoo && (
+                            <div className="p-3 bg-muted rounded-lg">
+                              <p className="text-muted-foreground text-xs">Attributs Odoo</p>
+                              <p className="font-semibold flex items-center gap-1">
+                                <Package className="w-4 h-4" />
+                                {Object.keys(result.enrichments.odoo.attributes || {}).length}
+                              </p>
+                            </div>
+                          )}
+                          
                           {(() => {
                             const mappings = taxonomyMappings.get(result.analysis.id) || [];
                             const googleTaxonomy = mappings.find(m => m.taxonomy_type === 'google');
@@ -296,6 +360,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                             </div>
                           )}
                         </div>
+                        </>
                       )}
 
                       {/* Images Gallery */}
@@ -327,26 +392,36 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                       {/* Detailed Analysis - Collapsible */}
                       {result.success && result.analysis && (
                         <Collapsible open={expandedIndices.has(index)}>
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => toggleExpanded(index)}
-                            >
-                              {expandedIndices.has(index) ? (
-                                <>
-                                  <ChevronUp className="w-4 h-4 mr-2" />
-                                  Masquer les détails
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="w-4 h-4 mr-2" />
-                                  Voir tous les détails
-                                </>
-                              )}
-                            </Button>
-                          </CollapsibleTrigger>
+                          <div className="flex gap-2">
+                            <CollapsibleTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                                onClick={() => toggleExpanded(index)}
+                              >
+                                {expandedIndices.has(index) ? (
+                                  <>
+                                    <ChevronUp className="w-4 h-4 mr-2" />
+                                    Masquer les détails
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="w-4 h-4 mr-2" />
+                                    Voir tous les détails
+                                  </>
+                                )}
+                              </Button>
+                            </CollapsibleTrigger>
+                            {result.analysis?.id && (
+                              <div className="flex-1">
+                                <ProductAIChat 
+                                  analysisId={result.analysis.id}
+                                  productName={result.analysis.analysis_result?.product_name || result.analysis.product_name || result.product}
+                                />
+                              </div>
+                            )}
+                          </div>
                           <CollapsibleContent className="mt-4 space-y-4">
                             {/* SEO Section */}
                             {result.analysis.seo && (

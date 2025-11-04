@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Progress } from "./ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useEnrichmentPipeline } from "@/hooks/useEnrichmentPipeline";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
@@ -34,10 +35,15 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(false);
   const [autoOdooAttributes, setAutoOdooAttributes] = useState(false);
+  const [autoCategories, setAutoCategories] = useState(false);
+  const [autoImages, setAutoImages] = useState(false);
+  const [autoShopping, setAutoShopping] = useState(false);
+  const [autoVideo, setAutoVideo] = useState(false);
   const [exportPlatform, setExportPlatform] = useState<string>("odoo");
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
   const [enrichmentProgress, setEnrichmentProgress] = useState<Record<string, any>>({});
+  const { runFullPipeline, isEnriching, currentStep } = useEnrichmentPipeline();
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -177,26 +183,56 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           // Auto-save to database with image URLs and category mapping
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
+            // Run enrichment pipeline if any auto-enrichments are enabled
+            let enrichmentResults: any = null;
+            if (autoCategories || autoImages || autoShopping || autoAdvancedEnrich || autoOdooAttributes || autoVideo) {
+              console.log('🚀 Starting enrichment pipeline...');
+              try {
+                enrichmentResults = await runFullPipeline(
+                  '', // Will be set after insert
+                  data.analysis,
+                  {
+                    includeCategories: autoCategories,
+                    includeImages: autoImages,
+                    includeShopping: autoShopping,
+                    includeAdvanced: autoAdvancedEnrich,
+                    includeOdoo: autoOdooAttributes,
+                    includeVideo: autoVideo
+                  }
+                );
+                console.log('✅ Enrichment pipeline completed:', enrichmentResults);
+              } catch (enrichError) {
+                console.error('❌ Enrichment pipeline error:', enrichError);
+              }
+            }
+
             const insertData: any = {
               user_id: user.id,
               product_url: product,
-              analysis_result: data.analysis,
-              image_urls: data.imageUrls || [],
+              analysis_result: {
+                ...data.analysis,
+                enrichments: enrichmentResults
+              },
+              image_urls: enrichmentResults?.images?.urls || data.imageUrls || [],
               tags: data.analysis?.tags_categories?.suggested_tags || [],
+              mapped_category_id: enrichmentResults?.categories?.google?.id || data.analysis?.tags_categories?.odoo_category_id,
+              mapped_category_name: enrichmentResults?.categories?.google?.name || data.analysis?.tags_categories?.odoo_category_name,
+              enrichment_status: {
+                categories: enrichmentResults?.categories ? 'completed' : 'not_started',
+                images: enrichmentResults?.images ? 'completed' : 'not_started',
+                shopping: enrichmentResults?.shopping ? 'completed' : 'not_started',
+                specifications: enrichmentResults?.advanced?.specifications ? 'completed' : 'not_started',
+                technical_description: enrichmentResults?.advanced?.technical_description ? 'completed' : 'not_started',
+                cost_analysis: enrichmentResults?.advanced?.cost_analysis ? 'completed' : 'not_started',
+                rsgp_compliance: enrichmentResults?.advanced?.rsgp_compliance ? 'completed' : 'not_started',
+                odoo_attributes: enrichmentResults?.odoo ? 'completed' : 'not_started',
+                heygen: enrichmentResults?.video ? 'completed' : 'not_started'
+              },
               amazon_enrichment_status: autoAmazonEnrich ? 'pending' : null,
               amazon_last_attempt: autoAmazonEnrich ? new Date().toISOString() : null,
             };
 
-            // Add category mapping if available
-            if (data.analysis?.tags_categories?.odoo_category_id) {
-              insertData.mapped_category_id = String(data.analysis.tags_categories.odoo_category_id);
-              insertData.mapped_category_name = data.analysis.tags_categories.odoo_category_name;
-            }
-
-            // Store raw_analysis for debugging if present
-            if (data.analysis.raw_analysis) {
-              console.log('Partial analysis detected, storing raw data for:', product);
-            }
+            console.log('💾 Saving to database with enrichments:', insertData);
 
             const { data: insertedAnalysis } = await supabase
               .from('product_analyses')
@@ -314,8 +350,9 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
             results.push({
               product,
-              analysis: data.analysis,
-              imageUrls: data.imageUrls || [],
+              analysis: insertedAnalysis,
+              enrichments: enrichmentResults,
+              imageUrls: enrichmentResults?.images?.urls || data.imageUrls || [],
               success: true,
               analysisId: insertedAnalysis?.id,
               provider,
@@ -495,43 +532,140 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           </TabsList>
 
           <TabsContent value={inputType} className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>⚙️ Configuration des Enrichissements Automatiques</CardTitle>
+                <CardDescription>
+                  Choisissez quels enrichissements doivent être exécutés automatiquement lors de l'analyse
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Catégorisation */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">🏷️ Catégorisation IA</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Google & Amazon taxonomie
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoCategories}
+                      onCheckedChange={setAutoCategories}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Images */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">🖼️ Recherche d'Images</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Images haute qualité du produit
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoImages}
+                      onCheckedChange={setAutoImages}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Google Shopping */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">🛒 Google Shopping</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Analyse concurrentielle
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoShopping}
+                      onCheckedChange={setAutoShopping}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Amazon */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">📦 Amazon</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Prix et détails Amazon
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoAmazonEnrich}
+                      onCheckedChange={setAutoAmazonEnrich}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Enrichissements avancés */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">✨ Enrichissements Avancés</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Specs, Description, Coûts, RGPD
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoAdvancedEnrich}
+                      onCheckedChange={setAutoAdvancedEnrich}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Attributs Odoo */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">📋 Attributs Odoo</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Catégorie auto-détectée
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoOdooAttributes}
+                      onCheckedChange={setAutoOdooAttributes}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                  
+                  {/* Vidéo HeyGen */}
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="space-y-1">
+                      <Label className="font-semibold">🎥 Vidéo HeyGen</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Génération vidéo (optionnel)
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoVideo}
+                      onCheckedChange={setAutoVideo}
+                      disabled={isAnalyzing}
+                    />
+                  </div>
+                </div>
+                
+                {/* Résumé des enrichissements sélectionnés */}
+                {(autoCategories || autoImages || autoShopping || autoAmazonEnrich || autoAdvancedEnrich || autoOdooAttributes || autoVideo) && (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="font-semibold mb-2">Enrichissements activés :</p>
+                    <div className="flex flex-wrap gap-2">
+                      {autoCategories && <Badge>🏷️ Catégorisation</Badge>}
+                      {autoImages && <Badge>🖼️ Images</Badge>}
+                      {autoShopping && <Badge>🛒 Shopping</Badge>}
+                      {autoAmazonEnrich && <Badge>📦 Amazon</Badge>}
+                      {autoAdvancedEnrich && <Badge>✨ Avancés</Badge>}
+                      {autoOdooAttributes && <Badge>📋 Odoo</Badge>}
+                      {autoVideo && <Badge>🎥 Vidéo</Badge>}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="space-y-3 mb-4 p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="auto-amazon"
-                  checked={autoAmazonEnrich}
-                  onCheckedChange={setAutoAmazonEnrich}
-                  disabled={isAnalyzing}
-                />
-                <Label htmlFor="auto-amazon" className="cursor-pointer">
-                  🔄 Auto-enrichissement Amazon (recommandé)
-                </Label>
-              </div>
-              
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="auto-advanced"
-                checked={autoAdvancedEnrich}
-                onCheckedChange={setAutoAdvancedEnrich}
-                disabled={isAnalyzing}
-              />
-              <Label htmlFor="auto-advanced" className="cursor-pointer">
-                ✨ Enrichissements avancés (Specs, Desc. technique, Coûts, RSGP)
-              </Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="auto-odoo-attributes"
-                checked={autoOdooAttributes}
-                onCheckedChange={setAutoOdooAttributes}
-                disabled={isAnalyzing}
-              />
-              <Label htmlFor="auto-odoo-attributes" className="cursor-pointer">
-                📋 Enrichissement attributs Odoo (catégorie auto-détectée)
-              </Label>
-            </div>
-
             <div className="flex items-center space-x-2">
               <Switch
                 id="auto-export"
@@ -583,7 +717,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             {isAnalyzing && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span>Analyse en cours...</span>
+                  <span>{currentStep || 'Analyse en cours...'}</span>
                   <span>{Math.round(progress)}%</span>
                 </div>
                 <Progress value={progress} />
@@ -647,13 +781,13 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
             <Button
               onClick={analyzeBatch}
-              disabled={isAnalyzing || !batchInput.trim()}
+              disabled={isAnalyzing || isEnriching || !batchInput.trim()}
               className="w-full"
             >
-              {isAnalyzing ? (
+              {isAnalyzing || isEnriching ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyse en cours...
+                  {currentStep || 'Analyse en cours...'}
                 </>
               ) : (
                 "Analyser tous les produits"
