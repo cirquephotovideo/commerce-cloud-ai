@@ -20,7 +20,21 @@ interface BatchResult {
   success: boolean | 'partial';
   amazonStatus?: string | null;
   warning?: string;
+  analysisId?: string;
+  provider?: string;
+  model?: string;
 }
+
+// Helper to get enrichments from either location
+const getEnrichments = (result: BatchResult) => {
+  if (result.enrichments) {
+    return result.enrichments;
+  }
+  if (result.analysis?.analysis_result?.enrichments) {
+    return result.analysis.analysis_result.enrichments;
+  }
+  return null;
+};
 
 interface DetailedBatchResultsProps {
   results: BatchResult[];
@@ -245,64 +259,73 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                           )}
 
                           {/* Enrichments Summary */}
-                          {result.enrichments?.categories && (
-                            <div className="p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs">Catégories</p>
-                              <Badge variant="secondary" className="text-xs mt-1">
-                                🏷️ {result.enrichments.categories.google?.name || 'Mappée'}
-                              </Badge>
-                            </div>
-                          )}
-
-                          {result.enrichments?.images?.urls?.length > 0 && (
-                            <div className="p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs">Images</p>
-                              <p className="font-semibold flex items-center gap-1">
-                                <ImageIcon className="w-4 h-4" />
-                                {result.enrichments.images.urls.length}
-                              </p>
-                            </div>
-                          )}
-
-                          {result.enrichments?.shopping && (
-                            <div className="p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs">Google Shopping</p>
-                              <p className="font-semibold flex items-center gap-1">
-                                <ShoppingCart className="w-4 h-4" />
-                                {result.enrichments.shopping.competitors || 0}
-                              </p>
-                            </div>
-                          )}
-
-                          {result.enrichments?.advanced && (
-                            <div className="col-span-2 p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs mb-2">Enrichissements</p>
-                              <div className="flex flex-wrap gap-1">
-                                {result.enrichments.advanced.specifications && (
-                                  <Badge variant="secondary" className="text-xs">📋 Specs</Badge>
+                          {(() => {
+                            const enrichments = getEnrichments(result);
+                            if (!enrichments) return null;
+                            
+                            return (
+                              <>
+                                {enrichments?.categories?.success && (
+                                  <div className="p-3 bg-muted rounded-lg">
+                                    <p className="text-muted-foreground text-xs">Catégories</p>
+                                    <Badge variant="secondary" className="text-xs mt-1">
+                                      🏷️ {enrichments.categories.google?.name || enrichments.categories.amazon?.name || 'Mappée'}
+                                    </Badge>
+                                  </div>
                                 )}
-                                {result.enrichments.advanced.technical_description && (
-                                  <Badge variant="secondary" className="text-xs">📝 Tech</Badge>
-                                )}
-                                {result.enrichments.advanced.cost_analysis && (
-                                  <Badge variant="secondary" className="text-xs">💰 Coûts</Badge>
-                                )}
-                                {result.enrichments.advanced.rsgp_compliance && (
-                                  <Badge variant="secondary" className="text-xs">✅ RGPD</Badge>
-                                )}
-                              </div>
-                            </div>
-                          )}
 
-                          {result.enrichments?.odoo && (
-                            <div className="p-3 bg-muted rounded-lg">
-                              <p className="text-muted-foreground text-xs">Attributs Odoo</p>
-                              <p className="font-semibold flex items-center gap-1">
-                                <Package className="w-4 h-4" />
-                                {Object.keys(result.enrichments.odoo.attributes || {}).length}
-                              </p>
-                            </div>
-                          )}
+                                {enrichments?.images?.urls?.length > 0 && (
+                                  <div className="p-3 bg-muted rounded-lg">
+                                    <p className="text-muted-foreground text-xs">Images</p>
+                                    <p className="font-semibold flex items-center gap-1">
+                                      <ImageIcon className="w-4 h-4" />
+                                      {enrichments.images.urls.length}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {enrichments?.shopping?.competitors > 0 && (
+                                  <div className="p-3 bg-muted rounded-lg">
+                                    <p className="text-muted-foreground text-xs">Google Shopping</p>
+                                    <p className="font-semibold flex items-center gap-1">
+                                      <ShoppingCart className="w-4 h-4" />
+                                      {enrichments.shopping.competitors}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {enrichments?.advanced && (
+                                  <div className="col-span-2 p-3 bg-muted rounded-lg">
+                                    <p className="text-muted-foreground text-xs mb-2">Enrichissements Avancés</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {enrichments.advanced.specifications && (
+                                        <Badge variant="secondary" className="text-xs">📋 Specs</Badge>
+                                      )}
+                                      {enrichments.advanced.technical_description && (
+                                        <Badge variant="secondary" className="text-xs">📝 Tech</Badge>
+                                      )}
+                                      {enrichments.advanced.cost_analysis && (
+                                        <Badge variant="secondary" className="text-xs">💰 Coûts</Badge>
+                                      )}
+                                      {enrichments.advanced.rsgp_compliance && (
+                                        <Badge variant="secondary" className="text-xs">✅ RGPD</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {enrichments?.odoo?.attributes && Object.keys(enrichments.odoo.attributes).length > 0 && (
+                                  <div className="p-3 bg-muted rounded-lg">
+                                    <p className="text-muted-foreground text-xs">Attributs Odoo</p>
+                                    <p className="font-semibold flex items-center gap-1">
+                                      <Package className="w-4 h-4" />
+                                      {Object.keys(enrichments.odoo.attributes).length}
+                                    </p>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                           
                           {(() => {
                             const mappings = taxonomyMappings.get(result.analysis.id) || [];

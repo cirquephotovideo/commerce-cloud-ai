@@ -180,16 +180,52 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             console.warn('Missing product_name in analysis for:', product);
           }
           
-          // Auto-save to database with image URLs and category mapping
+          // 1️⃣ Save to database FIRST (without enrichments)
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            // Run enrichment pipeline if any auto-enrichments are enabled
+            const insertData: any = {
+              user_id: user.id,
+              product_url: product,
+              analysis_result: data.analysis,
+              image_urls: data.imageUrls || [],
+              tags: data.analysis?.tags_categories?.suggested_tags || [],
+              mapped_category_id: data.analysis?.tags_categories?.odoo_category_id,
+              mapped_category_name: data.analysis?.tags_categories?.odoo_category_name,
+              enrichment_status: {
+                categories: 'not_started',
+                images: 'not_started',
+                shopping: 'not_started',
+                specifications: 'not_started',
+                technical_description: 'not_started',
+                cost_analysis: 'not_started',
+                rsgp_compliance: 'not_started',
+                odoo_attributes: 'not_started',
+                heygen: 'not_started'
+              },
+              amazon_enrichment_status: autoAmazonEnrich ? 'pending' : null,
+              amazon_last_attempt: autoAmazonEnrich ? new Date().toISOString() : null,
+            };
+
+            const { data: insertedAnalysis, error: insertError } = await supabase
+              .from('product_analyses')
+              .insert(insertData)
+              .select()
+              .single();
+
+            if (insertError) {
+              console.error('Failed to save analysis:', insertError);
+              throw insertError;
+            }
+
+            console.log('✅ Product saved to database with ID:', insertedAnalysis.id);
+
+            // 2️⃣ Run enrichment pipeline with real analysisId
             let enrichmentResults: any = null;
             if (autoCategories || autoImages || autoShopping || autoAdvancedEnrich || autoOdooAttributes || autoVideo) {
-              console.log('🚀 Starting enrichment pipeline...');
+              console.log('🚀 Starting enrichment pipeline for analysis:', insertedAnalysis.id);
               try {
                 enrichmentResults = await runFullPipeline(
-                  '', // Will be set after insert
+                  insertedAnalysis.id,
                   data.analysis,
                   {
                     includeCategories: autoCategories,
@@ -201,44 +237,43 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                   }
                 );
                 console.log('✅ Enrichment pipeline completed:', enrichmentResults);
+
+                // 3️⃣ Update analysis with enrichment results
+                const { error: updateError } = await supabase
+                  .from('product_analyses')
+                  .update({
+                    analysis_result: {
+                      ...data.analysis,
+                      enrichments: enrichmentResults
+                    },
+                    image_urls: enrichmentResults?.images?.urls || data.imageUrls || [],
+                    mapped_category_id: enrichmentResults?.categories?.google?.id || data.analysis?.tags_categories?.odoo_category_id,
+                    mapped_category_name: enrichmentResults?.categories?.google?.name || data.analysis?.tags_categories?.odoo_category_name,
+                    enrichment_status: {
+                      categories: enrichmentResults?.categories?.success ? 'completed' : (enrichmentResults?.categories ? 'failed' : 'not_started'),
+                      images: enrichmentResults?.images?.success ? 'completed' : (enrichmentResults?.images ? 'failed' : 'not_started'),
+                      shopping: enrichmentResults?.shopping?.success ? 'completed' : (enrichmentResults?.shopping ? 'failed' : 'not_started'),
+                      specifications: enrichmentResults?.advanced?.specifications ? 'completed' : 'not_started',
+                      technical_description: enrichmentResults?.advanced?.technical_description ? 'completed' : 'not_started',
+                      cost_analysis: enrichmentResults?.advanced?.cost_analysis ? 'completed' : 'not_started',
+                      rsgp_compliance: enrichmentResults?.advanced?.rsgp_compliance ? 'completed' : 'not_started',
+                      odoo_attributes: enrichmentResults?.odoo?.success ? 'completed' : (enrichmentResults?.odoo ? 'failed' : 'not_started'),
+                      heygen: enrichmentResults?.video?.success ? 'completed' : 'not_started'
+                    }
+                  })
+                  .eq('id', insertedAnalysis.id);
+
+                if (updateError) {
+                  console.error('⚠️ Failed to update enrichments:', updateError);
+                } else {
+                  console.log('✅ Enrichments saved to database');
+                }
+
               } catch (enrichError) {
                 console.error('❌ Enrichment pipeline error:', enrichError);
+                toast.error(`Enrichissements échoués pour ${product}`);
               }
             }
-
-            const insertData: any = {
-              user_id: user.id,
-              product_url: product,
-              analysis_result: {
-                ...data.analysis,
-                enrichments: enrichmentResults
-              },
-              image_urls: enrichmentResults?.images?.urls || data.imageUrls || [],
-              tags: data.analysis?.tags_categories?.suggested_tags || [],
-              mapped_category_id: enrichmentResults?.categories?.google?.id || data.analysis?.tags_categories?.odoo_category_id,
-              mapped_category_name: enrichmentResults?.categories?.google?.name || data.analysis?.tags_categories?.odoo_category_name,
-              enrichment_status: {
-                categories: enrichmentResults?.categories ? 'completed' : 'not_started',
-                images: enrichmentResults?.images ? 'completed' : 'not_started',
-                shopping: enrichmentResults?.shopping ? 'completed' : 'not_started',
-                specifications: enrichmentResults?.advanced?.specifications ? 'completed' : 'not_started',
-                technical_description: enrichmentResults?.advanced?.technical_description ? 'completed' : 'not_started',
-                cost_analysis: enrichmentResults?.advanced?.cost_analysis ? 'completed' : 'not_started',
-                rsgp_compliance: enrichmentResults?.advanced?.rsgp_compliance ? 'completed' : 'not_started',
-                odoo_attributes: enrichmentResults?.odoo ? 'completed' : 'not_started',
-                heygen: enrichmentResults?.video ? 'completed' : 'not_started'
-              },
-              amazon_enrichment_status: autoAmazonEnrich ? 'pending' : null,
-              amazon_last_attempt: autoAmazonEnrich ? new Date().toISOString() : null,
-            };
-
-            console.log('💾 Saving to database with enrichments:', insertData);
-
-            const { data: insertedAnalysis } = await supabase
-              .from('product_analyses')
-              .insert(insertData)
-              .select()
-              .single();
 
             // Auto-enrichissement Amazon si activé
             if (autoAmazonEnrich && insertedAnalysis?.id) {
@@ -348,13 +383,24 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
               }
             }
 
+            // 4️⃣ Add enrichments to result displayed
+            const analysisResult = typeof insertedAnalysis.analysis_result === 'object' && insertedAnalysis.analysis_result !== null
+              ? insertedAnalysis.analysis_result
+              : {};
+            
             results.push({
               product,
-              analysis: insertedAnalysis,
+              analysis: {
+                ...insertedAnalysis,
+                analysis_result: {
+                  ...analysisResult,
+                  enrichments: enrichmentResults
+                }
+              },
               enrichments: enrichmentResults,
               imageUrls: enrichmentResults?.images?.urls || data.imageUrls || [],
               success: true,
-              analysisId: insertedAnalysis?.id,
+              analysisId: insertedAnalysis.id,
               provider,
               model
             });

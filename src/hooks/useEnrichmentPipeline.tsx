@@ -52,11 +52,22 @@ export const useEnrichmentPipeline = () => {
               description: productData.description
             }
           });
-          if (!error && data) {
-            results.categories = data;
+          if (error) {
+            console.error('Catégorisation error:', error);
+            results.categories = { 
+              success: false, 
+              message: error.message || 'Erreur de catégorisation',
+              code: error.code 
+            };
+          } else if (data) {
+            results.categories = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Catégorisation error:', error);
+          console.error('Catégorisation exception:', error);
+          results.categories = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
@@ -70,11 +81,21 @@ export const useEnrichmentPipeline = () => {
               productName: productData.product_name || productData.title
             }
           });
-          if (!error && data) {
-            results.images = data;
+          if (error) {
+            console.error('Images error:', error);
+            results.images = { 
+              success: false, 
+              message: error.message || 'Erreur de recherche d\'images' 
+            };
+          } else if (data) {
+            results.images = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Images error:', error);
+          console.error('Images exception:', error);
+          results.images = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
@@ -89,11 +110,21 @@ export const useEnrichmentPipeline = () => {
               ean: productData.ean
             }
           });
-          if (!error && data) {
-            results.shopping = data;
+          if (error) {
+            console.error('Google Shopping error:', error);
+            results.shopping = { 
+              success: false, 
+              message: error.message || 'Erreur Google Shopping' 
+            };
+          } else if (data) {
+            results.shopping = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Google Shopping error:', error);
+          console.error('Google Shopping exception:', error);
+          results.shopping = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
@@ -108,11 +139,21 @@ export const useEnrichmentPipeline = () => {
               purchasePrice: productData.purchase_price
             }
           });
-          if (!error && data) {
-            results.advanced = data;
+          if (error) {
+            console.error('Advanced enrichment error:', error);
+            results.advanced = { 
+              success: false, 
+              message: error.message || 'Erreur enrichissements avancés' 
+            };
+          } else if (data) {
+            results.advanced = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Advanced enrichment error:', error);
+          console.error('Advanced enrichment exception:', error);
+          results.advanced = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
@@ -127,11 +168,21 @@ export const useEnrichmentPipeline = () => {
               webSearchEnabled: true
             }
           });
-          if (!error && data) {
-            results.odoo = data;
+          if (error) {
+            console.error('Odoo attributes error:', error);
+            results.odoo = { 
+              success: false, 
+              message: error.message || 'Erreur attributs Odoo' 
+            };
+          } else if (data) {
+            results.odoo = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Odoo attributes error:', error);
+          console.error('Odoo attributes exception:', error);
+          results.odoo = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
@@ -145,11 +196,21 @@ export const useEnrichmentPipeline = () => {
               analysis_id: analysisId
             }
           });
-          if (!error && data) {
-            results.video = data;
+          if (error) {
+            console.error('Video generation error:', error);
+            results.video = { 
+              success: false, 
+              message: error.message || 'Erreur génération vidéo' 
+            };
+          } else if (data) {
+            results.video = { ...data, success: true };
           }
         } catch (error) {
-          console.error('Video generation error:', error);
+          console.error('Video generation exception:', error);
+          results.video = { 
+            success: false, 
+            message: error instanceof Error ? error.message : 'Erreur inconnue' 
+          };
         }
       }
 
