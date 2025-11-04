@@ -46,6 +46,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
   const [expandedIndices, setExpandedIndices] = useState<Set<number>>(new Set());
   const [taxonomyMappings, setTaxonomyMappings] = useState<Map<string, any[]>>(new Map());
   const [enrichingAll, setEnrichingAll] = useState(false);
+  const [showAllData, setShowAllData] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const loadTaxonomies = async () => {
@@ -436,6 +437,21 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                 )}
                               </Button>
                             </CollapsibleTrigger>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newShowAll = new Set(showAllData);
+                                if (newShowAll.has(index)) {
+                                  newShowAll.delete(index);
+                                } else {
+                                  newShowAll.add(index);
+                                }
+                                setShowAllData(newShowAll);
+                              }}
+                            >
+                              {showAllData.has(index) ? '📋 Vue normale' : '🔍 Tout afficher'}
+                            </Button>
                             {result.analysis?.id && (
                               <div className="flex-1">
                                 <ProductAIChat 
@@ -463,31 +479,67 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
 
                             <Separator />
 
-                            {/* Pricing Section */}
-                            {result.analysis.pricing && (
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">💰 Analyse Tarifaire</h4>
-                                <div className="space-y-1 text-sm bg-muted p-3 rounded">
-                                  <p><strong>Position marché:</strong> {result.analysis.pricing.market_position}</p>
-                                  <p><strong>Analyse concurrentielle:</strong> {result.analysis.pricing.competitive_analysis}</p>
-                                </div>
-                              </div>
-                            )}
+                            {/* PHASE 3: Informations Commerciales Complètes */}
+                            {(() => {
+                              const enrichments = getEnrichments(result);
+                              const costAnalysis = enrichments?.advanced?.cost_analysis;
+                              const pricing = result.analysis?.pricing;
+                              const competition = result.analysis?.competition;
+                              
+                              if (costAnalysis || pricing || competition) {
+                                return (
+                                  <>
+                                    <div className="space-y-3">
+                                      <h4 className="font-semibold text-sm">💼 Informations Commerciales</h4>
+                                      
+                                      {/* Pricing de base */}
+                                      {pricing && (
+                                        <div className="bg-muted p-3 rounded">
+                                          <strong className="text-sm">💰 Tarification:</strong>
+                                          <div className="mt-2 text-sm space-y-1">
+                                            <p><strong>Position marché:</strong> {pricing.market_position}</p>
+                                            <p><strong>Analyse concurrentielle:</strong> {pricing.competitive_analysis}</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      {/* Analyse de coûts enrichie */}
+                                      {costAnalysis && (
+                                        <Collapsible>
+                                          <CollapsibleTrigger asChild>
+                                            <Button variant="outline" size="sm" className="w-full justify-between">
+                                              💰 Analyse détaillée des coûts
+                                              <ChevronDown className="h-4 w-4" />
+                                            </Button>
+                                          </CollapsibleTrigger>
+                                          <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                            {typeof costAnalysis === 'string' ? (
+                                              <p className="text-sm whitespace-pre-wrap">{costAnalysis}</p>
+                                            ) : (
+                                              <pre className="text-xs overflow-auto">{JSON.stringify(costAnalysis, null, 2)}</pre>
+                                            )}
+                                          </CollapsibleContent>
+                                        </Collapsible>
+                                      )}
+                                      
+                                      {/* Concurrence */}
+                                      {competition && (
+                                        <div className="bg-muted p-3 rounded">
+                                          <strong className="text-sm">🏆 Concurrence:</strong>
+                                          <div className="mt-2 text-sm space-y-1">
+                                            <p><strong>Principaux concurrents:</strong> {competition.main_competitors?.join(', ')}</p>
+                                            <p><strong>Différenciation:</strong> {competition.differentiation}</p>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Separator />
+                                  </>
+                                );
+                              }
+                              return null;
+                            })()}
 
-                            <Separator />
-
-                            {/* Competition Section */}
-                            {result.analysis.competition && (
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">🏆 Concurrence</h4>
-                                <div className="space-y-1 text-sm bg-muted p-3 rounded">
-                                  <p><strong>Principaux concurrents:</strong> {result.analysis.competition.main_competitors?.join(', ')}</p>
-                                  <p><strong>Différenciation:</strong> {result.analysis.competition.differentiation}</p>
-                                </div>
-                              </div>
-                            )}
-
-                            <Separator />
 
                             {/* Trends Section */}
                             {result.analysis.trends && (
@@ -524,6 +576,46 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                 </div>
                               </div>
                             )}
+
+                            {/* PHASE 1: Description Complète Enrichie */}
+                            {(() => {
+                              const enrichments = getEnrichments(result);
+                              const baseDescription = result.analysis?.analysis_result?.description;
+                              const enrichedDescription = enrichments?.advanced?.summary;
+                              const technicalDescription = enrichments?.advanced?.technical_description;
+                              
+                              if (baseDescription || enrichedDescription || technicalDescription) {
+                                return (
+                                  <>
+                                    <Separator />
+                                    <div className="space-y-2">
+                                      <h4 className="font-semibold text-sm">📝 Description Complète</h4>
+                                      <div className="space-y-3 text-sm bg-muted p-4 rounded">
+                                        {baseDescription && (
+                                          <div>
+                                            <strong className="text-primary">Description de base:</strong>
+                                            <p className="mt-1 text-muted-foreground">{baseDescription}</p>
+                                          </div>
+                                        )}
+                                        {enrichedDescription && (
+                                          <div>
+                                            <strong className="text-primary">Description enrichie:</strong>
+                                            <p className="mt-1 text-muted-foreground whitespace-pre-wrap">{enrichedDescription}</p>
+                                          </div>
+                                        )}
+                                        {technicalDescription && (
+                                          <div>
+                                            <strong className="text-primary">Description technique:</strong>
+                                            <p className="mt-1 text-muted-foreground whitespace-pre-wrap">{technicalDescription}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                );
+                              }
+                              return null;
+                            })()}
 
                             <Separator />
 
@@ -570,38 +662,88 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
 
                             <Separator />
 
-                            {/* Global Report */}
-                            {result.analysis.global_report && (
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">📊 Rapport Global</h4>
-                                <div className="space-y-2 text-sm bg-muted p-3 rounded">
-                                  <div>
-                                    <strong>Points forts:</strong>
-                                    <ul className="list-disc list-inside mt-1">
-                                      {result.analysis.global_report.strengths?.map((strength: string, i: number) => (
-                                        <li key={i} className="text-green-600">{strength}</li>
-                                      ))}
-                                    </ul>
+                            {/* PHASE 4: Rapport Global Enrichi */}
+                            {(() => {
+                              const enrichments = getEnrichments(result);
+                              const globalReport = result.analysis?.global_report;
+                              const advancedEnrichment = enrichments?.advanced;
+                              
+                              if (globalReport || advancedEnrichment) {
+                                return (
+                                  <div className="space-y-3">
+                                    <h4 className="font-semibold text-sm">📊 Rapport Global & Enrichissements</h4>
+                                    
+                                    {/* Rapport de base */}
+                                    {globalReport && (
+                                      <div className="bg-muted p-3 rounded space-y-3">
+                                        {globalReport.strengths && (
+                                          <div>
+                                            <strong className="text-sm">✅ Points forts:</strong>
+                                            <ul className="list-disc list-inside mt-1 text-sm">
+                                              {globalReport.strengths.map((strength: string, i: number) => (
+                                                <li key={i} className="text-green-600">{strength}</li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        
+                                        {globalReport.weaknesses && (
+                                          <div>
+                                            <strong className="text-sm">⚠️ Points faibles:</strong>
+                                            <ul className="list-disc list-inside mt-1 text-sm">
+                                              {globalReport.weaknesses.map((weakness: string, i: number) => (
+                                                <li key={i} className="text-orange-600">{weakness}</li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        
+                                        {globalReport.priority_actions && (
+                                          <div>
+                                            <strong className="text-sm">🎯 Actions prioritaires:</strong>
+                                            <ul className="list-disc list-inside mt-1 text-sm">
+                                              {globalReport.priority_actions.map((action: string, i: number) => (
+                                                <li key={i}>{action}</li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    
+                                    {/* Résumé enrichi */}
+                                    {advancedEnrichment?.summary && (
+                                      <div className="bg-muted p-3 rounded">
+                                        <strong className="text-sm">✨ Résumé enrichi IA:</strong>
+                                        <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                                          {advancedEnrichment.summary}
+                                        </p>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Web enrichment */}
+                                    {advancedEnrichment?.web_enrichment && (
+                                      <Collapsible>
+                                        <CollapsibleTrigger asChild>
+                                          <Button variant="outline" size="sm" className="w-full justify-between">
+                                            🌐 Enrichissement Web
+                                            <ChevronDown className="h-4 w-4" />
+                                          </Button>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                          <p className="text-sm whitespace-pre-wrap">
+                                            {typeof advancedEnrichment.web_enrichment === 'string' 
+                                              ? advancedEnrichment.web_enrichment 
+                                              : JSON.stringify(advancedEnrichment.web_enrichment, null, 2)}
+                                          </p>
+                                        </CollapsibleContent>
+                                      </Collapsible>
+                                    )}
                                   </div>
-                                  <div>
-                                    <strong>Points faibles:</strong>
-                                    <ul className="list-disc list-inside mt-1">
-                                      {result.analysis.global_report.weaknesses?.map((weakness: string, i: number) => (
-                                        <li key={i} className="text-orange-600">{weakness}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                  <div>
-                                    <strong>Actions prioritaires:</strong>
-                                    <ul className="list-disc list-inside mt-1">
-                                      {result.analysis.global_report.priority_actions?.map((action: string, i: number) => (
-                                        <li key={i}>{action}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
+                                );
+                              }
+                              return null;
+                            })()}
 
                             {/* NOUVELLES SECTIONS D'ENRICHISSEMENTS */}
                             {(() => {
@@ -708,24 +850,46 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                           ✨ Enrichissements Avancés
                                         </h4>
                                         
-                                        {/* Spécifications */}
-                                        {enrichments.advanced.specifications && (
-                                          <Collapsible>
-                                            <CollapsibleTrigger asChild>
-                                              <Button variant="outline" size="sm" className="w-full justify-between">
-                                                📋 Spécifications techniques
-                                                <ChevronDown className="h-4 w-4" />
-                                              </Button>
-                                            </CollapsibleTrigger>
-                                            <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
-                                              <pre className="text-xs overflow-auto whitespace-pre-wrap">
-                                                {typeof enrichments.advanced.specifications === 'string' 
-                                                  ? enrichments.advanced.specifications 
-                                                  : JSON.stringify(enrichments.advanced.specifications, null, 2)}
-                                              </pre>
-                                            </CollapsibleContent>
-                                          </Collapsible>
-                                        )}
+                                        {/* PHASE 2: Spécifications COMPLÈTES */}
+                                        {(() => {
+                                          const specs = enrichments.advanced?.specifications || 
+                                                        enrichments.advanced?.summary || 
+                                                        result.analysis?.analysis_result?.specifications;
+                                          
+                                          if (specs) {
+                                            return (
+                                              <Collapsible>
+                                                <CollapsibleTrigger asChild>
+                                                  <Button variant="outline" size="sm" className="w-full justify-between">
+                                                    📋 Spécifications techniques complètes
+                                                    <ChevronDown className="h-4 w-4" />
+                                                  </Button>
+                                                </CollapsibleTrigger>
+                                                <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                                  {typeof specs === 'string' ? (
+                                                    <div className="text-sm whitespace-pre-wrap">{specs}</div>
+                                                  ) : typeof specs === 'object' ? (
+                                                    <div className="space-y-2 text-sm">
+                                                      {Object.entries(specs).map(([key, value]) => (
+                                                        <div key={key} className="border-b pb-2 last:border-0">
+                                                          <strong className="text-primary capitalize">
+                                                            {key.replace(/_/g, ' ')}:
+                                                          </strong>
+                                                          <p className="mt-1 text-muted-foreground">
+                                                            {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                                          </p>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : (
+                                                    <p className="text-sm">Aucune spécification disponible</p>
+                                                  )}
+                                                </CollapsibleContent>
+                                              </Collapsible>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
                                         
                                         {/* Description technique */}
                                         {enrichments.advanced.technical_description && (
@@ -857,6 +1021,22 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                 </>
                               );
                             })()}
+
+                            {/* PHASE 5: Vue Complète Debug */}
+                            {showAllData.has(index) && (
+                              <>
+                                <Separator />
+                                <div className="mt-4 p-4 bg-muted rounded">
+                                  <h4 className="font-semibold mb-2">🔍 Données brutes complètes</h4>
+                                  <pre className="text-xs overflow-auto max-h-96 whitespace-pre-wrap">
+                                    {JSON.stringify({
+                                      analysis: result.analysis,
+                                      enrichments: getEnrichments(result),
+                                    }, null, 2)}
+                                  </pre>
+                                </div>
+                              </>
+                            )}
                           </CollapsibleContent>
                         </Collapsible>
                       )}
