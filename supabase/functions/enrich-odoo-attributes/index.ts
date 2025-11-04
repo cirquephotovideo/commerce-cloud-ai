@@ -208,7 +208,7 @@ SPÉCIFICATIONS: ${JSON.stringify(productSpecs)}
       try {
         console.log(`[enrich-odoo-attributes] Tentative enrichissement Amazon MCP pour EAN: ${analysis.ean}`);
         
-        const { data: amazonMCP, error: amazonError } = await supabaseClient.functions.invoke('mcp-proxy', {
+        const { data: amazonMCP, error: amazonError } = await supabase.functions.invoke('mcp-proxy', {
           body: {
             packageId: 'amazon-seller-mcp',
             toolName: 'search_catalog',
