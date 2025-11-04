@@ -140,6 +140,35 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             continue;
           }
           
+          // Enhanced quality validation
+          const isIncomplete = 
+            data.analysis.parsing_error === true ||
+            data.analysis._incomplete === true ||
+            !data.analysis.seo?.score ||
+            !data.analysis.pricing?.estimated_price ||
+            !data.analysis.product_name;
+
+          if (isIncomplete) {
+            console.warn('⚠️ Analyse incomplète détectée:', {
+              product,
+              missing: data.analysis._missing_fields || [],
+              hasParsingError: data.analysis.parsing_error,
+              hasIncompleteFlag: data.analysis._incomplete
+            });
+            
+            // Mark as partial success
+            results.push({
+              product,
+              analysis: data.analysis,
+              imageUrls: data.imageUrls || [],
+              success: 'partial',
+              warning: 'Analyse incomplète - certains détails manquent',
+              provider,
+              model
+            });
+            continue;
+          }
+          
           // Warn if missing essential fields
           if (!data.analysis.product_name) {
             console.warn('Missing product_name in analysis for:', product);

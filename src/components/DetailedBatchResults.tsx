@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Checkbox } from "./ui/checkbox";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { CheckSquare, Square, Upload, ChevronDown, ChevronUp, Image as ImageIcon, ShoppingCart, Package } from "lucide-react";
+import { CheckSquare, Square, Upload, ChevronDown, ChevronUp, Image as ImageIcon, ShoppingCart, Package, AlertTriangle } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { Separator } from "./ui/separator";
@@ -15,8 +15,9 @@ interface BatchResult {
   analysis?: any;
   imageUrls?: string[];
   error?: string;
-  success: boolean;
+  success: boolean | 'partial';
   amazonStatus?: string | null;
+  warning?: string;
 }
 
 interface DetailedBatchResultsProps {
@@ -185,13 +186,20 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-lg">
                               {result.analysis?.product_name || result.product}
                             </p>
-                            {result.success ? (
+                            {result.success && result.success !== 'partial' && (
                               <Badge variant="default">Succès</Badge>
-                            ) : (
+                            )}
+                            {result.success === 'partial' && (
+                              <Badge variant="destructive" className="flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                Analyse partielle
+                              </Badge>
+                            )}
+                            {!result.success && (
                               <Badge variant="destructive">Erreur</Badge>
                             )}
                             {result.success && result.analysis?.amazon_enrichment_status === 'success' && (
@@ -213,6 +221,11 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                           <p className="text-sm text-muted-foreground mt-1">
                             {result.product}
                           </p>
+                          {result.warning && (
+                            <p className="text-xs text-destructive mt-1">
+                              ⚠️ {result.warning}
+                            </p>
+                          )}
                         </div>
                       </div>
 

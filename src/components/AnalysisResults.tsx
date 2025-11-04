@@ -1,8 +1,11 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { ImageOptimization } from "./ImageOptimization";
 import { DeepResearchButton } from "./DeepResearchButton";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { 
   Search, 
   TrendingUp, 
@@ -14,7 +17,9 @@ import {
   MessageSquare,
   Star,
   TrendingDown,
-  Minus
+  Minus,
+  RefreshCw,
+  AlertTriangle
 } from "lucide-react";
 
 interface AnalysisResultsProps {
@@ -47,21 +52,68 @@ export const AnalysisResults = ({ analysis, productInput, inputType, analysisId 
     return <Minus className="w-4 h-4 text-yellow-500" />;
   };
 
+  const handleReanalyze = async () => {
+    if (!analysisId) {
+      toast.error("ID d'analyse manquant");
+      return;
+    }
+    
+    try {
+      toast.info("Ré-analyse en cours...");
+      const { data, error } = await supabase.functions.invoke('complete-analysis', {
+        body: { analysisId }
+      });
+      
+      if (error) throw error;
+      
+      toast.success("Ré-analyse terminée avec succès");
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error: any) {
+      console.error('Reanalysis error:', error);
+      toast.error(`Erreur: ${error.message}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <Card className="bg-gradient-primary border-border backdrop-blur-sm shadow-card p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2 flex-1">
-            <Badge variant="secondary" className="mb-2">
-              {inputType === 'url' ? 'URL' : inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}
-            </Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="secondary">
+                {inputType === 'url' ? 'URL' : inputType === 'barcode' ? 'Code-barres' : 'Nom de produit'}
+              </Badge>
+              
+              {/* Incomplete Analysis Badge */}
+              {(analysis.parsing_error || analysis._incomplete) && (
+                <Badge variant="destructive" className="flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Analyse partielle
+                </Badge>
+              )}
+            </div>
+            
             <h2 className="text-3xl font-bold">{analysis.product_name || productInput}</h2>
             <p className="text-muted-foreground">{productInput}</p>
             
-            {/* Deep Research Button */}
-            {analysisId && (
-              <div className="mt-4">
+            {/* Missing Fields Warning */}
+            {analysis._missing_fields && analysis._missing_fields.length > 0 && (
+              <div className="mt-2 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                <p className="text-sm text-destructive font-medium mb-1">
+                  ⚠️ Certaines données sont manquantes :
+                </p>
+                <ul className="text-xs text-muted-foreground list-disc list-inside">
+                  {analysis._missing_fields.map((field: string) => (
+                    <li key={field}>{field}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {/* Action Buttons */}
+            <div className="flex gap-2 mt-4">
+              {analysisId && (
                 <DeepResearchButton
                   analysisId={analysisId}
                   productData={{
@@ -75,8 +127,21 @@ export const AnalysisResults = ({ analysis, productInput, inputType, analysisId 
                     undefined
                   }
                 />
-              </div>
-            )}
+              )}
+              
+              {/* Reanalyze Button */}
+              {analysis._needs_reanalysis && analysisId && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleReanalyze}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Compléter l'analyse
+                </Button>
+              )}
+            </div>
           </div>
           {analysis.global_report?.overall_score && (
             <div className="text-center">

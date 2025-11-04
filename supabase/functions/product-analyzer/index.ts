@@ -341,7 +341,35 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       return null;
     };
 
+    // Enhanced validation helper
+    const validateAnalysisCompleteness = (analysis: any): { incomplete: boolean; missingFields: string[] } => {
+      const requiredFields = [
+        { path: 'product_name', check: (v: any) => v && typeof v === 'string' && v.length > 0 },
+        { path: 'seo.score', check: (v: any) => typeof v === 'number' },
+        { path: 'seo.keywords', check: (v: any) => Array.isArray(v) && v.length > 0 },
+        { path: 'pricing.estimated_price', check: (v: any) => v && v !== 'N/A' },
+        { path: 'global_report.overall_score', check: (v: any) => typeof v === 'number' },
+        { path: 'description', check: (v: any) => v && v !== 'N/A' },
+        { path: 'description_long', check: (v: any) => v && v.length > 50 }
+      ];
+      
+      const missing: string[] = [];
+      for (const field of requiredFields) {
+        const value = field.path.split('.').reduce((obj, key) => obj?.[key], analysis);
+        if (!field.check(value)) {
+          missing.push(field.path);
+        }
+      }
+      
+      return {
+        incomplete: missing.length > 0,
+        missingFields: missing
+      };
+    };
+
     let analysisResult;
+    let isPartialParse = false;
+    
     try {
       const repairedContent = repairJSON(analysisContent);
       analysisResult = JSON.parse(repairedContent);
@@ -356,6 +384,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       });
     } catch (parseError) {
       console.error('[PRODUCT-ANALYZER] ❌ JSON parse failed after repair, attempting cleanup...', parseError);
+      isPartialParse = true;
       
       // Try to extract JSON from the response
       const jsonMatch = analysisContent.match(/\{[\s\S]*\}/);
@@ -396,6 +425,18 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       } else {
         throw new Error('No valid JSON found in AI response');
       }
+    }
+    
+    // Validate completeness
+    const validation = validateAnalysisCompleteness(analysisResult);
+    if (validation.incomplete || isPartialParse) {
+      analysisResult._incomplete = true;
+      analysisResult._missing_fields = validation.missingFields;
+      analysisResult._needs_reanalysis = true;
+      console.warn('[PRODUCT-ANALYZER] ⚠️ Analysis incomplete:', {
+        missing_fields: validation.missingFields,
+        partial_parse: isPartialParse
+      });
     }
 
     // Fetch product images if requested
