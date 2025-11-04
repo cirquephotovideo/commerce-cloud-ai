@@ -602,6 +602,261 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                                 </div>
                               </div>
                             )}
+
+                            {/* NOUVELLES SECTIONS D'ENRICHISSEMENTS */}
+                            {(() => {
+                              const enrichments = getEnrichments(result);
+                              if (!enrichments) return null;
+                              
+                              return (
+                                <>
+                                  {/* Section Catégories */}
+                                  {enrichments.categories?.success && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-2">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                                          🏷️ Catégorisation automatique
+                                        </h4>
+                                        <div className="space-y-2 text-sm bg-muted p-3 rounded">
+                                          {enrichments.categories.google && (
+                                            <div>
+                                              <strong>Google:</strong> {enrichments.categories.google.path || enrichments.categories.google.name}
+                                              {enrichments.categories.google.id && (
+                                                <Badge variant="outline" className="ml-2">
+                                                  ID: {enrichments.categories.google.id}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          )}
+                                          {enrichments.categories.amazon && (
+                                            <div>
+                                              <strong>Amazon:</strong> {enrichments.categories.amazon.path || enrichments.categories.amazon.name}
+                                              {enrichments.categories.amazon.id && (
+                                                <Badge variant="outline" className="ml-2">
+                                                  ID: {enrichments.categories.amazon.id}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Section Images trouvées */}
+                                  {enrichments.images?.images?.length > 0 && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-2">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                                          🖼️ Images trouvées ({enrichments.images.images.length})
+                                        </h4>
+                                        <div className="grid grid-cols-3 gap-2">
+                                          {enrichments.images.images.slice(0, 9).map((img: any, idx: number) => (
+                                            <div key={idx} className="relative">
+                                              <img
+                                                src={img.thumbnail || img.url}
+                                                alt={img.title || `Image ${idx + 1}`}
+                                                className="w-full h-32 object-cover rounded border hover:scale-105 transition-transform cursor-pointer"
+                                                onError={(e) => {
+                                                  e.currentTarget.style.display = 'none';
+                                                }}
+                                                onClick={() => window.open(img.url, '_blank')}
+                                              />
+                                              {img.source && (
+                                                <Badge variant="secondary" className="absolute bottom-1 right-1 text-xs">
+                                                  {img.source}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Section Google Shopping */}
+                                  {enrichments.shopping && enrichments.shopping.success !== false && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-2">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                                          🛒 Résultats Google Shopping
+                                        </h4>
+                                        <div className="space-y-2 text-sm bg-muted p-3 rounded">
+                                          {enrichments.shopping.competitors && (
+                                            <p><strong>Concurrents trouvés:</strong> {enrichments.shopping.competitors}</p>
+                                          )}
+                                          {enrichments.shopping.price_range && (
+                                            <p><strong>Gamme de prix:</strong> {enrichments.shopping.price_range}</p>
+                                          )}
+                                          {enrichments.shopping.top_sellers && Array.isArray(enrichments.shopping.top_sellers) && (
+                                            <p><strong>Top vendeurs:</strong> {enrichments.shopping.top_sellers.join(', ')}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Section Enrichissements Avancés */}
+                                  {enrichments.advanced && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-3">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                                          ✨ Enrichissements Avancés
+                                        </h4>
+                                        
+                                        {/* Spécifications */}
+                                        {enrichments.advanced.specifications && (
+                                          <Collapsible>
+                                            <CollapsibleTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-between">
+                                                📋 Spécifications techniques
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                              <pre className="text-xs overflow-auto whitespace-pre-wrap">
+                                                {typeof enrichments.advanced.specifications === 'string' 
+                                                  ? enrichments.advanced.specifications 
+                                                  : JSON.stringify(enrichments.advanced.specifications, null, 2)}
+                                              </pre>
+                                            </CollapsibleContent>
+                                          </Collapsible>
+                                        )}
+                                        
+                                        {/* Description technique */}
+                                        {enrichments.advanced.technical_description && (
+                                          <Collapsible>
+                                            <CollapsibleTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-between">
+                                                📝 Description technique
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-2 p-3 bg-muted rounded text-sm">
+                                              {enrichments.advanced.technical_description}
+                                            </CollapsibleContent>
+                                          </Collapsible>
+                                        )}
+                                        
+                                        {/* Analyse coûts */}
+                                        {enrichments.advanced.cost_analysis && (
+                                          <Collapsible>
+                                            <CollapsibleTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-between">
+                                                💰 Analyse des coûts
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                              <pre className="text-xs overflow-auto whitespace-pre-wrap">
+                                                {typeof enrichments.advanced.cost_analysis === 'string' 
+                                                  ? enrichments.advanced.cost_analysis 
+                                                  : JSON.stringify(enrichments.advanced.cost_analysis, null, 2)}
+                                              </pre>
+                                            </CollapsibleContent>
+                                          </Collapsible>
+                                        )}
+                                        
+                                        {/* Conformité RGPD */}
+                                        {enrichments.advanced.rsgp_compliance && (
+                                          <Collapsible>
+                                            <CollapsibleTrigger asChild>
+                                              <Button variant="outline" size="sm" className="w-full justify-between">
+                                                ✅ Conformité RGPD
+                                                <ChevronDown className="h-4 w-4" />
+                                              </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-2 p-3 bg-muted rounded">
+                                              <div className="space-y-2 text-sm">
+                                                {typeof enrichments.advanced.rsgp_compliance === 'object' ? (
+                                                  <>
+                                                    {enrichments.advanced.rsgp_compliance.status && (
+                                                      <p><strong>Statut:</strong> {enrichments.advanced.rsgp_compliance.status}</p>
+                                                    )}
+                                                    {enrichments.advanced.rsgp_compliance.documents_found && (
+                                                      <p><strong>Documents trouvés:</strong> {enrichments.advanced.rsgp_compliance.documents_found}</p>
+                                                    )}
+                                                    {enrichments.advanced.rsgp_compliance.certifications && Array.isArray(enrichments.advanced.rsgp_compliance.certifications) && (
+                                                      <p><strong>Certifications:</strong> {enrichments.advanced.rsgp_compliance.certifications.join(', ')}</p>
+                                                    )}
+                                                  </>
+                                                ) : (
+                                                  <p>{String(enrichments.advanced.rsgp_compliance)}</p>
+                                                )}
+                                              </div>
+                                            </CollapsibleContent>
+                                          </Collapsible>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Section Attributs Odoo */}
+                                  {enrichments.odoo?.attributes && Object.keys(enrichments.odoo.attributes).length > 0 && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-2">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2">
+                                          📋 Attributs Odoo
+                                          <Badge variant="secondary">{Object.keys(enrichments.odoo.attributes).length} attributs</Badge>
+                                        </h4>
+                                        <ScrollArea className="h-64">
+                                          <div className="space-y-1 text-sm bg-muted p-3 rounded">
+                                            {Object.entries(enrichments.odoo.attributes).map(([key, value]) => (
+                                              <div key={key} className="flex justify-between border-b pb-1 last:border-0">
+                                                <span className="font-medium">{key}:</span>
+                                                <span className="text-right ml-2">{String(value)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </ScrollArea>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {/* Section Erreurs d'enrichissement */}
+                                  {(enrichments.categories?.success === false || 
+                                    enrichments.images?.success === false || 
+                                    enrichments.shopping?.success === false ||
+                                    enrichments.odoo?.success === false) && (
+                                    <>
+                                      <Separator />
+                                      <div className="space-y-2">
+                                        <h4 className="font-semibold text-sm flex items-center gap-2 text-destructive">
+                                          ⚠️ Erreurs d'enrichissement
+                                        </h4>
+                                        <div className="space-y-2 text-sm bg-destructive/10 p-3 rounded">
+                                          {enrichments.categories?.success === false && (
+                                            <p>
+                                              <strong>Catégorisation:</strong> {enrichments.categories.message || 'Erreur inconnue'}
+                                            </p>
+                                          )}
+                                          {enrichments.images?.success === false && (
+                                            <p>
+                                              <strong>Images:</strong> {enrichments.images.message || 'Erreur inconnue'}
+                                            </p>
+                                          )}
+                                          {enrichments.shopping?.success === false && (
+                                            <p>
+                                              <strong>Google Shopping:</strong> {enrichments.shopping.message || 'Erreur inconnue'}
+                                            </p>
+                                          )}
+                                          {enrichments.odoo?.success === false && (
+                                            <p>
+                                              <strong>Attributs Odoo:</strong> {enrichments.odoo.message || 'Erreur inconnue'}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </CollapsibleContent>
                         </Collapsible>
                       )}
