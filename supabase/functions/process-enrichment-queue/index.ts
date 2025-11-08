@@ -206,7 +206,6 @@ serve(async (req) => {
                 if (supplierProduct.ean || supplierProduct.product_name) {
                   console.log('[ENRICHMENT-QUEUE] Using Amazon MCP for enrichment');
                   
-                  // Utiliser le MCP Amazon au lieu de amazon-product-enrichment
                   const { data: mcpResult, error: mcpError } = await supabase.functions.invoke('mcp-proxy', {
                     body: {
                       packageId: 'amazon-seller-mcp',
@@ -223,7 +222,6 @@ serve(async (req) => {
                     const amazonItem = mcpResult.data.items[0];
                     console.log(`[ENRICHMENT-QUEUE] Found Amazon product: ${amazonItem.asin}`);
                     
-                    // Insérer dans amazon_product_data
                     try {
                       await supabase.from('amazon_product_data').upsert({
                         analysis_id: analysis.id,
@@ -247,7 +245,7 @@ serve(async (req) => {
                     }
                   }
                 }
-                break;
+                return { success: true, type: 'amazon' };
 
               case 'images':
               case 'ai_images':
@@ -322,10 +320,26 @@ serve(async (req) => {
                     webSearchEnabled: ollamaPreferences.webSearchEnabled
                   }
                 });
+              
+              default:
+                return { success: true, type };
             }
           } catch (enrichError) {
             console.error(`[ENRICHMENT-QUEUE] Error in ${type} enrichment:`, enrichError);
             return { error: enrichError };
+          }
+        });
+
+        // Exécuter TOUS les enrichissements en parallèle
+        console.log(`[ENRICHMENT-QUEUE] Launching ${enrichmentPromises.length} enrichments in parallel`);
+        const enrichmentResults = await Promise.allSettled(enrichmentPromises);
+
+        // Logger les résultats
+        enrichmentResults.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            console.log(`[ENRICHMENT-QUEUE] ✅ Enrichment ${enrichmentTypes[idx]} completed`);
+          } else {
+            console.error(`[ENRICHMENT-QUEUE] ❌ Enrichment ${enrichmentTypes[idx]} failed:`, result.reason);
           }
         });
 
