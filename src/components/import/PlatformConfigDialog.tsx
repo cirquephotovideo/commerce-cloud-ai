@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PlatformConfigDialogProps {
   open: boolean;
@@ -38,6 +39,7 @@ export const PlatformConfigDialog = ({
   const queryClient = useQueryClient();
   const [platformType, setPlatformType] = useState(existingConfig?.platform_type || "odoo");
   const [platformUrl, setPlatformUrl] = useState(existingConfig?.platform_url || "");
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [credentials, setCredentials] = useState<any>(() => {
     if (!existingConfig) {
       return {
@@ -71,6 +73,30 @@ export const PlatformConfigDialog = ({
       };
     }
     return {};
+  });
+
+  const testConnection = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('test-platform-connection', {
+        body: {
+          platform_type: platformType,
+          platform_url: platformUrl,
+          credentials,
+        },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      setTestResult({ success: true, message: data.message });
+      toast.success('Connexion réussie ! ✓');
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Échec de la connexion';
+      setTestResult({ success: false, message });
+      toast.error(`Échec du test : ${message}`);
+    },
   });
 
   const savePlatform = useMutation({
@@ -126,6 +152,7 @@ export const PlatformConfigDialog = ({
       );
       queryClient.invalidateQueries({ queryKey: ['platform-configurations'] });
       onOpenChange(false);
+      setTestResult(null);
     },
     onError: (error: Error) => {
       console.error('Erreur sauvegarde config:', error);
@@ -281,9 +308,34 @@ export const PlatformConfigDialog = ({
           {renderCredentialFields()}
         </div>
 
-        <DialogFooter>
+        {testResult && (
+          <Alert variant={testResult.success ? "default" : "destructive"}>
+            <div className="flex items-start gap-2">
+              {testResult.success ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
+              ) : (
+                <XCircle className="h-4 w-4 text-destructive mt-0.5" />
+              )}
+              <AlertDescription className="text-sm">
+                {testResult.message}
+              </AlertDescription>
+            </div>
+          </Alert>
+        )}
+
+        <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Annuler
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => testConnection.mutate()}
+            disabled={testConnection.isPending || !platformUrl}
+          >
+            {testConnection.isPending && (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            )}
+            Tester la connexion
           </Button>
           <Button
             onClick={() => savePlatform.mutate()}
