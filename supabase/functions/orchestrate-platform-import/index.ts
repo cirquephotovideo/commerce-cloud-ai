@@ -82,7 +82,7 @@ serve(async (req) => {
     }
 
     // PHASE 2: Create import job record
-    const chunkSize = 500;
+    const chunkSize = 100; // Reduced from 500 to avoid PostgreSQL statement timeout
     const totalChunks = Math.ceil(totalProducts / chunkSize);
     
     console.log('[ORCHESTRATE] Phase 2: Creating import job record...');
