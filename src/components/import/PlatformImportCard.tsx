@@ -16,8 +16,8 @@ interface PlatformImportCardProps {
   };
   onImport: (platformId: string) => void;
   onConfigure: (platformId: string) => void;
-  isImporting?: boolean;
   jobId?: string | null;
+  onJobComplete?: () => void;
 }
 
 const platformIcons: Record<string, string> = {
@@ -40,8 +40,8 @@ export const PlatformImportCard = ({
   platform,
   onImport,
   onConfigure,
-  isImporting = false,
   jobId = null,
+  onJobComplete,
 }: PlatformImportCardProps) => {
   return (
     <Card className="p-6 hover:shadow-lg transition-shadow">
@@ -94,12 +94,12 @@ export const PlatformImportCard = ({
         <div className="flex gap-2">
           <Button
             onClick={() => onImport(platform.id)}
-            disabled={!platform.is_active || isImporting}
+            disabled={!platform.is_active || !!jobId}
             className="flex-1"
             size="sm"
           >
             <Download className="w-4 h-4 mr-2" />
-            {isImporting ? "Import en cours..." : "Importer"}
+            {jobId ? "Import en cours..." : "Importer"}
           </Button>
           <Button
             onClick={() => onConfigure(platform.id)}
@@ -111,8 +111,12 @@ export const PlatformImportCard = ({
         </div>
 
         {/* Progress section */}
-        {isImporting && jobId && (
-          <PlatformImportProgress platformId={platform.id} jobId={jobId} />
+        {jobId && (
+          <PlatformImportProgress 
+            platformId={platform.id} 
+            jobId={jobId}
+            onComplete={onJobComplete}
+          />
         )}
       </div>
     </Card>

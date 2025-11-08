@@ -11,9 +11,10 @@ import { fr } from "date-fns/locale";
 interface PlatformImportProgressProps {
   platformId: string;
   jobId: string | null;
+  onComplete?: () => void;
 }
 
-export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProgressProps) => {
+export const PlatformImportProgress = ({ platformId, jobId, onComplete }: PlatformImportProgressProps) => {
   const [logs, setLogs] = useState<any[]>([]);
 
   // Fetch job progress
@@ -95,6 +96,16 @@ export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProg
   const isCompleted = job.status === 'completed';
   const isFailed = job.status === 'failed';
   const isProcessing = job.status === 'processing';
+
+  // Nettoyer le job quand il est terminé
+  useEffect(() => {
+    if (job && (isCompleted || isFailed) && onComplete) {
+      const timer = setTimeout(() => {
+        onComplete();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [job?.status, isCompleted, isFailed, onComplete]);
 
   return (
     <Card className="mt-4">

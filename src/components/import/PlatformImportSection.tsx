@@ -13,8 +13,7 @@ export const PlatformImportSection = () => {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [selectedPlatformId, setSelectedPlatformId] = useState<string | undefined>();
   const [selectedConfig, setSelectedConfig] = useState<any>(undefined);
-  const [importingPlatformId, setImportingPlatformId] = useState<string | null>(null);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeJobs, setActiveJobs] = useState<Map<string, string>>(new Map());
 
   const { importFromPlatform } = usePlatformImport();
 
@@ -37,13 +36,22 @@ export const PlatformImportSection = () => {
   });
 
   const handleImport = async (platformId: string) => {
-    setImportingPlatformId(platformId);
     try {
       const result = await importFromPlatform.mutateAsync(platformId);
-      setActiveJobId(result?.import_job_id || null);
-    } finally {
-      setImportingPlatformId(null);
+      if (result?.import_job_id) {
+        setActiveJobs(prev => new Map(prev).set(platformId, result.import_job_id));
+      }
+    } catch (error) {
+      console.error('Import failed:', error);
     }
+  };
+
+  const handleJobComplete = (platformId: string) => {
+    setActiveJobs(prev => {
+      const next = new Map(prev);
+      next.delete(platformId);
+      return next;
+    });
   };
 
   const handleConfigure = (platformId: string) => {
@@ -100,8 +108,8 @@ export const PlatformImportSection = () => {
               platform={platform}
               onImport={handleImport}
               onConfigure={handleConfigure}
-              isImporting={importingPlatformId === platform.id}
-              jobId={importingPlatformId === platform.id ? activeJobId : null}
+              jobId={activeJobs.get(platform.id) || null}
+              onJobComplete={() => handleJobComplete(platform.id)}
             />
           ))}
         </div>
