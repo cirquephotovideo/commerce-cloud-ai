@@ -14,7 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData, preferred_model } = await req.json();
+    const { analysisId, productData, preferred_model, web_search_enabled } = await req.json();
+    console.log('[ENRICH-SPECS] Web search:', web_search_enabled || false);
     console.log('[ENRICH-SPECS] Starting enrichment for analysis:', analysisId);
     console.log('[ENRICH-SPECS] Preferred model:', preferred_model || 'auto');
 
@@ -65,14 +66,14 @@ Fournis les spécifications suivantes en JSON structuré:
 
     // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
-      model: preferred_model || 'gpt-oss:120b-cloud',
+      model: preferred_model || 'gpt-oss:20b-cloud',
       messages: [
         { role: 'system', content: 'Tu es un expert en spécifications techniques de produits.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.3,
       max_tokens: 2000,
-      web_search: true  // Enable Ollama native web search
+      web_search: web_search_enabled || false  // Utiliser le paramètre utilisateur
     });
 
     if (!aiResponse.success) {

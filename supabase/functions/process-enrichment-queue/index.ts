@@ -66,6 +66,30 @@ serve(async (req) => {
       );
     }
 
+    // Phase 1: Charger les préférences Ollama de l'utilisateur
+    let ollamaPreferences = { 
+      preferredModel: 'gpt-oss:20b-cloud', 
+      webSearchEnabled: false 
+    };
+
+    if (tasks.length > 0 && tasks[0].user_id) {
+      const { data: ollamaConfig } = await supabase
+        .from('ollama_configurations')
+        .select('default_model, web_search_enabled')
+        .eq('user_id', tasks[0].user_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (ollamaConfig) {
+        ollamaPreferences = {
+          preferredModel: ollamaConfig.default_model || 'gpt-oss:20b-cloud',
+          webSearchEnabled: ollamaConfig.web_search_enabled || false
+        };
+        console.log('[ENRICHMENT-QUEUE] Loaded Ollama preferences:', ollamaPreferences);
+      }
+    }
+
     let successCount = 0;
     let errorCount = 0;
     const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes timeout per task
@@ -162,10 +186,18 @@ serve(async (req) => {
           .update({ analysis_id: analysis.id })
           .eq('id', task.id);
 
-        // Process additional enrichments
-        const enrichmentTypes = task.enrichment_type || [];
+        // Phase 6: Logs de débogage
+        console.log('[ENRICHMENT-QUEUE] Using Ollama preferences:', {
+          model: ollamaPreferences.preferredModel,
+          webSearch: ollamaPreferences.webSearchEnabled
+        });
 
-        for (const type of enrichmentTypes) {
+        // Phase 3: Process additional enrichments EN PARALLÈLE
+        const enrichmentTypes = task.enrichment_type || [];
+        console.log('[ENRICHMENT-QUEUE] Enrichment types to process:', enrichmentTypes);
+
+        // Créer un tableau de promesses pour tous les enrichissements
+        const enrichmentPromises = enrichmentTypes.map(async (type) => {
           try {
             console.log(`[ENRICHMENT-QUEUE] Processing enrichment type: ${type}`);
 
@@ -219,81 +251,96 @@ serve(async (req) => {
 
               case 'images':
               case 'ai_images':
-                await supabase.functions.invoke('generate-image', {
+                return supabase.functions.invoke('generate-image', {
                   body: { 
                     analysisId: analysis.id,
                     productName: supplierProduct.product_name,
                     description: supplierProduct.description,
                   }
                 });
-                break;
 
               case 'specifications':
                 console.log('[ENRICHMENT-QUEUE] Generating specifications');
-                await supabase.functions.invoke('enrich-specifications', {
+                return supabase.functions.invoke('enrich-specifications', {
                   body: { 
                     analysisId: analysis.id,
                     productData: supplierProduct,
+                    preferred_model: ollamaPreferences.preferredModel,
+                    web_search_enabled: ollamaPreferences.webSearchEnabled
                   }
                 });
-                break;
 
               case 'cost_analysis':
                 console.log('[ENRICHMENT-QUEUE] Generating cost analysis');
-                await supabase.functions.invoke('enrich-cost-analysis', {
+                return supabase.functions.invoke('enrich-cost-analysis', {
                   body: { 
                     analysisId: analysis.id,
                     productData: supplierProduct,
                     purchasePrice: supplierProduct?.purchase_price,
+                    preferred_model: ollamaPreferences.preferredModel,
+                    web_search_enabled: ollamaPreferences.webSearchEnabled
                   }
                 });
-                break;
 
               case 'technical_description':
                 console.log('[ENRICHMENT-QUEUE] Generating technical description');
-                await supabase.functions.invoke('enrich-technical-description', {
+                return supabase.functions.invoke('enrich-technical-description', {
                   body: { 
                     analysisId: analysis.id,
                     productData: supplierProduct,
+                    preferred_model: ollamaPreferences.preferredModel,
+                    web_search_enabled: ollamaPreferences.webSearchEnabled
                   }
                 });
-                break;
 
               case 'video':
-                await supabase.functions.invoke('heygen-video-generator', {
+                return supabase.functions.invoke('heygen-video-generator', {
                   body: { 
                     analysisId: analysis.id,
                     productData: analysisData,
                   }
                 });
-                break;
 
               case 'rsgp':
                 console.log('[ENRICHMENT-QUEUE] Generating RSGP compliance');
-                await supabase.functions.invoke('rsgp-compliance-generator', {
+                return supabase.functions.invoke('rsgp-compliance-generator', {
                   body: { 
                     analysis_id: analysis.id,
                     productData: analysisData,
+                    preferred_model: ollamaPreferences.preferredModel,
+                    web_search_enabled: ollamaPreferences.webSearchEnabled
                   }
                 });
-                break;
 
               case 'odoo_attributes':
                 console.log('[ENRICHMENT-QUEUE] Enriching Odoo attributes');
-                await supabase.functions.invoke('enrich-odoo-attributes', {
+                return supabase.functions.invoke('enrich-odoo-attributes', {
                   body: { 
                     analysisId: analysis.id,
                     provider: 'lovable',
-                    webSearchEnabled: true
+                    preferred_model: ollamaPreferences.preferredModel,
+                    webSearchEnabled: ollamaPreferences.webSearchEnabled
                   }
                 });
-                break;
             }
           } catch (enrichError) {
             console.error(`[ENRICHMENT-QUEUE] Error in ${type} enrichment:`, enrichError);
-            // Continue with other enrichments even if one fails
+            return { error: enrichError };
           }
-        }
+        });
+
+        // Exécuter TOUS les enrichissements en parallèle
+        console.log(`[ENRICHMENT-QUEUE] Launching ${enrichmentPromises.length} enrichments in parallel`);
+        const enrichmentResults = await Promise.allSettled(enrichmentPromises);
+
+        // Logger les résultats
+        enrichmentResults.forEach((result, idx) => {
+          if (result.status === 'fulfilled') {
+            console.log(`[ENRICHMENT-QUEUE] ✅ Enrichment ${enrichmentTypes[idx]} completed`);
+          } else {
+            console.error(`[ENRICHMENT-QUEUE] ❌ Enrichment ${enrichmentTypes[idx]} failed:`, result.reason);
+          }
+        });
 
         // Mark as completed
         await supabase

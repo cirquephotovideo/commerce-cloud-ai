@@ -31,14 +31,18 @@ export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionPro
     enrichMutation.mutate({ enrichmentType: selectedEnrichments });
   };
   
-  // Gérer le cas où description est un objet ou une chaîne
-  const descriptionData = analysis?.long_description || analysis?.analysis_result?.description;
+  // Phase 5: Simplifier l'extraction de la description
+  const descriptionData = analysis?.long_description || 
+                          analysis?.analysis_result?.description_long || 
+                          analysis?.analysis_result?.description;
+
   const description = typeof descriptionData === 'string' 
     ? descriptionData 
-    : descriptionData?.suggested_description || 
-      analysis?.analysis_result?.product_description ||
-      analysis?.description ||
-      'Aucune description disponible';
+    : (descriptionData?.suggested_description || 
+       descriptionData?.current_quality || 
+       descriptionData?.key_features || 
+       analysis?.analysis_result?.product_description ||
+       'Aucune description disponible pour ce produit, car aucune information précise n\'a pu être trouvée lors de la recherche web.');
   
   const webSources = analysis?.analysis_result?._web_sources || [];
   const confidenceLevel = analysis?.analysis_result?._confidence_level;

@@ -13,7 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData, preferred_model } = await req.json();
+    const { analysisId, productData, preferred_model, web_search_enabled } = await req.json();
+    console.log('[ENRICH-TECH] Web search:', web_search_enabled || false);
     console.log('[ENRICH-TECH-DESC] Starting for:', analysisId);
     console.log('[ENRICH-TECH-DESC] Preferred model:', preferred_model || 'auto');
 
@@ -60,14 +61,14 @@ Format: Texte structuré en paragraphes avec sous-titres.`;
 
     // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
-      model: preferred_model || 'gpt-oss:120b-cloud',
+      model: preferred_model || 'gpt-oss:20b-cloud',
       messages: [
         { role: 'system', content: 'Tu es un rédacteur technique expert spécialisé dans les descriptions produits B2B.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.4,
       max_tokens: 3000,
-      web_search: true  // Enable Ollama native web search
+      web_search: web_search_enabled || false  // Utiliser le paramètre utilisateur
     });
 
     if (!aiResponse.success) {
