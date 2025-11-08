@@ -43,7 +43,7 @@ export const useEnrichmentPipeline = () => {
     try {
       // Load Ollama preferences at the start
       const { data: { session } } = await supabase.auth.getSession();
-      let ollamaPreferences = { preferredModel: 'gpt-oss:120b-cloud', webSearchEnabled: false };
+      let ollamaPreferences = { preferredModel: 'gpt-oss:20b-cloud', webSearchEnabled: false };
       
       if (session?.user) {
         const { data: ollamaConfig } = await supabase
@@ -56,7 +56,7 @@ export const useEnrichmentPipeline = () => {
         
         if (ollamaConfig) {
           ollamaPreferences = {
-            preferredModel: ollamaConfig.default_model || 'gpt-oss:120b-cloud',
+            preferredModel: ollamaConfig.default_model || 'gpt-oss:20b-cloud',
             webSearchEnabled: ollamaConfig.web_search_enabled || false
           };
           console.log('[useEnrichmentPipeline] Loaded Ollama preferences:', ollamaPreferences);

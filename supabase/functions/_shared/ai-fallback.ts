@@ -177,10 +177,11 @@ export async function callAIWithFallback(
       const endpoint = apiUrl;
       const startTime = Date.now();
 
-      // Timeout spécial pour Ollama (45s) pour les gros modèles cloud
+      // Timeout adaptatif: 90s avec web search, 60s sans
       const isOllama = providerConfig.provider === 'ollama';
       const controller = new AbortController();
-      const timeoutId = isOllama ? setTimeout(() => controller.abort(), 45000) : undefined;
+      const ollamaTimeout = (isOllama && options.web_search) ? 90000 : 60000;
+      const timeoutId = isOllama ? setTimeout(() => controller.abort(), ollamaTimeout) : undefined;
 
       try {
         // Build headers conditionally
@@ -207,9 +208,15 @@ export async function callAIWithFallback(
         };
 
         // Add web_search for Ollama if requested
-        if (isOllama && options.web_search) {
-          requestBody.web_search = true;
-          console.log('[AI-FALLBACK] Enabling Ollama native web search');
+        if (options.web_search) {
+          if (isOllama) {
+            requestBody.web_search = true;
+            console.log('[AI-FALLBACK] Enabling Ollama native web search');
+          } else if (providerConfig.provider === 'lovable_ai') {
+            // Lovable AI: ajouter context dans le prompt au lieu de web_search natif
+            console.log('[AI-FALLBACK] Web search requested but Lovable AI does not support native web_search');
+            console.log('[AI-FALLBACK] Consider adding Serper API call for web context');
+          }
         }
         
         const response = await fetch(endpoint, {
@@ -222,6 +229,10 @@ export async function callAIWithFallback(
         if (timeoutId) clearTimeout(timeoutId);
         const duration = Date.now() - startTime;
         console.log(`[AI-FALLBACK] ${providerConfig.provider} responded in ${duration}ms`);
+        
+        if (duration > 30000) {
+          console.warn(`[AI-FALLBACK] ⚠️ Slow response (${duration}ms), consider using a faster model`);
+        }
 
         if (!response.ok) {
           lastError = { status: response.status, message: await response.text() };
@@ -246,6 +257,7 @@ export async function callAIWithFallback(
         const content = data.message?.content || data.choices?.[0]?.message?.content || data;
         
         console.log(`[AI-FALLBACK] ✅ Success with provider: ${providerConfig.provider}`);
+        console.log(`[AI-FALLBACK] Response preview: ${JSON.stringify(data).substring(0, 200)}...`);
         
         return {
           success: true,

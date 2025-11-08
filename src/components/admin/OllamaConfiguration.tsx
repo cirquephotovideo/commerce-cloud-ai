@@ -33,7 +33,7 @@ export const OllamaConfiguration = () => {
     api_key_encrypted: "",
     available_models: [] as string[],
     is_active: true,
-    default_model: "gpt-oss:120b-cloud",
+    default_model: "gpt-oss:20b-cloud",
     web_search_enabled: false,
   });
   const [selectedModel, setSelectedModel] = useState("llama3");
@@ -80,11 +80,11 @@ export const OllamaConfiguration = () => {
           api_key_encrypted: latestConfig.api_key_encrypted || "",
           available_models: models.length > 0 ? models : (isCloud ? CLOUD_MODELS : LOCAL_MODELS),
           is_active: latestConfig.is_active,
-          default_model: latestConfig.default_model || (isCloud ? 'gpt-oss:120b-cloud' : 'llama3'),
+          default_model: latestConfig.default_model || (isCloud ? 'gpt-oss:20b-cloud' : 'llama3'),
           web_search_enabled: latestConfig.web_search_enabled || false,
         });
         
-        setSelectedModel(latestConfig.default_model || (isCloud ? 'gpt-oss:120b-cloud' : 'llama3'));
+        setSelectedModel(latestConfig.default_model || (isCloud ? 'gpt-oss:20b-cloud' : 'llama3'));
         setWebSearchEnabled(latestConfig.web_search_enabled || false);
         setIsCloudMode(isCloud);
       }

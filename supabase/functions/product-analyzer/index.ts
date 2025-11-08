@@ -384,9 +384,10 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       });
     } catch (parseError) {
       console.error('[PRODUCT-ANALYZER] ❌ JSON parse failed after repair, attempting cleanup...', parseError);
+      console.log('[PRODUCT-ANALYZER] Content preview:', analysisContent.substring(0, 300));
       isPartialParse = true;
       
-      // Try to extract JSON from the response
+      // Tentative 1: Extraire le JSON entre premiers { et derniers }
       const jsonMatch = analysisContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
@@ -394,10 +395,26 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
           analysisResult = JSON.parse(repairedMatch);
           console.log('[PRODUCT-ANALYZER] ✅ Successfully parsed extracted JSON');
         } catch (secondError) {
-          console.error('[PRODUCT-ANALYZER] ❌ Second parse failed, extracting partial data');
+          console.error('[PRODUCT-ANALYZER] Second parse failed, trying truncation');
           
-          // Phase 3: Better fallback extraction
-          analysisResult = {
+          // Tentative 2: Tronquer à 8000 chars et réessayer
+          const truncated = analysisContent.slice(0, 8000);
+          const truncMatch = truncated.match(/\{[\s\S]*\}/);
+          if (truncMatch) {
+            try {
+              analysisResult = JSON.parse(repairJSON(truncMatch[0]));
+              console.log('[PRODUCT-ANALYZER] ✅ Parsed truncated JSON');
+            } catch (thirdError) {
+              console.error('[PRODUCT-ANALYZER] All JSON parsing attempts failed, using fallback');
+              // Continue to fallback extraction
+            }
+          }
+          
+          if (!analysisResult) {
+            console.error('[PRODUCT-ANALYZER] ❌ All parsing attempts failed, extracting partial data');
+            
+            // Phase 3: Better fallback extraction
+            analysisResult = {
             product_name: extractField(analysisContent, 'product_name') || productInput,
             description: extractField(analysisContent, 'description') || 'N/A',
             description_long: extractField(analysisContent, 'description_long') || extractField(analysisContent, 'description') || 'Description non disponible',
@@ -412,15 +429,16 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
             global_report: {
               overall_score: 50
             },
-            raw_analysis: analysisContent,
-            parsing_error: true
-          };
-          
-          console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
-            product_name: analysisResult.product_name,
-            has_description: !!analysisResult.description,
-            has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
-          });
+              raw_analysis: analysisContent,
+              parsing_error: true
+            };
+            
+            console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
+              product_name: analysisResult.product_name,
+              has_description: !!analysisResult.description,
+              has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
+            });
+          }
         }
       } else {
         throw new Error('No valid JSON found in AI response');
