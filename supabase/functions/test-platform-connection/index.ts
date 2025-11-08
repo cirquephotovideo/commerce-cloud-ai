@@ -77,79 +77,106 @@ async function testOdooConnection(baseUrl: string, credentials: Record<string, s
     };
   }
 
-  // Normalize URL
-  const normalizedUrl = baseUrl.replace(/\/$/, '');
-  const endpoints = [
-    `${normalizedUrl}/jsonrpc`,
-    `${normalizedUrl}/web/database/jsonrpc`
-  ];
+  // Build XML-RPC endpoint candidates (same logic as import-from-odoo)
+  const buildXmlRpcCandidates = (url: string): string[] => {
+    try {
+      const urlObj = new URL(url);
+      const origin = urlObj.origin;
+      const path = urlObj.pathname;
+      
+      const candidates: string[] = [];
+      
+      // Priority 1: Origin root (most common)
+      candidates.push(`${origin}/xmlrpc/2`);
+      
+      // Priority 2: With /odoo prefix
+      if (!path.includes('/odoo')) {
+        candidates.push(`${origin}/odoo/xmlrpc/2`);
+      }
+      
+      // Priority 3: Use configured path if exists and different
+      if (path && path !== '/' && !candidates.includes(`${origin}${path}/xmlrpc/2`)) {
+        candidates.push(`${origin}${path}/xmlrpc/2`);
+      }
+      
+      return candidates;
+    } catch (e) {
+      return [`${url}/xmlrpc/2`];
+    }
+  };
+
+  const endpoints = buildXmlRpcCandidates(baseUrl);
+  console.log('[ODOO-TEST] XML-RPC endpoint candidates:', endpoints);
 
   let lastError = '';
   
-  for (const endpoint of endpoints) {
+  for (const baseEndpoint of endpoints) {
     try {
-      console.log(`[ODOO-TEST] Trying endpoint: ${endpoint}`);
+      console.log(`[ODOO-TEST] Trying endpoint: ${baseEndpoint}`);
       
-      // Step 1: Authenticate
-      const authResponse = await fetch(endpoint, {
+      // Step 1: Authenticate using XML-RPC
+      const authPayload = `<?xml version="1.0"?>
+        <methodCall>
+          <methodName>authenticate</methodName>
+          <params>
+            <param><string>${database}</string></param>
+            <param><string>${username}</string></param>
+            <param><string>${password}</string></param>
+            <param><struct></struct></param>
+          </params>
+        </methodCall>`;
+
+      const authResponse = await fetch(`${baseEndpoint}/common`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            service: 'common',
-            method: 'authenticate',
-            args: [database, username, password, {}]
-          },
-          id: Math.floor(Math.random() * 1000000)
-        })
+        headers: { 'Content-Type': 'text/xml' },
+        body: authPayload,
       });
+
+      const authText = await authResponse.text();
+      
+      // Check for HTML response (wrong endpoint)
+      if (authText.includes('<!doctype html>') || authText.includes('<html')) {
+        lastError = 'Wrong endpoint (got HTML response)';
+        console.log(`[ODOO-TEST] ${lastError} at ${baseEndpoint}`);
+        continue;
+      }
 
       if (!authResponse.ok) {
         lastError = `Authentication failed (HTTP ${authResponse.status})`;
-        console.log(`[ODOO-TEST] ${lastError} at ${endpoint}`);
+        console.log(`[ODOO-TEST] ${lastError} at ${baseEndpoint}`);
         continue;
       }
 
-      const authData = await authResponse.json();
-      
-      if (authData.error) {
-        lastError = authData.error.data?.message || authData.error.message || 'Authentication error';
+      // Parse XML-RPC response
+      const uidMatch = authText.match(/<int>(\d+)<\/int>/);
+      const uid = uidMatch ? parseInt(uidMatch[1], 10) : null;
+
+      if (!uid || uid === 0) {
+        lastError = 'Invalid credentials or authentication failed';
         console.log(`[ODOO-TEST] ${lastError}`);
         continue;
       }
 
-      const uid = authData.result;
-      if (!uid || uid === false) {
-        lastError = 'Invalid credentials';
-        console.log(`[ODOO-TEST] ${lastError}`);
-        continue;
-      }
+      console.log(`[ODOO-TEST] ✓ Authentication successful at ${baseEndpoint} (UID: ${uid})`);
 
-      console.log(`[ODOO-TEST] ✓ Authentication successful at ${endpoint} (UID: ${uid})`);
+      // Step 2: Test access to product.template model
+      const searchPayload = `<?xml version="1.0"?>
+        <methodCall>
+          <methodName>execute</methodName>
+          <params>
+            <param><string>${database}</string></param>
+            <param><int>${uid}</int></param>
+            <param><string>${password}</string></param>
+            <param><string>product.template</string></param>
+            <param><string>search_count</string></param>
+            <param><array><data></data></array></param>
+          </params>
+        </methodCall>`;
 
-      // Step 2: Test access to product.product model
-      const testResponse = await fetch(endpoint, {
+      const testResponse = await fetch(`${baseEndpoint}/object`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'call',
-          params: {
-            service: 'object',
-            method: 'execute',
-            args: [
-              database,
-              uid,
-              password,
-              'product.product',
-              'search_count',
-              []
-            ]
-          },
-          id: Math.floor(Math.random() * 1000000)
-        })
+        headers: { 'Content-Type': 'text/xml' },
+        body: searchPayload,
       });
 
       if (!testResponse.ok) {
@@ -158,22 +185,17 @@ async function testOdooConnection(baseUrl: string, credentials: Record<string, s
         continue;
       }
 
-      const testData = await testResponse.json();
-      
-      if (testData.error) {
-        lastError = testData.error.data?.message || testData.error.message || 'Product access error';
-        console.log(`[ODOO-TEST] ${lastError}`);
-        continue;
-      }
+      const testText = await testResponse.text();
+      const countMatch = testText.match(/<int>(\d+)<\/int>/);
+      const productCount = countMatch ? parseInt(countMatch[1], 10) : 0;
 
-      const productCount = testData.result;
       console.log(`[ODOO-TEST] ✓ Product access successful. Found ${productCount} products`);
 
       return {
         success: true,
-        message: `Successfully connected to Odoo. Found ${productCount} products available for import.`,
+        message: `Successfully connected to Odoo. Found ${productCount} product templates available for import.`,
         details: {
-          endpoint,
+          endpoint: baseEndpoint,
           uid,
           productCount,
           database
@@ -182,7 +204,7 @@ async function testOdooConnection(baseUrl: string, credentials: Record<string, s
 
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      console.log(`[ODOO-TEST] Exception at ${endpoint}:`, lastError);
+      console.log(`[ODOO-TEST] Exception at ${baseEndpoint}:`, lastError);
       continue;
     }
   }
