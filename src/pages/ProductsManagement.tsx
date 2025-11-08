@@ -51,7 +51,7 @@ export default function ProductsManagement() {
           supplier_products!left(
             id,
             purchase_price,
-            purchase_currency,
+            currency,
             supplier_id,
             supplier_configurations!left(
               supplier_name
