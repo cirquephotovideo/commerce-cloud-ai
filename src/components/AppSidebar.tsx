@@ -11,6 +11,7 @@ import {
   BarChart3,
   ArrowLeftRight,
   Sparkles,
+  PackageSearch,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -55,6 +56,12 @@ const mainNavigation = [
 ];
 
 const supplierNavigation = [
+  { 
+    title: "Produits", 
+    url: "/products", 
+    icon: PackageSearch,
+    description: "Gérez tous vos produits : filtrage, enrichissement et export"
+  },
   { 
     title: "Fournisseurs", 
     url: "/suppliers", 
