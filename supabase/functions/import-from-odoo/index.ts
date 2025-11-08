@@ -469,20 +469,33 @@ serve(async (req) => {
         const rawEan = product.barcode?.trim();
         const ean = rawEan && isValidEAN13(rawEan) ? rawEan : null;
 
+        // Préparer les données d'insertion
+        const insertData = {
+          user_id: userId,
+          supplier_id: supplier_id,
+          supplier_reference: product.default_code || `odoo_${Date.now()}_${Math.random()}`,
+          ean: ean,
+          product_name: product.name,
+          purchase_price: product.standard_price || 0, // Force 0 si undefined/null
+          stock_quantity: product.qty_available || 0,
+          currency: 'EUR',
+          additional_data: { lst_price: product.lst_price },
+        };
+
+        // Log première tentative pour debug
+        if (imported === 0 && errors === 0) {
+          console.log('[ODOO] 🔍 First product insert attempt:', {
+            product_name: insertData.product_name,
+            purchase_price: insertData.purchase_price,
+            supplier_reference: insertData.supplier_reference,
+            ean: insertData.ean,
+          });
+        }
+
         // Insérer/Update supplier_product
         const { data: supplierProduct, error: insertError } = await supabaseClient
           .from('supplier_products')
-          .upsert({
-            user_id: userId,
-            supplier_id: supplier_id,
-            supplier_reference: product.default_code || `odoo_${Date.now()}_${Math.random()}`,
-            ean: ean,
-            product_name: product.name,
-            purchase_price: product.standard_price,
-            stock_quantity: product.qty_available,
-            currency: 'EUR',
-            additional_data: { lst_price: product.lst_price },
-          }, {
+          .upsert(insertData, {
             onConflict: 'user_id,supplier_id,supplier_reference',
           })
           .select()
@@ -522,6 +535,18 @@ serve(async (req) => {
           error: err.message,
         });
       }
+    }
+
+    // Log détaillé des erreurs (premiers 10 pour debug)
+    if (errorDetails.length > 0) {
+      console.error(`[ODOO] ❌ ${errorDetails.length} errors occurred during import:`);
+      errorDetails.slice(0, 10).forEach((err, idx) => {
+        console.error(`[ODOO] Error ${idx + 1}/${errorDetails.length}:`, {
+          product: err.product,
+          reference: err.reference,
+          error: err.error,
+        });
+      });
     }
 
     console.log(`[ODOO] ✅ Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors`);
