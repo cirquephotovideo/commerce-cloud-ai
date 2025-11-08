@@ -1,16 +1,16 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoExportRules } from "@/components/AutoExportRules";
 import { ExportScheduler } from "@/components/ExportScheduler";
 import { ExportHistoryDialog } from "@/components/ExportHistoryDialog";
-import { Card, CardContent } from "@/components/ui/card";
-import { Package, Calendar, History, TrendingUp, AlertCircle, Upload, Download } from "lucide-react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Badge } from "@/components/ui/badge";
+import { PlatformImportSection } from "@/components/import/PlatformImportSection";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { History, Package, TrendingUp, AlertCircle, Calendar, Loader2, Download, Upload } from "lucide-react";
 
 export default function ImportExportDashboard() {
   const [showHistory, setShowHistory] = useState(false);
@@ -149,8 +149,12 @@ export default function ImportExportDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="export-rules" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="imports" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="imports">
+            <Download className="w-4 h-4 mr-2" />
+            Imports
+          </TabsTrigger>
           <TabsTrigger value="export-rules">
             <Package className="w-4 h-4 mr-2" />
             Règles d'Export
@@ -164,6 +168,10 @@ export default function ImportExportDashboard() {
             Activité Récente
           </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="imports" className="space-y-4">
+          <PlatformImportSection />
+        </TabsContent>
 
         <TabsContent value="export-rules" className="space-y-4">
           <AutoExportRules />
