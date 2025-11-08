@@ -21,6 +21,7 @@ import SubscriptionWelcome from "./pages/SubscriptionWelcome";
 import NotFound from "./pages/NotFound";
 import Demo from "./pages/Demo";
 import UniversalWizard from "./pages/UniversalWizard";
+import ProductsManagement from "./pages/ProductsManagement";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -60,6 +61,7 @@ const App = () => {
         <Route path="/imported-products" element={<ProtectedRoute><DashboardLayout><ImportedProducts /></DashboardLayout></ProtectedRoute>} />
         <Route path="/import-export-dashboard" element={<ProtectedRoute><DashboardLayout><ImportExportDashboard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><DashboardLayout><Analytics /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/products" element={<ProtectedRoute><DashboardLayout><ProductsManagement /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
