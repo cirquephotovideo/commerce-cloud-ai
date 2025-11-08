@@ -64,13 +64,19 @@ export const usePlatformImport = () => {
         supplierId = newSupplier.id;
       }
 
-      // 5. Appeler l'edge function d'import avec les credentials reconstruits
+      // 5. Appeler l'edge function d'import avec la config complète
       const functionName = `import-from-${config.platform_type}`;
       
-      const platformConfig = {
-        url: config.platform_url,
-        ...credentials,
-      };
+      // Pour Odoo, on doit envoyer la structure complète avec platform_url et additional_config
+      const platformConfig = config.platform_type === 'odoo' 
+        ? {
+            platform_url: config.platform_url,
+            additional_config: credentials
+          }
+        : {
+            url: config.platform_url,
+            ...credentials
+          };
       
       const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
