@@ -87,6 +87,16 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
     };
   }, [jobId]);
 
+  // Nettoyer le job quand il est terminé
+  useEffect(() => {
+    if (job && (job.status === 'completed' || job.status === 'failed') && onComplete) {
+      const timer = setTimeout(() => {
+        onComplete();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [job?.status, onComplete]);
+
   if (!job) return null;
 
   const percentage = job.progress_total > 0 
@@ -96,16 +106,6 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
   const isCompleted = job.status === 'completed';
   const isFailed = job.status === 'failed';
   const isProcessing = job.status === 'processing';
-
-  // Nettoyer le job quand il est terminé
-  useEffect(() => {
-    if (job && (isCompleted || isFailed) && onComplete) {
-      const timer = setTimeout(() => {
-        onComplete();
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [job?.status, isCompleted, isFailed, onComplete]);
 
   return (
     <Card className="mt-4">
