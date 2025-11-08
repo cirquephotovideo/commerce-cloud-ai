@@ -6,6 +6,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Write log to import_logs table
+async function writeLog(supabaseClient: any, params: {
+  jobId?: string;
+  userId: string;
+  supplierId?: string;
+  functionName: string;
+  step: string;
+  level?: string;
+  message: string;
+  context?: any;
+}) {
+  if (!params.jobId) return; // Skip if no job ID
+  
+  try {
+    await supabaseClient.from('import_logs').insert([{
+      job_id: params.jobId,
+      user_id: params.userId,
+      supplier_id: params.supplierId ?? null,
+      function_name: params.functionName,
+      step: params.step,
+      level: params.level ?? 'info',
+      message: params.message,
+      context: params.context ?? {}
+    }]);
+  } catch (err) {
+    console.error('[LOG] Failed to write log:', err);
+  }
+}
+
 // Validation EAN-13
 function isValidEAN13(ean: string): boolean {
   if (!ean || !/^\d{13}$/.test(ean)) return false;
@@ -500,6 +529,17 @@ serve(async (req) => {
 
     console.log(`[ODOO] ✅ Chunk products collected: ${allProducts.length}`);
 
+    // Log chunk parsed
+    await writeLog(supabaseClient, {
+      jobId: import_job_id,
+      userId,
+      supplierId: supplier_id,
+      functionName: 'import-from-odoo',
+      step: 'odoo_chunk_parsed',
+      message: `Parsed ${allProducts.length} product templates from Odoo`,
+      context: { count: allProducts.length, offset, limit }
+    });
+
     // 3. Importer dans supplier_products
     let imported = 0, matched = 0, errors = 0;
     const errorDetails = [];
@@ -609,6 +649,18 @@ serve(async (req) => {
     }
 
     console.log(`[ODOO] ✅ Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors`);
+
+    // Log chunk upserted
+    await writeLog(supabaseClient, {
+      jobId: import_job_id,
+      userId,
+      supplierId: supplier_id,
+      functionName: 'import-from-odoo',
+      step: 'odoo_chunk_upserted',
+      level: errors > 0 ? 'warn' : 'info',
+      message: `Chunk upserted: imported=${imported}, matched=${matched}, errors=${errors}`,
+      context: { imported, matched, errors, offset, limit, hasErrors: errors > 0 }
+    });
 
     // Update import job progress if job_id provided
     if (import_job_id) {

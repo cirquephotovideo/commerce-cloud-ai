@@ -92,16 +92,19 @@ export const usePlatformImport = () => {
       return data;
     },
     onSuccess: (data) => {
+      const totalProducts = data?.total_products || 0;
+      const estimatedChunks = data?.estimated_chunks || 0;
+      
       toast.success(
-        `Import réussi ! ${data?.imported || 0} produits importés${
-          data?.updated ? `, ${data.updated} mis à jour` : ''
-        }`,
+        `Import démarré • ${totalProducts} produits à traiter en ${estimatedChunks} lots`,
         { duration: 5000 }
       );
+      
       queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
       queryClient.invalidateQueries({ queryKey: ['import-export-stats'] });
       queryClient.invalidateQueries({ queryKey: ['platform-configurations'] });
       queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
+      queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: (error: Error) => {
       console.error('Erreur import plateforme:', error);

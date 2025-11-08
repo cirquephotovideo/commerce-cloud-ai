@@ -2021,6 +2021,53 @@ export type Database = {
           },
         ]
       }
+      import_logs: {
+        Row: {
+          context: Json
+          created_at: string
+          function_name: string | null
+          id: string
+          job_id: string
+          level: string
+          message: string
+          step: string | null
+          supplier_id: string | null
+          user_id: string
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          function_name?: string | null
+          id?: string
+          job_id: string
+          level?: string
+          message: string
+          step?: string | null
+          supplier_id?: string | null
+          user_id: string
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          function_name?: string | null
+          id?: string
+          job_id?: string
+          level?: string
+          message?: string
+          step?: string | null
+          supplier_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_schedules: {
         Row: {
           config: Json | null

@@ -2,6 +2,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
+// Write log to import_logs table
+async function writeLog(supabaseClient: any, params: {
+  jobId: string;
+  userId: string;
+  supplierId?: string;
+  functionName: string;
+  step: string;
+  level?: string;
+  message: string;
+  context?: any;
+}) {
+  try {
+    await supabaseClient.from('import_logs').insert([{
+      job_id: params.jobId,
+      user_id: params.userId,
+      supplier_id: params.supplierId ?? null,
+      function_name: params.functionName,
+      step: params.step,
+      level: params.level ?? 'info',
+      message: params.message,
+      context: params.context ?? {}
+    }]);
+  } catch (err) {
+    console.error('[LOG] Failed to write log:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -39,6 +66,17 @@ serve(async (req) => {
         })
         .eq('id', import_job_id);
     }
+
+    // Log chunk start
+    await writeLog(supabaseClient, {
+      jobId: import_job_id,
+      userId: job.user_id,
+      supplierId: supplier_id,
+      functionName: 'process-import-chunk',
+      step: 'chunk_start',
+      message: `Processing chunk: offset=${offset}, limit=${limit}`,
+      context: { offset, limit, platform }
+    });
 
     // Call import function for this chunk
     console.log(`[CHUNK-PROCESSOR] Invoking import-from-${platform} for chunk...`);
@@ -107,6 +145,25 @@ serve(async (req) => {
 
     console.log('[CHUNK-PROCESSOR] Chunk completed:', data);
 
+    // Log chunk complete
+    await writeLog(supabaseClient, {
+      jobId: import_job_id,
+      userId: job.user_id,
+      supplierId: supplier_id,
+      functionName: 'process-import-chunk',
+      step: 'chunk_complete',
+      message: `Chunk completed: imported=${data.imported || 0}, matched=${data.matched || 0}, errors=${data.errors || 0}`,
+      context: { 
+        offset, 
+        limit, 
+        imported: data.imported || 0,
+        matched: data.matched || 0,
+        errors: data.errors || 0,
+        hasMore: data.hasMore, 
+        nextOffset: data.nextOffset 
+      }
+    });
+
     // Update job progress
     const currentProgress = offset + (data.imported || 0);
     const chunksCompleted = Math.floor(currentProgress / limit);
@@ -133,6 +190,17 @@ serve(async (req) => {
     if (data.hasMore) {
       console.log('[CHUNK-PROCESSOR] More chunks to process, triggering next chunk...');
       
+      // Log next chunk dispatch
+      await writeLog(supabaseClient, {
+        jobId: import_job_id,
+        userId: job.user_id,
+        supplierId: supplier_id,
+        functionName: 'process-import-chunk',
+        step: 'next_chunk_dispatched',
+        message: `Dispatched next chunk: offset=${data.nextOffset}, limit=${limit}`,
+        context: { nextOffset: data.nextOffset, limit }
+      });
+      
       // Trigger next chunk (don't await - let it run in background)
       supabaseClient.functions.invoke('process-import-chunk', {
         body: {
@@ -150,6 +218,21 @@ serve(async (req) => {
     } else {
       // All chunks completed
       console.log('[CHUNK-PROCESSOR] All chunks completed, marking job as completed');
+      
+      // Log completion
+      await writeLog(supabaseClient, {
+        jobId: import_job_id,
+        userId: job.user_id,
+        supplierId: supplier_id,
+        functionName: 'process-import-chunk',
+        step: 'all_chunks_completed',
+        message: `Import completed successfully`,
+        context: { 
+          totalImported: job.products_imported + (data.imported || 0),
+          totalMatched: job.products_matched + (data.matched || 0),
+          totalErrors: job.products_errors + (data.errors || 0)
+        }
+      });
       await supabaseClient
         .from('import_jobs')
         .update({

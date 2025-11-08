@@ -2,6 +2,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 
+// Write log to import_logs table
+async function writeLog(supabaseClient: any, params: {
+  jobId: string;
+  userId: string;
+  supplierId?: string;
+  functionName: string;
+  step: string;
+  level?: string;
+  message: string;
+  context?: any;
+}) {
+  try {
+    await supabaseClient.from('import_logs').insert([{
+      job_id: params.jobId,
+      user_id: params.userId,
+      supplier_id: params.supplierId ?? null,
+      function_name: params.functionName,
+      step: params.step,
+      level: params.level ?? 'info',
+      message: params.message,
+      context: params.context ?? {}
+    }]);
+  } catch (err) {
+    console.error('[LOG] Failed to write log:', err);
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -83,8 +110,30 @@ serve(async (req) => {
 
     console.log('[ORCHESTRATE] Job created with ID:', job.id);
 
+    // Log job creation
+    await writeLog(supabaseClient, {
+      jobId: job.id,
+      userId,
+      supplierId: supplier_id,
+      functionName: 'orchestrate-platform-import',
+      step: 'job_created',
+      message: `Import started in background: ${totalProducts} products in ${totalChunks} chunks (chunk_size=${chunkSize})`,
+      context: { totalProducts, totalChunks, chunkSize, platform, options }
+    });
+
     // PHASE 3: Enqueue first chunk (non-blocking)
     console.log('[ORCHESTRATE] Phase 3: Starting first chunk...');
+    
+    // Log first chunk dispatch
+    await writeLog(supabaseClient, {
+      jobId: job.id,
+      userId,
+      supplierId: supplier_id,
+      functionName: 'orchestrate-platform-import',
+      step: 'first_chunk_dispatched',
+      message: `Dispatched first chunk: offset=0, limit=${chunkSize}`,
+      context: { offset: 0, limit: chunkSize }
+    });
     
     // Start first chunk in background - don't await
     supabaseClient.functions.invoke('process-import-chunk', {

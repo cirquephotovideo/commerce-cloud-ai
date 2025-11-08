@@ -14,7 +14,7 @@ interface PlatformImportProgressProps {
 }
 
 export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProgressProps) => {
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
 
   // Fetch job progress
   const { data: job } = useQuery({
@@ -35,22 +35,48 @@ export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProg
     refetchInterval: 1000, // Refresh every second
   });
 
-  // Subscribe to realtime updates
+  // Fetch real logs from import_logs table
+  const { data: fetchedLogs } = useQuery({
+    queryKey: ['import-logs', jobId],
+    queryFn: async () => {
+      if (!jobId) return [];
+      
+      const { data, error } = await supabase
+        .from('import_logs')
+        .select('*')
+        .eq('job_id', jobId)
+        .order('created_at', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!jobId,
+  });
+
+  // Initialize logs from fetched data
+  useEffect(() => {
+    if (fetchedLogs) {
+      setLogs(fetchedLogs);
+    }
+  }, [fetchedLogs]);
+
+  // Subscribe to realtime updates for new logs
   useEffect(() => {
     if (!jobId) return;
 
     const channel = supabase
-      .channel(`import-job-${jobId}`)
+      .channel(`import-logs-${jobId}`)
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: 'INSERT',
           schema: 'public',
-          table: 'import_jobs',
-          filter: `id=eq.${jobId}`,
+          table: 'import_logs',
+          filter: `job_id=eq.${jobId}`,
         },
         (payload) => {
-          console.log('Job updated:', payload.new);
+          console.log('New log received:', payload.new);
+          setLogs((prev) => [...prev, payload.new]);
         }
       )
       .subscribe();
@@ -59,20 +85,6 @@ export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProg
       supabase.removeChannel(channel);
     };
   }, [jobId]);
-
-  // Simulate edge function logs
-  useEffect(() => {
-    if (!job || job.status !== 'processing') return;
-
-    const interval = setInterval(() => {
-      setLogs((prev) => [
-        ...prev.slice(-9),
-        `[${new Date().toLocaleTimeString()}] Processing products ${job.progress_current}/${job.progress_total}...`,
-      ]);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [job]);
 
   if (!job) return null;
 
@@ -149,8 +161,15 @@ export const PlatformImportProgress = ({ platformId, jobId }: PlatformImportProg
               <div className="text-muted-foreground">En attente des logs...</div>
             ) : (
               logs.map((log, idx) => (
-                <div key={idx} className="text-muted-foreground">
-                  {log}
+                <div 
+                  key={idx} 
+                  className={`${
+                    log.level === 'error' ? 'text-red-600' : 
+                    log.level === 'warn' ? 'text-yellow-600' : 
+                    'text-muted-foreground'
+                  }`}
+                >
+                  [{new Date(log.created_at).toLocaleTimeString()}] [{log.step}] {log.message}
                 </div>
               ))
             )}
