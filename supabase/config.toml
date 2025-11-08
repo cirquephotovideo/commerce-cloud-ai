@@ -297,3 +297,15 @@ verify_jwt = false
 [functions.deep-research-enrichment]
 verify_jwt = true
 
+[functions.test-platform-connection]
+verify_jwt = true
+
+[functions.orchestrate-platform-import]
+verify_jwt = true
+
+[functions.process-import-chunk]
+verify_jwt = false
+
+[functions.process-pending-import-chunks]
+verify_jwt = false
+

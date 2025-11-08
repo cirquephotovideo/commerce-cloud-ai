@@ -396,7 +396,29 @@ serve(async (req) => {
       
       if (productMatches.length === 0) {
         console.log(`[ODOO] ⚠️ No more products found at offset ${offset}`);
-        break;
+        // No more products in this chunk - return early
+        if (import_job_id) {
+          await supabaseClient
+            .from('import_jobs')
+            .update({
+              status: 'completed',
+              completed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', import_job_id);
+        }
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            imported: 0, 
+            matched: 0, 
+            errors: 0,
+            hasMore: false,
+            totalCount,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       console.log(`[ODOO] ✓ Parsed ${productMatches.length} products from page`);
