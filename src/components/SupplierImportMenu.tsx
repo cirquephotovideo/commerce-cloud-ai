@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -82,7 +82,7 @@ export const SupplierImportMenu = ({
   const { toast } = useToast();
 
   // Realtime subscription for job progress
-  useState(() => {
+  useEffect(() => {
     if (!currentJobId) return;
 
     const channel = supabase
@@ -138,7 +138,7 @@ export const SupplierImportMenu = ({
     return () => {
       supabase.removeChannel(channel);
     };
-  });
+  }, [currentJobId, onImportComplete, toast]);
 
   // Récupérer toutes les plateformes actives (pas de vérification supports_import)
   const { data: platforms, isLoading, error } = useQuery({

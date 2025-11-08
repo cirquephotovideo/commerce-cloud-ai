@@ -3,7 +3,7 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, Download } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ImportProgressDialogProps {
   open: boolean;
@@ -32,7 +32,7 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
   const hasNoProducts = progress.success === 0 && progress.processed > 0;
 
   // Calculate estimated time remaining
-  useState(() => {
+  useEffect(() => {
     if (progress.processed === 0 || progress.total === 0 || isFinished) {
       setEstimatedTimeRemaining('');
       return;
@@ -51,7 +51,7 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
         ? `~${minutes}m ${seconds}s restantes` 
         : `~${seconds}s restantes`
     );
-  });
+  }, [progress.processed, progress.total, isFinished, startTime]);
 
   const handleDownloadLogs = () => {
     if (!processingLogs || processingLogs.length === 0) return;

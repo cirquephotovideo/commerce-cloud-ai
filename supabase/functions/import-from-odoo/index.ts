@@ -502,53 +502,72 @@ serve(async (req) => {
       }
     }
 
-    // 4. Logger l'import
-    await supabaseClient.from('supplier_import_logs').insert({
-      user_id: userId,
-      supplier_id: supplier_id,
-      import_type: 'odoo_api',
-      products_count: allProducts.length,
-      success_count: imported,
-      error_count: errors,
-      error_details: errorDetails.length > 0 ? errorDetails : null,
-    });
+    console.log(`[ODOO] ✅ Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors`);
 
-    // 5. Mettre à jour last_sync_at
-    if (supplier_id) {
+    // Update import job progress if job_id provided
+    if (import_job_id) {
+      const { error: updateError } = await supabaseClient
+        .from('import_jobs')
+        .update({
+          progress_current: offset + imported,
+          metadata: {
+            last_offset: offset + limit,
+            last_chunk_completed: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', import_job_id);
+
+      if (updateError) {
+        console.error('[ODOO] Failed to update job progress:', updateError);
+      }
+    }
+
+    const hasMore = (offset + limit) < totalCount;
+
+    // Log l'import chunk
+    if (!hasMore) {
+      await supabaseClient.from('supplier_import_logs').insert({
+        user_id: userId,
+        supplier_id: supplier_id,
+        total_items: imported,
+        success_items: imported,
+        error_items: errors,
+        import_result: { imported, matched, errors, errorDetails: errorDetails.slice(0, 10) },
+      });
+
+      // Mettre à jour last_sync_at uniquement quand tous les chunks sont finis
       await supabaseClient
         .from('supplier_configurations')
         .update({ last_sync_at: new Date().toISOString() })
         .eq('id', supplier_id);
     }
 
-    console.log('Odoo import completed:', { imported, matched, errors });
-
     return new Response(
-      JSON.stringify({
-        found: allProducts.length,
-        imported,
-        matched,
-        new: imported - matched,
+      JSON.stringify({ 
+        success: true, 
+        imported, 
+        matched, 
         errors,
-        errorDetails: errorDetails.slice(0, 10),
+        hasMore,
+        nextOffset: offset + limit,
+        totalCount,
+        errorSample: errorDetails.slice(0, 5),
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
 
   } catch (error: any) {
-    console.error('Error in import-from-odoo:', error);
+    console.error('[ODOO-IMPORT] Error:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        imported: 0,
-        matched: 0,
-        new: 0,
-        errors: 1,
+        success: false,
       }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
+      },
     );
   }
 });
