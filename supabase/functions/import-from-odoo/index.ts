@@ -119,56 +119,160 @@ serve(async (req) => {
 
     // 1. Extract credentials with fallback logic
     const additionalConfig = odooConfig.additional_config || {};
-    const odooUrl = odooConfig.platform_url;
-    const database = additionalConfig.database || odooConfig.api_key_encrypted || 'odoo';
-    const username = additionalConfig.username || odooConfig.api_secret_encrypted;
-    const password = additionalConfig.password || odooConfig.access_token_encrypted;
+    const configuredUrl = odooConfig.platform_url;
+    const database = additionalConfig.database || additionalConfig.db || odooConfig.api_key_encrypted || 'odoo';
+    const username = additionalConfig.username || additionalConfig.login || additionalConfig.user || odooConfig.api_secret_encrypted;
+    const password = additionalConfig.password || additionalConfig.pass || odooConfig.access_token_encrypted;
 
     console.log('[ODOO] Configuration extracted:', {
-      url: odooUrl,
+      url: configuredUrl,
       database: database,
       username: username ? '***' : 'missing',
       password: password ? '***' : 'missing'
     });
 
-    if (!odooUrl || !database || !username || !password) {
+    if (!configuredUrl || !database || !username || !password) {
       throw new Error('Incomplete Odoo credentials. Please check Platform Configuration (URL, Database, Username, Password).');
     }
 
-    const authPayload = `<?xml version="1.0"?>
-      <methodCall>
-        <methodName>authenticate</methodName>
-        <params>
-          <param><string>${database}</string></param>
-          <param><string>${username}</string></param>
-          <param><string>${password}</string></param>
-          <param><struct></struct></param>
-        </params>
-      </methodCall>`;
+    // 2. Build XML-RPC endpoint candidates
+    const buildXmlRpcCandidates = (url: string): string[] => {
+      try {
+        const urlObj = new URL(url);
+        const origin = `${urlObj.protocol}//${urlObj.host}`;
+        const path = urlObj.pathname;
+        
+        const candidates: string[] = [];
+        
+        // Priority 1: Origin root (most common)
+        candidates.push(`${origin}/xmlrpc/2`);
+        
+        // Priority 2: With /odoo prefix
+        if (!path.includes('/odoo')) {
+          candidates.push(`${origin}/odoo/xmlrpc/2`);
+        }
+        
+        // Priority 3: Use configured path if exists and different
+        if (path && path !== '/' && !candidates.includes(`${origin}${path}/xmlrpc/2`)) {
+          candidates.push(`${origin}${path}/xmlrpc/2`);
+        }
+        
+        return candidates;
+      } catch (e) {
+        // Fallback if URL parsing fails
+        return [`${url}/xmlrpc/2`];
+      }
+    };
 
-    console.log('[ODOO] Authenticating with Odoo...');
-    const authResponse = await fetch(`${odooUrl}/xmlrpc/2/common`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/xml' },
-      body: authPayload,
-    });
+    const xmlRpcCandidates = buildXmlRpcCandidates(configuredUrl);
+    console.log('[ODOO] XML-RPC endpoint candidates:', xmlRpcCandidates.map(c => c.replace(/https?:\/\/[^\/]+/, '[REDACTED]')));
 
-    const authText = await authResponse.text();
-    console.log('[ODOO] Auth response status:', authResponse.status);
-    console.log('[ODOO] Auth response:', authText.substring(0, 300));
+    // 3. Try authentication on each candidate
+    const tryAuthenticate = async (baseUrl: string): Promise<{ success: boolean; uid?: number; error?: string; responseText?: string }> => {
+      const authPayload = `<?xml version="1.0"?>
+        <methodCall>
+          <methodName>authenticate</methodName>
+          <params>
+            <param><string>${database}</string></param>
+            <param><string>${username}</string></param>
+            <param><string>${password}</string></param>
+            <param><struct></struct></param>
+          </params>
+        </methodCall>`;
 
-    if (!authResponse.ok) {
-      throw new Error(`Odoo authentication failed (HTTP ${authResponse.status}): ${authText.substring(0, 200)}`);
+      try {
+        const authResponse = await fetch(`${baseUrl}/common`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/xml' },
+          body: authPayload,
+        });
+
+        const authText = await authResponse.text();
+        
+        // Check for HTML response (wrong endpoint)
+        if (authText.includes('<!doctype html>') || authText.includes('<html')) {
+          return { 
+            success: false, 
+            error: `Wrong endpoint (got HTML): ${authText.substring(0, 100)}`,
+            responseText: authText.substring(0, 300)
+          };
+        }
+
+        // Check for XML-RPC response
+        if (!authResponse.ok) {
+          return { 
+            success: false, 
+            error: `HTTP ${authResponse.status}`,
+            responseText: authText.substring(0, 300)
+          };
+        }
+
+        // Try to parse UID
+        const uidMatch = authText.match(/<int>(\d+)<\/int>/);
+        if (!uidMatch) {
+          return { 
+            success: false, 
+            error: 'No UID in response (invalid credentials or database?)',
+            responseText: authText.substring(0, 300)
+          };
+        }
+
+        const uid = parseInt(uidMatch[1]);
+        if (uid <= 0) {
+          return { 
+            success: false, 
+            error: 'Invalid UID (authentication rejected)',
+            responseText: authText.substring(0, 300)
+          };
+        }
+
+        return { success: true, uid };
+      } catch (err: any) {
+        return { 
+          success: false, 
+          error: `Network error: ${err.message}` 
+        };
+      }
+    };
+
+    // Try each candidate until one succeeds
+    let authenticatedBaseUrl: string | null = null;
+    let uid: number | null = null;
+    const authAttempts: Array<{ url: string; result: string }> = [];
+
+    for (const candidateBase of xmlRpcCandidates) {
+      console.log(`[ODOO] Trying authentication at: ${candidateBase.replace(/https?:\/\/[^\/]+/, '[REDACTED]')}/common`);
+      const result = await tryAuthenticate(candidateBase);
+      
+      authAttempts.push({
+        url: candidateBase.replace(/https?:\/\/[^\/]+/, '[REDACTED]'),
+        result: result.success ? `✅ Success (UID: ${result.uid})` : `❌ ${result.error}`
+      });
+
+      if (result.success) {
+        authenticatedBaseUrl = candidateBase;
+        uid = result.uid!;
+        console.log(`[ODOO] ✅ Authentication successful at: ${candidateBase.replace(/https?:\/\/[^\/]+/, '[REDACTED]')} (UID: ${uid})`);
+        break;
+      } else {
+        console.log(`[ODOO] ❌ Authentication failed at ${candidateBase.replace(/https?:\/\/[^\/]+/, '[REDACTED]')}: ${result.error}`);
+      }
     }
-    
-    const uidMatch = authText.match(/<int>(\d+)<\/int>/);
-    if (!uidMatch) {
-      console.error('[ODOO] Failed to parse UID from response:', authText.substring(0, 500));
-      throw new Error('Odoo authentication failed - invalid credentials or database name');
-    }
-    const uid = parseInt(uidMatch[1]);
 
-    console.log('[ODOO] Authenticated with UID:', uid);
+    // If all candidates failed, throw detailed error
+    if (!authenticatedBaseUrl || !uid) {
+      const attemptsSummary = authAttempts.map(a => `  - ${a.url}: ${a.result}`).join('\n');
+      throw new Error(
+        `Odoo authentication failed on all endpoints:\n${attemptsSummary}\n\n` +
+        `Please verify:\n` +
+        `1. URL is correct (try without /odoo path)\n` +
+        `2. Database name: "${database}"\n` +
+        `3. Username and password are valid`
+      );
+    }
+
+    const odooBaseUrl = authenticatedBaseUrl;
+    console.log('[ODOO] Using XML-RPC base:', odooBaseUrl.replace(/https?:\/\/[^\/]+/, '[REDACTED]'));
 
     // 2. First get the total count of active products
     console.log('[ODOO] Getting total product count...');
@@ -195,7 +299,7 @@ serve(async (req) => {
         </params>
       </methodCall>`;
 
-    const countResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
+    const countResponse = await fetch(`${odooBaseUrl}/object`, {
       method: 'POST',
       headers: { 'Content-Type': 'text/xml' },
       body: countPayload,
@@ -262,7 +366,7 @@ serve(async (req) => {
           </params>
         </methodCall>`;
 
-      const productsResponse = await fetch(`${odooUrl}/xmlrpc/2/object`, {
+      const productsResponse = await fetch(`${odooBaseUrl}/object`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/xml' },
         body: searchPayload,
