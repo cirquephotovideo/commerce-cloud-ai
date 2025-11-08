@@ -358,12 +358,22 @@ serve(async (req) => {
                 <member>
                   <name>fields</name>
                   <value><array><data>
+                    <value><string>id</string></value>
                     <value><string>barcode</string></value>
                     <value><string>default_code</string></value>
                     <value><string>name</string></value>
                     <value><string>standard_price</string></value>
                     <value><string>lst_price</string></value>
                     <value><string>qty_available</string></value>
+                    <value><string>image_1920</string></value>
+                    <value><string>image_512</string></value>
+                    <value><string>image_256</string></value>
+                    <value><string>description</string></value>
+                    <value><string>description_sale</string></value>
+                    <value><string>categ_id</string></value>
+                    <value><string>product_tmpl_id</string></value>
+                    <value><string>weight</string></value>
+                    <value><string>volume</string></value>
                   </data></array></value>
                 </member>
                 <member>
@@ -442,22 +452,136 @@ serve(async (req) => {
           return null;
         };
 
+        const extractArray = (key: string) => {
+          // Extrait les valeurs array comme categ_id [id, name]
+          const regex = new RegExp(`<name>${key}</name>\\s*<value><array><data>([\\s\\S]*?)</data></array></value>`, 's');
+          const match = structMatch.match(regex);
+          if (!match) return null;
+          
+          const content = match[1];
+          const intMatch = content.match(/<int>(\d+)<\/int>/);
+          const stringMatch = content.match(/<string>([^<]*)<\/string>/);
+          
+          if (intMatch && stringMatch) {
+            return [parseInt(intMatch[1]), stringMatch[1].trim()];
+          }
+          return null;
+        };
+
         const name = extractValue('name', 'string');
         if (!name) continue; // Skip si pas de nom
 
         const product = {
+          id: parseInt(extractValue('id', 'int') || '0'),
           default_code: extractStringOrFalse('default_code'),
           barcode: extractStringOrFalse('barcode'),
           name: name,
           standard_price: parseFloat(extractValue('standard_price', 'double') || '0'),
           lst_price: parseFloat(extractValue('lst_price', 'double') || '0'),
           qty_available: parseInt(extractValue('qty_available', 'int') || '0'),
+          image_1920: extractStringOrFalse('image_1920'),
+          image_512: extractStringOrFalse('image_512'),
+          image_256: extractStringOrFalse('image_256'),
+          description: extractStringOrFalse('description'),
+          description_sale: extractStringOrFalse('description_sale'),
+          categ_id: extractArray('categ_id'),
+          product_tmpl_id: parseInt(extractValue('product_tmpl_id', 'int') || '0') || null,
+          weight: parseFloat(extractValue('weight', 'double') || '0') || null,
+          volume: parseFloat(extractValue('volume', 'double') || '0') || null,
         };
 
       allProducts.push(product);
     }
 
     console.log(`[ODOO] ✅ Chunk products collected: ${allProducts.length}`);
+
+    // Récupérer les attributs Odoo pour tous les product templates
+    const templateIds = [...new Set(
+      allProducts
+        .map(p => p.product_tmpl_id)
+        .filter((id): id is number => typeof id === 'number' && id > 0)
+    )];
+
+    console.log(`[ODOO] 📋 Fetching attributes for ${templateIds.length} product templates...`);
+    
+    const odooAttributesMap: Record<number, Record<string, string>> = {};
+    
+    if (templateIds.length > 0) {
+      try {
+        const attrPayload = `<?xml version="1.0"?>
+          <methodCall>
+            <methodName>execute_kw</methodName>
+            <params>
+              <param><string>${database}</string></param>
+              <param><int>${uid}</int></param>
+              <param><string>${password}</string></param>
+              <param><string>product.template.attribute.value</string></param>
+              <param><string>search_read</string></param>
+              <param>
+                <array><data>
+                  <value><array><data>
+                    <value><array><data>
+                      <value><string>product_tmpl_id</string></value>
+                      <value><string>in</string></value>
+                      <value><array><data>
+                        ${templateIds.map(id => `<value><int>${id}</int></value>`).join('')}
+                      </data></array></value>
+                    </data></array></value>
+                  </data></array></value>
+                </data></array>
+              </param>
+              <param>
+                <struct>
+                  <member>
+                    <name>fields</name>
+                    <value><array><data>
+                      <value><string>product_tmpl_id</string></value>
+                      <value><string>name</string></value>
+                    </data></array></value>
+                  </member>
+                </struct>
+              </param>
+            </params>
+          </methodCall>`;
+        
+        const attrResponse = await fetch(`${odooBaseUrl}/object`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/xml' },
+          body: attrPayload,
+        });
+        
+        const attrXML = await attrResponse.text();
+        const attrMatches = attrXML.match(/<struct>[\s\S]*?<\/struct>/g) || [];
+        
+        for (const attrStruct of attrMatches) {
+          const tmplIdMatch = attrStruct.match(/<name>product_tmpl_id<\/name>\s*<value><int>(\d+)<\/int>/);
+          const nameMatch = attrStruct.match(/<name>name<\/name>\s*<value><string>([^<]*)<\/string>/);
+          
+          if (tmplIdMatch && nameMatch) {
+            const tmplId = parseInt(tmplIdMatch[1]);
+            const fullName = nameMatch[1].trim();
+            
+            // Parser "AttributeName: AttributeValue"
+            const parts = fullName.split(':').map(s => s.trim());
+            if (parts.length >= 2) {
+              const attrName = parts[0];
+              const attrValue = parts.slice(1).join(':');
+              
+              if (!odooAttributesMap[tmplId]) {
+                odooAttributesMap[tmplId] = {};
+              }
+              
+              odooAttributesMap[tmplId][attrName] = attrValue;
+            }
+          }
+        }
+        
+        console.log(`[ODOO] ✅ Fetched attributes for ${Object.keys(odooAttributesMap).length} product templates`);
+      } catch (err: any) {
+        console.warn(`[ODOO] ⚠️ Failed to fetch attributes:`, err.message);
+        // Continue sans les attributs
+      }
+    }
 
     // 3. Importer dans supplier_products
     let imported = 0, matched = 0, errors = 0;
@@ -469,26 +593,49 @@ serve(async (req) => {
         const rawEan = product.barcode?.trim();
         const ean = rawEan && isValidEAN13(rawEan) ? rawEan : null;
 
-        // Préparer les données d'insertion
+        // Préparer les données d'insertion enrichies
         const insertData = {
           user_id: userId,
           supplier_id: supplier_id,
-          supplier_reference: product.default_code || `odoo_${Date.now()}_${Math.random()}`,
+          supplier_reference: product.default_code || `odoo_id_${product.id}`,
           ean: ean,
           product_name: product.name,
-          purchase_price: product.standard_price || 0, // Force 0 si undefined/null
+          purchase_price: product.standard_price || 0,
           stock_quantity: product.qty_available || 0,
           currency: 'EUR',
-          additional_data: { lst_price: product.lst_price },
+          description: product.description || product.description_sale || null,
+          additional_data: {
+            lst_price: product.lst_price,
+            // Images Odoo en base64
+            image_1920: product.image_1920 || null,
+            image_512: product.image_512 || null,
+            image_256: product.image_256 || null,
+            // Catégorie
+            category_id: product.categ_id?.[0] || null,
+            category_name: product.categ_id?.[1] || null,
+            // Métadonnées
+            weight: product.weight,
+            volume: product.volume,
+            odoo_id: product.id,
+            product_tmpl_id: product.product_tmpl_id,
+            // Attributs Odoo personnalisés
+            odoo_attributes: product.product_tmpl_id && odooAttributesMap[product.product_tmpl_id]
+              ? odooAttributesMap[product.product_tmpl_id]
+              : {},
+          },
         };
 
-        // Log première tentative pour debug
+        // Log première tentative pour debug enrichi
         if (imported === 0 && errors === 0) {
-          console.log('[ODOO] 🔍 First product insert attempt:', {
+          console.log('[ODOO] 🔍 First product insert (enriched):', {
             product_name: insertData.product_name,
             purchase_price: insertData.purchase_price,
             supplier_reference: insertData.supplier_reference,
             ean: insertData.ean,
+            has_image_512: !!insertData.additional_data.image_512,
+            has_description: !!insertData.description,
+            category: insertData.additional_data.category_name,
+            attributes_count: Object.keys(insertData.additional_data.odoo_attributes).length,
           });
         }
 
