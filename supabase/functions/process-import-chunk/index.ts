@@ -168,7 +168,14 @@ serve(async (req) => {
     const currentProgress = offset + (data.imported || 0);
     const chunksCompleted = Math.floor(currentProgress / limit);
     
-    await supabaseClient
+    console.log('[CHUNK-PROCESSOR] Updating job progress:', {
+      currentProgress,
+      imported: (job.products_imported || 0) + (data.imported || 0),
+      matched: (job.products_matched || 0) + (data.matched || 0),
+      errors: (job.products_errors || 0) + (data.errors || 0),
+    });
+    
+    const { error: updateError } = await supabaseClient
       .from('import_jobs')
       .update({
         progress_current: currentProgress,
@@ -185,6 +192,13 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq('id', import_job_id);
+    
+    if (updateError) {
+      console.error('[CHUNK-PROCESSOR] Failed to update job progress:', updateError);
+      throw new Error(`Failed to update job progress: ${updateError.message}`);
+    }
+    
+    console.log('[CHUNK-PROCESSOR] Job progress updated successfully');
 
     // Check if more chunks needed
     if (data.hasMore) {

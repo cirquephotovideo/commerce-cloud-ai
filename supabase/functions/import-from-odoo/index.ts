@@ -662,24 +662,8 @@ serve(async (req) => {
       context: { imported, matched, errors, offset, limit, hasErrors: errors > 0 }
     });
 
-    // Update import job progress if job_id provided
-    if (import_job_id) {
-      const { error: updateError } = await supabaseClient
-        .from('import_jobs')
-        .update({
-          progress_current: offset + imported,
-          metadata: {
-            last_offset: offset + limit,
-            last_chunk_completed: new Date().toISOString(),
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', import_job_id);
-
-      if (updateError) {
-        console.error('[ODOO] Failed to update job progress:', updateError);
-      }
-    }
+    // Note: Job progress updates are now handled by process-import-chunk
+    // to avoid race conditions between multiple concurrent chunks
 
     const hasMore = (offset + limit) < totalCount;
 
