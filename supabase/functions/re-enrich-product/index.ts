@@ -159,12 +159,48 @@ serve(async (req) => {
     // Determine which enrichments to run
     const enrichmentsToRun = enrichmentTypes || ['amazon', 'ai_analysis'];
 
+    // PHASE 1: Créer un supplier product temporaire si nécessaire
+    let finalSupplierProductId = supplierProduct?.id;
+
+    if (!supplierProduct && analysis) {
+      console.log('[RE-ENRICH] No supplier product found, creating temporary one from analysis');
+      
+      const { data: tempProduct, error: tempProductError } = await supabase
+        .from('supplier_products')
+        .insert({
+          user_id: user.id,
+          product_name: analysis.analysis_result?.product_name || 'Produit sans nom',
+          description: analysis.analysis_result?.description || null,
+          ean: analysis.analysis_result?.ean || null,
+          purchase_price: analysis.analysis_result?.purchase_price || null,
+          source: 'temp_from_analysis',
+          import_status: 'completed'
+        })
+        .select()
+        .single();
+      
+      if (tempProductError) {
+        console.error('[RE-ENRICH] Failed to create temp product:', tempProductError);
+      } else {
+        finalSupplierProductId = tempProduct.id;
+        supplierProduct = tempProduct;
+        
+        // Link analysis to the new supplier product
+        await supabase
+          .from('product_analyses')
+          .update({ supplier_product_id: tempProduct.id })
+          .eq('id', analysis.id);
+        
+        console.log('[RE-ENRICH] ✅ Created temporary supplier product:', tempProduct.id);
+      }
+    }
+
     // Add to enrichment queue with high priority
     const { data: queueEntry, error: queueError } = await supabase
       .from('enrichment_queue')
       .insert({
         user_id: user.id,
-        supplier_product_id: supplierProduct?.id || null,
+        supplier_product_id: finalSupplierProductId,
         analysis_id: analysis?.id || null,
         enrichment_type: enrichmentsToRun,
         priority: 'high',

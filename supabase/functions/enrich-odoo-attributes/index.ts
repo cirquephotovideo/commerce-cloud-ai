@@ -322,41 +322,62 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
     const aiData = fallbackResponse.content;
     console.log('[enrich-odoo-attributes] Réponse IA reçue');
 
-    // 9. Parser la réponse JSON
+    // 9. Parser la réponse JSON - PHASE 3: Logs détaillés
     let extractedAttributes: Record<string, string> = {};
     try {
+      console.log('[enrich-odoo-attributes] 🔍 Type de réponse IA:', typeof aiData);
+      console.log('[enrich-odoo-attributes] 🔍 Structure aiData:', JSON.stringify(aiData).slice(0, 500));
+      
       const responseText = aiData.choices?.[0]?.message?.content || aiData.response || '{}';
+      console.log('[enrich-odoo-attributes] 🔍 Response text extrait:', responseText.slice(0, 500));
+      
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
+        console.log('[enrich-odoo-attributes] 🔍 JSON match trouvé, longueur:', jsonMatch[0].length);
         extractedAttributes = JSON.parse(jsonMatch[0]);
       } else {
+        console.log('[enrich-odoo-attributes] 🔍 Pas de JSON match, parsing direct');
         extractedAttributes = JSON.parse(responseText);
       }
+      
+      console.log('[enrich-odoo-attributes] 🔍 Attributs après parsing:', Object.keys(extractedAttributes));
+      console.log('[enrich-odoo-attributes] 🔍 Premier attribut:', Object.entries(extractedAttributes)[0]);
     } catch (parseError) {
-      console.error('[enrich-odoo-attributes] Erreur parsing JSON:', parseError);
+      console.error('[enrich-odoo-attributes] ❌ Erreur parsing JSON:', parseError);
+      console.error('[enrich-odoo-attributes] ❌ Contenu qui a causé l\'erreur:', aiData);
       throw new Error('Impossible de parser la réponse IA');
     }
 
     console.log(`[enrich-odoo-attributes] ${Object.keys(extractedAttributes).length} attributs extraits`);
 
-    // 10. Validation stricte des valeurs
+    // 10. Validation stricte des valeurs - PHASE 3: Logs détaillés
     const validatedAttributes: Record<string, string> = {};
     let validCount = 0;
     let invalidCount = 0;
 
+    console.log('[enrich-odoo-attributes] 🔍 Début validation, attributeSchema keys:', Object.keys(attributeSchema));
+
     for (const [attrName, attrValue] of Object.entries(extractedAttributes)) {
       const allowedValues = attributeSchema[attrName];
+      
+      console.log(`[enrich-odoo-attributes] 🔍 Validation "${attrName}": value="${attrValue}", allowed=${allowedValues?.length || 0} values`);
+      
       if (allowedValues && allowedValues.includes(attrValue)) {
         validatedAttributes[attrName] = attrValue;
         validCount++;
+        console.log(`[enrich-odoo-attributes] ✅ "${attrName}" = "${attrValue}" (valide)`);
       } else {
-        console.warn(`⚠️ Valeur invalide pour "${attrName}": "${attrValue}"`);
+        if (!allowedValues) {
+          console.warn(`[enrich-odoo-attributes] ⚠️ Attribut "${attrName}" absent du schéma`);
+        } else {
+          console.warn(`[enrich-odoo-attributes] ⚠️ Valeur "${attrValue}" non trouvée dans:`, allowedValues.slice(0, 5));
+        }
         validatedAttributes[attrName] = "Non déterminé";
         invalidCount++;
       }
     }
 
-    console.log(`[enrich-odoo-attributes] Validation: ${validCount} valides, ${invalidCount} invalides`);
+    console.log(`[enrich-odoo-attributes] Validation finale: ${validCount} valides, ${invalidCount} invalides sur ${Object.keys(extractedAttributes).length} attributs`);
 
     // 11. Sauvegarder dans product_analyses
     const { error: updateError } = await supabase

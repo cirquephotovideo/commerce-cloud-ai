@@ -115,21 +115,100 @@ serve(async (req) => {
             })
             .eq('id', task.id);
 
+        // PHASE 2: Fallback robuste en 3 niveaux
         let supplierProduct = task.supplier_products;
+
+        // Fallback 1: Fetch par supplier_product_id si disponible
         if (!supplierProduct && task.supplier_product_id) {
+          console.log(`[ENRICHMENT-QUEUE] Fallback L1: Fetching by supplier_product_id: ${task.supplier_product_id}`);
           const { data: fetchedProduct, error: fetchProductError } = await supabase
             .from('supplier_products')
             .select('*')
             .eq('id', task.supplier_product_id)
             .single();
+          
           if (fetchProductError) {
-            console.error('[ENRICHMENT-QUEUE] Failed to fetch supplier_product by ID:', fetchProductError);
+            console.error('[ENRICHMENT-QUEUE] Fallback L1 failed:', fetchProductError);
+          } else {
+            supplierProduct = fetchedProduct;
+            console.log('[ENRICHMENT-QUEUE] ✅ Fallback L1 success: Fetched by ID');
           }
-          supplierProduct = fetchedProduct;
         }
+
+        // Fallback 2: Fetch depuis analysis_id si disponible
+        if (!supplierProduct && task.analysis_id) {
+          console.log(`[ENRICHMENT-QUEUE] Fallback L2: Trying via analysis_id: ${task.analysis_id}`);
+          
+          const { data: analysis, error: analysisError } = await supabase
+            .from('product_analyses')
+            .select('supplier_product_id, supplier_products(*)')
+            .eq('id', task.analysis_id)
+            .single();
+          
+          if (!analysisError && analysis?.supplier_products) {
+            supplierProduct = analysis.supplier_products;
+            console.log('[ENRICHMENT-QUEUE] ✅ Fallback L2 success: Fetched from analysis join');
+          } else if (!analysisError && analysis?.supplier_product_id) {
+            const { data: linkedProduct } = await supabase
+              .from('supplier_products')
+              .select('*')
+              .eq('id', analysis.supplier_product_id)
+              .single();
+            
+            if (linkedProduct) {
+              supplierProduct = linkedProduct;
+              console.log('[ENRICHMENT-QUEUE] ✅ Fallback L2 success: Fetched via analysis.supplier_product_id');
+            }
+          } else {
+            console.warn('[ENRICHMENT-QUEUE] Fallback L2 failed:', analysisError);
+          }
+        }
+
+        // Fallback 3: Créer un produit minimal depuis analysis_result
+        if (!supplierProduct && task.analysis_id) {
+          console.log('[ENRICHMENT-QUEUE] Fallback L3: Creating minimal supplier product from analysis');
+          
+          const { data: analysis } = await supabase
+            .from('product_analyses')
+            .select('analysis_result, user_id')
+            .eq('id', task.analysis_id)
+            .single();
+          
+          if (analysis) {
+            const { data: minimalProduct, error: createError } = await supabase
+              .from('supplier_products')
+              .insert({
+                user_id: analysis.user_id,
+                product_name: analysis.analysis_result?.product_name || 'Produit sans nom',
+                description: analysis.analysis_result?.description || null,
+                ean: analysis.analysis_result?.ean || null,
+                source: 'enrichment_fallback',
+                import_status: 'completed'
+              })
+              .select()
+              .single();
+            
+            if (!createError && minimalProduct) {
+              supplierProduct = minimalProduct;
+              
+              // Lier à l'analysis
+              await supabase
+                .from('product_analyses')
+                .update({ supplier_product_id: minimalProduct.id })
+                .eq('id', task.analysis_id);
+              
+              console.log('[ENRICHMENT-QUEUE] ✅ Fallback L3 success: Created minimal supplier product:', minimalProduct.id);
+            } else {
+              console.error('[ENRICHMENT-QUEUE] Fallback L3 failed:', createError);
+            }
+          }
+        }
+
         if (!supplierProduct) {
-          throw new Error('Supplier product not found');
+          throw new Error('Supplier product not found after 3-level fallback');
         }
+
+        console.log(`[ENRICHMENT-QUEUE] ✅ Supplier product resolved: ${supplierProduct.id} - ${supplierProduct.product_name}`);
 
         // Call product-analyzer with correct format
         console.log(`[ENRICHMENT-QUEUE] Calling product-analyzer for ${supplierProduct.product_name}`);
