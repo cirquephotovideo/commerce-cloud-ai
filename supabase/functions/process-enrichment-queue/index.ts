@@ -115,7 +115,18 @@ serve(async (req) => {
             })
             .eq('id', task.id);
 
-        const supplierProduct = task.supplier_products;
+        let supplierProduct = task.supplier_products;
+        if (!supplierProduct && task.supplier_product_id) {
+          const { data: fetchedProduct, error: fetchProductError } = await supabase
+            .from('supplier_products')
+            .select('*')
+            .eq('id', task.supplier_product_id)
+            .single();
+          if (fetchProductError) {
+            console.error('[ENRICHMENT-QUEUE] Failed to fetch supplier_product by ID:', fetchProductError);
+          }
+          supplierProduct = fetchedProduct;
+        }
         if (!supplierProduct) {
           throw new Error('Supplier product not found');
         }
@@ -343,18 +354,6 @@ serve(async (req) => {
           }
         });
 
-        // Exécuter TOUS les enrichissements en parallèle
-        console.log(`[ENRICHMENT-QUEUE] Launching ${enrichmentPromises.length} enrichments in parallel`);
-        const enrichmentResults = await Promise.allSettled(enrichmentPromises);
-
-        // Logger les résultats
-        enrichmentResults.forEach((result, idx) => {
-          if (result.status === 'fulfilled') {
-            console.log(`[ENRICHMENT-QUEUE] ✅ Enrichment ${enrichmentTypes[idx]} completed`);
-          } else {
-            console.error(`[ENRICHMENT-QUEUE] ❌ Enrichment ${enrichmentTypes[idx]} failed:`, result.reason);
-          }
-        });
 
         // Mark as completed
         await supabase
