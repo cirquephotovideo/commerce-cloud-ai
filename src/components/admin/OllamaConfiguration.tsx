@@ -33,6 +33,8 @@ export const OllamaConfiguration = () => {
     api_key_encrypted: "",
     available_models: [] as string[],
     is_active: true,
+    default_model: "gpt-oss:120b-cloud",
+    web_search_enabled: false,
   });
   const [selectedModel, setSelectedModel] = useState("llama3");
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +45,7 @@ export const OllamaConfiguration = () => {
   const [testPrompt, setTestPrompt] = useState("");
   const [webSearchResults, setWebSearchResults] = useState<any>(null);
   const [isTestingWebSearch, setIsTestingWebSearch] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -77,9 +80,12 @@ export const OllamaConfiguration = () => {
           api_key_encrypted: latestConfig.api_key_encrypted || "",
           available_models: models.length > 0 ? models : (isCloud ? CLOUD_MODELS : LOCAL_MODELS),
           is_active: latestConfig.is_active,
+          default_model: latestConfig.default_model || (isCloud ? 'gpt-oss:120b-cloud' : 'llama3'),
+          web_search_enabled: latestConfig.web_search_enabled || false,
         });
         
-        setSelectedModel(isCloud ? 'gpt-oss:120b-cloud' : 'llama3');
+        setSelectedModel(latestConfig.default_model || (isCloud ? 'gpt-oss:120b-cloud' : 'llama3'));
+        setWebSearchEnabled(latestConfig.web_search_enabled || false);
         setIsCloudMode(isCloud);
       }
     } catch (error) {
@@ -238,6 +244,8 @@ export const OllamaConfiguration = () => {
           api_key_encrypted: config.api_key_encrypted,
           available_models: config.available_models,
           is_active: config.is_active,
+          default_model: selectedModel,
+          web_search_enabled: webSearchEnabled,
         }, { onConflict: 'user_id' });
 
       if (error) throw error;
@@ -420,6 +428,17 @@ export const OllamaConfiguration = () => {
           />
           <Label htmlFor="is_active">Activer Ollama {isCloudMode ? 'Cloud' : 'Local'}</Label>
         </div>
+
+        {isCloudMode && (
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="web_search_default"
+              checked={webSearchEnabled}
+              onCheckedChange={setWebSearchEnabled}
+            />
+            <Label htmlFor="web_search_default">Web Search par défaut (pour tous les enrichissements)</Label>
+          </div>
+        )}
 
         {config.available_models.length > 0 && (
           <div className="space-y-2">

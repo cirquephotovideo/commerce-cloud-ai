@@ -41,6 +41,27 @@ export const useEnrichmentPipeline = () => {
     setIsEnriching(true);
 
     try {
+      // Load Ollama preferences at the start
+      const { data: { session } } = await supabase.auth.getSession();
+      let ollamaPreferences = { preferredModel: 'gpt-oss:120b-cloud', webSearchEnabled: false };
+      
+      if (session?.user) {
+        const { data: ollamaConfig } = await supabase
+          .from('ollama_configurations')
+          .select('default_model, web_search_enabled')
+          .eq('user_id', session.user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (ollamaConfig) {
+          ollamaPreferences = {
+            preferredModel: ollamaConfig.default_model || 'gpt-oss:120b-cloud',
+            webSearchEnabled: ollamaConfig.web_search_enabled || false
+          };
+          console.log('[useEnrichmentPipeline] Loaded Ollama preferences:', ollamaPreferences);
+        }
+      }
       // 1. Catégorisation
       if (options.includeCategories) {
         setCurrentStep('🏷️ Catégorisation...');
@@ -49,7 +70,9 @@ export const useEnrichmentPipeline = () => {
             body: { 
               analysisId,
               productName: productData.product_name || productData.title,
-              description: productData.description
+              description: productData.description,
+              preferred_model: ollamaPreferences.preferredModel,
+              web_search_enabled: ollamaPreferences.webSearchEnabled
             }
           });
           if (error) {
@@ -136,7 +159,9 @@ export const useEnrichmentPipeline = () => {
             body: { 
               analysisId,
               productData,
-              purchasePrice: productData.purchase_price
+              purchasePrice: productData.purchase_price,
+              preferred_model: ollamaPreferences.preferredModel,
+              web_search_enabled: ollamaPreferences.webSearchEnabled
             }
           });
           if (error) {
@@ -165,7 +190,8 @@ export const useEnrichmentPipeline = () => {
             body: { 
               analysisId,
               provider: 'lovable',
-              webSearchEnabled: true
+              webSearchEnabled: ollamaPreferences.webSearchEnabled,
+              preferred_model: ollamaPreferences.preferredModel
             }
           });
           if (error) {

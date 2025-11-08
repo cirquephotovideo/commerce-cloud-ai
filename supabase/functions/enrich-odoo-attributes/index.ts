@@ -12,11 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, provider = 'lovable', webSearchEnabled = true } = await req.json();
+    const { analysisId, provider = 'lovable', webSearchEnabled = true, preferred_model } = await req.json();
     
     if (!analysisId) {
       throw new Error("analysisId est requis");
     }
+    
+    console.log('[enrich-odoo-attributes] Preferred model:', preferred_model || 'auto');
+    console.log('[enrich-odoo-attributes] Web search enabled:', webSearchEnabled);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -300,13 +303,14 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
     const { callAIWithFallback } = await import('../_shared/ai-fallback.ts');
 
     const fallbackResponse = await callAIWithFallback({
-      model: 'qwen3-coder:480b-cloud', // Modèle plus rapide que gpt-oss:120b
+      model: preferred_model || 'qwen3-coder:480b-cloud',
       messages: [
         { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
         { role: 'user', content: systemPrompt }
       ],
       temperature: 0.3,
-      max_tokens: 4000
+      max_tokens: 4000,
+      web_search: webSearchEnabled
     });
 
     if (!fallbackResponse.success) {

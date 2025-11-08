@@ -12,8 +12,14 @@ serve(async (req) => {
   let analysisIdForError: string | undefined;
   
   try {
-    const { analysisId, productData, purchasePrice } = await req.json();
+    const { analysisId, productData, purchasePrice, preferred_model, web_search_enabled } = await req.json();
     analysisIdForError = analysisId;
+    
+    const modelToUse = preferred_model || 'qwen3-coder:480b-cloud';
+    const webSearchToUse = web_search_enabled ?? true; // Default true for backward compatibility
+    
+    console.log('[ENRICH-OLLAMA-WEB] Using model:', modelToUse);
+    console.log('[ENRICH-OLLAMA-WEB] Web search:', webSearchToUse);
     
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -89,18 +95,18 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
   "confidence_level": "high|medium|low"
 }`;
 
-    // APPEL OLLAMA CLOUD avec WEB SEARCH activé
-    console.log('[ENRICH-OLLAMA-WEB] ⚡ Calling Ollama Cloud with web_search=true...');
+    // APPEL OLLAMA CLOUD avec WEB SEARCH
+    console.log(`[ENRICH-OLLAMA-WEB] ⚡ Calling Ollama Cloud with model=${modelToUse}, web_search=${webSearchToUse}...`);
 
     const { data: ollamaData, error: ollamaError } = await supabase.functions.invoke('ollama-proxy', {
       body: {
         action: 'chat',
-        model: 'qwen3-coder:480b-cloud', // Modèle plus stable pour extraction structurée
-        web_search: true,
+        model: modelToUse,
+        web_search: webSearchToUse,
         messages: [
           { 
             role: 'system', 
-            content: 'Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide. Tu effectues des recherches web pour obtenir des données réelles.' 
+            content: `Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide.${webSearchToUse ? ' Tu effectues des recherches web pour obtenir des données réelles.' : ''}` 
           },
           { role: 'user', content: prompt }
         ]
@@ -125,11 +131,11 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
       await supabase
         .from('enrichment_queue')
         .update({
-          error_message: `Ollama Cloud error: ${ollamaError?.message || 'Invalid response'}. Using fallback providers...`,
+        error_message: `Ollama Cloud error: ${ollamaError?.message || 'Invalid response'}. Using fallback providers...`,
           last_error: {
             timestamp: new Date().toISOString(),
             provider: 'ollama-cloud',
-            model: 'qwen3-coder:480b-cloud',
+            model: modelToUse,
             error: ollamaError?.message || 'Invalid response structure'
           }
         })
@@ -142,10 +148,11 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
           messages: [
             { 
               role: 'system', 
-              content: 'Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide. Utilise tes connaissances pour enrichir les données produit.' 
+              content: `Tu es un assistant qui analyse des produits et répond UNIQUEMENT en JSON valide.${webSearchToUse ? ' Utilise tes connaissances pour enrichir les données produit.' : ''}` 
             },
             { role: 'user', content: prompt }
-          ]
+          ],
+          web_search: webSearchToUse
         }, { skipProviders: ['ollama'] }); // Skip Ollama since it already failed
 
         if (!fallbackResponse.success) {

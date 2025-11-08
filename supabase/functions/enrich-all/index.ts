@@ -12,9 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { analysisId, productData, purchasePrice, preferred_model } = await req.json();
+    const { analysisId, productData, purchasePrice, preferred_model, web_search_enabled } = await req.json();
     console.log('[ENRICH-ALL] 🚀 Starting all enrichments for:', analysisId);
     console.log('[ENRICH-ALL] Preferred model:', preferred_model || 'auto');
+    console.log('[ENRICH-ALL] Web search enabled:', web_search_enabled ?? false);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -76,7 +77,13 @@ serve(async (req) => {
 
     // Appel unique avec web search
     const webEnrichResult = await supabase.functions.invoke('enrich-with-ollama-web', {
-      body: { analysisId, productData, purchasePrice },
+      body: { 
+        analysisId, 
+        productData, 
+        purchasePrice,
+        preferred_model: preferred_model || 'gpt-oss:120b-cloud',
+        web_search_enabled: web_search_enabled ?? false
+      },
       headers: token ? { Authorization: `Bearer ${token}` } : {}
     });
 

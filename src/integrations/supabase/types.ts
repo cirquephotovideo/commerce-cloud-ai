@@ -2534,31 +2534,37 @@ export type Database = {
           api_key_encrypted: string | null
           available_models: Json | null
           created_at: string | null
+          default_model: string | null
           id: string
           is_active: boolean | null
           ollama_url: string
           updated_at: string | null
           user_id: string
+          web_search_enabled: boolean | null
         }
         Insert: {
           api_key_encrypted?: string | null
           available_models?: Json | null
           created_at?: string | null
+          default_model?: string | null
           id?: string
           is_active?: boolean | null
           ollama_url: string
           updated_at?: string | null
           user_id: string
+          web_search_enabled?: boolean | null
         }
         Update: {
           api_key_encrypted?: string | null
           available_models?: Json | null
           created_at?: string | null
+          default_model?: string | null
           id?: string
           is_active?: boolean | null
           ollama_url?: string
           updated_at?: string | null
           user_id?: string
+          web_search_enabled?: boolean | null
         }
         Relationships: []
       }

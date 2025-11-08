@@ -38,7 +38,10 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    const { analysis_id } = await req.json();
+    const { analysis_id, preferred_model, web_search_enabled } = await req.json();
+    
+    console.log('[TAXONOMY] Preferred model:', preferred_model || 'auto');
+    console.log('[TAXONOMY] Web search enabled:', web_search_enabled ?? false);
 
     const { data: settings } = await supabase
       .from('taxonomy_settings')
@@ -97,8 +100,9 @@ Réponds uniquement avec un JSON suivant ce format exact:
     console.log('[TAXONOMY] Calling AI with fallback (skipping Lovable AI)');
     
     const aiResponse = await callAIWithFallback({
-      model: 'gpt-oss:20b-cloud',
+      model: preferred_model || 'gpt-oss:20b-cloud',
       messages: [{ role: 'user', content: prompt }],
+      web_search: web_search_enabled ?? false
     }, ['lovable_ai']); // Skip Lovable AI to avoid rate limits
 
     if (!aiResponse.success) {
@@ -157,8 +161,9 @@ Réponds uniquement avec un JSON suivant ce format exact:
     try {
       console.log('[TAXONOMY] Attempting secondary taxonomy...');
       const secondaryAiResponse = await callAIWithFallback({
-        model: 'gpt-oss:20b-cloud',
+        model: preferred_model || 'gpt-oss:20b-cloud',
         messages: [{ role: 'user', content: otherPrompt }],
+        web_search: web_search_enabled ?? false
       }, ['lovable_ai']); // Skip Lovable AI
 
       if (secondaryAiResponse.success) {
