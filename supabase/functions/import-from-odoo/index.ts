@@ -26,9 +26,9 @@ serve(async (req) => {
   }
 
   try {
-    const { supplier_id, config } = await req.json();
+    const { supplier_id, config, mode = 'import', offset = 0, limit = 500, import_job_id } = await req.json();
     
-    console.log('[ODOO-IMPORT] Starting import for supplier:', supplier_id);
+    console.log('[ODOO-IMPORT] Starting with mode:', mode, 'supplier:', supplier_id, 'offset:', offset, 'limit:', limit);
 
     // Determine which key to use based on auth context with robust JWT validation
     const authHeader = req.headers.get('Authorization') || '';
@@ -274,6 +274,14 @@ serve(async (req) => {
     const odooBaseUrl = authenticatedBaseUrl;
     console.log('[ODOO] Using XML-RPC base:', odooBaseUrl.replace(/https?:\/\/[^\/]+/, '[REDACTED]'));
 
+    // MODE: test - just return success after authentication
+    if (mode === 'test') {
+      return new Response(
+        JSON.stringify({ success: true, message: 'Authentication successful' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // 2. First get the total count of active products
     console.log('[ODOO] Getting total product count...');
     const countPayload = `<?xml version="1.0"?>
@@ -310,17 +318,22 @@ serve(async (req) => {
     const totalCount = countMatch ? parseInt(countMatch[1]) : 0;
     console.log(`[ODOO] ✅ Total active products in Odoo: ${totalCount}`);
 
-    // 3. Fetch all products with pagination
+    // MODE: count - just return the count
+    if (mode === 'count') {
+      return new Response(
+        JSON.stringify({ total_products: totalCount }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // MODE: import - fetch and import chunk
+    // 3. Fetch products for this chunk only
     const allProducts: any[] = [];
-    let offset = 0;
-    const limit = 500;
+    const currentPage = Math.floor(offset / limit) + 1;
+    const totalPages = Math.ceil(totalCount / limit);
+    console.log(`[ODOO] 📦 Fetching chunk ${currentPage}/${totalPages} (offset: ${offset}, limit: ${limit})`);
 
-    while (offset < totalCount) {
-      const currentPage = Math.floor(offset / limit) + 1;
-      const totalPages = Math.ceil(totalCount / limit);
-      console.log(`[ODOO] 📦 Fetching page ${currentPage}/${totalPages} (offset: ${offset}, limit: ${limit})`);
-
-      const searchPayload = `<?xml version="1.0"?>
+    const searchPayload = `<?xml version="1.0"?>
         <methodCall>
           <methodName>execute_kw</methodName>
           <params>
@@ -419,14 +432,10 @@ serve(async (req) => {
           qty_available: parseInt(extractValue('qty_available', 'int') || '0'),
         };
 
-        allProducts.push(product);
-      }
-
-      offset += limit;
-      console.log(`[ODOO] Progress: ${allProducts.length}/${totalCount} products collected`);
+      allProducts.push(product);
     }
 
-    console.log(`[ODOO] ✅ Total products collected: ${allProducts.length}/${totalCount}`);
+    console.log(`[ODOO] ✅ Chunk products collected: ${allProducts.length}`);
 
     // 3. Importer dans supplier_products
     let imported = 0, matched = 0, errors = 0;

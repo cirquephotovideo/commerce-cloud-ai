@@ -61,6 +61,7 @@ export const SupplierImportMenu = ({
   const [importingPlatform, setImportingPlatform] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   // Options d'import
   const [importType, setImportType] = useState<'full' | 'incremental'>('full');
@@ -75,9 +76,69 @@ export const SupplierImportMenu = ({
     skipped: 0,
     errors: 0,
     current_operation: '',
+    status: 'queued' as string,
   });
 
   const { toast } = useToast();
+
+  // Realtime subscription for job progress
+  useState(() => {
+    if (!currentJobId) return;
+
+    const channel = supabase
+      .channel(`import-job-${currentJobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'import_jobs',
+          filter: `id=eq.${currentJobId}`
+        },
+        (payload) => {
+          const job = payload.new as any;
+          
+          const chunkSize = job.metadata?.chunk_size || 500;
+          const currentChunk = Math.ceil(job.progress_current / chunkSize);
+          const totalChunks = Math.ceil(job.progress_total / chunkSize);
+          
+          setImportProgress({
+            total: job.progress_total || 0,
+            processed: job.progress_current || 0,
+            success: job.products_imported || 0,
+            skipped: job.products_matched || 0,
+            errors: job.products_errors || 0,
+            current_operation: `Importation lot ${currentChunk}/${totalChunks}`,
+            status: job.status,
+          });
+
+          // Stop tracking when completed
+          if (job.status === 'completed' || job.status === 'failed') {
+            setIsImporting(false);
+            setCurrentJobId(null);
+            
+            if (job.status === 'completed') {
+              toast({
+                title: "✅ Import terminé",
+                description: `${job.products_imported} produits importés, ${job.products_matched} matchés`,
+              });
+              onImportComplete?.();
+            } else {
+              toast({
+                title: "❌ Import échoué",
+                description: job.error_message || "Une erreur s'est produite",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  });
 
   // Récupérer toutes les plateformes actives (pas de vérification supports_import)
   const { data: platforms, isLoading, error } = useQuery({
@@ -116,16 +177,18 @@ export const SupplierImportMenu = ({
 
     // Initialiser le tracking
     setImportProgress({
-      total: 100,
+      total: 0,
       processed: 0,
       success: 0,
       skipped: 0,
       errors: 0,
-      current_operation: 'Connexion à la plateforme...',
+      current_operation: 'Démarrage de l\'import...',
+      status: 'queued',
     });
 
     try {
-      const { data, error } = await supabase.functions.invoke('import-from-platform', {
+      // Call orchestration function
+      const { data, error } = await supabase.functions.invoke('orchestrate-platform-import', {
         body: {
           platform: selectedPlatform,
           supplier_id: supplierId,
@@ -139,19 +202,24 @@ export const SupplierImportMenu = ({
 
       if (error) throw error;
 
-      // Mettre à jour le progress final
-      setImportProgress(prev => ({
-        ...prev,
-        processed: prev.total,
-        current_operation: 'Import terminé',
-      }));
-
-      toast({
-        title: "✅ Import réussi",
-        description: `${data.imported} produits importés (${data.matched} matchés, ${data.new} nouveaux)`,
+      // Store job ID for tracking
+      setCurrentJobId(data.import_job_id);
+      
+      // Update initial progress
+      setImportProgress({
+        total: data.total_products,
+        processed: 0,
+        success: 0,
+        skipped: 0,
+        errors: 0,
+        current_operation: `Importation en cours (${data.estimated_chunks} lots de ${data.chunk_size} produits)`,
+        status: 'processing',
       });
 
-      onImportComplete?.();
+      toast({
+        title: "🚀 Import démarré",
+        description: `${data.total_products} produits à importer en ${data.estimated_chunks} lots`,
+      });
 
     } catch (error: any) {
       console.error('Import error:', error);
@@ -160,7 +228,6 @@ export const SupplierImportMenu = ({
         description: error.message || "Une erreur s'est produite lors de l'import",
         variant: "destructive",
       });
-    } finally {
       setIsImporting(false);
       setImportingPlatform(null);
     }

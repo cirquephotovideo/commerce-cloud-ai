@@ -21,6 +21,8 @@ interface ImportProgressDialogProps {
 
 export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportProgressDialogProps) => {
   const [isManuallyClosing, setIsManuallyClosing] = useState(false);
+  const [startTime] = useState(Date.now());
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
   
   const percentage = progress.total > 0 
     ? Math.round((progress.processed / progress.total) * 100) 
@@ -28,6 +30,28 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
 
   const isFinished = progress.status === 'completed' || progress.status === 'failed';
   const hasNoProducts = progress.success === 0 && progress.processed > 0;
+
+  // Calculate estimated time remaining
+  useState(() => {
+    if (progress.processed === 0 || progress.total === 0 || isFinished) {
+      setEstimatedTimeRemaining('');
+      return;
+    }
+    
+    const elapsed = Date.now() - startTime;
+    const rate = progress.processed / elapsed; // products per ms
+    const remaining = progress.total - progress.processed;
+    const remainingMs = remaining / rate;
+    
+    const minutes = Math.floor(remainingMs / 60000);
+    const seconds = Math.floor((remainingMs % 60000) / 1000);
+    
+    setEstimatedTimeRemaining(
+      minutes > 0 
+        ? `~${minutes}m ${seconds}s restantes` 
+        : `~${seconds}s restantes`
+    );
+  });
 
   const handleDownloadLogs = () => {
     if (!processingLogs || processingLogs.length === 0) return;
@@ -70,10 +94,24 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
           {/* Progress bar */}
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span>{progress.processed} / {progress.total}</span>
-              <span>{percentage}%</span>
+              <span>{progress.processed} / {progress.total} produits</span>
+              <span className="font-mono">{percentage}%</span>
             </div>
+            
+            {estimatedTimeRemaining && !isFinished && (
+              <div className="text-xs text-muted-foreground text-right mb-1">
+                {estimatedTimeRemaining}
+              </div>
+            )}
+            
             <Progress value={percentage} />
+            
+            {/* Speed indicator */}
+            {progress.processed > 0 && !isFinished && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Vitesse: ~{Math.round((progress.processed / (Date.now() - startTime)) * 1000)} produits/s
+              </div>
+            )}
           </div>
 
           {/* Statut actuel */}
