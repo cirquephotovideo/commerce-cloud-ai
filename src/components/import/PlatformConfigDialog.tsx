@@ -38,14 +38,39 @@ export const PlatformConfigDialog = ({
   const queryClient = useQueryClient();
   const [platformType, setPlatformType] = useState(existingConfig?.platform_type || "odoo");
   const [platformUrl, setPlatformUrl] = useState(existingConfig?.platform_url || "");
-  const [credentials, setCredentials] = useState({
-    database: existingConfig?.credentials?.database || "",
-    username: existingConfig?.credentials?.username || "",
-    password: existingConfig?.credentials?.password || "",
-    api_key: existingConfig?.credentials?.api_key || "",
-    consumer_key: existingConfig?.credentials?.consumer_key || "",
-    consumer_secret: existingConfig?.credentials?.consumer_secret || "",
-    access_token: existingConfig?.credentials?.access_token || "",
+  const [credentials, setCredentials] = useState<any>(() => {
+    if (!existingConfig) {
+      return {
+        database: "",
+        username: "",
+        password: "",
+        api_key: "",
+        consumer_key: "",
+        consumer_secret: "",
+        access_token: "",
+      };
+    }
+
+    // Reconstruct credentials from correct columns based on platform type
+    if (existingConfig.platform_type === 'odoo') {
+      return existingConfig.additional_config || {};
+    } else if (existingConfig.platform_type === 'prestashop') {
+      return { api_key: existingConfig.api_key_encrypted || '' };
+    } else if (existingConfig.platform_type === 'woocommerce') {
+      return {
+        consumer_key: existingConfig.api_key_encrypted || '',
+        consumer_secret: existingConfig.api_secret_encrypted || ''
+      };
+    } else if (existingConfig.platform_type === 'shopify') {
+      return { access_token: existingConfig.access_token_encrypted || '' };
+    } else if (existingConfig.platform_type === 'magento') {
+      return {
+        consumer_key: existingConfig.api_key_encrypted || '',
+        consumer_secret: existingConfig.api_secret_encrypted || '',
+        access_token: existingConfig.access_token_encrypted || ''
+      };
+    }
+    return {};
   });
 
   const savePlatform = useMutation({
@@ -53,13 +78,32 @@ export const PlatformConfigDialog = ({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non authentifié');
 
-      const configData = {
+      let configData: any = {
         user_id: user.id,
         platform_type: platformType,
         platform_url: platformUrl,
         is_active: true,
-        credentials: credentials,
       };
+
+      // Map credentials to correct columns based on platform type
+      if (platformType === 'odoo') {
+        configData.additional_config = {
+          username: credentials.username,
+          password: credentials.password,
+          database: credentials.database
+        };
+      } else if (platformType === 'prestashop') {
+        configData.api_key_encrypted = credentials.api_key;
+      } else if (platformType === 'woocommerce') {
+        configData.api_key_encrypted = credentials.consumer_key;
+        configData.api_secret_encrypted = credentials.consumer_secret;
+      } else if (platformType === 'shopify') {
+        configData.access_token_encrypted = credentials.access_token;
+      } else if (platformType === 'magento') {
+        configData.api_key_encrypted = credentials.consumer_key;
+        configData.api_secret_encrypted = credentials.consumer_secret;
+        configData.access_token_encrypted = credentials.access_token;
+      }
 
       if (platformId) {
         const { error } = await supabase

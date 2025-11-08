@@ -21,7 +21,18 @@ export const usePlatformImport = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non authentifié');
 
-      // 3. Créer ou récupérer le supplier_configuration correspondant
+      // 3. Reconstruct credentials from correct columns
+      const credentials: Record<string, any> = config.platform_type === 'odoo' 
+        ? (typeof config.additional_config === 'object' && config.additional_config !== null 
+            ? config.additional_config as Record<string, any>
+            : {})
+        : {
+            apiKey: config.api_key_encrypted,
+            apiSecret: config.api_secret_encrypted,
+            accessToken: config.access_token_encrypted
+          };
+
+      // 4. Créer ou récupérer le supplier_configuration correspondant
       const platformType = config.platform_type === 'odoo' || config.platform_type === 'prestashop' 
         ? config.platform_type 
         : 'api';
@@ -53,15 +64,12 @@ export const usePlatformImport = () => {
         supplierId = newSupplier.id;
       }
 
-      // 4. Appeler l'edge function d'import
+      // 5. Appeler l'edge function d'import avec les credentials reconstruits
       const functionName = `import-from-${config.platform_type}`;
-      const additionalConfig = config.additional_config && typeof config.additional_config === 'object' 
-        ? config.additional_config 
-        : {};
       
       const platformConfig = {
         url: config.platform_url,
-        ...additionalConfig,
+        ...credentials,
       };
       
       const { data, error } = await supabase.functions.invoke(functionName, {
