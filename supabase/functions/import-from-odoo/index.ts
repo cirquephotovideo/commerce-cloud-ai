@@ -562,9 +562,9 @@ serve(async (req) => {
         description: product.description || product.description_sale || null,
         additional_data: {
           list_price: product.list_price,
-          // Images Odoo en base64
-          image_1920: product.image_1920 || null,
-          image_512: product.image_512 || null,
+          // Exclure temporairement les images volumineuses pour éviter timeout
+          // image_1920: product.image_1920 || null,
+          // image_512: product.image_512 || null,
           image_256: product.image_256 || null,
           // Catégorie
           category_id: product.categ_id?.[0] || null,
@@ -688,7 +688,7 @@ serve(async (req) => {
         total_items: imported,
         success_items: imported,
         error_items: errors,
-        import_result: { imported, matched, errors, errorDetails: errorDetails.slice(0, 10) },
+        import_result: { imported, matched, errors },
       });
 
       // Mettre à jour last_sync_at uniquement quand tous les chunks sont finis
@@ -707,7 +707,7 @@ serve(async (req) => {
         hasMore,
         nextOffset: offset + limit,
         totalCount,
-        errorSample: errorDetails.slice(0, 5),
+        errorSample: [],
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
