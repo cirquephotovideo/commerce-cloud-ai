@@ -540,112 +540,125 @@ serve(async (req) => {
       context: { count: allProducts.length, offset, limit }
     });
 
-    // 3. Importer dans supplier_products
+    // 3. Importer dans supplier_products - BATCH OPTIMIZED
     let imported = 0, matched = 0, errors = 0;
-    const errorDetails = [];
 
+    // Phase 1: Collecter tous les produits à insérer
+    const productsToInsert = [];
     for (const product of allProducts) {
-      try {
-        // Valider et nettoyer EAN
-        const rawEan = product.barcode?.trim();
-        const ean = rawEan && isValidEAN13(rawEan) ? rawEan : null;
+      // Valider et nettoyer EAN
+      const rawEan = product.barcode?.trim();
+      const ean = rawEan && isValidEAN13(rawEan) ? rawEan : null;
 
-        // Préparer les données d'insertion enrichies
-        const insertData = {
-          user_id: userId,
-          supplier_id: supplier_id,
-          supplier_reference: product.default_code || `odoo_id_${product.id}`,
-          ean: ean,
-          product_name: product.name,
-          purchase_price: product.standard_price || 0,
-          stock_quantity: product.qty_available || 0,
-          currency: 'EUR',
-          description: product.description || product.description_sale || null,
-          additional_data: {
-            list_price: product.list_price,
-            // Images Odoo en base64
-            image_1920: product.image_1920 || null,
-            image_512: product.image_512 || null,
-            image_256: product.image_256 || null,
-            // Catégorie
-            category_id: product.categ_id?.[0] || null,
-            category_name: product.categ_id?.[1] || null,
-            // Métadonnées
-            weight: product.weight,
-            volume: product.volume,
-            odoo_template_id: product.id, // ID du template Odoo
-          },
-        };
-
-        // Log première tentative pour debug enrichi
-        if (imported === 0 && errors === 0) {
-          console.log('[ODOO] 🔍 First product insert (from template):', {
-            product_name: insertData.product_name,
-            template_id: insertData.additional_data.odoo_template_id,
-            has_image_1920: !!insertData.additional_data.image_1920,
-            has_image_512: !!insertData.additional_data.image_512,
-            image_1920_length: insertData.additional_data.image_1920?.length || 0,
-            has_description: !!insertData.description,
-            description_preview: insertData.description?.substring(0, 100),
-            category: insertData.additional_data.category_name,
-          });
-        }
-
-        // Insérer/Update supplier_product
-        const { data: supplierProduct, error: insertError } = await supabaseClient
-          .from('supplier_products')
-          .upsert(insertData, {
-            onConflict: 'user_id,supplier_id,supplier_reference',
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        imported++;
-
-        // Matching automatique par EAN
-        if (ean) {
-          const { data: analysis } = await supabaseClient
-            .from('product_analyses')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('ean', ean)
-            .maybeSingle();
-
-          if (analysis) {
-            await supabaseClient
-              .from('product_analyses')
-              .update({
-                supplier_product_id: supplierProduct.id,
-                purchase_price: product.standard_price,
-                purchase_currency: 'EUR',
-              })
-              .eq('id', analysis.id);
-            
-            matched++;
-          }
-        }
-
-      } catch (err: any) {
-        errors++;
-        errorDetails.push({
-          product: product.name,
-          reference: product.default_code,
-          error: err.message,
-        });
-      }
+      productsToInsert.push({
+        user_id: userId,
+        supplier_id: supplier_id,
+        supplier_reference: product.default_code || `odoo_id_${product.id}`,
+        ean: ean,
+        product_name: product.name,
+        purchase_price: product.standard_price || 0,
+        stock_quantity: product.qty_available || 0,
+        currency: 'EUR',
+        description: product.description || product.description_sale || null,
+        additional_data: {
+          list_price: product.list_price,
+          // Images Odoo en base64
+          image_1920: product.image_1920 || null,
+          image_512: product.image_512 || null,
+          image_256: product.image_256 || null,
+          // Catégorie
+          category_id: product.categ_id?.[0] || null,
+          category_name: product.categ_id?.[1] || null,
+          // Métadonnées
+          weight: product.weight,
+          volume: product.volume,
+          odoo_template_id: product.id, // ID du template Odoo
+        },
+      });
     }
 
-    // Log détaillé des erreurs (premiers 10 pour debug)
-    if (errorDetails.length > 0) {
-      console.error(`[ODOO] ❌ ${errorDetails.length} errors occurred during import:`);
-      errorDetails.slice(0, 10).forEach((err, idx) => {
-        console.error(`[ODOO] Error ${idx + 1}/${errorDetails.length}:`, {
-          product: err.product,
-          reference: err.reference,
-          error: err.error,
-        });
+    // Log first product for debugging
+    if (productsToInsert.length > 0) {
+      console.log('[ODOO] 🔍 First product to insert:', {
+        product_name: productsToInsert[0].product_name,
+        template_id: productsToInsert[0].additional_data.odoo_template_id,
+        has_image_1920: !!productsToInsert[0].additional_data.image_1920,
+        has_description: !!productsToInsert[0].description,
+        category: productsToInsert[0].additional_data.category_name,
       });
+    }
+
+    // Phase 2: Batch upsert de tous les supplier_products (1 seule requête SQL)
+    console.log(`[ODOO] 📤 Upserting ${productsToInsert.length} products in batch...`);
+    try {
+      const { data: insertedProducts, error: insertError } = await supabaseClient
+        .from('supplier_products')
+        .upsert(productsToInsert, { 
+          onConflict: 'user_id,supplier_id,supplier_reference',
+          ignoreDuplicates: false 
+        })
+        .select('id, ean, purchase_price');
+
+      if (insertError) {
+        console.error('[ODOO] ❌ Batch insert error:', insertError);
+        throw insertError;
+      }
+
+      imported = insertedProducts?.length || 0;
+      console.log(`[ODOO] ✅ ${imported} products upserted successfully`);
+
+      // Phase 3: Batch matching par EAN (1 SELECT + 1 UPDATE)
+      const productsWithEan = insertedProducts?.filter(p => p.ean) || [];
+      if (productsWithEan.length > 0) {
+        console.log(`[ODOO] 🔍 Matching ${productsWithEan.length} products by EAN...`);
+        
+        const eanList = productsWithEan.map(p => p.ean);
+        
+        // Récupérer tous les product_analyses qui ont ces EAN (1 seule requête)
+        const { data: analysesToMatch } = await supabaseClient
+          .from('product_analyses')
+          .select('id, ean')
+          .eq('user_id', userId)
+          .in('ean', eanList)
+          .is('supplier_product_id', null);
+        
+        if (analysesToMatch && analysesToMatch.length > 0) {
+          // Créer un map EAN -> supplier_product info
+          const eanToProductInfo = new Map(
+            productsWithEan.map(p => [p.ean, { id: p.id, price: p.purchase_price }])
+          );
+          
+          // Préparer les updates en batch
+          const updates = analysesToMatch.map(analysis => {
+            const productInfo = eanToProductInfo.get(analysis.ean);
+            return {
+              id: analysis.id,
+              supplier_product_id: productInfo?.id,
+              purchase_price: productInfo?.price,
+              purchase_currency: 'EUR',
+              updated_at: new Date().toISOString()
+            };
+          });
+          
+          // Batch update (1 seule requête)
+          const { error: matchError } = await supabaseClient
+            .from('product_analyses')
+            .upsert(updates, { onConflict: 'id' });
+          
+          if (matchError) {
+            console.error('[ODOO] ⚠️ Batch matching error:', matchError);
+          } else {
+            matched = updates.length;
+            console.log(`[ODOO] ✅ ${matched} products matched by EAN`);
+          }
+        }
+      }
+
+      errors = productsToInsert.length - imported;
+
+    } catch (err: any) {
+      console.error('[ODOO] ❌ Batch operation failed:', err.message);
+      errors = productsToInsert.length;
     }
 
     console.log(`[ODOO] ✅ Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors`);
