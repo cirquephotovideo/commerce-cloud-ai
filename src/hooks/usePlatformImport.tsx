@@ -64,10 +64,7 @@ export const usePlatformImport = () => {
         supplierId = newSupplier.id;
       }
 
-      // 5. Appeler l'edge function d'import avec la config complète
-      const functionName = `import-from-${config.platform_type}`;
-      
-      // Pour Odoo, on doit envoyer la structure complète avec platform_url et additional_config
+      // 5. Appeler l'orchestrateur d'import pour créer un job trackable
       const platformConfig = config.platform_type === 'odoo' 
         ? {
             platform_url: config.platform_url,
@@ -78,10 +75,16 @@ export const usePlatformImport = () => {
             ...credentials
           };
       
-      const { data, error } = await supabase.functions.invoke(functionName, {
+      const { data, error } = await supabase.functions.invoke('orchestrate-platform-import', {
         body: {
           supplier_id: supplierId,
-          config: platformConfig,
+          platform: config.platform_type,
+          options: {
+            config: platformConfig,
+            importType: 'full',
+            autoEnrich: false,
+            matchByEan: true,
+          },
         },
       });
 

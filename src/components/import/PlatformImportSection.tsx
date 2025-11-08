@@ -14,6 +14,7 @@ export const PlatformImportSection = () => {
   const [selectedPlatformId, setSelectedPlatformId] = useState<string | undefined>();
   const [selectedConfig, setSelectedConfig] = useState<any>(undefined);
   const [importingPlatformId, setImportingPlatformId] = useState<string | null>(null);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
 
   const { importFromPlatform } = usePlatformImport();
 
@@ -38,7 +39,8 @@ export const PlatformImportSection = () => {
   const handleImport = async (platformId: string) => {
     setImportingPlatformId(platformId);
     try {
-      await importFromPlatform.mutateAsync(platformId);
+      const result = await importFromPlatform.mutateAsync(platformId);
+      setActiveJobId(result?.import_job_id || null);
     } finally {
       setImportingPlatformId(null);
     }
@@ -99,6 +101,7 @@ export const PlatformImportSection = () => {
               onImport={handleImport}
               onConfigure={handleConfigure}
               isImporting={importingPlatformId === platform.id}
+              jobId={importingPlatformId === platform.id ? activeJobId : null}
             />
           ))}
         </div>

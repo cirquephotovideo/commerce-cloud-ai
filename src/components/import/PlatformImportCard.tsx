@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Download, Settings, CheckCircle2, XCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { PlatformImportProgress } from "./PlatformImportProgress";
 
 interface PlatformImportCardProps {
   platform: {
@@ -16,6 +17,7 @@ interface PlatformImportCardProps {
   onImport: (platformId: string) => void;
   onConfigure: (platformId: string) => void;
   isImporting?: boolean;
+  jobId?: string | null;
 }
 
 const platformIcons: Record<string, string> = {
@@ -39,6 +41,7 @@ export const PlatformImportCard = ({
   onImport,
   onConfigure,
   isImporting = false,
+  jobId = null,
 }: PlatformImportCardProps) => {
   return (
     <Card className="p-6 hover:shadow-lg transition-shadow">
@@ -106,6 +109,11 @@ export const PlatformImportCard = ({
             <Settings className="w-4 h-4" />
           </Button>
         </div>
+
+        {/* Progress section */}
+        {isImporting && jobId && (
+          <PlatformImportProgress platformId={platform.id} jobId={jobId} />
+        )}
       </div>
     </Card>
   );
