@@ -195,6 +195,14 @@ serve(async (req) => {
       }
     }
 
+    // Define productData for later use
+    const productData = supplierProduct || {
+      name: analysis?.analysis_result?.product_name || 'Unknown Product',
+      ean: analysis?.analysis_result?.ean || null,
+      description: analysis?.analysis_result?.description || null,
+      purchase_price: analysis?.analysis_result?.purchase_price || null
+    };
+
     // Add to enrichment queue with high priority
     const { data: queueEntry, error: queueError } = await supabase
       .from('enrichment_queue')
