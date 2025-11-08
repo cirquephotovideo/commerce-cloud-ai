@@ -28,7 +28,7 @@ serve(async (req) => {
   try {
     const { supplier_id, config } = await req.json();
     
-    console.log('Starting Odoo import for supplier:', supplier_id);
+    console.log('[ODOO-IMPORT] Starting import for supplier:', supplier_id);
 
     // Determine which key to use based on auth context with robust JWT validation
     const authHeader = req.headers.get('Authorization') || '';
