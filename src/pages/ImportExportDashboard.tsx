@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useRealtimeImportExportStats } from "@/hooks/useRealtimeImportExportStats";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoExportRules } from "@/components/AutoExportRules";
@@ -14,8 +15,9 @@ import { History, Package, TrendingUp, AlertCircle, Calendar, Loader2, Download,
 
 export default function ImportExportDashboard() {
   const [showHistory, setShowHistory] = useState(false);
+  const { liveStats, setLiveStats } = useRealtimeImportExportStats();
 
-  // Stats globales
+  // Stats globales avec temps réel
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['import-export-stats'],
     queryFn: async () => {
@@ -34,6 +36,13 @@ export default function ImportExportDashboard() {
       };
     },
   });
+
+  // Initialiser les stats temps réel avec les données de la base
+  useEffect(() => {
+    if (stats) {
+      setLiveStats(stats);
+    }
+  }, [stats, setLiveStats]);
 
   // Activité récente
   const { data: recentActivity } = useQuery({
@@ -101,13 +110,13 @@ export default function ImportExportDashboard() {
         </Button>
       </div>
 
-      {/* Stats globales */}
+      {/* Stats globales avec mise à jour temps réel */}
       <div className="grid grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold">{stats?.totalImports || 0}</div>
+                <div className="text-3xl font-bold animate-in fade-in-50">{liveStats.totalImports}</div>
                 <p className="text-sm text-muted-foreground">Imports totaux</p>
               </div>
               <Upload className="h-8 w-8 text-blue-500" />
@@ -118,7 +127,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-green-500">{stats?.successfulExports || 0}</div>
+                <div className="text-3xl font-bold text-green-500 animate-in fade-in-50">{liveStats.successfulExports}</div>
                 <p className="text-sm text-muted-foreground">Exports réussis</p>
               </div>
               <Download className="h-8 w-8 text-green-500" />
@@ -129,7 +138,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-orange-500">{stats?.pendingEnrichments || 0}</div>
+                <div className="text-3xl font-bold text-orange-500 animate-in fade-in-50">{liveStats.pendingEnrichments}</div>
                 <p className="text-sm text-muted-foreground">En attente</p>
               </div>
               <TrendingUp className="h-8 w-8 text-orange-500" />
@@ -140,7 +149,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-red-500">{stats?.errors || 0}</div>
+                <div className="text-3xl font-bold text-red-500 animate-in fade-in-50">{liveStats.errors}</div>
                 <p className="text-sm text-muted-foreground">Erreurs</p>
               </div>
               <AlertCircle className="h-8 w-8 text-red-500" />
