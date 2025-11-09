@@ -349,124 +349,124 @@ serve(async (req) => {
         }));
       }
 
-    const data = await response.json();
-    const products = Array.isArray(data.products) ? data.products : 
-                     (data.products?.product ? (Array.isArray(data.products.product) ? data.products.product : [data.products.product]) : []);
+      const data = await response.json();
+      const products = Array.isArray(data.products) ? data.products : 
+                       (data.products?.product ? (Array.isArray(data.products.product) ? data.products.product : [data.products.product]) : []);
 
-    console.log(`[PRESTASHOP] Found ${products.length} products in this chunk`);
+      console.log(`[PRESTASHOP] Found ${products.length} products in this chunk`);
 
-    let imported = 0, matched = 0, errors = 0;
-    const errorDetails: any[] = [];
+      let imported = 0, matched = 0, errors = 0;
+      const errorDetails: any[] = [];
 
-    for (const product of products) {
-      try {
-        // PrestaShop structure
-        const ean = product.ean13 && isValidEAN13(product.ean13) ? product.ean13 : null;
-        const price = parseFloat(product.price || product.wholesale_price || 0);
-        const stockQty = parseInt(product.quantity || 0);
+      for (const product of products) {
+        try {
+          // PrestaShop structure
+          const ean = product.ean13 && isValidEAN13(product.ean13) ? product.ean13 : null;
+          const price = parseFloat(product.price || product.wholesale_price || 0);
+          const stockQty = parseInt(product.quantity || 0);
 
-        const productData = {
-          user_id: user.id,
-          supplier_id: supplier_id,
-          supplier_reference: product.reference || `ps_${product.id}`,
-          ean: ean,
-          product_name: product.name?.[0]?.value || product.name || 'Product',
-          purchase_price: price,
-          stock_quantity: stockQty,
-          currency: 'EUR',
-          supplier_url: `${shopUrl}/admin-dev/index.php?controller=AdminProducts&id_product=${product.id}`,
-          description: product.description?.[0]?.value || null,
-          brand: product.manufacturer_name || null,
-        };
+          const productData = {
+            user_id: user.id,
+            supplier_id: supplier_id,
+            supplier_reference: product.reference || `ps_${product.id}`,
+            ean: ean,
+            product_name: product.name?.[0]?.value || product.name || 'Product',
+            purchase_price: price,
+            stock_quantity: stockQty,
+            currency: 'EUR',
+            supplier_url: `${shopUrl}/admin-dev/index.php?controller=AdminProducts&id_product=${product.id}`,
+            description: product.description?.[0]?.value || null,
+            brand: product.manufacturer_name || null,
+          };
 
-        const { data: supplierProduct, error: insertError } = await supabaseClient
-          .from('supplier_products')
-          .upsert(productData, {
-            onConflict: 'user_id,supplier_id,supplier_reference',
-          })
-          .select()
-          .single();
+          const { data: supplierProduct, error: insertError } = await supabaseClient
+            .from('supplier_products')
+            .upsert(productData, {
+              onConflict: 'user_id,supplier_id,supplier_reference',
+            })
+            .select()
+            .single();
 
-        if (insertError) throw insertError;
-        imported++;
+          if (insertError) throw insertError;
+          imported++;
 
-        // Try to match with existing analysis by EAN
-        if (ean) {
-          const { data: analysis } = await supabaseClient
-            .from('product_analyses')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('ean', ean)
-            .maybeSingle();
-
-          if (analysis) {
-            await supabaseClient
+          // Try to match with existing analysis by EAN
+          if (ean) {
+            const { data: analysis } = await supabaseClient
               .from('product_analyses')
-              .update({
-                supplier_product_id: supplierProduct.id,
-                purchase_price: price,
-                purchase_currency: 'EUR',
-              })
-              .eq('id', analysis.id);
-            
-            await supabaseClient
-              .from('supplier_products')
-              .update({ enrichment_status: 'completed', enrichment_progress: 100 })
-              .eq('id', supplierProduct.id);
-            
-            matched++;
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('ean', ean)
+              .maybeSingle();
+
+            if (analysis) {
+              await supabaseClient
+                .from('product_analyses')
+                .update({
+                  supplier_product_id: supplierProduct.id,
+                  purchase_price: price,
+                  purchase_currency: 'EUR',
+                })
+                .eq('id', analysis.id);
+              
+              await supabaseClient
+                .from('supplier_products')
+                .update({ enrichment_status: 'completed', enrichment_progress: 100 })
+                .eq('id', supplierProduct.id);
+              
+              matched++;
+            }
           }
+        } catch (err: any) {
+          console.error('[PRESTASHOP] Product error:', err);
+          errors++;
+          errorDetails.push({
+            product: product.name || product.id,
+            error: err.message,
+          });
         }
-      } catch (err: any) {
-        console.error('[PRESTASHOP] Product error:', err);
-        errors++;
-        errorDetails.push({
-          product: product.name || product.id,
-          error: err.message,
-        });
       }
-    }
 
-    // Log import
-    await supabaseClient.from('supplier_import_logs').insert({
-      user_id: user.id,
-      supplier_id: supplier_id,
-      import_type: 'prestashop_api',
-      source_file: 'prestashop_webservice',
-      products_found: products.length,
-      products_matched: matched,
-      products_new: imported - matched,
-      products_updated: matched,
-      products_failed: errors,
-      import_status: errors === 0 ? 'success' : errors < products.length ? 'partial' : 'failed',
-    });
+      // Log import
+      await supabaseClient.from('supplier_import_logs').insert({
+        user_id: user.id,
+        supplier_id: supplier_id,
+        import_type: 'prestashop_api',
+        source_file: 'prestashop_webservice',
+        products_found: products.length,
+        products_matched: matched,
+        products_new: imported - matched,
+        products_updated: matched,
+        products_failed: errors,
+        import_status: errors === 0 ? 'success' : errors < products.length ? 'partial' : 'failed',
+      });
 
-    // Update supplier sync time
-    if (supplier_id) {
-      await supabaseClient
-        .from('supplier_configurations')
-        .update({ last_sync_at: new Date().toISOString() })
-        .eq('id', supplier_id);
-    }
+      // Update supplier sync time
+      if (supplier_id) {
+        await supabaseClient
+          .from('supplier_configurations')
+          .update({ last_sync_at: new Date().toISOString() })
+          .eq('id', supplier_id);
+      }
 
-    // Déterminer s'il y a plus de produits
-    const hasMore = products.length === chunkLimit;
-    const nextOffset = chunkOffset + chunkLimit;
+      // Déterminer s'il y a plus de produits
+      const hasMore = products.length === chunkLimit;
+      const nextOffset = chunkOffset + chunkLimit;
 
-    console.log(`[PRESTASHOP] Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors, hasMore: ${hasMore}`);
+      console.log(`[PRESTASHOP] Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors, hasMore: ${hasMore}`);
 
-    return new Response(
-      JSON.stringify({
-        imported,
-        matched,
-        new: imported - matched,
-        errors,
-        errorDetails: errorDetails.slice(0, 10),
-        hasMore,
-        nextOffset,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      return new Response(
+        JSON.stringify({
+          imported,
+          matched,
+          new: imported - matched,
+          errors,
+          errorDetails: errorDetails.slice(0, 10),
+          hasMore,
+          nextOffset,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
 
     } catch (error: any) {
       console.error('[PRESTASHOP] Import error:', error);
