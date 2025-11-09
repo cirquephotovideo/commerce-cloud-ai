@@ -51,9 +51,8 @@ serve(async (req) => {
     console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit, import_job_id });
 
     // Authentifier l'utilisateur - support pour les appels backend
-    const authHeader = req.headers.get('Authorization');
     let userId: string;
-    let supabaseClient;
+    let supabaseClient: any;
 
     // Si appelé depuis un autre edge function (avec service role key)
     if (import_job_id) {
@@ -80,10 +79,15 @@ serve(async (req) => {
     } else {
       // Appel direct depuis le frontend
       console.log('[PRESTASHOP] Frontend call detected, authenticating user');
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        throw new Error('Authorization header required');
+      }
+      
       supabaseClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        { global: { headers: { Authorization: authHeader! } } }
+        { global: { headers: { Authorization: authHeader } } }
       );
       
       const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
