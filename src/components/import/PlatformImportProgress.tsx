@@ -149,15 +149,25 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
     if (!jobId || !job) return;
     
     try {
+      const metadata = job.metadata as any || {};
+      // Récupérer le type de plateforme depuis supplier_configurations
+      const { data: supplierData } = await supabase
+        .from('platform_configurations')
+        .select('platform_type')
+        .eq('id', job.supplier_id)
+        .single();
+      
+      const platformType = supplierData?.platform_type || 'unknown';
+      
       // Relancer depuis le dernier offset
       await supabase.functions.invoke('process-import-chunk', {
         body: {
           import_job_id: jobId,
           supplier_id: job.supplier_id,
-          platform: job.platform,
-          offset: job.metadata?.last_offset || 0,
-          limit: job.metadata?.chunk_size || 50,
-          options: job.metadata?.options || {},
+          platform: platformType,
+          offset: metadata.last_offset || 0,
+          limit: metadata.chunk_size || 50,
+          options: metadata.options || {},
         }
       });
       

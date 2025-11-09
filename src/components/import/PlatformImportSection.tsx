@@ -44,7 +44,7 @@ export const PlatformImportSection = () => {
 
       const { data, error } = await supabase
         .from('import_jobs')
-        .select('id, supplier_id, platform')
+        .select('id, supplier_id')
         .eq('user_id', user.id)
         .in('status', ['processing', 'queued'])
         .order('created_at', { ascending: false });
