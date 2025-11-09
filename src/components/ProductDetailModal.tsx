@@ -325,7 +325,7 @@ export function ProductDetailModal({
         <DialogContent className="max-w-7xl max-h-[95vh]">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              {product.product_name || product.name}
+              {product.analysis_result?.product_name || product.analysis_result?.name || product.product_name || product.name || 'Produit sans nom'}
               {product.ean && (
                 <span className="text-sm text-muted-foreground ml-3">
                   EAN: {product.ean}
