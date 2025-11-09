@@ -87,6 +87,56 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
     }
   };
 
+  const handleTestPrestaShopConnection = async () => {
+    if (!config?.platform_url || !config?.api_key) {
+      toast({
+        title: "❌ Configuration incomplète",
+        description: "Veuillez renseigner l'URL et la clé API",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTesting(true);
+    setConnectionSuccess(false);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('test-prestashop-connection', {
+        body: {
+          url: config.platform_url,
+          apiKey: config.api_key,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setConnectionSuccess(true);
+        toast({
+          title: "✅ Connexion réussie",
+          description: data.message || "Connexion à PrestaShop établie",
+        });
+      } else {
+        setConnectionSuccess(false);
+        toast({
+          title: "❌ Échec de connexion",
+          description: data.message || data.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Test PrestaShop error:', error);
+      setConnectionSuccess(false);
+      toast({
+        title: "❌ Erreur",
+        description: error instanceof Error ? error.message : "Erreur de connexion",
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   if (supplierType === 'ftp' || supplierType === 'sftp') {
     return (
       <div className="space-y-4 border rounded-lg p-4">
@@ -416,6 +466,62 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
             maxLength={3}
           />
         </div>
+      </div>
+    );
+  }
+
+  if (supplierType === 'prestashop') {
+    return (
+      <div className="space-y-4 border rounded-lg p-4">
+        <h3 className="font-medium">Configuration PrestaShop</h3>
+        
+        <div className="space-y-2">
+          <Label htmlFor="platform_url">URL de la boutique PrestaShop</Label>
+          <Input
+            id="platform_url"
+            value={config.platform_url || ''}
+            onChange={(e) => updateConfig('platform_url', e.target.value)}
+            placeholder="https://votre-boutique.com"
+          />
+          <p className="text-xs text-muted-foreground">
+            URL complète de votre boutique PrestaShop (sans /api)
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="api_key">Clé API PrestaShop</Label>
+          <Input
+            id="api_key"
+            type="password"
+            value={config.api_key || ''}
+            onChange={(e) => updateConfig('api_key', e.target.value)}
+            placeholder="XXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+          />
+          <p className="text-xs text-muted-foreground">
+            Clé API générée dans PrestaShop → Paramètres avancés → Webservice
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleTestPrestaShopConnection}
+          disabled={testing || !config.api_key || !config.platform_url}
+        >
+          {testing ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Test en cours...
+            </>
+          ) : (
+            <>
+              {connectionSuccess ? (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              ) : null}
+              Tester la connexion
+            </>
+          )}
+        </Button>
       </div>
     );
   }
