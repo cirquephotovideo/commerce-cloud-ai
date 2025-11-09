@@ -22,8 +22,15 @@ serve(async (req) => {
   }
 
   try {
-    const { supplier_id, config } = await req.json();
-    
+    const { supplier_id, mode, offset, limit, import_job_id } = await req.json();
+
+    if (!supplier_id) {
+      throw new Error('supplier_id requis');
+    }
+
+    console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit });
+
+    // Authentifier l'utilisateur
     const authHeader = req.headers.get('Authorization')!;
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -31,28 +38,81 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) throw new Error('Unauthorized');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      throw new Error('Non authentifié');
+    }
 
-    console.log(`[PRESTASHOP] Starting import for supplier ${supplier_id}`);
+    // Récupérer la configuration PrestaShop depuis la DB
+    console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
+    const { data: platformConfig, error: configError } = await supabaseClient
+      .from('platform_configurations')
+      .select('api_key_encrypted, api_secret_encrypted, platform_url, additional_config')
+      .eq('id', supplier_id)
+      .eq('platform_type', 'prestashop')
+      .eq('user_id', user.id)
+      .single();
+
+    if (configError || !platformConfig) {
+      console.error('[PRESTASHOP] Configuration not found:', configError);
+      throw new Error(`Configuration PrestaShop introuvable pour le fournisseur ${supplier_id}`);
+    }
+
+    console.log('[PRESTASHOP] Configuration loaded successfully');
 
     // PrestaShop Webservice API
-    const apiKey = config.api_key_encrypted;
-    const shopUrl = config.platform_url.replace(/\/$/, '');
+    const apiKey = platformConfig.api_key_encrypted;
+    const shopUrl = platformConfig.platform_url.replace(/\/$/, '');
     
     // Basic Auth avec API key PrestaShop
     const auth = btoa(`${apiKey}:`);
-    
-    // Récupérer les produits (avec pagination si nécessaire)
-    const response = await fetch(
-      `${shopUrl}/api/products?display=full&output_format=JSON`,
-      {
+
+    // MODE COUNT: Retourner juste le nombre de produits
+    if (mode === 'count') {
+      console.log('[PRESTASHOP] Count mode - fetching product count');
+      const countUrl = `${shopUrl}/api/products?display=[id]&output_format=JSON`;
+      
+      const countResponse = await fetch(countUrl, {
+        method: 'GET',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Accept': 'application/json',
         },
+      });
+
+      if (!countResponse.ok) {
+        const errorText = await countResponse.text();
+        console.error('[PRESTASHOP] Count error:', errorText);
+        throw new Error(`Erreur lors du comptage: ${countResponse.status}`);
       }
-    );
+
+      const countData = await countResponse.json();
+      const products = countData.products?.product || countData.products || [];
+      const total = Array.isArray(products) ? products.length : (products ? 1 : 0);
+      
+      console.log('[PRESTASHOP] Total products found:', total);
+      
+      return new Response(
+        JSON.stringify({ total_products: total }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // MODE IMPORT: Importer les produits avec pagination
+    console.log('[PRESTASHOP] Import mode - fetching products with offset:', offset, 'limit:', limit);
+    
+    // Récupérer les produits avec pagination
+    const chunkLimit = limit || 50;
+    const chunkOffset = offset || 0;
+    const productsUrl = `${shopUrl}/api/products?display=full&output_format=JSON&limit=${chunkLimit}&offset=${chunkOffset}`;
+    
+    const response = await fetch(productsUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json',
+      },
+    });
 
     if (!response.ok) {
       throw new Error(`PrestaShop API error: ${response.status} - ${await response.text()}`);
@@ -62,7 +122,7 @@ serve(async (req) => {
     const products = Array.isArray(data.products) ? data.products : 
                      (data.products?.product ? (Array.isArray(data.products.product) ? data.products.product : [data.products.product]) : []);
 
-    console.log(`[PRESTASHOP] Found ${products.length} products`);
+    console.log(`[PRESTASHOP] Found ${products.length} products in this chunk`);
 
     let imported = 0, matched = 0, errors = 0;
     const errorDetails: any[] = [];
@@ -158,7 +218,11 @@ serve(async (req) => {
         .eq('id', supplier_id);
     }
 
-    console.log(`[PRESTASHOP] Import complete: ${imported} imported, ${matched} matched, ${errors} errors`);
+    // Déterminer s'il y a plus de produits
+    const hasMore = products.length === chunkLimit;
+    const nextOffset = chunkOffset + chunkLimit;
+
+    console.log(`[PRESTASHOP] Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors, hasMore: ${hasMore}`);
 
     return new Response(
       JSON.stringify({
@@ -167,6 +231,8 @@ serve(async (req) => {
         new: imported - matched,
         errors,
         errorDetails: errorDetails.slice(0, 10),
+        hasMore,
+        nextOffset,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
