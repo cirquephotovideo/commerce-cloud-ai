@@ -47,10 +47,25 @@ serve(async (req) => {
 
     // Récupérer la configuration PrestaShop depuis la DB
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
+    
+    // First get the supplier config to find the platform_configuration_id
+    const { data: supplierConfig, error: supplierError } = await supabaseClient
+      .from('supplier_configurations')
+      .select('platform_configuration_id')
+      .eq('id', supplier_id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (supplierError || !supplierConfig?.platform_configuration_id) {
+      console.error('[PRESTASHOP] Supplier not found:', supplierError);
+      throw new Error(`Fournisseur introuvable: ${supplier_id}`);
+    }
+
+    // Now get the platform configuration
     const { data: platformConfig, error: configError } = await supabaseClient
       .from('platform_configurations')
       .select('api_key_encrypted, api_secret_encrypted, platform_url, additional_config')
-      .eq('id', supplier_id)
+      .eq('id', supplierConfig.platform_configuration_id)
       .eq('platform_type', 'prestashop')
       .eq('user_id', user.id)
       .single();
