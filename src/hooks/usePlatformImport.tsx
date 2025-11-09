@@ -12,10 +12,22 @@ export const usePlatformImport = () => {
         .from('platform_configurations')
         .select('*')
         .eq('id', platformId)
-        .single();
+        .maybeSingle();
 
-      if (configError) throw configError;
-      if (!config) throw new Error('Configuration introuvable');
+      if (configError) {
+        console.error('[usePlatformImport] Config fetch error:', configError);
+        throw configError;
+      }
+      if (!config) {
+        console.error('[usePlatformImport] No config found for platformId:', platformId);
+        throw new Error('Configuration introuvable');
+      }
+
+      console.log('[usePlatformImport] Config loaded:', {
+        platformId,
+        platform_type: config.platform_type,
+        platform_url: config.platform_url
+      });
 
       // 2. Récupérer l'utilisateur actuel
       const { data: { user } } = await supabase.auth.getUser();
@@ -107,14 +119,26 @@ export const usePlatformImport = () => {
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
     },
     onError: (error: any) => {
-      console.error('Erreur import plateforme:', error);
+      console.error('[usePlatformImport] Error:', error);
       
       let errorMessage = "Une erreur s'est produite lors de l'import";
       let errorTitle = "Erreur d'import";
       let duration = 5000;
       
-      // Try to extract structured error from the response
-      if (error?.message) {
+      // Handle Supabase client errors
+      if (error?.message?.includes('Cannot coerce')) {
+        errorTitle = "Configuration introuvable";
+        errorMessage = "La plateforme sélectionnée n'a pas pu être trouvée. Veuillez rafraîchir la page.";
+        duration = 8000;
+      }
+      // Handle missing configuration
+      else if (error?.message === 'Configuration introuvable') {
+        errorTitle = "Configuration introuvable";
+        errorMessage = "Cette plateforme n'est pas configurée. Veuillez la configurer dans les paramètres.";
+        duration = 8000;
+      }
+      // Try to extract structured error from edge functions
+      else if (error?.message) {
         try {
           const parsed = JSON.parse(error.message);
           if (parsed.user_message || parsed.error) {
@@ -122,8 +146,11 @@ export const usePlatformImport = () => {
           }
           if (parsed.requires_configuration) {
             errorTitle = "⚙️ Configuration requise";
-            errorMessage += "\n\nRendez-vous dans les paramètres du fournisseur pour configurer PrestaShop.";
-            duration = 10000; // Longer duration for config errors
+            errorMessage += "\n\nRendez-vous dans les paramètres du fournisseur pour configurer la plateforme.";
+            duration = 10000;
+          }
+          if (parsed.error_code) {
+            console.error('[usePlatformImport] Error code:', parsed.error_code);
           }
         } catch {
           errorMessage = error.message;
