@@ -14,10 +14,40 @@ interface ExportHistoryDialogProps {
   analysisId?: string;
 }
 
+interface ExportLog {
+  id: string;
+  user_id: string;
+  products_count: number;
+  success_count: number;
+  error_count: number;
+  export_details: {
+    results?: Array<{
+      analysis_id: string;
+      product_name: string;
+      success: boolean;
+      error?: string;
+      platform?: string;
+      action?: string;
+    }>;
+  } | null;
+  created_at: string;
+}
+
+interface FlattenedExport {
+  id: string;
+  created_at: string;
+  platform_type: string;
+  status: 'success' | 'failed';
+  error_message: string | null;
+  analysis_id: string;
+  product_name: string;
+  action: string;
+}
+
 export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHistoryDialogProps) => {
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  const { data: exportHistory, isLoading, refetch } = useQuery({
+  const { data: exportHistory, isLoading, refetch } = useQuery<FlattenedExport[]>({
     queryKey: ['export-history', analysisId],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -32,20 +62,23 @@ export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHi
       
       if (error) throw error;
 
+      // Cast to proper type
+      const logs = (data || []) as ExportLog[];
+
       // Flatten export_details.results into individual rows
-      const flattenedData = data?.flatMap(log => {
+      const flattenedData: FlattenedExport[] = logs.flatMap(log => {
         const results = log.export_details?.results || [];
-        return results.map((result: any) => ({
+        return results.map(result => ({
           id: `${log.id}-${result.analysis_id}`,
           created_at: log.created_at,
           platform_type: result.platform || 'odoo',
-          status: result.success ? 'success' : 'failed',
+          status: (result.success ? 'success' : 'failed') as 'success' | 'failed',
           error_message: result.error || null,
           analysis_id: result.analysis_id,
           product_name: result.product_name,
-          action: result.action,
+          action: result.action || 'created',
         }));
-      }) || [];
+      });
 
       // Filter by analysisId if provided
       if (analysisId) {
