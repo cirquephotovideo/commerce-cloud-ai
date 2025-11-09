@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ExportHistoryDialogProps {
   open: boolean;
@@ -20,21 +20,66 @@ export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHi
   const { data: exportHistory, isLoading, refetch } = useQuery({
     queryKey: ['export-history', analysisId],
     queryFn: async () => {
-      let query = supabase
-        .from('export_history')
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('export_logs')
         .select('*')
-        .order('exported_at', { ascending: false });
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
       
-      if (analysisId) {
-        query = query.eq('analysis_id', analysisId);
-      }
-      
-      const { data, error } = await query.limit(50);
       if (error) throw error;
-      return data;
+
+      // Flatten export_details.results into individual rows
+      const flattenedData = data?.flatMap(log => {
+        const results = log.export_details?.results || [];
+        return results.map((result: any) => ({
+          id: `${log.id}-${result.analysis_id}`,
+          created_at: log.created_at,
+          platform_type: result.platform || 'odoo',
+          status: result.success ? 'success' : 'failed',
+          error_message: result.error || null,
+          analysis_id: result.analysis_id,
+          product_name: result.product_name,
+          action: result.action,
+        }));
+      }) || [];
+
+      // Filter by analysisId if provided
+      if (analysisId) {
+        return flattenedData.filter(exp => exp.analysis_id === analysisId);
+      }
+
+      return flattenedData;
     },
     enabled: open,
   });
+
+  // Realtime subscription for new exports
+  useEffect(() => {
+    if (!open) return;
+
+    const channel = supabase
+      .channel('export-logs-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'export_logs',
+        },
+        () => {
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, refetch]);
 
   const retryExport = async (exportId: string, platform: string, analysisId: string) => {
     setRetryingId(exportId);
@@ -83,27 +128,23 @@ export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHi
               {exportHistory?.map((exp) => (
                 <TableRow key={exp.id}>
                   <TableCell className="text-sm">
-                    {new Date(exp.exported_at).toLocaleString('fr-FR')}
+                    {new Date(exp.created_at).toLocaleString('fr-FR')}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{exp.platform_type}</Badge>
+                    <Badge variant="outline" className="capitalize">
+                      {exp.platform_type}
+                    </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={
-                      exp.status === 'success' ? 'default' :
-                      exp.status === 'failed' ? 'destructive' :
-                      'secondary'
-                    }>
-                      {exp.status === 'success' ? '✓ Succès' :
-                       exp.status === 'failed' ? '✗ Échec' :
-                       '⚠ Partiel'}
+                    <Badge variant={exp.status === 'success' ? 'default' : 'destructive'}>
+                      {exp.status === 'success' ? '✓ Succès' : '✗ Échec'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
                     {exp.error_message || '-'}
                   </TableCell>
                   <TableCell>
-                    {exp.status === 'failed' && (
+                    {exp.status === 'failed' && exp.analysis_id && (
                       <Button 
                         variant="ghost" 
                         size="sm"
