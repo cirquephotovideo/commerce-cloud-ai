@@ -6,6 +6,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+enum PrestashopErrorCode {
+  MISSING_CONFIG = 'MISSING_CONFIG',
+  MISSING_API_KEY = 'MISSING_API_KEY',
+  MISSING_URL = 'MISSING_URL',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  INVALID_URL = 'INVALID_URL',
+  API_ERROR = 'API_ERROR',
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  SUPPLIER_NOT_FOUND = 'SUPPLIER_NOT_FOUND',
+}
+
+interface ErrorResponse {
+  error: string;
+  error_code: PrestashopErrorCode;
+  message: string;
+  user_message: string;
+  requires_configuration: boolean;
+  details?: any;
+}
+
 function isValidEAN13(ean: string): boolean {
   if (!ean || !/^\d{13}$/.test(ean)) return false;
   const digits = ean.split('').map(Number);
@@ -48,8 +68,6 @@ serve(async (req) => {
     // Récupérer la configuration PrestaShop depuis la DB
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
     
-    // First get the supplier config to find the platform_configuration_id
-    // Charger la config PrestaShop depuis le fournisseur ou sinon plateforme active
     const { data: supplier, error: supplierError } = await supabaseClient
       .from('supplier_configurations')
       .select('supplier_type, connection_config')
@@ -59,7 +77,18 @@ serve(async (req) => {
 
     if (supplierError || !supplier) {
       console.error('[PRESTASHOP] Supplier not found:', supplierError);
-      throw new Error(`Fournisseur introuvable: ${supplier_id}`);
+      const errorResponse: ErrorResponse = {
+        error: 'Supplier not found',
+        error_code: PrestashopErrorCode.SUPPLIER_NOT_FOUND,
+        message: `Supplier ${supplier_id} not found`,
+        user_message: 'Le fournisseur PrestaShop est introuvable. Veuillez vérifier la configuration.',
+        requires_configuration: false,
+      };
+      
+      return new Response(
+        JSON.stringify(errorResponse),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     if (supplier.supplier_type !== 'prestashop') {
@@ -69,9 +98,10 @@ serve(async (req) => {
     let sourceApiKey: string | null = supplier.connection_config?.api_key || null;
     let sourceShopUrl: string | null = supplier.connection_config?.platform_url || null;
 
+    // Validate configuration with detailed checks
     if (!sourceApiKey || !sourceShopUrl) {
-      // Fallback: utiliser une configuration de plateforme PrestaShop active de l'utilisateur
-      const { data: platformConfig, error: configError } = await supabaseClient
+      // Try fallback to platform config
+      const { data: platformConfig } = await supabaseClient
         .from('platform_configurations')
         .select('api_key_encrypted, platform_url')
         .eq('platform_type', 'prestashop')
@@ -80,17 +110,95 @@ serve(async (req) => {
         .order('updated_at', { ascending: false, nullsFirst: false })
         .maybeSingle();
 
-      if (configError || !platformConfig) {
-        console.error('[PRESTASHOP] Configuration not found:', configError);
-        throw new Error(`Configuration PrestaShop introuvable pour le fournisseur ${supplier_id}`);
+      if (!platformConfig) {
+        // No configuration found at all
+        const errorResponse: ErrorResponse = {
+          error: 'Configuration required',
+          error_code: PrestashopErrorCode.MISSING_CONFIG,
+          message: 'PrestaShop configuration not found',
+          user_message: 'Configuration PrestaShop manquante. Veuillez ajouter votre clé API et URL dans les paramètres du fournisseur.',
+          requires_configuration: true,
+        };
+
+        if (mode === 'count') {
+          return new Response(
+            JSON.stringify({ 
+              total_products: 0, 
+              requires_configuration: true,
+              error_code: PrestashopErrorCode.MISSING_CONFIG,
+              user_message: errorResponse.user_message,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(errorResponse),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       sourceApiKey = platformConfig.api_key_encrypted;
       sourceShopUrl = platformConfig.platform_url;
     }
 
-    const resolvedApiKey = sourceApiKey!;
-    const resolvedShopUrl = (sourceShopUrl || '').replace(/\/$/, '');
+    // Validate specific fields
+    if (!sourceApiKey) {
+      const errorResponse: ErrorResponse = {
+        error: 'API key missing',
+        error_code: PrestashopErrorCode.MISSING_API_KEY,
+        message: 'PrestaShop API key not configured',
+        user_message: 'Clé API PrestaShop manquante. Veuillez l\'ajouter dans les paramètres du fournisseur.',
+        requires_configuration: true,
+      };
+
+      if (mode === 'count') {
+        return new Response(
+          JSON.stringify({ 
+            total_products: 0, 
+            requires_configuration: true,
+            error_code: PrestashopErrorCode.MISSING_API_KEY,
+            user_message: errorResponse.user_message,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(errorResponse),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!sourceShopUrl) {
+      const errorResponse: ErrorResponse = {
+        error: 'URL missing',
+        error_code: PrestashopErrorCode.MISSING_URL,
+        message: 'PrestaShop URL not configured',
+        user_message: 'URL PrestaShop manquante. Veuillez l\'ajouter dans les paramètres du fournisseur.',
+        requires_configuration: true,
+      };
+
+      if (mode === 'count') {
+        return new Response(
+          JSON.stringify({ 
+            total_products: 0, 
+            requires_configuration: true,
+            error_code: PrestashopErrorCode.MISSING_URL,
+            user_message: errorResponse.user_message,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(errorResponse),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const resolvedApiKey = sourceApiKey;
+    const resolvedShopUrl = sourceShopUrl.replace(/\/$/, '');
 
     console.log('[PRESTASHOP] Configuration loaded successfully');
 
@@ -106,30 +214,95 @@ serve(async (req) => {
       console.log('[PRESTASHOP] Count mode - fetching product count');
       const countUrl = `${shopUrl}/api/products?display=[id]&output_format=JSON`;
       
-      const countResponse = await fetch(countUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Accept': 'application/json',
-        },
-      });
+      try {
+        const countResponse = await fetch(countUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Accept': 'application/json',
+          },
+        });
 
-      if (!countResponse.ok) {
-        const errorText = await countResponse.text();
-        console.error('[PRESTASHOP] Count error:', errorText);
-        throw new Error(`Erreur lors du comptage: ${countResponse.status}`);
+        if (!countResponse.ok) {
+          const errorText = await countResponse.text();
+          console.error('[PRESTASHOP] Count API error:', countResponse.status, errorText);
+          
+          // Handle specific HTTP status codes
+          if (countResponse.status === 401 || countResponse.status === 403) {
+            return new Response(
+              JSON.stringify({
+                total_products: 0,
+                requires_configuration: true,
+                error_code: PrestashopErrorCode.INVALID_CREDENTIALS,
+                error: 'Authentication failed',
+                message: `PrestaShop returned ${countResponse.status}`,
+                user_message: 'Authentification PrestaShop échouée. Vérifiez que votre clé API est valide et que les permissions Webservice sont activées.',
+                details: { status: countResponse.status, response: errorText.substring(0, 200) }
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          if (countResponse.status === 404) {
+            return new Response(
+              JSON.stringify({
+                total_products: 0,
+                requires_configuration: true,
+                error_code: PrestashopErrorCode.INVALID_URL,
+                error: 'API endpoint not found',
+                message: 'PrestaShop API endpoint not found',
+                user_message: 'URL PrestaShop invalide. Vérifiez que l\'URL est correcte et que le Webservice est activé (sans /api à la fin).',
+                details: { status: 404, url: shopUrl }
+              }),
+              { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+
+          // Generic API error
+          return new Response(
+            JSON.stringify({
+              total_products: 0,
+              error_code: PrestashopErrorCode.API_ERROR,
+              error: 'PrestaShop API error',
+              message: `PrestaShop API returned ${countResponse.status}`,
+              user_message: `Erreur PrestaShop (${countResponse.status}). Vérifiez que votre boutique est accessible et que le Webservice est activé.`,
+              details: { status: countResponse.status, response: errorText.substring(0, 200) }
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const countData = await countResponse.json();
+        const products = countData.products?.product || countData.products || [];
+        const total = Array.isArray(products) ? products.length : (products ? 1 : 0);
+        
+        console.log('[PRESTASHOP] Total products found:', total);
+        
+        return new Response(
+          JSON.stringify({ 
+            total_products: total,
+            requires_configuration: false,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+        
+      } catch (error: any) {
+        console.error('[PRESTASHOP] Network error:', error);
+        
+        // Network/connection errors
+        return new Response(
+          JSON.stringify({
+            total_products: 0,
+            requires_configuration: true,
+            error_code: PrestashopErrorCode.NETWORK_ERROR,
+            error: 'Network error',
+            message: error.message,
+            user_message: 'Impossible de contacter PrestaShop. Vérifiez que l\'URL est correcte et que votre boutique est accessible.',
+            details: { error: error.message }
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-
-      const countData = await countResponse.json();
-      const products = countData.products?.product || countData.products || [];
-      const total = Array.isArray(products) ? products.length : (products ? 1 : 0);
-      
-      console.log('[PRESTASHOP] Total products found:', total);
-      
-      return new Response(
-        JSON.stringify({ total_products: total }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
 
     // MODE IMPORT: Importer les produits avec pagination
@@ -140,17 +313,41 @@ serve(async (req) => {
     const chunkOffset = offset || 0;
     const productsUrl = `${shopUrl}/api/products?display=full&output_format=JSON&limit=${chunkLimit}&offset=${chunkOffset}`;
     
-    const response = await fetch(productsUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Accept': 'application/json',
-      },
-    });
+    try {
+      const response = await fetch(productsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Accept': 'application/json',
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`PrestaShop API error: ${response.status} - ${await response.text()}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[PRESTASHOP] Import API error:', response.status, errorText);
+        
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(JSON.stringify({
+            error_code: PrestashopErrorCode.INVALID_CREDENTIALS,
+            user_message: 'Authentification PrestaShop échouée. Vérifiez votre clé API.',
+            details: { status: response.status }
+          }));
+        }
+        
+        if (response.status === 404) {
+          throw new Error(JSON.stringify({
+            error_code: PrestashopErrorCode.INVALID_URL,
+            user_message: 'URL PrestaShop invalide. Vérifiez que l\'URL est correcte.',
+            details: { status: 404 }
+          }));
+        }
+        
+        throw new Error(JSON.stringify({
+          error_code: PrestashopErrorCode.API_ERROR,
+          user_message: `Erreur PrestaShop (${response.status})`,
+          details: { status: response.status, response: errorText.substring(0, 200) }
+        }));
+      }
 
     const data = await response.json();
     const products = Array.isArray(data.products) ? data.products : 
@@ -271,11 +468,52 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
+    } catch (error: any) {
+      console.error('[PRESTASHOP] Import error:', error);
+      
+      // Parse structured errors
+      let errorResponse: ErrorResponse;
+      
+      try {
+        const parsed = JSON.parse(error.message);
+        errorResponse = {
+          error: 'Import failed',
+          error_code: parsed.error_code || PrestashopErrorCode.API_ERROR,
+          message: error.message,
+          user_message: parsed.user_message || 'Erreur lors de l\'import',
+          requires_configuration: false,
+          details: parsed.details,
+        };
+      } catch {
+        // Not a structured error
+        errorResponse = {
+          error: 'Import failed',
+          error_code: PrestashopErrorCode.NETWORK_ERROR,
+          message: error.message,
+          user_message: 'Erreur lors de l\'import des produits PrestaShop',
+          requires_configuration: false,
+        };
+      }
+      
+      return new Response(
+        JSON.stringify({
+          ...errorResponse,
+          imported: 0,
+          matched: 0,
+          new: 0,
+          errors: 1,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
   } catch (error: any) {
-    console.error('[PRESTASHOP] Error:', error);
+    console.error('[PRESTASHOP] Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message,
+        error_code: 'UNKNOWN_ERROR',
+        user_message: 'Une erreur inattendue s\'est produite',
         imported: 0,
         matched: 0,
         new: 0,

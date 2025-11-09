@@ -66,7 +66,54 @@ serve(async (req) => {
       }
     );
 
-    if (countError) throw countError;
+    if (countError) {
+      console.error('[ORCHESTRATE] Count error:', countError);
+      
+      // Try to extract error details from FunctionsHttpError
+      let errorMessage = countError.message;
+      let errorDetails = null;
+      
+      if (countError instanceof Error && 'context' in countError) {
+        const context = (countError as any).context;
+        if (context?.body) {
+          try {
+            errorDetails = typeof context.body === 'string' ? JSON.parse(context.body) : context.body;
+            errorMessage = errorDetails.user_message || errorDetails.message || errorMessage;
+          } catch {}
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: errorMessage,
+          error_code: errorDetails?.error_code,
+          requires_configuration: errorDetails?.requires_configuration || false,
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+          status: 400 
+        }
+      );
+    }
+
+    // Check for requires_configuration flag in successful response
+    if (countData?.requires_configuration === true) {
+      console.log('[ORCHESTRATE] Configuration required for platform:', platform);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: countData.user_message || 'Configuration required',
+          error_code: countData.error_code || 'MISSING_CONFIG',
+          requires_configuration: true,
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+          status: 400 
+        }
+      );
+    }
     
     const totalProducts = countData?.total_products || 0;
     console.log('[ORCHESTRATE] Total products to import:', totalProducts);

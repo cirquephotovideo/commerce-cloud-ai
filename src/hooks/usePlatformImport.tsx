@@ -106,9 +106,34 @@ export const usePlatformImport = () => {
       queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
       queryClient.invalidateQueries({ queryKey: ['import-jobs'] });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('Erreur import plateforme:', error);
-      toast.error(`Erreur lors de l'import : ${error.message}`);
+      
+      let errorMessage = "Une erreur s'est produite lors de l'import";
+      let errorTitle = "Erreur d'import";
+      let duration = 5000;
+      
+      // Try to extract structured error from the response
+      if (error?.message) {
+        try {
+          const parsed = JSON.parse(error.message);
+          if (parsed.user_message || parsed.error) {
+            errorMessage = parsed.user_message || parsed.error;
+          }
+          if (parsed.requires_configuration) {
+            errorTitle = "⚙️ Configuration requise";
+            errorMessage += "\n\nRendez-vous dans les paramètres du fournisseur pour configurer PrestaShop.";
+            duration = 10000; // Longer duration for config errors
+          }
+        } catch {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage, {
+        description: errorTitle !== "Erreur d'import" ? undefined : "Veuillez réessayer",
+        duration,
+      });
     },
   });
 
