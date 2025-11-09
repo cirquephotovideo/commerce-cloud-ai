@@ -49,37 +49,54 @@ serve(async (req) => {
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
     
     // First get the supplier config to find the platform_configuration_id
-    const { data: supplierConfig, error: supplierError } = await supabaseClient
+    // Charger la config PrestaShop depuis le fournisseur ou sinon plateforme active
+    const { data: supplier, error: supplierError } = await supabaseClient
       .from('supplier_configurations')
-      .select('platform_configuration_id')
+      .select('supplier_type, connection_config')
       .eq('id', supplier_id)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (supplierError || !supplierConfig?.platform_configuration_id) {
+    if (supplierError || !supplier) {
       console.error('[PRESTASHOP] Supplier not found:', supplierError);
       throw new Error(`Fournisseur introuvable: ${supplier_id}`);
     }
 
-    // Now get the platform configuration
-    const { data: platformConfig, error: configError } = await supabaseClient
-      .from('platform_configurations')
-      .select('api_key_encrypted, api_secret_encrypted, platform_url, additional_config')
-      .eq('id', supplierConfig.platform_configuration_id)
-      .eq('platform_type', 'prestashop')
-      .eq('user_id', user.id)
-      .single();
-
-    if (configError || !platformConfig) {
-      console.error('[PRESTASHOP] Configuration not found:', configError);
-      throw new Error(`Configuration PrestaShop introuvable pour le fournisseur ${supplier_id}`);
+    if (supplier.supplier_type !== 'prestashop') {
+      throw new Error(`Type de fournisseur invalide: attendu prestashop, reçu ${supplier.supplier_type}`);
     }
+
+    let sourceApiKey: string | null = supplier.connection_config?.api_key || null;
+    let sourceShopUrl: string | null = supplier.connection_config?.platform_url || null;
+
+    if (!sourceApiKey || !sourceShopUrl) {
+      // Fallback: utiliser une configuration de plateforme PrestaShop active de l'utilisateur
+      const { data: platformConfig, error: configError } = await supabaseClient
+        .from('platform_configurations')
+        .select('api_key_encrypted, platform_url')
+        .eq('platform_type', 'prestashop')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false, nullsFirst: false })
+        .maybeSingle();
+
+      if (configError || !platformConfig) {
+        console.error('[PRESTASHOP] Configuration not found:', configError);
+        throw new Error(`Configuration PrestaShop introuvable pour le fournisseur ${supplier_id}`);
+      }
+
+      sourceApiKey = platformConfig.api_key_encrypted;
+      sourceShopUrl = platformConfig.platform_url;
+    }
+
+    const resolvedApiKey = sourceApiKey!;
+    const resolvedShopUrl = (sourceShopUrl || '').replace(/\/$/, '');
 
     console.log('[PRESTASHOP] Configuration loaded successfully');
 
     // PrestaShop Webservice API
-    const apiKey = platformConfig.api_key_encrypted;
-    const shopUrl = platformConfig.platform_url.replace(/\/$/, '');
+    const apiKey = resolvedApiKey;
+    const shopUrl = resolvedShopUrl;
     
     // Basic Auth avec API key PrestaShop
     const auth = btoa(`${apiKey}:`);
