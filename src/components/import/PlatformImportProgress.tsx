@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle2, XCircle, Clock, AlertCircle, Pause, Play } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface PlatformImportProgressProps {
   platformId: string;
@@ -16,6 +18,8 @@ interface PlatformImportProgressProps {
 
 export const PlatformImportProgress = ({ platformId, jobId, onComplete }: PlatformImportProgressProps) => {
   const [logs, setLogs] = useState<any[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const queryClient = useQueryClient();
 
   // Fetch job progress
   const { data: job } = useQuery({
@@ -87,6 +91,32 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
     };
   }, [jobId]);
 
+  // Subscribe to realtime updates for job status
+  useEffect(() => {
+    if (!jobId) return;
+
+    const jobChannel = supabase
+      .channel(`import-job-${jobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'import_jobs',
+          filter: `id=eq.${jobId}`,
+        },
+        (payload) => {
+          console.log('Job updated:', payload.new);
+          queryClient.invalidateQueries({ queryKey: ['import-job', jobId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(jobChannel);
+    };
+  }, [jobId, queryClient]);
+
   // Nettoyer le job quand il est terminé
   useEffect(() => {
     if (job && (job.status === 'completed' || job.status === 'failed') && onComplete) {
@@ -97,6 +127,53 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
     }
   }, [job?.status, onComplete]);
 
+  // Fonction pour mettre en pause
+  const handlePause = async () => {
+    if (!jobId) return;
+    
+    const { error } = await supabase
+      .from('import_jobs')
+      .update({ status: 'paused' })
+      .eq('id', jobId);
+    
+    if (!error) {
+      setIsPaused(true);
+      toast.success('Import mis en pause');
+    } else {
+      toast.error('Erreur lors de la mise en pause');
+    }
+  };
+
+  // Fonction pour reprendre
+  const handleResume = async () => {
+    if (!jobId || !job) return;
+    
+    try {
+      // Relancer depuis le dernier offset
+      await supabase.functions.invoke('process-import-chunk', {
+        body: {
+          import_job_id: jobId,
+          supplier_id: job.supplier_id,
+          platform: job.platform,
+          offset: job.metadata?.last_offset || 0,
+          limit: job.metadata?.chunk_size || 50,
+          options: job.metadata?.options || {},
+        }
+      });
+      
+      await supabase
+        .from('import_jobs')
+        .update({ status: 'processing' })
+        .eq('id', jobId);
+      
+      setIsPaused(false);
+      toast.success('Import repris');
+    } catch (error) {
+      console.error('Erreur lors de la reprise:', error);
+      toast.error('Erreur lors de la reprise');
+    }
+  };
+
   if (!job) return null;
 
   const percentage = job.progress_total > 0 
@@ -106,6 +183,7 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
   const isCompleted = job.status === 'completed';
   const isFailed = job.status === 'failed';
   const isProcessing = job.status === 'processing';
+  const isPausedStatus = job.status === 'paused';
 
   return (
     <Card className="mt-4">
@@ -114,15 +192,38 @@ export const PlatformImportProgress = ({ platformId, jobId, onComplete }: Platfo
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h4 className="font-semibold">Import en cours</h4>
-            {isProcessing && <Badge variant="default">En cours</Badge>}
+            {isProcessing && (
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <div className="w-3 h-3 bg-primary rounded-full animate-ping absolute" />
+                  <div className="w-3 h-3 bg-primary rounded-full" />
+                </div>
+                <Badge variant="default" className="animate-pulse">Traitement en cours</Badge>
+              </div>
+            )}
+            {isPausedStatus && <Badge variant="secondary">En pause</Badge>}
             {isCompleted && <Badge variant="default" className="bg-green-600">Terminé</Badge>}
             {isFailed && <Badge variant="destructive">Échoué</Badge>}
           </div>
-          {job.started_at && (
-            <span className="text-sm text-muted-foreground">
-              {formatDistanceToNow(new Date(job.started_at), { locale: fr, addSuffix: true })}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {isProcessing && !isPausedStatus && (
+              <Button variant="outline" size="sm" onClick={handlePause}>
+                <Pause className="w-4 h-4 mr-2" />
+                Pause
+              </Button>
+            )}
+            {isPausedStatus && (
+              <Button variant="default" size="sm" onClick={handleResume}>
+                <Play className="w-4 h-4 mr-2" />
+                Reprendre
+              </Button>
+            )}
+            {job.started_at && (
+              <span className="text-sm text-muted-foreground">
+                {formatDistanceToNow(new Date(job.started_at), { locale: fr, addSuffix: true })}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Progress bar */}

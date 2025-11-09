@@ -200,6 +200,32 @@ serve(async (req) => {
     
     console.log('[CHUNK-PROCESSOR] Job progress updated successfully');
 
+    // Check if job is paused before continuing
+    const { data: currentJob } = await supabaseClient
+      .from('import_jobs')
+      .select('status')
+      .eq('id', import_job_id)
+      .single();
+
+    if (currentJob?.status === 'paused') {
+      console.log('[CHUNK-PROCESSOR] Job paused, stopping chunk processing');
+      
+      await writeLog(supabaseClient, {
+        jobId: import_job_id,
+        userId: job.user_id,
+        supplierId: supplier_id,
+        functionName: 'process-import-chunk',
+        step: 'job_paused',
+        message: 'Job paused by user',
+        context: { pausedAt: new Date().toISOString() }
+      });
+      
+      return new Response(
+        JSON.stringify({ success: true, message: 'Job paused', paused: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check if more chunks needed
     if (data.hasMore) {
       console.log('[CHUNK-PROCESSOR] More chunks to process, triggering next chunk...');

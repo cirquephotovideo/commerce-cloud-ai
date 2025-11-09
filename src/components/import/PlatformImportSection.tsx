@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,40 @@ export const PlatformImportSection = () => {
       return data || [];
     },
   });
+
+  // Récupérer les jobs actifs depuis la DB
+  const { data: activeJobsFromDB } = useQuery({
+    queryKey: ['active-import-jobs'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('import_jobs')
+        .select('id, supplier_id, platform')
+        .eq('user_id', user.id)
+        .in('status', ['processing', 'queued'])
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    refetchInterval: 5000,
+  });
+
+  // Initialiser activeJobs avec les jobs de la DB
+  useEffect(() => {
+    if (activeJobsFromDB && platforms) {
+      const jobsMap = new Map();
+      activeJobsFromDB.forEach(job => {
+        const platform = platforms.find(p => p.id === job.supplier_id);
+        if (platform) {
+          jobsMap.set(platform.id, job.id);
+        }
+      });
+      setActiveJobs(jobsMap);
+    }
+  }, [activeJobsFromDB, platforms]);
 
   const handleImport = async (platformId: string) => {
     try {
