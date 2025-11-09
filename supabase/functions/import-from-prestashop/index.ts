@@ -506,7 +506,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
   } catch (error: any) {
     console.error('[PRESTASHOP] Unexpected error:', error);
     return new Response(
