@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PlatformImportCard } from "./PlatformImportCard";
 import { PlatformConfigDialog } from "./PlatformConfigDialog";
 import { AutoSyncToggle } from "./AutoSyncToggle";
+import { RecentlyImportedProducts } from "./RecentlyImportedProducts";
 import { usePlatformImport } from "@/hooks/usePlatformImport";
 import { Plus, Loader2 } from "lucide-react";
 
@@ -164,7 +165,12 @@ export const PlatformImportSection = () => {
       )}
 
       {/* Synchronisation automatique */}
-      {platforms && platforms.length > 0 && <AutoSyncToggle />}
+      {platforms && platforms.length > 0 && (
+        <>
+          <AutoSyncToggle />
+          <RecentlyImportedProducts />
+        </>
+      )}
 
       {/* Dialog de configuration */}
       <PlatformConfigDialog

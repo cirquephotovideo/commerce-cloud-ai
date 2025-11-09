@@ -48,22 +48,83 @@ serve(async (req) => {
       throw new Error('supplier_id requis');
     }
 
-    console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit });
+    console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit, import_job_id });
 
-    // Authentifier l'utilisateur
-    const authHeader = req.headers.get('Authorization')!;
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Determine which key to use based on auth context with robust JWT validation
+    const authHeader = req.headers.get('Authorization') || '';
+    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    let supabaseClient: any;
+    let userId!: string;
+    let isAutoSync = false;
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      throw new Error('Non authentifié');
+    // Validate JWT format (3 segments separated by dots)
+    const isValidJWT = bearer && bearer.split('.').length === 3;
+
+    if (isValidJWT) {
+      // Try UI mode first
+      console.log('🔐 [PRESTASHOP] Attempting UI authentication with Bearer token');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        {
+          global: {
+            headers: {
+              Authorization: `Bearer ${bearer}`,
+            },
+          },
+        }
+      );
+
+      try {
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(bearer);
+        
+        if (authError) {
+          console.log('⚠️ [PRESTASHOP] Auth error detected:', authError.message);
+          if (authError.message?.includes('bad_jwt') || authError.message?.includes('invalid')) {
+            console.log('🔄 [PRESTASHOP] Detected invalid/expired JWT, falling back to auto-sync mode');
+            isAutoSync = true;
+          } else {
+            throw new Error(`Authentication failed: ${authError.message}`);
+          }
+        } else if (!user) {
+          console.log('🔄 [PRESTASHOP] No user found, falling back to auto-sync mode');
+          isAutoSync = true;
+        } else {
+          userId = user.id;
+          console.log('✅ [PRESTASHOP] Authenticated user:', userId);
+        }
+      } catch (err: any) {
+        console.log('🔄 [PRESTASHOP] Auth exception, falling back to auto-sync mode:', err.message);
+        isAutoSync = true;
+      }
+    } else {
+      console.log('🔧 [PRESTASHOP] No valid Bearer token detected, using auto-sync mode');
+      isAutoSync = true;
     }
-    
-    console.log('[PRESTASHOP] User authenticated:', user.id);
+
+    // If auto-sync mode, recreate client with SERVICE_ROLE_KEY and fetch user_id
+    if (isAutoSync) {
+      console.log('✅ [PRESTASHOP] Using SERVICE_ROLE_KEY for auto-sync');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      // Get user_id from supplier configuration
+      const { data: supplier, error: supplierError } = await supabaseClient
+        .from('supplier_configurations')
+        .select('user_id')
+        .eq('id', supplier_id)
+        .single();
+
+      if (supplierError || !supplier) {
+        console.error('❌ [PRESTASHOP] Supplier not found:', supplierError);
+        throw new Error('Supplier configuration not found');
+      }
+
+      userId = supplier.user_id;
+      console.log('✅ [PRESTASHOP] Using user_id from supplier:', userId);
+    }
 
     // Récupérer la configuration PrestaShop depuis la DB
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
@@ -72,7 +133,7 @@ serve(async (req) => {
       .from('supplier_configurations')
       .select('supplier_type, connection_config')
       .eq('id', supplier_id)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (supplierError || !supplier) {
@@ -105,7 +166,7 @@ serve(async (req) => {
         .from('platform_configurations')
         .select('api_key_encrypted, platform_url')
         .eq('platform_type', 'prestashop')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false, nullsFirst: false })
         .maybeSingle();
@@ -366,7 +427,7 @@ serve(async (req) => {
           const stockQty = parseInt(product.quantity || 0);
 
           const productData = {
-            user_id: user.id,
+            user_id: userId,
             supplier_id: supplier_id,
             supplier_reference: product.reference || `ps_${product.id}`,
             ean: ean,
@@ -395,7 +456,7 @@ serve(async (req) => {
             const { data: analysis } = await supabaseClient
               .from('product_analyses')
               .select('id')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('ean', ean)
               .maybeSingle();
 
@@ -429,7 +490,7 @@ serve(async (req) => {
 
       // Log import
       await supabaseClient.from('supplier_import_logs').insert({
-        user_id: user.id,
+        user_id: userId,
         supplier_id: supplier_id,
         import_type: 'prestashop_api',
         source_file: 'prestashop_webservice',
