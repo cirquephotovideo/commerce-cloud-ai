@@ -437,7 +437,6 @@ serve(async (req) => {
             currency: 'EUR',
             supplier_url: `${shopUrl}/admin-dev/index.php?controller=AdminProducts&id_product=${product.id}`,
             description: product.description?.[0]?.value || null,
-            brand: product.manufacturer_name || null,
           };
 
           const { data: supplierProduct, error: insertError } = await supabaseClient
