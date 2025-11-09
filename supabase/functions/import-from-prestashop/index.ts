@@ -34,7 +34,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization')!;
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -42,6 +42,8 @@ serve(async (req) => {
     if (authError || !user) {
       throw new Error('Non authentifié');
     }
+    
+    console.log('[PRESTASHOP] User authenticated:', user.id);
 
     // Récupérer la configuration PrestaShop depuis la DB
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
