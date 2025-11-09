@@ -48,22 +48,52 @@ serve(async (req) => {
       throw new Error('supplier_id requis');
     }
 
-    console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit });
+    console.log('[PRESTASHOP] Request:', { supplier_id, mode, offset, limit, import_job_id });
 
-    // Authentifier l'utilisateur
-    const authHeader = req.headers.get('Authorization')!;
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Authentifier l'utilisateur - support pour les appels backend
+    const authHeader = req.headers.get('Authorization');
+    let userId: string;
+    let supabaseClient;
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !user) {
-      throw new Error('Non authentifié');
+    // Si appelé depuis un autre edge function (avec service role key)
+    if (import_job_id) {
+      console.log('[PRESTASHOP] Backend call detected, using service role key');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      // Récupérer le user_id depuis le job
+      const { data: job, error: jobError } = await supabaseClient
+        .from('import_jobs')
+        .select('user_id')
+        .eq('id', import_job_id)
+        .single();
+      
+      if (jobError || !job?.user_id) {
+        console.error('[PRESTASHOP] Job lookup failed:', jobError);
+        throw new Error('Job or user_id not found');
+      }
+      userId = job.user_id;
+      console.log('[PRESTASHOP] User ID from job:', userId);
+      
+    } else {
+      // Appel direct depuis le frontend
+      console.log('[PRESTASHOP] Frontend call detected, authenticating user');
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader! } } }
+      );
+      
+      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+      if (authError || !user) {
+        console.error('[PRESTASHOP] Auth failed:', authError);
+        throw new Error('Non authentifié');
+      }
+      userId = user.id;
+      console.log('[PRESTASHOP] User authenticated:', userId);
     }
-    
-    console.log('[PRESTASHOP] User authenticated:', user.id);
 
     // Récupérer la configuration PrestaShop depuis la DB
     console.log('[PRESTASHOP] Fetching configuration for supplier:', supplier_id);
@@ -72,7 +102,7 @@ serve(async (req) => {
       .from('supplier_configurations')
       .select('supplier_type, connection_config')
       .eq('id', supplier_id)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (supplierError || !supplier) {
@@ -105,7 +135,7 @@ serve(async (req) => {
         .from('platform_configurations')
         .select('api_key_encrypted, platform_url')
         .eq('platform_type', 'prestashop')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_active', true)
         .order('updated_at', { ascending: false, nullsFirst: false })
         .maybeSingle();
@@ -366,7 +396,7 @@ serve(async (req) => {
           const stockQty = parseInt(product.quantity || 0);
 
           const productData = {
-            user_id: user.id,
+            user_id: userId,
             supplier_id: supplier_id,
             supplier_reference: product.reference || `ps_${product.id}`,
             ean: ean,
@@ -395,7 +425,7 @@ serve(async (req) => {
             const { data: analysis } = await supabaseClient
               .from('product_analyses')
               .select('id')
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .eq('ean', ean)
               .maybeSingle();
 
@@ -429,7 +459,7 @@ serve(async (req) => {
 
       // Log import
       await supabaseClient.from('supplier_import_logs').insert({
-        user_id: user.id,
+        user_id: userId,
         supplier_id: supplier_id,
         import_type: 'prestashop_api',
         source_file: 'prestashop_webservice',
