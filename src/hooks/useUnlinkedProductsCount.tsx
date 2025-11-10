@@ -23,9 +23,9 @@ export const useUnlinkedProductsCount = () => {
         );
 
         if (!response.ok) {
-          // Fallback: calcul manuel sans typage strict
+          // Fallback: calcul manuel via JOIN avec supplier_products
           const linkedResult = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/product_links?select=supplier_product_id&user_id=eq.${user.id}`,
+            `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/product_links?select=supplier_product_id,supplier_products!inner(user_id)&supplier_products.user_id=eq.${user.id}`,
             {
               headers: {
                 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -35,7 +35,7 @@ export const useUnlinkedProductsCount = () => {
           );
           const linkedData = await linkedResult.json();
           
-          // ✅ Vérifier que linkedData est bien un tableau avant d'utiliser .map()
+          // ✅ Vérifier que linkedData est bien un tableau
           if (!Array.isArray(linkedData)) {
             console.warn('[useUnlinkedProductsCount] linkedData is not an array:', linkedData);
             return 0;
@@ -53,8 +53,13 @@ export const useUnlinkedProductsCount = () => {
             }
           );
           const totalData = await totalResult.json();
-          const totalCount = (totalData || []).length;
           
+          if (!Array.isArray(totalData)) {
+            console.warn('[useUnlinkedProductsCount] totalData is not an array:', totalData);
+            return 0;
+          }
+          
+          const totalCount = totalData.length;
           const unlinkedCount = totalCount - linkedIds.size;
           return unlinkedCount > 0 ? unlinkedCount : 0;
         }
