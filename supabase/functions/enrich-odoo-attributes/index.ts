@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getPromptForAttribute, parseAttributeResponse } from '../_shared/odoo-prompt-templates.ts';
+import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -297,77 +299,56 @@ RÈGLES STRICTES - AUCUNE HALLUCINATION TOLÉRÉE :
 
 Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référentiel.`;
 
-    console.log('[enrich-odoo-attributes] Appel IA avec fallback automatique...');
+    console.log('[enrich-odoo-attributes] 🚀 SYSTÈME GÉNÉRIQUE - Enrichissement attribut par attribut avec web search');
 
-    // 8. Appel IA avec fallback automatique (Ollama prioritaire)
-    const { callAIWithFallback } = await import('../_shared/ai-fallback.ts');
-
-    const fallbackResponse = await callAIWithFallback({
-      model: preferred_model || 'qwen3-coder:480b-cloud',
-      messages: [
-        { role: 'system', content: 'Tu es un assistant qui répond UNIQUEMENT en JSON valide.' },
-        { role: 'user', content: systemPrompt }
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
-      web_search: webSearchEnabled
-    });
-
-    if (!fallbackResponse.success) {
-      throw new Error(`Tous les providers IA ont échoué: ${fallbackResponse.error}`);
-    }
-
-    console.log(`[enrich-odoo-attributes] ✅ Réponse IA reçue via provider: ${fallbackResponse.provider}`);
-    
-    // fallbackResponse.content est déjà une string JSON directement
-    const responseText = fallbackResponse.content;
-    console.log('[enrich-odoo-attributes] 🔍 Type:', typeof responseText);
-    console.log('[enrich-odoo-attributes] 🔍 Preview:', responseText.slice(0, 300));
-
-    // 9. Parser la réponse JSON
-    let extractedAttributes: Record<string, string> = {};
-    try {
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        console.log('[enrich-odoo-attributes] 🔍 JSON match trouvé, longueur:', jsonMatch[0].length);
-        extractedAttributes = JSON.parse(jsonMatch[0]);
-      } else {
-        console.log('[enrich-odoo-attributes] 🔍 Pas de JSON match, parsing direct');
-        extractedAttributes = JSON.parse(responseText);
-      }
-      
-      console.log('[enrich-odoo-attributes] 🔍 Attributs après parsing:', Object.keys(extractedAttributes));
-      console.log('[enrich-odoo-attributes] 🔍 Premier attribut:', Object.entries(extractedAttributes)[0]);
-    } catch (parseError) {
-      console.error('[enrich-odoo-attributes] ❌ Erreur parsing JSON:', parseError);
-      console.error('[enrich-odoo-attributes] ❌ Contenu qui a causé l\'erreur:', aiData);
-      throw new Error('Impossible de parser la réponse IA');
-    }
-
-    console.log(`[enrich-odoo-attributes] ${Object.keys(extractedAttributes).length} attributs extraits`);
-
-    // 10. Validation stricte des valeurs - PHASE 3: Logs détaillés
+    // 6. NOUVEAU SYSTÈME: Enrichir chaque attribut individuellement avec son prompt optimisé
     const validatedAttributes: Record<string, string> = {};
     let validCount = 0;
     let invalidCount = 0;
+    
+    for (const [attrName, allowedValues] of Object.entries(attributeSchema)) {
+      try {
+        console.log(`[enrich-odoo-attributes] 🔍 Web search: ${attrName}`);
+        
+        // Générer le prompt optimisé AUTOMATIQUEMENT selon le type d'attribut
+        const attributePrompt = getPromptForAttribute(
+          attrName,
+          productName,
+          productBrand || 'Non spécifiée',
+          allowedValues,
+          categoryDisplayName
+        );
 
-    console.log('[enrich-odoo-attributes] 🔍 Début validation, attributeSchema keys:', Object.keys(attributeSchema));
+        const result = await callAIWithFallback({
+          messages: [{ role: 'user', content: attributePrompt }],
+          web_search: webSearchEnabled,
+          model: preferred_model || 'qwen3-coder:480b-cloud',
+          temperature: 0.1
+        });
 
-    for (const [attrName, attrValue] of Object.entries(extractedAttributes)) {
-      const allowedValues = attributeSchema[attrName];
-      
-      console.log(`[enrich-odoo-attributes] 🔍 Validation "${attrName}": value="${attrValue}", allowed=${allowedValues?.length || 0} values`);
-      
-      if (allowedValues && allowedValues.includes(attrValue)) {
-        validatedAttributes[attrName] = attrValue;
-        validCount++;
-        console.log(`[enrich-odoo-attributes] ✅ "${attrName}" = "${attrValue}" (valide)`);
-      } else {
-        if (!allowedValues) {
-          console.warn(`[enrich-odoo-attributes] ⚠️ Attribut "${attrName}" absent du schéma`);
+        if (result.success) {
+          // Parser la réponse avec la fonction générique robuste
+          const extractedValue = parseAttributeResponse(result.content, allowedValues);
+          
+          if (extractedValue && extractedValue !== "Non déterminé") {
+            validatedAttributes[attrName] = extractedValue;
+            validCount++;
+            console.log(`[enrich-odoo-attributes] ✅ ${attrName} = "${extractedValue}"`);
+          } else {
+            validatedAttributes[attrName] = "Non déterminé";
+            invalidCount++;
+            console.warn(`[enrich-odoo-attributes] ⚠️ ${attrName}: valeur non trouvée`);
+          }
         } else {
-          console.warn(`[enrich-odoo-attributes] ⚠️ Valeur "${attrValue}" non trouvée dans:`, allowedValues.slice(0, 5));
+          validatedAttributes[attrName] = "Non déterminé";
+          invalidCount++;
         }
+        
+        // Délai anti-rate-limit
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+      } catch (error) {
+        console.error(`[enrich-odoo-attributes] ❌ ${attrName}:`, error);
         validatedAttributes[attrName] = "Non déterminé";
         invalidCount++;
       }
