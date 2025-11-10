@@ -3,12 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Package, CheckCircle, RefreshCw, AlertCircle, Eye, EyeOff, Save, ExternalLink } from "lucide-react";
+import { Package, CheckCircle, RefreshCw, AlertCircle, Eye, EyeOff, Save, ExternalLink, Copy, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { AmazonHealthStatus } from "./AmazonHealthStatus";
 import { AmazonSetupGuide } from "./AmazonSetupGuide";
 import { AmazonErrorTester } from "./AmazonErrorTester";
@@ -34,6 +35,7 @@ export const APIKeyManagement = () => {
   // OAuth state
   const [appId, setAppId] = useState('');
   const [region, setRegion] = useState<'EU' | 'NA' | 'FE'>('EU');
+  const [rdtDelegation, setRdtDelegation] = useState(false);
 
   const fetchAmazonData = async () => {
     try {
@@ -50,6 +52,7 @@ export const APIKeyManagement = () => {
         setMarketplaceId(credData.marketplace_id || '');
         setSecretExpiresAt(credData.secret_expires_at || null);
         setLastRotationAt(credData.last_rotation_at || null);
+        setRdtDelegation(credData.rdt_delegation || false);
       }
     } catch (error) {
       console.error('Error fetching Amazon data:', error);
@@ -100,6 +103,7 @@ export const APIKeyManagement = () => {
           client_secret_encrypted: clientSecret,
           refresh_token_encrypted: refreshToken,
           marketplace_id: marketplaceId,
+          rdt_delegation: rdtDelegation,
           is_active: true,
         });
 
@@ -314,6 +318,100 @@ export const APIKeyManagement = () => {
                 <strong>Méthode recommandée :</strong> Utilisez le bouton "Autoriser avec Amazon" ci-dessous pour configurer automatiquement vos credentials via OAuth.
               </AlertDescription>
             </Alert>
+
+            {/* Section Configuration OAuth - Informations importantes */}
+            <div className="space-y-4 p-4 border rounded-lg bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+              <h3 className="font-semibold flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                <Info className="h-4 w-4" />
+                Informations de Configuration OAuth
+              </h3>
+              
+              {/* RDT Delegation Switch */}
+              <div className="space-y-2 p-3 bg-white dark:bg-gray-900 rounded border">
+                <Label htmlFor="rdt" className="font-semibold">Restricted Data Token (RDT)</Label>
+                <div className="flex items-start space-x-3">
+                  <Switch
+                    id="rdt"
+                    checked={rdtDelegation}
+                    onCheckedChange={setRdtDelegation}
+                  />
+                  <div className="flex-1">
+                    <Label htmlFor="rdt" className="font-normal cursor-pointer">
+                      Déléguer l'accès aux PII (Personally Identifiable Information) à l'application d'un autre développeur
+                    </Label>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                      ⚠️ N'activez cette option que si vous autorisez explicitement une application tierce à accéder aux données personnelles via le Restricted Data Token
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* OAuth URIs */}
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                  URIs à configurer dans Amazon Seller Central
+                </h4>
+                
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">URI de redirection OAuth</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value="https://ayjdtstugbqoadgipzon.supabase.co/functions/v1/amazon-oauth-callback"
+                      className="font-mono text-xs bg-white dark:bg-gray-900"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText('https://ayjdtstugbqoadgipzon.supabase.co/functions/v1/amazon-oauth-callback');
+                        toast({ title: "✅ Copié", description: "URI de redirection copiée" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    📋 Ajoutez cette URI dans : Seller Central → Apps & Services → Develop Apps → Edit App → OAuth Redirect URIs
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">URI de connexion OAuth (Login URI)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={
+                        region === 'EU' 
+                          ? 'https://sellercentral-europe.amazon.com/apps/authorize/consent'
+                          : region === 'NA'
+                          ? 'https://sellercentral.amazon.com/apps/authorize/consent'
+                          : 'https://sellercentral.amazon.co.jp/apps/authorize/consent'
+                      }
+                      className="font-mono text-xs bg-white dark:bg-gray-900"
+                    />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        const loginUri = region === 'EU' 
+                          ? 'https://sellercentral-europe.amazon.com/apps/authorize/consent'
+                          : region === 'NA'
+                          ? 'https://sellercentral.amazon.com/apps/authorize/consent'
+                          : 'https://sellercentral.amazon.co.jp/apps/authorize/consent';
+                        navigator.clipboard.writeText(loginUri);
+                        toast({ title: "✅ Copié", description: "URI de connexion copiée" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    🔗 URI utilisée pour l'autorisation OAuth (calculée automatiquement selon la région sélectionnée)
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
               <h3 className="font-semibold flex items-center gap-2">

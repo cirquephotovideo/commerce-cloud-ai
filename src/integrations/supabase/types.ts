@@ -247,6 +247,7 @@ export type Database = {
           is_active: boolean | null
           last_rotation_at: string | null
           marketplace_id: string
+          rdt_delegation: boolean | null
           refresh_token_encrypted: string
           rotation_warning_sent: boolean | null
           secret_expires_at: string | null
@@ -261,6 +262,7 @@ export type Database = {
           is_active?: boolean | null
           last_rotation_at?: string | null
           marketplace_id?: string
+          rdt_delegation?: boolean | null
           refresh_token_encrypted: string
           rotation_warning_sent?: boolean | null
           secret_expires_at?: string | null
@@ -275,6 +277,7 @@ export type Database = {
           is_active?: boolean | null
           last_rotation_at?: string | null
           marketplace_id?: string
+          rdt_delegation?: boolean | null
           refresh_token_encrypted?: string
           rotation_warning_sent?: boolean | null
           secret_expires_at?: string | null
