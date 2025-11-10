@@ -17,22 +17,42 @@ export default function Code2AsinExport() {
   }[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Fetch all non-enriched products with EAN
+  // Fetch all non-enriched products with EAN using pagination
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['non-enriched-products-ean'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_analyses')
-        .select('ean')
-        .not('ean', 'is', null)
-        .neq('ean', '')
-        .in('code2asin_enrichment_status', ['not_started', 'failed'])
-        .limit(100000)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
-    }
+      let allProducts: { ean: string }[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      // Récupérer TOUS les produits via pagination
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('product_analyses')
+          .select('ean')
+          .not('ean', 'is', null)
+          .neq('ean', '')
+          .in('code2asin_enrichment_status', ['not_started', 'failed'])
+          .range(page * pageSize, (page + 1) * pageSize - 1)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allProducts = [...allProducts, ...data];
+          page++;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      // Dédupliquer les EAN
+      const uniqueEans = [...new Set(allProducts.map(p => p.ean))];
+      return uniqueEans.map(ean => ({ ean }));
+    },
+    staleTime: 5 * 60 * 1000, // Cache 5 minutes
   });
 
   const generateBatchFiles = () => {
@@ -85,9 +105,22 @@ export default function Code2AsinExport() {
   if (isLoading) {
     return (
       <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>📤 Chargement des produits...</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary" />
+              <p className="text-muted-foreground animate-pulse">
+                Récupération de tous les produits non-enrichis...
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Cela peut prendre quelques secondes pour de grandes quantités
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -142,6 +175,16 @@ export default function Code2AsinExport() {
               </>
             )}
           </Button>
+
+          {/* Info sur les doublons */}
+          {products.length > 0 && (
+            <Alert variant="default" className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-900 dark:text-blue-100">
+                ℹ️ Les EAN sont automatiquement dédupliqués. Seuls les EAN uniques sont exportés.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Liste des fichiers générés */}
           {exportedFiles.length > 0 && (
