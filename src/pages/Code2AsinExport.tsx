@@ -268,40 +268,152 @@ export default function Code2AsinExport() {
             </label>
           </div>
           
-          {/* Liste produits */}
-          <div className="max-h-96 overflow-y-auto space-y-2">
-            {products.map(product => (
-              <div 
-                key={product.id}
-                className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
-                onClick={() => toggleProduct(product.id)}
-              >
-                <Checkbox
-                  checked={selectedIds.has(product.id)}
-                  onCheckedChange={() => toggleProduct(product.id)}
-                />
-                <div className="flex-1">
-                  <div className="font-medium">
-                    {(product.analysis_result as any)?.product_name || 'Produit sans nom'}
+          {/* Liste produits ou Mode Sélection Rapide */}
+          {products.length <= 1000 ? (
+            // Mode liste normale pour <= 1000 produits
+            <div className="max-h-96 overflow-y-auto space-y-2">
+              {products.map(product => (
+                <div 
+                  key={product.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
+                  onClick={() => toggleProduct(product.id)}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(product.id)}
+                    onCheckedChange={() => toggleProduct(product.id)}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium">
+                      {(product.analysis_result as any)?.product_name || 'Produit sans nom'}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      EAN: {product.ean} • {product.category || 'Non catégorisé'}
+                    </div>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    EAN: {product.ean} • {product.category || 'Non catégorisé'}
+                  <div className="text-xs">
+                    {product.code2asin_enrichment_status === 'completed' && (
+                      <span className="text-green-600">✓ Enrichi</span>
+                    )}
+                    {product.code2asin_enrichment_status === 'not_started' && (
+                      <span className="text-gray-500">Non enrichi</span>
+                    )}
+                    {product.code2asin_enrichment_status === 'failed' && (
+                      <span className="text-red-600">Échoué</span>
+                    )}
                   </div>
                 </div>
-                <div className="text-xs">
-                  {product.code2asin_enrichment_status === 'completed' && (
-                    <span className="text-green-600">✓ Enrichi</span>
-                  )}
-                  {product.code2asin_enrichment_status === 'not_started' && (
-                    <span className="text-gray-500">Non enrichi</span>
-                  )}
-                  {product.code2asin_enrichment_status === 'failed' && (
-                    <span className="text-red-600">Échoué</span>
-                  )}
+              ))}
+            </div>
+          ) : (
+            // Mode sélection rapide pour > 1000 produits
+            <div className="space-y-4">
+              <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  ⚡ {products.length.toLocaleString()} produits chargés (mode sélection rapide pour optimiser les performances)
+                </p>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const allIds = products.map(p => p.id);
+                      setSelectedIds(new Set(allIds));
+                      toast.success(`✅ ${products.length.toLocaleString()} produits sélectionnés`);
+                    }}
+                    className="h-auto py-3 flex flex-col items-start"
+                  >
+                    <span className="font-semibold">✓ Tout sélectionner</span>
+                    <span className="text-xs text-muted-foreground">{products.length.toLocaleString()} produits</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const nonEnrichedIds = products
+                        .filter(p => p.code2asin_enrichment_status === 'not_started' || p.code2asin_enrichment_status === 'failed')
+                        .map(p => p.id);
+                      setSelectedIds(new Set(nonEnrichedIds));
+                      toast.success(`✅ ${nonEnrichedIds.length.toLocaleString()} produits non-enrichis sélectionnés`);
+                    }}
+                    className="h-auto py-3 flex flex-col items-start"
+                  >
+                    <span className="font-semibold">⚠️ Non-enrichis</span>
+                    <span className="text-xs text-muted-foreground">{nonEnrichedCount.toLocaleString()} produits</span>
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const completedIds = products
+                        .filter(p => p.code2asin_enrichment_status === 'completed')
+                        .map(p => p.id);
+                      setSelectedIds(new Set(completedIds));
+                      toast.success(`✅ ${completedIds.length.toLocaleString()} produits enrichis sélectionnés`);
+                    }}
+                    className="h-auto py-3 flex flex-col items-start"
+                  >
+                    <span className="font-semibold">✅ Enrichis</span>
+                    <span className="text-xs text-muted-foreground">
+                      {(products.length - nonEnrichedCount).toLocaleString()} produits
+                    </span>
+                  </Button>
+                  
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setSelectedIds(new Set());
+                      toast.info("Sélection effacée");
+                    }}
+                    className="h-auto py-3 flex flex-col items-start"
+                  >
+                    <span className="font-semibold">🗑️ Désélectionner</span>
+                    <span className="text-xs text-muted-foreground">Effacer tout</span>
+                  </Button>
                 </div>
               </div>
-            ))}
-          </div>
+              
+              {/* Aperçu optionnel des 100 premiers produits */}
+              <details className="group">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 p-2 rounded-md hover:bg-muted/30 transition-colors">
+                  <span className="group-open:rotate-90 transition-transform">▶</span>
+                  👁️ Afficher un aperçu des 100 premiers produits
+                </summary>
+                <div className="max-h-96 overflow-y-auto space-y-2 mt-2">
+                  {products.slice(0, 100).map(product => (
+                    <div 
+                      key={product.id}
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
+                      onClick={() => toggleProduct(product.id)}
+                    >
+                      <Checkbox
+                        checked={selectedIds.has(product.id)}
+                        onCheckedChange={() => toggleProduct(product.id)}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {(product.analysis_result as any)?.product_name || 'Produit sans nom'}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          EAN: {product.ean} • {product.category || 'Non catégorisé'}
+                        </div>
+                      </div>
+                      <div className="text-xs">
+                        {product.code2asin_enrichment_status === 'completed' && (
+                          <span className="text-green-600">✓ Enrichi</span>
+                        )}
+                        {product.code2asin_enrichment_status === 'not_started' && (
+                          <span className="text-gray-500">Non enrichi</span>
+                        )}
+                        {product.code2asin_enrichment_status === 'failed' && (
+                          <span className="text-red-600">Échoué</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          )}
           
           {/* Actions */}
           <div className="space-y-3 pt-4">
