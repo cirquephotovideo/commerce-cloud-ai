@@ -26,6 +26,14 @@ interface EnrichmentTask {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
+  supplier_products?: {
+    id: string;
+    product_name: string;
+  } | null;
+  product_analyses?: {
+    id: string;
+    analysis_result: any;
+  } | null;
 }
 
 const ENRICHMENT_ICONS: Record<string, any> = {
@@ -151,7 +159,11 @@ export function EnrichmentProgressMonitor() {
 
       const { data, error } = await supabase
         .from('enrichment_queue')
-        .select('*')
+        .select(`
+          *,
+          supplier_products(id, product_name),
+          product_analyses(id, analysis_result)
+        `)
         .eq('user_id', user.id)
         .gte('created_at', twentyFourHoursAgo.toISOString())
         .order('created_at', { ascending: false });
@@ -185,6 +197,36 @@ export function EnrichmentProgressMonitor() {
       case 'processing': return <Loader2 className="h-4 w-4 animate-spin" />;
       case 'failed': return <XCircle className="h-4 w-4" />;
       default: return <Clock className="h-4 w-4" />;
+    }
+  };
+
+  const getProductName = (task: EnrichmentTask): string => {
+    // Priorité 1: Nom depuis supplier_products
+    if (task.supplier_products?.product_name) {
+      return task.supplier_products.product_name;
+    }
+    
+    // Priorité 2: Nom depuis product_analyses
+    if (task.product_analyses?.analysis_result?.name) {
+      return task.product_analyses.analysis_result.name;
+    }
+    
+    // Fallback
+    return 'Produit sans nom';
+  };
+
+  const navigateToProductDetail = (task: EnrichmentTask) => {
+    if (task.analysis_id) {
+      // Utiliser l'événement de navigation personnalisé
+      window.dispatchEvent(new CustomEvent('navigate-to-product', { 
+        detail: {
+          productId: task.analysis_id,
+          productName: getProductName(task)
+        }
+      }));
+    } else if (task.supplier_product_id) {
+      // Fallback: redirection vers la page des produits fournisseurs
+      window.location.href = `/unified-products?highlight=${task.supplier_product_id}`;
     }
   };
 
@@ -802,20 +844,26 @@ export function EnrichmentProgressMonitor() {
                   
                   return (
                     <Card 
-                      key={task.id} 
+                      key={task.id}
+                      onClick={() => navigateToProductDetail(task)}
                       className="hover:shadow-xl transition-all cursor-pointer border-2 border-green-500/30 bg-green-50/50 dark:bg-green-950/20 hover:border-green-500/60 hover:scale-[1.02]"
                     >
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center gap-2 justify-between">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
                             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center ring-2 ring-green-500/30">
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
                             </div>
-                            <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">
-                              Enrichissement Réussi
-                            </h4>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-semibold text-sm text-green-900 dark:text-green-100 truncate">
+                                {getProductName(task)}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                Cliquez pour voir la fiche
+                              </p>
+                            </div>
                           </div>
-                          <Badge className="bg-green-600 text-white hover:bg-green-700">
+                          <Badge className="bg-green-600 text-white hover:bg-green-700 flex-shrink-0">
                             ✓ Succès
                           </Badge>
                         </div>
