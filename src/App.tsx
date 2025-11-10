@@ -23,6 +23,8 @@ import NotFound from "./pages/NotFound";
 import Demo from "./pages/Demo";
 import UniversalWizard from "./pages/UniversalWizard";
 import ProductsManagement from "./pages/ProductsManagement";
+import Code2AsinExport from "./pages/Code2AsinExport";
+import Code2AsinImport from "./pages/Code2AsinImport";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -63,6 +65,8 @@ const App = () => {
         <Route path="/import-export-dashboard" element={<ProtectedRoute><DashboardLayout><ImportExportDashboard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><DashboardLayout><Analytics /></DashboardLayout></ProtectedRoute>} />
         <Route path="/products" element={<ProtectedRoute><DashboardLayout><ProductsManagement /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/code2asin-export" element={<ProtectedRoute><DashboardLayout><Code2AsinExport /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/code2asin-import" element={<ProtectedRoute><DashboardLayout><Code2AsinImport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />

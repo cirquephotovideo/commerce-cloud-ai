@@ -312,3 +312,6 @@ verify_jwt = false
 [functions.process-pending-import-chunks]
 verify_jwt = false
 
+[functions.import-code2asin-csv]
+verify_jwt = true
+

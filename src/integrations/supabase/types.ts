@@ -1006,6 +1006,188 @@ export type Database = {
           },
         ]
       }
+      code2asin_enrichments: {
+        Row: {
+          amazon_price: number | null
+          analysis_id: string | null
+          asin: string | null
+          brand: string | null
+          browse_nodes: string | null
+          buybox_is_amazon: boolean | null
+          buybox_is_fba: boolean | null
+          buybox_price: number | null
+          buybox_seller_id: string | null
+          buybox_seller_name: string | null
+          color: string | null
+          created_at: string | null
+          ean: string | null
+          enriched_at: string | null
+          features: string | null
+          fulfillment_fee: number | null
+          id: string
+          image_urls: Json | null
+          is_tradeable: boolean | null
+          item_count: number | null
+          item_height_cm: number | null
+          item_length_cm: number | null
+          item_weight_g: number | null
+          item_width_cm: number | null
+          list_price: number | null
+          lowest_collectible: number | null
+          lowest_fba_new: number | null
+          lowest_new: number | null
+          lowest_refurbished: number | null
+          lowest_used: number | null
+          manufacturer: string | null
+          marketplace: string | null
+          offer_count_collectible: number | null
+          offer_count_new: number | null
+          offer_count_refurbished: number | null
+          offer_count_used: number | null
+          package_height_cm: number | null
+          package_length_cm: number | null
+          package_quantity: number | null
+          package_weight_g: number | null
+          package_width_cm: number | null
+          page_count: number | null
+          part_number: string | null
+          product_group: string | null
+          product_type: string | null
+          publication_date: string | null
+          referral_fee_percentage: number | null
+          release_date: string | null
+          sales_rank: string | null
+          size: string | null
+          title: string | null
+          upc: string | null
+          updated_at: string | null
+          user_id: string
+          variation_count: number | null
+        }
+        Insert: {
+          amazon_price?: number | null
+          analysis_id?: string | null
+          asin?: string | null
+          brand?: string | null
+          browse_nodes?: string | null
+          buybox_is_amazon?: boolean | null
+          buybox_is_fba?: boolean | null
+          buybox_price?: number | null
+          buybox_seller_id?: string | null
+          buybox_seller_name?: string | null
+          color?: string | null
+          created_at?: string | null
+          ean?: string | null
+          enriched_at?: string | null
+          features?: string | null
+          fulfillment_fee?: number | null
+          id?: string
+          image_urls?: Json | null
+          is_tradeable?: boolean | null
+          item_count?: number | null
+          item_height_cm?: number | null
+          item_length_cm?: number | null
+          item_weight_g?: number | null
+          item_width_cm?: number | null
+          list_price?: number | null
+          lowest_collectible?: number | null
+          lowest_fba_new?: number | null
+          lowest_new?: number | null
+          lowest_refurbished?: number | null
+          lowest_used?: number | null
+          manufacturer?: string | null
+          marketplace?: string | null
+          offer_count_collectible?: number | null
+          offer_count_new?: number | null
+          offer_count_refurbished?: number | null
+          offer_count_used?: number | null
+          package_height_cm?: number | null
+          package_length_cm?: number | null
+          package_quantity?: number | null
+          package_weight_g?: number | null
+          package_width_cm?: number | null
+          page_count?: number | null
+          part_number?: string | null
+          product_group?: string | null
+          product_type?: string | null
+          publication_date?: string | null
+          referral_fee_percentage?: number | null
+          release_date?: string | null
+          sales_rank?: string | null
+          size?: string | null
+          title?: string | null
+          upc?: string | null
+          updated_at?: string | null
+          user_id: string
+          variation_count?: number | null
+        }
+        Update: {
+          amazon_price?: number | null
+          analysis_id?: string | null
+          asin?: string | null
+          brand?: string | null
+          browse_nodes?: string | null
+          buybox_is_amazon?: boolean | null
+          buybox_is_fba?: boolean | null
+          buybox_price?: number | null
+          buybox_seller_id?: string | null
+          buybox_seller_name?: string | null
+          color?: string | null
+          created_at?: string | null
+          ean?: string | null
+          enriched_at?: string | null
+          features?: string | null
+          fulfillment_fee?: number | null
+          id?: string
+          image_urls?: Json | null
+          is_tradeable?: boolean | null
+          item_count?: number | null
+          item_height_cm?: number | null
+          item_length_cm?: number | null
+          item_weight_g?: number | null
+          item_width_cm?: number | null
+          list_price?: number | null
+          lowest_collectible?: number | null
+          lowest_fba_new?: number | null
+          lowest_new?: number | null
+          lowest_refurbished?: number | null
+          lowest_used?: number | null
+          manufacturer?: string | null
+          marketplace?: string | null
+          offer_count_collectible?: number | null
+          offer_count_new?: number | null
+          offer_count_refurbished?: number | null
+          offer_count_used?: number | null
+          package_height_cm?: number | null
+          package_length_cm?: number | null
+          package_quantity?: number | null
+          package_weight_g?: number | null
+          package_width_cm?: number | null
+          page_count?: number | null
+          part_number?: string | null
+          product_group?: string | null
+          product_type?: string | null
+          publication_date?: string | null
+          referral_fee_percentage?: number | null
+          release_date?: string | null
+          sales_rank?: string | null
+          size?: string | null
+          title?: string | null
+          upc?: string | null
+          updated_at?: string | null
+          user_id?: string
+          variation_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "code2asin_enrichments_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       compatibility_matrix: {
         Row: {
           compatible_products: Json | null
@@ -2965,6 +3147,8 @@ export type Database = {
           analysis_result: Json
           auto_enrichment_count: number | null
           category: string | null
+          code2asin_enriched_at: string | null
+          code2asin_enrichment_status: string | null
           competitive_cons: Json | null
           competitive_pros: Json | null
           cost_analysis: Json | null
@@ -3004,6 +3188,8 @@ export type Database = {
           analysis_result: Json
           auto_enrichment_count?: number | null
           category?: string | null
+          code2asin_enriched_at?: string | null
+          code2asin_enrichment_status?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           cost_analysis?: Json | null
@@ -3043,6 +3229,8 @@ export type Database = {
           analysis_result?: Json
           auto_enrichment_count?: number | null
           category?: string | null
+          code2asin_enriched_at?: string | null
+          code2asin_enrichment_status?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
           cost_analysis?: Json | null

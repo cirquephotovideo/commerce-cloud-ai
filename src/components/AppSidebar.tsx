@@ -12,6 +12,8 @@ import {
   ArrowLeftRight,
   Sparkles,
   PackageSearch,
+  FileSpreadsheet,
+  FileUp,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -79,6 +81,21 @@ const supplierNavigation = [
     url: "/import-export-dashboard", 
     icon: ArrowLeftRight,
     description: "Importez et exportez vos données vers différentes plateformes"
+  },
+];
+
+const enrichmentNavigation = [
+  { 
+    title: "Export Code2ASIN", 
+    url: "/code2asin-export", 
+    icon: FileSpreadsheet,
+    description: "Exportez vos EAN pour enrichissement externe via code2asin.com"
+  },
+  { 
+    title: "Import Code2ASIN", 
+    url: "/code2asin-import", 
+    icon: FileUp,
+    description: "Importez les données enrichies depuis code2asin.com"
   },
 ];
 
@@ -187,6 +204,32 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {supplierNavigation.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <NavLink to={item.url}>
+                          <item.icon />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Enrichissement</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {enrichmentNavigation.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <Tooltip>
                     <TooltipTrigger asChild>
