@@ -9,13 +9,15 @@ import { Code2AsinStats } from "@/components/code2asin/Code2AsinStats";
 import { QuickImportZone } from "@/components/code2asin/QuickImportZone";
 import { PendingProductsTable } from "@/components/code2asin/PendingProductsTable";
 import { ImportHistoryList } from "@/components/code2asin/ImportHistoryList";
-import { FileDown, RefreshCw } from "lucide-react";
+import { LiveExportProgress } from "@/components/code2asin/LiveExportProgress";
+import { FileDown, RefreshCw, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Code2AsinTracker() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
   const itemsPerPage = 50;
 
   // Fetch statistics
@@ -103,6 +105,30 @@ export default function Code2AsinTracker() {
     queryClient.invalidateQueries({ queryKey: ['code2asin-import-history'] });
   };
 
+  const handleStartExport = async () => {
+    setIsExporting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase.functions.invoke('start-code2asin-export', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success(data.message);
+      queryClient.invalidateQueries({ queryKey: ['code2asin-exports'] });
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast.error(error.message || "Erreur lors du démarrage de l'export");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (statsLoading) {
     return (
       <div className="container mx-auto py-8">
@@ -167,16 +193,23 @@ export default function Code2AsinTracker() {
             Produits en attente d'enrichissement sur Code2ASIN
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
             <div className="flex-1">
-              <p className="text-sm text-muted-foreground">Produits exportés</p>
+              <p className="text-sm text-muted-foreground">Produits avec EAN</p>
               <p className="text-2xl font-bold">{stats?.pending || 0}</p>
             </div>
-            <Badge variant="secondary" className="text-sm">
-              En attente d'import
-            </Badge>
+            <Button
+              onClick={handleStartExport}
+              disabled={isExporting || !stats?.pending}
+              size="sm"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {isExporting ? 'Export en cours...' : 'Exporter tout'}
+            </Button>
           </div>
+          
+          <LiveExportProgress />
         </CardContent>
       </Card>
 

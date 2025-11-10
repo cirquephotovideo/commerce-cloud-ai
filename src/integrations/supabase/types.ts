@@ -1188,6 +1188,57 @@ export type Database = {
           },
         ]
       }
+      code2asin_export_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          file_name: string | null
+          file_url: string | null
+          id: string
+          metadata: Json | null
+          products_exported: number | null
+          progress_current: number | null
+          progress_total: number | null
+          started_at: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          metadata?: Json | null
+          products_exported?: number | null
+          progress_current?: number | null
+          progress_total?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          metadata?: Json | null
+          products_exported?: number | null
+          progress_current?: number | null
+          progress_total?: number | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       code2asin_import_logs: {
         Row: {
           completed_at: string | null
