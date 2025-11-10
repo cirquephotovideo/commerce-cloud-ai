@@ -22,7 +22,7 @@ export const AuthPage = () => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate("/");
+        navigate("/dashboard");
       }
     };
     checkUser();
@@ -57,7 +57,7 @@ export const AuthPage = () => {
           title: "Connexion réussie",
           description: "Bienvenue !",
         });
-        navigate("/");
+        navigate("/dashboard");
       } else {
         const { error } = await supabase.auth.signUp({
           email,
