@@ -13,16 +13,30 @@ export const AutoLinkPanel = () => {
   const handleAutoLink = async () => {
     setIsLinking(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user || !session) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase.functions.invoke("auto-link-products", {
-        body: {
-          user_id: user.id,
-          auto_mode: true,
-          min_confidence: 95,
-        },
-      });
+      const invokeWithToken = async (jwt: string) =>
+        await supabase.functions.invoke("auto-link-products", {
+          body: {
+            user_id: user.id,
+            auto_mode: true,
+            min_confidence: 95,
+          },
+          headers: { Authorization: `Bearer ${jwt}` },
+        });
+
+      // First try with current session token
+      let { data, error } = await invokeWithToken(session.access_token);
+
+      // If unauthorized, try refreshing the session once and retry
+      if (error && (error.message?.includes("401") || error.message?.toLowerCase().includes("unauthorized"))) {
+        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && refreshed?.session?.access_token) {
+          ({ data, error } = await invokeWithToken(refreshed.session.access_token));
+        }
+      }
 
       if (error) throw error;
 
@@ -43,7 +57,6 @@ export const AutoLinkPanel = () => {
       setIsLinking(false);
     }
   };
-
   return (
     <Card className="p-6 bg-primary/5 border-primary/20">
       <div className="flex items-center justify-between flex-wrap gap-4">
