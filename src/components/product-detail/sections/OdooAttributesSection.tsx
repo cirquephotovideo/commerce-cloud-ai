@@ -38,7 +38,7 @@ export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSecti
           </Alert>
           
           <Button 
-            onClick={() => triggerEnrichment({ type: 'odoo_attributes', analysisId: analysis?.id })}
+            onClick={() => triggerEnrichment({ enrichmentType: ['odoo_attributes'], webSearchEnabled: true })}
             disabled={isPending}
             className="w-full"
           >
