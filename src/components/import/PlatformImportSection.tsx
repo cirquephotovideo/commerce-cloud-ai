@@ -7,7 +7,9 @@ import { PlatformImportCard } from "./PlatformImportCard";
 import { PlatformConfigDialog } from "./PlatformConfigDialog";
 import { AutoSyncToggle } from "./AutoSyncToggle";
 import { RecentlyImportedProducts } from "./RecentlyImportedProducts";
+import { ImportErrorsWidget } from "./ImportErrorsWidget";
 import { usePlatformImport } from "@/hooks/usePlatformImport";
+import { LiveImportProgress } from "@/components/LiveImportProgress";
 import { Plus, Loader2 } from "lucide-react";
 
 export const PlatformImportSection = () => {
@@ -133,6 +135,12 @@ export const PlatformImportSection = () => {
           </div>
         </CardHeader>
       </Card>
+
+      {/* Progression des imports en cours */}
+      <LiveImportProgress />
+
+      {/* Widget des erreurs d'import */}
+      <ImportErrorsWidget />
 
       {/* Plateformes configurées */}
       {platforms && platforms.length > 0 ? (
