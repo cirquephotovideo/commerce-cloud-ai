@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Info, Download, FileSpreadsheet } from "lucide-react";
+import { Info, Download, FileSpreadsheet, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -15,7 +15,13 @@ export default function Code2AsinExport() {
   const [selectedStatus, setSelectedStatus] = useState<string>("not_started");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
-  const [batchSize, setBatchSize] = useState<number>(50000);
+  const [batchSize, setBatchSize] = useState<number>(25000);
+  const [exportSummary, setExportSummary] = useState<{
+    totalEAN: number;
+    filesGenerated: number;
+    batchSize: number;
+    timestamp: Date;
+  } | null>(null);
 
   // Fetch products with EAN (limite à 50000 pour performance)
   const { data: products = [], isLoading } = useQuery({
@@ -94,6 +100,14 @@ export default function Code2AsinExport() {
       link.href = URL.createObjectURL(blob);
       link.download = `code2asin_batch${index + 1}_${customBatchSize}EAN_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
       link.click();
+    });
+    
+    // Sauvegarder le résumé d'export
+    setExportSummary({
+      totalEAN: eans.length,
+      filesGenerated: batches.length,
+      batchSize: customBatchSize,
+      timestamp: new Date()
     });
     
     toast.success(`✅ ${batches.length} fichier(s) CSV généré(s) de ${customBatchSize.toLocaleString()} EAN (total: ${eans.length.toLocaleString()} EAN)`);
@@ -203,8 +217,8 @@ export default function Code2AsinExport() {
                   <SelectItem value="2500">Max 2 500 EAN/fichier</SelectItem>
                   <SelectItem value="5000">Max 5 000 EAN/fichier</SelectItem>
                   <SelectItem value="10000">Max 10 000 EAN/fichier</SelectItem>
-                  <SelectItem value="25000">Max 25 000 EAN/fichier</SelectItem>
-                  <SelectItem value="50000">Max 50 000 EAN/fichier (défaut)</SelectItem>
+                  <SelectItem value="25000">Max 25 000 EAN/fichier (défaut)</SelectItem>
+                  <SelectItem value="50000">Max 50 000 EAN/fichier</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-2">
@@ -450,6 +464,60 @@ export default function Code2AsinExport() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Résumé d'export */}
+      {exportSummary && (
+        <Card className="mt-6 border-green-200 bg-green-50/50">
+          <CardHeader>
+            <CardTitle className="text-green-900 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              📊 Résumé de l'export
+            </CardTitle>
+            <CardDescription>
+              Export réalisé le {format(exportSummary.timestamp, 'dd/MM/yyyy à HH:mm:ss')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-3xl font-bold text-green-600">
+                  {exportSummary.filesGenerated}
+                </div>
+                <div className="text-sm text-muted-foreground">Fichiers générés</div>
+              </div>
+              
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-3xl font-bold text-blue-600">
+                  {exportSummary.totalEAN.toLocaleString()}
+                </div>
+                <div className="text-sm text-muted-foreground">EAN exportés</div>
+              </div>
+              
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-3xl font-bold text-purple-600">
+                  {exportSummary.batchSize.toLocaleString()}
+                </div>
+                <div className="text-sm text-muted-foreground">EAN/fichier max</div>
+              </div>
+              
+              <div className="text-center p-4 bg-white rounded-lg border">
+                <div className="text-2xl font-bold text-orange-600">
+                  {format(exportSummary.timestamp, 'HH:mm:ss')}
+                </div>
+                <div className="text-sm text-muted-foreground">Heure d'export</div>
+              </div>
+            </div>
+            
+            <Alert className="mt-4 bg-white">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                💡 Chaque fichier contient jusqu'à <strong>{exportSummary.batchSize.toLocaleString()}</strong> EAN. 
+                Uploadez-les sur <strong>code2asin.com</strong> pour enrichir vos données.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

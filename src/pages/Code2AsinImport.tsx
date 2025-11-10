@@ -10,6 +10,7 @@ import { ImportedProductsList } from "@/components/code2asin/ImportedProductsLis
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import Papa from "papaparse";
+import { format } from "date-fns";
 
 interface Code2AsinRow {
   ASIN?: string;
@@ -302,43 +303,98 @@ export default function Code2AsinImport() {
                 </div>
               )}
               
-              {/* Résultats */}
+              {/* Résumé d'import */}
               {importResult && (
-                <div className="space-y-4">
-                  <Alert>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription>
-                      <div className="space-y-1">
-                        <p><strong>Import terminé</strong></p>
-                        <p className="text-sm">
-                          ✅ {importResult.success} réussis • 
-                          ❌ {importResult.failed} échoués • 
-                          🆕 {importResult.created} créés • 
-                          🔄 {importResult.updated} mis à jour
-                        </p>
-                      </div>
-                    </AlertDescription>
-                  </Alert>
+                <Card className={`border-2 ${importResult.failed === 0 ? 'border-green-200 bg-green-50/50' : 'border-orange-200 bg-orange-50/50'}`}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      {importResult.failed === 0 ? (
+                        <>
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          <span className="text-green-900">✅ Import terminé avec succès</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="h-5 w-5 text-orange-600" />
+                          <span className="text-orange-900">⚠️ Import terminé avec avertissements</span>
+                        </>
+                      )}
+                    </CardTitle>
+                    <CardDescription>
+                      {format(new Date(), 'dd/MM/yyyy à HH:mm:ss')}
+                    </CardDescription>
+                  </CardHeader>
                   
-                  {importResult.errors.length > 0 && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        <div className="space-y-1">
-                          <p className="font-semibold">Erreurs détectées:</p>
-                          <div className="max-h-32 overflow-y-auto text-xs space-y-1">
-                            {importResult.errors.slice(0, 10).map((error, i) => (
-                              <p key={i}>• {error}</p>
-                            ))}
-                            {importResult.errors.length > 10 && (
-                              <p>... et {importResult.errors.length - 10} autres erreurs</p>
+                  <CardContent>
+                    {/* Statistiques visuelles */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="text-center p-4 bg-white rounded-lg border">
+                        <div className="text-3xl font-bold text-green-600">
+                          {importResult.success}
+                        </div>
+                        <div className="text-sm text-muted-foreground">✅ Réussis</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-white rounded-lg border">
+                        <div className="text-3xl font-bold text-red-600">
+                          {importResult.failed}
+                        </div>
+                        <div className="text-sm text-muted-foreground">❌ Échoués</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-white rounded-lg border">
+                        <div className="text-3xl font-bold text-blue-600">
+                          {importResult.created}
+                        </div>
+                        <div className="text-sm text-muted-foreground">🆕 Créés</div>
+                      </div>
+                      
+                      <div className="text-center p-4 bg-white rounded-lg border">
+                        <div className="text-3xl font-bold text-purple-600">
+                          {importResult.updated}
+                        </div>
+                        <div className="text-sm text-muted-foreground">🔄 Mis à jour</div>
+                      </div>
+                    </div>
+                    
+                    {/* Détails des erreurs */}
+                    {importResult.errors.length > 0 && (
+                      <Alert variant="destructive" className="bg-white mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <div className="space-y-2">
+                            <p className="font-semibold">
+                              🚨 {importResult.errors.length} erreur{importResult.errors.length > 1 ? 's' : ''} détectée{importResult.errors.length > 1 ? 's' : ''} :
+                            </p>
+                            <div className="max-h-48 overflow-y-auto bg-red-50 rounded-md p-3 space-y-1">
+                              {importResult.errors.map((error, i) => (
+                                <div key={i} className="text-xs font-mono border-b border-red-100 pb-1 last:border-0">
+                                  <span className="text-red-700 font-bold">#{i + 1}</span> {error}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            {importResult.errors.length > 20 && (
+                              <p className="text-xs text-muted-foreground italic">
+                                ℹ️ Certaines erreurs peuvent être dues à des EAN invalides ou des données manquantes
+                              </p>
                             )}
                           </div>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    
+                    {/* Message de succès complet */}
+                    {importResult.failed === 0 && (
+                      <Alert className="bg-white border-green-300">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <AlertDescription className="text-green-900">
+                          🎉 Tous les produits ont été importés avec succès ! Vous pouvez maintenant consulter vos enrichissements ci-dessous.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
               )}
             </>
           )}
