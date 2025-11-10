@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('[auto-link-products] Missing authorization header');
       return new Response(JSON.stringify({ error: 'Missing authorization' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -55,11 +56,17 @@ Deno.serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      console.error('[auto-link-products] Auth error:', userError?.message || 'No user found');
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized', 
+        details: userError?.message || 'Invalid or expired token' 
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('[auto-link-products] Authenticated user:', user.id);
 
     const { analysis_id, auto_mode = false, min_confidence = 95 } = await req.json();
 
