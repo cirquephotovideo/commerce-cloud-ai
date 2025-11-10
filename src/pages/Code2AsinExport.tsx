@@ -149,7 +149,11 @@ export default function Code2AsinExport() {
             📤 Export EAN pour Code2ASIN
           </CardTitle>
           <CardDescription>
-            Exportez vos EAN par paquets configurables (de 1 000 à 50 000) pour enrichissement externe via code2asin.com
+            Exportez vos EAN par paquets configurables (de 1 000 à 50 000) pour enrichissement externe via code2asin.com.
+            <br />
+            <span className="text-xs mt-1 inline-block">
+              💡 Le découpage détermine combien d'EAN seront inclus dans chaque fichier CSV exporté
+            </span>
           </CardDescription>
         </CardHeader>
         
@@ -188,20 +192,55 @@ export default function Code2AsinExport() {
             </div>
             
             <div>
-              <label className="text-sm font-medium mb-2 block">Taille des paquets</label>
+              <label className="text-sm font-medium mb-2 block">📦 Découpage des fichiers</label>
               <Select value={batchSize.toString()} onValueChange={(v) => setBatchSize(parseInt(v))}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1000">1 000 EAN / fichier</SelectItem>
-                  <SelectItem value="2500">2 500 EAN / fichier</SelectItem>
-                  <SelectItem value="5000">5 000 EAN / fichier</SelectItem>
-                  <SelectItem value="10000">10 000 EAN / fichier</SelectItem>
-                  <SelectItem value="25000">25 000 EAN / fichier</SelectItem>
-                  <SelectItem value="50000">50 000 EAN / fichier (défaut)</SelectItem>
+                  <SelectItem value="1000">Max 1 000 EAN/fichier</SelectItem>
+                  <SelectItem value="2500">Max 2 500 EAN/fichier</SelectItem>
+                  <SelectItem value="5000">Max 5 000 EAN/fichier</SelectItem>
+                  <SelectItem value="10000">Max 10 000 EAN/fichier</SelectItem>
+                  <SelectItem value="25000">Max 25 000 EAN/fichier</SelectItem>
+                  <SelectItem value="50000">Max 50 000 EAN/fichier (défaut)</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-2">
+                Chaque fichier CSV contiendra jusqu'à <strong>{batchSize.toLocaleString()}</strong> EAN maximum
+              </p>
+              
+              {/* Indicateur visuel pour les produits sélectionnés */}
+              {selectedCount > 0 && (
+                <div className="text-xs bg-primary/10 border border-primary/20 rounded-lg p-3 mt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-muted-foreground">Avec votre sélection actuelle :</span>
+                    <span className="font-semibold text-primary">{batchCount} fichier{batchCount > 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="w-full bg-background rounded-full h-2 overflow-hidden">
+                    <div 
+                      className="bg-primary h-full transition-all duration-300"
+                      style={{ width: `${Math.min((selectedCount % batchSize) / batchSize * 100, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-muted-foreground mt-2">
+                    {selectedCount.toLocaleString()} EAN → {batchCount} fichier{batchCount > 1 ? 's' : ''} de {batchSize.toLocaleString()} max
+                  </p>
+                </div>
+              )}
+              
+              {/* Indicateur pour les non-enrichis */}
+              {nonEnrichedCount > 0 && selectedCount === 0 && (
+                <div className="text-xs bg-orange-50 border border-orange-200 rounded-lg p-3 mt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-muted-foreground">Produits non-enrichis disponibles :</span>
+                    <span className="font-semibold text-orange-700">{nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''}</span>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {nonEnrichedCount.toLocaleString()} EAN → {nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''} de {batchSize.toLocaleString()} max
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           
