@@ -9,15 +9,30 @@ export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log('🔍 ProtectedRoute: Checking authentication...');
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('ProtectedRoute auth status:', { 
+        hasSession: !!session, 
+        error: error?.message,
+        userId: session?.user?.id 
+      });
       setIsAuthenticated(!!session);
       setIsLoading(false);
     };
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔔 Auth state changed:', event, { hasSession: !!session });
       setIsAuthenticated(!!session);
+      
+      if (!session && event === 'SIGNED_OUT') {
+        console.warn('⚠️ User signed out, clearing session');
+      }
+      
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('✅ Token refreshed successfully');
+      }
     });
 
     return () => subscription.unsubscribe();

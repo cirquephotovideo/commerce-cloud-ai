@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LanguageSelector } from "./LanguageSelector";
 import { ThemeSelector } from "./ThemeSelector";
 import { TarifiqueLogo } from "./TarifiqueLogo";
 import { useTranslation } from "react-i18next";
+import { useAuthRefresh } from "@/hooks/useAuthRefresh";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 export const Header = () => {
@@ -17,6 +18,7 @@ export const Header = () => {
   const { toast } = useToast();
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const { refreshSession, isRefreshing } = useAuthRefresh();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -52,15 +54,27 @@ export const Header = () => {
           <LanguageSelector />
           
           {user ? (
-            <Button 
-              variant="ghost" 
-              size={isMobile ? "icon" : "sm"}
-              onClick={handleSignOut}
-              className="shrink-0"
-            >
-              <LogOut className={isMobile ? "h-4 w-4" : "mr-2 h-4 w-4"} />
-              {!isMobile && <span className="hidden md:inline">{t("nav.signOut")}</span>}
-            </Button>
+            <>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={refreshSession}
+                disabled={isRefreshing}
+                className="shrink-0"
+                title="Rafraîchir la session"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size={isMobile ? "icon" : "sm"}
+                onClick={handleSignOut}
+                className="shrink-0"
+              >
+                <LogOut className={isMobile ? "h-4 w-4" : "mr-2 h-4 w-4"} />
+                {!isMobile && <span className="hidden md:inline">{t("nav.signOut")}</span>}
+              </Button>
+            </>
           ) : (
             <Button 
               onClick={() => navigate("/auth")} 

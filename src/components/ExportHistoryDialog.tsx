@@ -50,8 +50,18 @@ export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHi
   const { data: exportHistory, isLoading, refetch } = useQuery<FlattenedExport[]>({
     queryKey: ['export-history', analysisId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('❌ Auth error in ExportHistoryDialog:', authError);
+        toast.error('Erreur d\'authentification. Veuillez vous reconnecter.');
+        throw new Error('Authentication failed: ' + authError.message);
+      }
+      
+      if (!user) {
+        toast.error('Vous devez être connecté pour voir l\'historique.');
+        throw new Error('Not authenticated');
+      }
 
       const { data, error } = await supabase
         .from('export_logs')
@@ -88,6 +98,7 @@ export const ExportHistoryDialog = ({ open, onOpenChange, analysisId }: ExportHi
       return flattenedData;
     },
     enabled: open,
+    retry: false,
   });
 
   // Realtime subscription for new exports
