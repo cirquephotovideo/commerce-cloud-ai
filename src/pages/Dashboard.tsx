@@ -76,6 +76,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
+  const [supplierCount, setSupplierCount] = useState(0);
+  const [code2asinCount, setCode2asinCount] = useState(0);
 
   const handleOpenDetail = (analysis: ProductAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -168,6 +170,23 @@ export default function Dashboard() {
     };
     checkAuth();
   }, [navigate]);
+
+  useEffect(() => {
+    const loadCounts = async () => {
+      const { count: suppCount } = await supabase
+        .from('supplier_products')
+        .select('*', { count: 'exact', head: true });
+      
+      const { count: c2aCount } = await supabase
+        .from('code2asin_enrichments')
+        .select('*', { count: 'exact', head: true });
+      
+      setSupplierCount(suppCount || 0);
+      setCode2asinCount(c2aCount || 0);
+    };
+    
+    loadCounts();
+  }, []);
 
   // Écouter les événements de navigation globale
   useEffect(() => {
@@ -677,6 +696,70 @@ export default function Dashboard() {
   return (
     <>
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
+        {/* 🆕 RECHERCHE GLOBALE EN HAUT */}
+        <Card className="mb-4 sm:mb-6 border-primary/20 shadow-md">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Search className="h-5 w-5 text-primary" />
+              Recherche Produits
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+              <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="name">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4" />
+                      Par Nom
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="url">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4" />
+                      Par URL
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="ean">
+                    <div className="flex items-center gap-2">
+                      <Barcode className="w-4 h-4" />
+                      Par EAN
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder={
+                  searchType === "name" ? "🔍 Rechercher un produit par nom..." :
+                  searchType === "url" ? "🔗 Rechercher par URL..." : 
+                  "🔢 Rechercher par EAN/Barcode..."
+                }
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 text-base"
+              />
+              {searchQuery && (
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setSearchQuery('')}
+                  className="shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {searchQuery && (
+              <p className="text-sm text-muted-foreground mt-2">
+                📊 {filteredAnalyses.length} résultat(s) trouvé(s) sur {analyses.length} produit(s)
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="lg:col-span-1 space-y-4">
             <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
@@ -703,20 +786,26 @@ export default function Dashboard() {
             
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base sm:text-lg">Statistiques</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Aperçu de votre activité</CardDescription>
+                <CardTitle className="text-base sm:text-lg">Base de Données</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Vos produits</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <p className="text-xl sm:text-2xl font-bold">{analyses.length}</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Analyses totales</p>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-2 bg-primary/5 rounded">
+                    <span className="text-sm font-medium">🔍 Produits analysés</span>
+                    <span className="text-lg font-bold">{analyses.length.toLocaleString()}</span>
                   </div>
-                  <div>
-                    <p className="text-xl sm:text-2xl font-bold">
-                      {analyses.filter(a => a.is_favorite).length}
-                    </p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">Favoris</p>
+                  <div className="flex justify-between items-center p-2 bg-secondary/5 rounded">
+                    <span className="text-sm font-medium">📦 Produits fournisseurs</span>
+                    <span className="text-lg font-bold">{supplierCount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-accent/5 rounded">
+                    <span className="text-sm font-medium">🔗 Enrichissements Code2ASIN</span>
+                    <span className="text-lg font-bold">{code2asinCount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-muted/30 rounded border border-muted">
+                    <span className="text-sm font-medium">⭐ Favoris</span>
+                    <span className="text-lg font-bold">{analyses.filter(a => a.is_favorite).length}</span>
                   </div>
                 </div>
               </CardContent>
@@ -727,68 +816,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Search Bar */}
-        {hasPermission('ean_search') && (
-          <Card className="mb-4 sm:mb-6">
-            <CardContent className="pt-4 sm:pt-6">
-              <div className="space-y-2">
-                {isChatActive && chatFilteredProducts.length > 0 && (
-                  <Badge className="bg-primary/10 text-primary mb-2">
-                    🤖 Assistant IA Général - {chatFilteredProducts.length} produit(s) suggéré(s)
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="ml-2 h-4 w-4 p-0"
-                      onClick={() => {
-                        setChatFilteredProducts([]);
-                        setIsChatActive(false);
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-                  <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
-                    <SelectTrigger className="w-full sm:w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="name">
-                        <div className="flex items-center gap-2">
-                          <Search className="w-4 h-4" />
-                          Par Nom du produit
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="url">
-                        <div className="flex items-center gap-2">
-                          <Search className="w-4 h-4" />
-                          Par URL
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="ean">
-                        <div className="flex items-center gap-2">
-                          <Barcode className="w-4 h-4" />
-                          Par EAN/Barcode
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    placeholder={
-                      searchType === "name" ? "Rechercher par nom..." :
-                      searchType === "url" ? "Rechercher par URL..." : 
-                      "Rechercher par EAN..."
-                    }
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Section Détails de l'Analyse */}
         {selectedAnalysis && (
