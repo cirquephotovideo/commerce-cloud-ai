@@ -136,6 +136,29 @@ export default function Code2AsinExport() {
     exportEANBatches(nonEnriched, batchSize);
   };
 
+  const export25kNonEnriched = () => {
+    const nonEnriched = products.filter(p => 
+      p.code2asin_enrichment_status === 'not_started' || 
+      p.code2asin_enrichment_status === 'failed'
+    );
+    
+    if (nonEnriched.length === 0) {
+      toast.error("Aucun produit non-enrichi trouvé");
+      return;
+    }
+    
+    // Prendre les 25 000 premiers (ou moins s'il n'y en a pas autant)
+    const toExport = nonEnriched.slice(0, 25000);
+    
+    // Export en UN SEUL fichier de 25 000 EAN max
+    exportEANBatches(toExport, 25000);
+    
+    const remaining = nonEnriched.length - toExport.length;
+    toast.info(
+      `📦 ${toExport.length.toLocaleString()} EAN exportés. ${remaining > 0 ? `Il reste ${remaining.toLocaleString()} produits non-enrichis.` : "Tous les produits non-enrichis ont été exportés !"}`
+    );
+  };
+
   const nonEnrichedCount = products.filter(p => 
     p.code2asin_enrichment_status === 'not_started' || 
     p.code2asin_enrichment_status === 'failed'
@@ -239,7 +262,8 @@ export default function Code2AsinExport() {
                     />
                   </div>
                   <p className="text-muted-foreground mt-2">
-                    {selectedCount.toLocaleString()} EAN → {batchCount} fichier{batchCount > 1 ? 's' : ''} de {batchSize.toLocaleString()} max
+                    {selectedCount.toLocaleString()} EAN → {batchCount} fichier{batchCount > 1 ? 's' : ''}
+                    {batchCount > 1 && ` (max ${batchSize.toLocaleString()} EAN/fichier)`}
                   </p>
                 </div>
               )}
@@ -252,7 +276,8 @@ export default function Code2AsinExport() {
                     <span className="font-semibold text-orange-700">{nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''}</span>
                   </div>
                   <p className="text-muted-foreground">
-                    {nonEnrichedCount.toLocaleString()} EAN → {nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''} de {batchSize.toLocaleString()} max
+                    {nonEnrichedCount.toLocaleString()} EAN → {nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''}
+                    {nonEnrichedBatchCount > 1 && ` (max ${batchSize.toLocaleString()} EAN/fichier)`}
                   </p>
                 </div>
               )}
@@ -431,6 +456,22 @@ export default function Code2AsinExport() {
           
           {/* Actions */}
           <div className="space-y-3 pt-4">
+            <Button
+              onClick={export25kNonEnriched}
+              variant="default"
+              disabled={nonEnrichedCount === 0}
+              className="w-full justify-between bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              size="lg"
+            >
+              <span className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                🚀 Export 25 000 non-enrichis (rapide)
+              </span>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-medium">
+                {Math.min(nonEnrichedCount, 25000).toLocaleString()} EAN → 1 fichier
+              </span>
+            </Button>
+            
             <Button
               onClick={exportAllNonEnriched}
               variant="outline"
