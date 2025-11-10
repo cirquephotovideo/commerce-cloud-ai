@@ -26,14 +26,14 @@ interface EnrichmentTask {
   started_at: string | null;
   completed_at: string | null;
   error_message: string | null;
-  supplier_products?: {
-    id: string;
-    product_name: string;
-  } | null;
-  product_analyses?: {
-    id: string;
-    analysis_result: any;
-  } | null;
+  user_id: string;
+  retry_count: number;
+  max_retries: number;
+  last_error: string | null;
+  timeout_at: string | null;
+  updated_at: string;
+  product_name: string;
+  product_ean: string | null;
 }
 
 const ENRICHMENT_ICONS: Record<string, any> = {
@@ -157,16 +157,10 @@ export function EnrichmentProgressMonitor() {
       const twentyFourHoursAgo = new Date();
       twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
 
-      const { data, error } = await supabase
-        .from('enrichment_queue')
-        .select(`
-          *,
-          supplier_products(id, product_name),
-          product_analyses(id, analysis_result)
-        `)
-        .eq('user_id', user.id)
-        .gte('created_at', twentyFourHoursAgo.toISOString())
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('get_enrichment_tasks_with_products', {
+        user_id_param: user.id,
+        since_param: twentyFourHoursAgo.toISOString()
+      });
 
       if (error) {
         console.error('[ENRICHMENT-MONITOR] ❌ Error loading tasks:', error);
@@ -201,31 +195,13 @@ export function EnrichmentProgressMonitor() {
   };
 
   const getProductName = (task: EnrichmentTask): string => {
-    // Priorité 1: Nom depuis supplier_products
-    if (task.supplier_products?.product_name) {
-      return task.supplier_products.product_name;
-    }
-    
-    // Priorité 2: Nom depuis product_analyses
-    if (task.product_analyses?.analysis_result?.name) {
-      return task.product_analyses.analysis_result.name;
-    }
-    
-    // Fallback
-    return 'Produit sans nom';
+    return task.product_name || 'Produit sans nom';
   };
 
   const navigateToProductDetail = (task: EnrichmentTask) => {
     if (task.analysis_id) {
-      // Utiliser l'événement de navigation personnalisé
-      window.dispatchEvent(new CustomEvent('navigate-to-product', { 
-        detail: {
-          productId: task.analysis_id,
-          productName: getProductName(task)
-        }
-      }));
+      window.location.href = `/product/${task.analysis_id}`;
     } else if (task.supplier_product_id) {
-      // Fallback: redirection vers la page des produits fournisseurs
       window.location.href = `/unified-products?highlight=${task.supplier_product_id}`;
     }
   };
@@ -858,6 +834,11 @@ export function EnrichmentProgressMonitor() {
                               <h4 className="font-semibold text-sm text-green-900 dark:text-green-100 truncate">
                                 {getProductName(task)}
                               </h4>
+                              {task.product_ean && (
+                                <p className="text-xs text-muted-foreground font-mono">
+                                  EAN: {task.product_ean}
+                                </p>
+                              )}
                               <p className="text-xs text-muted-foreground">
                                 Cliquez pour voir la fiche
                               </p>

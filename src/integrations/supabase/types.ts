@@ -5039,6 +5039,29 @@ export type Database = {
         Args: { p_supplier_id: string }
         Returns: undefined
       }
+      get_enrichment_tasks_with_products: {
+        Args: { since_param: string; user_id_param: string }
+        Returns: {
+          analysis_id: string
+          completed_at: string
+          created_at: string
+          enrichment_type: string[]
+          error_message: string
+          id: string
+          last_error: string
+          max_retries: number
+          priority: string
+          product_ean: string
+          product_name: string
+          retry_count: number
+          started_at: string
+          status: string
+          supplier_product_id: string
+          timeout_at: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
       get_retryable_import_errors: {
         Args: never
         Returns: {
