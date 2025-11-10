@@ -12,6 +12,7 @@ import { useEnrichmentPipeline } from "@/hooks/useEnrichmentPipeline";
 import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
+import { EnrichmentProgressDialog } from "./EnrichmentProgressDialog";
 
 interface BatchAnalyzerProps {
   onAnalysisComplete: (results: any[]) => void;
@@ -43,7 +44,8 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [failedProducts, setFailedProducts] = useState<Array<{ product: string; error: string }>>([]);
   const [providerStats, setProviderStats] = useState<ProviderStat[]>([]);
   const [enrichmentProgress, setEnrichmentProgress] = useState<Record<string, any>>({});
-  const { runFullPipeline, isEnriching, currentStep } = useEnrichmentPipeline();
+  const { runFullPipeline, isEnriching, currentStep, progress: detailedProgress } = useEnrichmentPipeline();
+  const [showProgressDialog, setShowProgressDialog] = useState(false);
 
   const getPlaceholder = () => {
     switch (inputType) {
@@ -224,6 +226,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
             if (autoCategories || autoImages || autoShopping || autoAdvancedEnrich || autoOdooAttributes || autoVideo) {
               console.log('🚀 Starting enrichment pipeline for analysis:', insertedAnalysis.id);
               try {
+                setShowProgressDialog(true);
                 enrichmentResults = await runFullPipeline(
                   insertedAnalysis.id,
                   data.analysis,
@@ -236,6 +239,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                     includeVideo: autoVideo
                   }
                 );
+                setShowProgressDialog(false);
                 console.log('✅ Enrichment pipeline completed:', enrichmentResults);
 
                 // 3️⃣ Update analysis with enrichment results
@@ -271,6 +275,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
 
               } catch (enrichError) {
                 console.error('❌ Enrichment pipeline error:', enrichError);
+                setShowProgressDialog(false);
                 toast.error(`Enrichissements échoués pour ${product}`);
               }
             }
@@ -842,6 +847,11 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
           </TabsContent>
         </Tabs>
       </CardContent>
+      
+      <EnrichmentProgressDialog 
+        open={showProgressDialog} 
+        progress={detailedProgress} 
+      />
     </Card>
   );
 };
