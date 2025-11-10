@@ -860,24 +860,24 @@ export function EnrichmentProgressMonitor() {
                     <Card 
                       key={task.id}
                       onClick={() => navigateToProductDetail(task)}
-                      className="hover:shadow-xl transition-all cursor-pointer border-2 border-green-500/30 bg-green-50/50 dark:bg-green-950/20 hover:border-green-500/60 hover:scale-[1.02]"
+                      className="hover:shadow-xl transition-all cursor-pointer border-2 border-green-500/40 bg-green-50 dark:bg-green-950/30 hover:border-green-500/60 hover:scale-[1.02]"
                     >
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-center gap-2 justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center ring-2 ring-green-500/30">
-                              <CheckCircle2 className="h-5 w-5 text-green-600" />
+                            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500/30 flex items-center justify-center ring-2 ring-green-500/40">
+                              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm text-green-900 dark:text-green-100 truncate">
+                              <h4 className="font-semibold text-sm text-green-900 dark:text-green-50 truncate">
                                 {getProductName(task)}
                               </h4>
                               {task.product_ean && (
-                                <p className="text-xs text-muted-foreground font-mono">
+                                <p className="text-xs text-gray-600 dark:text-gray-300 font-mono">
                                   EAN: {task.product_ean}
                                 </p>
                               )}
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-xs text-gray-600 dark:text-gray-300">
                                 Cliquez pour voir la fiche
                               </p>
                             </div>
@@ -887,35 +887,35 @@ export function EnrichmentProgressMonitor() {
                           </Badge>
                         </div>
                         
-                        <div className="space-y-1.5 bg-white/50 dark:bg-gray-900/50 p-3 rounded-lg">
+                        <div className="space-y-1.5 bg-white/70 dark:bg-gray-800/70 p-3 rounded-lg border border-green-500/20">
                           {task.enrichment_type.slice(0, 3).map(type => {
                             const TypeIcon = ENRICHMENT_ICONS[type] || ENRICHMENT_ICONS.default;
                             return (
                               <div key={type} className="flex items-center gap-2 text-sm">
-                                <TypeIcon className="h-4 w-4 text-green-600" />
-                                <span className="text-gray-700 dark:text-gray-300 font-medium">
+                                <TypeIcon className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                <span className="text-gray-800 dark:text-gray-100 font-medium">
                                   {ENRICHMENT_LABELS[type]}
                                 </span>
-                                <CheckCircle2 className="h-4 w-4 text-green-600 ml-auto animate-pulse" />
+                                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 ml-auto animate-pulse" />
                               </div>
                             );
                           })}
                           {task.enrichment_type.length > 3 && (
-                            <div className="text-xs text-muted-foreground italic pl-6">
+                            <div className="text-xs text-gray-600 dark:text-gray-300 italic pl-6">
                               +{task.enrichment_type.length - 3} autres enrichissements...
                             </div>
                           )}
                         </div>
                         
                         {task.completed_at && (
-                          <div className="flex items-center justify-between pt-2 border-t border-green-200/50">
-                            <div className="text-xs text-muted-foreground">
+                          <div className="flex items-center justify-between pt-2 border-t border-green-200/50 dark:border-green-800/50">
+                            <div className="text-xs text-gray-600 dark:text-gray-300">
                               ✓ Terminé {formatDistanceToNow(new Date(task.completed_at), { 
                                 addSuffix: true,
                                 locale: fr 
                               })}
                             </div>
-                            <Badge variant="outline" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-300">
+                            <Badge variant="outline" className="bg-green-100 dark:bg-green-900/70 text-green-700 dark:text-green-200 border-green-300 dark:border-green-700">
                               ⭐ Qualité: A+
                             </Badge>
                           </div>
