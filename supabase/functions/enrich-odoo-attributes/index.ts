@@ -330,7 +330,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
           // Parser la réponse avec la fonction générique robuste
           const extractedValue = parseAttributeResponse(result.content, allowedValues);
           
-          if (extractedValue && extractedValue !== "Non déterminé") {
+          if (extractedValue !== "Non déterminé") {
             validatedAttributes[attrName] = extractedValue;
             validCount++;
             console.log(`[enrich-odoo-attributes] ✅ ${attrName} = "${extractedValue}"`);
@@ -354,7 +354,7 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
       }
     }
 
-    console.log(`[enrich-odoo-attributes] Validation finale: ${validCount} valides, ${invalidCount} invalides sur ${Object.keys(extractedAttributes).length} attributs`);
+    console.log(`[enrich-odoo-attributes] Validation finale: ${validCount} valides, ${invalidCount} invalides sur ${Object.keys(validatedAttributes).length} attributs`);
 
     // 11. Sauvegarder dans product_analyses
     const { error: updateError } = await supabase

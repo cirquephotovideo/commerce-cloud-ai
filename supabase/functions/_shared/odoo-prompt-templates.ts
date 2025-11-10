@@ -523,7 +523,7 @@ export function getPromptForAttribute(
 /**
  * Parse la réponse de l'IA pour extraire la valeur
  */
-export function parseAttributeResponse(aiResponse: string, allowedValues: string[]): string | null {
+export function parseAttributeResponse(aiResponse: string, allowedValues: string[]): string {
   // Format attendu: "N. valeur"
   const match = aiResponse.match(/^\s*(\d+)\.\s*(.+)$/m);
   
@@ -551,5 +551,5 @@ export function parseAttributeResponse(aiResponse: string, allowedValues: string
     aiResponse.toLowerCase().includes(v.toLowerCase())
   );
   
-  return directMatch || null;
+  return directMatch || "Non déterminé";
 }
