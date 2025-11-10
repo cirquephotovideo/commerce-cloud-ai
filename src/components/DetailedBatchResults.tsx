@@ -47,6 +47,7 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
   const [taxonomyMappings, setTaxonomyMappings] = useState<Map<string, any[]>>(new Map());
   const [enrichingAll, setEnrichingAll] = useState(false);
   const [showAllData, setShowAllData] = useState<Set<number>>(new Set());
+  const [showMissingFields, setShowMissingFields] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const loadTaxonomies = async () => {
@@ -93,6 +94,26 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
       newExpanded.add(index);
     }
     setExpandedIndices(newExpanded);
+  };
+
+  const toggleShowAllData = (index: number) => {
+    const newShowAll = new Set(showAllData);
+    if (newShowAll.has(index)) {
+      newShowAll.delete(index);
+    } else {
+      newShowAll.add(index);
+    }
+    setShowAllData(newShowAll);
+  };
+
+  const toggleShowMissingFields = (index: number) => {
+    const newShow = new Set(showMissingFields);
+    if (newShow.has(index)) {
+      newShow.delete(index);
+    } else {
+      newShow.add(index);
+    }
+    setShowMissingFields(newShow);
   };
 
   const selectAll = () => {
@@ -244,10 +265,253 @@ export const DetailedBatchResults = ({ results, onExport }: DetailedBatchResults
                             </p>
                           )}
                         </div>
+                        
+                        {/* Action buttons for partial results */}
+                        {result.success === 'partial' && (
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleShowMissingFields(index)}
+                            >
+                              {showMissingFields.has(index) ? '🔽 Masquer' : '🔍 Voir champs manquants'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleShowAllData(index)}
+                            >
+                              {showAllData.has(index) ? '📊 Résumé' : '📋 Tous les détails'}
+                            </Button>
+                          </div>
+                        )}
                       </div>
 
+                      {/* Missing Fields Section */}
+                      {result.success === 'partial' && showMissingFields.has(index) && result.analysis?.validation_result?.missingFields && (
+                        <Card className="border-destructive/50 bg-destructive/5">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4 text-destructive" />
+                              Champs manquants ({result.analysis.validation_result.missingFields.length})
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                              Score de complétude : {result.analysis.validation_result.completeness_score || 0}%
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {result.analysis.validation_result.missingFields.map((field: string, i: number) => (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-muted rounded">
+                                  <span className="text-destructive">❌</span>
+                                  <code className="text-xs">{field}</code>
+                                </div>
+                              ))}
+                            </div>
+                            {result.analysis.validation_result.incompleteFields?.length > 0 && (
+                              <div className="mt-3">
+                                <p className="text-xs font-semibold mb-2">Champs incomplets :</p>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                  {result.analysis.validation_result.incompleteFields.map((field: string, i: number) => (
+                                    <div key={i} className="flex items-center gap-2 p-2 bg-muted rounded">
+                                      <span className="text-yellow-500">⚠️</span>
+                                      <code className="text-xs">{field}</code>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* All Data Section */}
+                      {showAllData.has(index) && result.analysis && (
+                        <Card className="border-primary/50 bg-primary/5">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">📊 Données complètes de l'analyse</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            {/* SEO */}
+                            {result.analysis.seo && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">🔍 SEO</h4>
+                                <div className="grid gap-2 text-xs pl-3">
+                                  {result.analysis.seo.title && <p><strong>Titre:</strong> {result.analysis.seo.title}</p>}
+                                  {result.analysis.seo.meta_description && <p><strong>Meta:</strong> {result.analysis.seo.meta_description}</p>}
+                                  {result.analysis.seo.keywords && <p><strong>Mots-clés:</strong> {result.analysis.seo.keywords.join(', ')}</p>}
+                                  {result.analysis.seo.score && <p><strong>Score:</strong> {result.analysis.seo.score}/100</p>}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Pricing */}
+                            {result.analysis.pricing && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">💰 Prix & Marché</h4>
+                                <div className="grid gap-2 text-xs pl-3">
+                                  {result.analysis.pricing.estimated_price && <p><strong>Prix estimé:</strong> {result.analysis.pricing.estimated_price}</p>}
+                                  {result.analysis.pricing.market_position && <p><strong>Position:</strong> {result.analysis.pricing.market_position}</p>}
+                                  {result.analysis.pricing.competitive_analysis && (
+                                    <p><strong>Analyse concurrence:</strong> {result.analysis.pricing.competitive_analysis.substring(0, 200)}...</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Competition */}
+                            {result.analysis.competition && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">🏆 Concurrence</h4>
+                                <div className="grid gap-2 text-xs pl-3">
+                                  {result.analysis.competition.main_competitors && (
+                                    <div>
+                                      <strong>Concurrents principaux:</strong>
+                                      <ul className="list-disc pl-5 mt-1">
+                                        {result.analysis.competition.main_competitors.map((c: any, i: number) => (
+                                          <li key={i}>{c.name} - {c.product} ({c.price})</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {result.analysis.competition.differentiation && (
+                                    <p><strong>Différenciation:</strong> {result.analysis.competition.differentiation}</p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Technical & Specs */}
+                            {result.analysis.technical_specifications && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">🔧 Spécifications</h4>
+                                <div className="grid gap-2 text-xs pl-3">
+                                  <pre className="bg-muted p-2 rounded overflow-x-auto">
+                                    {JSON.stringify(result.analysis.technical_specifications, null, 2)}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Use Cases */}
+                            {result.analysis.use_cases && result.analysis.use_cases.length > 0 && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">💼 Cas d'usage</h4>
+                                <ul className="list-disc pl-5 text-xs space-y-1">
+                                  {result.analysis.use_cases.map((uc: string, i: number) => (
+                                    <li key={i}>{uc}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {/* Pros & Cons */}
+                            <div className="grid grid-cols-2 gap-3">
+                              {result.analysis.competitive_pros && result.analysis.competitive_pros.length > 0 && (
+                                <div>
+                                  <h4 className="font-semibold text-sm mb-2 text-green-600">✅ Avantages</h4>
+                                  <ul className="list-disc pl-5 text-xs space-y-1">
+                                    {result.analysis.competitive_pros.map((pro: string, i: number) => (
+                                      <li key={i}>{pro}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {result.analysis.competitive_cons && result.analysis.competitive_cons.length > 0 && (
+                                <div>
+                                  <h4 className="font-semibold text-sm mb-2 text-red-600">❌ Inconvénients</h4>
+                                  <ul className="list-disc pl-5 text-xs space-y-1">
+                                    {result.analysis.competitive_cons.map((con: string, i: number) => (
+                                      <li key={i}>{con}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Environmental & Repairability */}
+                            <div className="grid grid-cols-2 gap-3">
+                              {result.analysis.environmental_impact && (
+                                <div>
+                                  <h4 className="font-semibold text-sm mb-2">🌱 Impact environnemental</h4>
+                                  <div className="text-xs space-y-1">
+                                    {result.analysis.environmental_impact.recyclability_score && (
+                                      <p>Recyclabilité: {result.analysis.environmental_impact.recyclability_score}/100</p>
+                                    )}
+                                    {result.analysis.environmental_impact.eco_score && (
+                                      <p>Eco-score: {result.analysis.environmental_impact.eco_score}/100</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {result.analysis.repairability && (
+                                <div>
+                                  <h4 className="font-semibold text-sm mb-2">🔧 Réparabilité</h4>
+                                  <div className="text-xs space-y-1">
+                                    {result.analysis.repairability.score && (
+                                      <p>Score: {result.analysis.repairability.score}/10</p>
+                                    )}
+                                    {result.analysis.repairability.ease_of_repair && (
+                                      <p>{result.analysis.repairability.ease_of_repair}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Global Report */}
+                            {result.analysis.global_report && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">📊 Rapport global</h4>
+                                <div className="grid gap-2 text-xs pl-3">
+                                  {result.analysis.global_report.overall_score && (
+                                    <p><strong>Score:</strong> {result.analysis.global_report.overall_score}/100</p>
+                                  )}
+                                  {result.analysis.global_report.strengths && result.analysis.global_report.strengths.length > 0 && (
+                                    <div>
+                                      <strong>Points forts:</strong>
+                                      <ul className="list-disc pl-5 mt-1">
+                                        {result.analysis.global_report.strengths.map((s: string, i: number) => (
+                                          <li key={i}>{s}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {result.analysis.global_report.priority_actions && result.analysis.global_report.priority_actions.length > 0 && (
+                                    <div>
+                                      <strong>Actions prioritaires:</strong>
+                                      <ul className="list-disc pl-5 mt-1">
+                                        {result.analysis.global_report.priority_actions.map((a: string, i: number) => (
+                                          <li key={i}>{a}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Web Sources */}
+                            {result.analysis.web_sources && result.analysis.web_sources.length > 0 && (
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2">🌐 Sources consultées</h4>
+                                <ul className="list-disc pl-5 text-xs space-y-1">
+                                  {result.analysis.web_sources.map((source: string, i: number) => (
+                                    <li key={i}>
+                                      <a href={source} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                                        {source}
+                                      </a>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
                       {/* Quick Summary */}
-                      {result.success && result.analysis && (
+                      {result.success && result.analysis && !showAllData.has(index) && (
                         <>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           {result.analysis.pricing?.estimated_price && (
