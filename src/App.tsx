@@ -26,6 +26,7 @@ import ProductsManagement from "./pages/ProductsManagement";
 import Code2AsinExport from "./pages/Code2AsinExport";
 import Code2AsinImport from "./pages/Code2AsinImport";
 import Code2AsinProductsList from "./pages/Code2AsinProductsList";
+import UnifiedProductsManagement from "./pages/UnifiedProductsManagement";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -66,6 +67,7 @@ const App = () => {
         <Route path="/import-export-dashboard" element={<ProtectedRoute><DashboardLayout><ImportExportDashboard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><DashboardLayout><Analytics /></DashboardLayout></ProtectedRoute>} />
         <Route path="/products" element={<ProtectedRoute><DashboardLayout><ProductsManagement /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/unified-products" element={<ProtectedRoute><DashboardLayout><UnifiedProductsManagement /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-export" element={<ProtectedRoute><DashboardLayout><Code2AsinExport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-import" element={<ProtectedRoute><DashboardLayout><Code2AsinImport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-products" element={<ProtectedRoute><DashboardLayout><Code2AsinProductsList /></DashboardLayout></ProtectedRoute>} />
