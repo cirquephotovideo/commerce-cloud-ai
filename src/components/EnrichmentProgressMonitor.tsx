@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { navigateToProduct } from '@/lib/productNavigationEvents';
 
 interface EnrichmentTask {
   id: string;
@@ -200,9 +201,16 @@ export function EnrichmentProgressMonitor() {
 
   const navigateToProductDetail = (task: EnrichmentTask) => {
     if (task.analysis_id) {
-      window.location.href = `/product/${task.analysis_id}`;
+      // Utiliser l'événement global pour ouvrir le modal sur Dashboard
+      navigateToProduct({
+        productId: task.analysis_id,
+        productName: task.product_name || 'Produit sans nom',
+      });
     } else if (task.supplier_product_id) {
-      window.location.href = `/unified-products?highlight=${task.supplier_product_id}`;
+      // Pour les produits fournisseurs, rediriger vers l'onglet approprié
+      window.location.href = `/unified-products?tab=suppliers&highlight=${task.supplier_product_id}`;
+    } else {
+      toast.error("Impossible d'ouvrir les détails : ID manquant");
     }
   };
 
