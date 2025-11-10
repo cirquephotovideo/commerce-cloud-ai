@@ -66,16 +66,17 @@ serve(async (req) => {
         // Invoquer email-import-chunk pour ce job
         const { data, error } = await supabase.functions.invoke('email-import-chunk', {
           body: {
-            jobId: job.id,
-            userId: job.user_id,
-            supplierId: job.supplier_id,
-            ndjsonPath: metadata.ndjson_path,
+            job_id: job.id,
+            user_id: job.user_id,
+            supplier_id: job.supplier_id,
+            ndjson_path: metadata.ndjson_path,
             mapping: metadata.mapping,
-            skipConfig: metadata.skip_config || {},
-            excludedColumns: metadata.excluded_columns || [],
+            headers: metadata.headers || [],
+            skip_config: metadata.skip_config || {},
+            excluded_columns: metadata.excluded_columns || [],
             offset: 0,
             limit: 500,
-            correlationId: `retry-${job.id}-${Date.now()}`
+            correlation_id: `retry-${job.id}-${Date.now()}`
           }
         });
 

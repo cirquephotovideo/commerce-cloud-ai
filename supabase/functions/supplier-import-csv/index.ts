@@ -326,13 +326,16 @@ serve(async (req) => {
       
       const { error: chunkError } = await supabase.functions.invoke('email-import-chunk', {
         body: {
-          jobId: job.id,
-          filePath: batchPath,
-          userId: user.id,
-          supplierId,
+          job_id: job.id,
+          ndjson_path: batchPath,
+          user_id: user.id,
+          supplier_id: supplierId,
+          mapping: columnMapping,
+          headers: Object.keys(columnMapping),
+          skip_config: {},
+          excluded_columns: [],
           offset: 0,
-          limit: 1000,
-          columnMapping
+          limit: 1000
         }
       });
 
