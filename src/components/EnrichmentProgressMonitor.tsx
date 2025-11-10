@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { navigateToProduct } from '@/lib/productNavigationEvents';
+import { EnrichmentStatsChart } from './enrichment/EnrichmentStatsChart';
 
 interface EnrichmentTask {
   id: string;
@@ -267,6 +268,39 @@ export function EnrichmentProgressMonitor() {
       return Math.min(95, Math.floor(smoothProgress));
     }
     return 0;
+  };
+
+  // Calculer le temps estimé pour les tâches en attente
+  const getEstimatedWaitTime = (task: EnrichmentTask) => {
+    const pendingTasks = tasks.filter(t => 
+      t.status === 'pending' && 
+      new Date(t.created_at) < new Date(task.created_at)
+    );
+    
+    // Nombre de tâches avant celle-ci dans la queue
+    const position = pendingTasks.length + 1;
+    
+    // Temps moyen de traitement par tâche (en minutes)
+    const avgProcessingTime = task.enrichment_type.includes('heygen') ? 2 :
+                             task.enrichment_type.includes('amazon') ? 1 :
+                             task.enrichment_type.includes('images') || task.enrichment_type.includes('ai_images') ? 0.75 :
+                             0.5;
+    
+    // Nombre de tâches en cours (traitement parallèle)
+    const processingCount = tasks.filter(t => t.status === 'processing').length;
+    const parallelCapacity = Math.max(1, 3 - processingCount); // Assume 3 tâches max en parallèle
+    
+    // Calculer le temps estimé
+    const estimatedMinutes = Math.ceil((position / parallelCapacity) * avgProcessingTime);
+    
+    return {
+      position,
+      estimatedMinutes,
+      displayText: estimatedMinutes < 1 ? 'Démarrage imminent' :
+                   estimatedMinutes === 1 ? '~1 minute' :
+                   estimatedMinutes < 60 ? `~${estimatedMinutes} minutes` :
+                   `~${Math.round(estimatedMinutes / 60)}h ${estimatedMinutes % 60}min`
+    };
   };
 
   const getStats = () => {
@@ -600,6 +634,42 @@ export function EnrichmentProgressMonitor() {
           </Alert>
         )}
 
+        {/* Indicateur de temps d'attente pour les tâches en attente */}
+        {stats.pending > 0 && (
+          <Alert className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-2 border-yellow-500/50">
+            <AlertTitle className="flex items-center gap-3 text-lg font-bold">
+              <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+              <span className="text-yellow-700 dark:text-yellow-300">
+                {stats.pending} tâche{stats.pending > 1 ? 's' : ''} en attente
+              </span>
+            </AlertTitle>
+            <AlertDescription className="text-sm mt-2">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span className="text-gray-700 dark:text-gray-200">
+                  Temps estimé avant traitement : 
+                  <span className="font-bold ml-1">
+                    {(() => {
+                      const pendingTasks = tasks.filter(t => t.status === 'pending');
+                      const totalMinutes = pendingTasks.reduce((sum, task) => {
+                        const waitTime = getEstimatedWaitTime(task);
+                        return Math.max(sum, waitTime.estimatedMinutes);
+                      }, 0);
+                      
+                      return totalMinutes < 1 ? 'Démarrage imminent' :
+                             totalMinutes === 1 ? '~1 minute' :
+                             totalMinutes < 60 ? `~${totalMinutes} minutes` :
+                             `~${Math.round(totalMinutes / 60)}h ${totalMinutes % 60}min`;
+                    })()}
+                  </span>
+                </span>
+                <Badge variant="outline" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700">
+                  {stats.processing > 0 ? '⚡ Traitement en cours' : '⏸️ En pause'}
+                </Badge>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Progression globale améliorée */}
         {stats.processing > 0 && (
           <div className="p-5 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border-2 border-blue-500/40 shadow-lg">
@@ -689,6 +759,13 @@ export function EnrichmentProgressMonitor() {
           </div>
         </div>
 
+        {/* Graphique des statistiques par type */}
+        {tasks.length > 0 && (
+          <div className="mt-6">
+            <EnrichmentStatsChart tasks={tasks} />
+          </div>
+        )}
+
         {/* Liste des tâches */}
         <ScrollArea className="h-[500px] pr-4">
           <div className="space-y-3">
@@ -748,12 +825,23 @@ export function EnrichmentProgressMonitor() {
                           </div>
                         </div>
 
-                        {/* Progress bar */}
+                        {/* Progress bar et temps estimé */}
                         {(task.status === 'processing' || task.status === 'pending') && (
                           <div className="space-y-1">
                             <Progress value={progress} className="h-2" />
-                            <div className="text-xs text-muted-foreground">
-                              {progress}% complété
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">
+                                {progress}% complété
+                              </span>
+                              {task.status === 'pending' && (() => {
+                                const waitTime = getEstimatedWaitTime(task);
+                                return (
+                                  <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/20">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    Position {waitTime.position} • {waitTime.displayText}
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                           </div>
                         )}
