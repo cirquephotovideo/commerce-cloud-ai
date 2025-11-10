@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 import { handleError } from '../_shared/error-handler.ts';
+import { PromptTemplates } from '../_shared/prompt-templates.ts';
+import { validateEnrichment } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,25 +46,9 @@ serve(async (req) => {
 
     console.log('[ENRICH-SPECS] Status set to processing');
 
-    // Préparer le prompt pour les spécifications
-    const prompt = `Génère des spécifications techniques détaillées pour ce produit :
-
-Nom: ${productData?.name || 'Produit'}
-Description: ${productData?.description || ''}
-Données brutes: ${JSON.stringify(productData, null, 2)}
-
-Fournis les spécifications suivantes en JSON structuré:
-{
-  "dimensions": { "length": "", "width": "", "height": "", "unit": "cm" },
-  "weight": { "value": "", "unit": "kg" },
-  "materials": [""],
-  "certifications": [""],
-  "standards": [""],
-  "technical_details": "",
-  "compatibility": "",
-  "power_requirements": "",
-  "operating_conditions": ""
-}`;
+    // Use the new comprehensive specifications prompt
+    const existingSpecs = currentAnalysis.analysis_result?.specifications;
+    const prompt = PromptTemplates.specifications(productData, existingSpecs);
 
     // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
@@ -85,25 +71,35 @@ Fournis les spécifications suivantes en JSON structuré:
     
     console.log('[ENRICH-SPECS] AI response length:', specificationsRaw?.length || 0);
 
-    // Try to parse JSON, fallback to raw string
+    // Try to parse JSON and validate
     let specifications;
     let parseError = null;
+    let validationIssues: string[] = [];
+    
     try {
       specifications = JSON.parse(specificationsRaw);
+      
+      // Validate the enrichment quality
+      const validation = validateEnrichment('specifications', specifications);
+      if (!validation.isValid) {
+        validationIssues = validation.issues;
+        console.warn('[ENRICH-SPECS] Validation issues found:', validationIssues);
+      }
     } catch (e) {
       console.warn('[ENRICH-SPECS] Failed to parse JSON, storing as string');
       specifications = specificationsRaw;
       parseError = e instanceof Error ? e.message : 'JSON parse error';
     }
 
-    // Merge with existing analysis_result (garantir que l'objet existe)
+    // Merge with existing analysis_result
     const currentResult = currentAnalysis.analysis_result || {};
     const newAnalysisResult = {
       ...currentResult,
       specifications,
       _enrichment_provider: aiResponse.provider,
       _last_enriched: new Date().toISOString(),
-      ...(parseError && { specifications_parse_error: parseError })
+      ...(parseError && { specifications_parse_error: parseError }),
+      ...(validationIssues.length > 0 && { specifications_validation_issues: validationIssues })
     };
 
     // Update status to completed

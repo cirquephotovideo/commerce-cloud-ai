@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 import { handleError } from '../_shared/error-handler.ts';
+import { PromptTemplates } from '../_shared/prompt-templates.ts';
+import { validateEnrichment } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,27 +46,9 @@ serve(async (req) => {
 
     console.log('[ENRICH-COST] Status set to processing');
 
-    const prompt = `Analyse les coûts pour ce produit :
-
-Nom: ${productData?.name || 'Produit'}
-Prix d'achat: ${purchasePrice || 'Non spécifié'}
-Description: ${productData?.description || ''}
-
-Fournis une analyse détaillée des coûts en JSON:
-{
-  "manufacturing_cost_estimate": "",
-  "shipping_cost_estimate": "",
-  "customs_duties": "",
-  "recommended_margin": "",
-  "recommended_selling_price": "",
-  "cost_breakdown": {
-    "materials": "",
-    "labor": "",
-    "overhead": ""
-  },
-  "profitability_analysis": "",
-  "pricing_strategy": ""
-}`;
+    // Use the new comprehensive cost analysis prompt
+    const existingMarketData = currentAnalysis.analysis_result?.pricing;
+    const prompt = PromptTemplates.costAnalysis(productData, purchasePrice, existingMarketData);
 
     // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
@@ -87,25 +71,35 @@ Fournis une analyse détaillée des coûts en JSON:
     
     console.log('[ENRICH-COST] AI response length:', costAnalysisRaw?.length || 0);
 
-    // Try to parse JSON, fallback to raw string
+    // Try to parse JSON and validate
     let costAnalysis;
     let parseError = null;
+    let validationIssues: string[] = [];
+    
     try {
       costAnalysis = JSON.parse(costAnalysisRaw);
+      
+      // Validate the enrichment quality
+      const validation = validateEnrichment('cost_analysis', costAnalysis);
+      if (!validation.isValid) {
+        validationIssues = validation.issues;
+        console.warn('[ENRICH-COST] Validation issues found:', validationIssues);
+      }
     } catch (e) {
       console.warn('[ENRICH-COST] Failed to parse JSON, storing as string');
       costAnalysis = costAnalysisRaw;
       parseError = e instanceof Error ? e.message : 'JSON parse error';
     }
 
-    // Merge with existing analysis_result (garantir que l'objet existe)
+    // Merge with existing analysis_result
     const currentResult = currentAnalysis.analysis_result || {};
     const newAnalysisResult = {
       ...currentResult,
       cost_analysis: costAnalysis,
       _enrichment_provider: aiResponse.provider,
       _last_enriched: new Date().toISOString(),
-      ...(parseError && { cost_analysis_parse_error: parseError })
+      ...(parseError && { cost_analysis_parse_error: parseError }),
+      ...(validationIssues.length > 0 && { cost_analysis_validation_issues: validationIssues })
     };
 
     // Update status to completed

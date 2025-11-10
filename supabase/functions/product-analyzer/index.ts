@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
 import { handleError } from '../_shared/error-handler.ts';
+import { PromptTemplates } from '../_shared/prompt-templates.ts';
+import { validateAnalysis } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,140 +23,9 @@ function detectInputType(input: string): 'url' | 'barcode' | 'product_name' {
   return 'product_name';
 }
 
+// Use the new comprehensive prompt template
 const analysisPrompt = (productInfo: string, inputType: string, categories: any[], additionalData?: any) => {
-  const categoriesContext = categories.length > 0
-    ? `\n\nCatégories Odoo disponibles:\n${categories.map(c => `- ${c.full_path} (ID: ${c.odoo_category_id})`).join('\n')}`
-    : '';
-
-  const additionalContext = additionalData 
-    ? `\n\nDonnées fournisseur existantes:
-       - Description: ${additionalData.description || 'N/A'}
-       - EAN: ${additionalData.ean || 'N/A'}
-       - Marque: ${additionalData.brand || 'N/A'}
-       - Catégorie: ${additionalData.category || 'N/A'}
-       - Prix d'achat: ${additionalData.purchase_price || 'N/A'} ${additionalData.currency || ''}
-       - Référence fournisseur: ${additionalData.supplier_reference || 'N/A'}`
-    : '';
-
-  return `Analyse complète du produit e-commerce en utilisant la recherche web pour obtenir des informations à jour.
-
-Type d'entrée: ${inputType}
-${inputType === 'url' ? `URL du produit: ${productInfo}` : 
-  inputType === 'barcode' ? `Code-barres: ${productInfo}` : 
-  `Nom du produit: ${productInfo}`}
-${additionalContext}
-${categoriesContext}
-
-IMPORTANT: 
-- Retourne UNIQUEMENT le JSON, sans texte markdown, sans balises de code
-- Sois concis: description_long max 200 mots, recommendations max 2 par section
-- Si tu manques d'info, utilise "N/A" ou null
-- STRUCTURE EXACTE requise (JSON valide):
-
-{
-  "product_name": "Nom du produit identifié",
-  "description": "description courte (50 caractères max)",
-  "description_long": "description marketing longue et optimisée SEO (200-300 mots) mettant en valeur les bénéfices, caractéristiques et avantages du produit. Cette description doit être persuasive et inclure les principaux mots-clés du produit.",
-  "seo": {
-    "score": 85,
-    "title": "Recommandation pour le titre SEO",
-    "meta_description": "Recommandation pour la meta description",
-    "keywords": ["mot-clé1", "mot-clé2", "mot-clé3"],
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "pricing": {
-    "estimated_price": "Prix estimé du produit",
-    "market_position": "Budget/Milieu de gamme/Premium",
-    "competitive_analysis": "Analyse du positionnement tarifaire",
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "competition": {
-    "main_competitors": ["Concurrent 1", "Concurrent 2", "Concurrent 3"],
-    "market_share": "Estimation de la part de marché",
-    "differentiation": "Points de différenciation",
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "competitive_pros": ["avantage concurrentiel 1", "avantage 2", "avantage 3"],
-  "competitive_cons": ["inconvénient potentiel 1", "inconvénient 2"],
-  "use_cases": ["cas d'utilisation professionnel 1", "cas d'utilisation particulier 2", "cas d'utilisation 3"],
-  "market_position": "leader/challenger/niche - Explication du positionnement",
-  "trends": {
-    "market_trend": "Croissance/Stable/Déclin",
-    "popularity_score": 75,
-    "seasonal_factors": "Facteurs de saisonnalité",
-    "future_outlook": "Perspectives d'avenir",
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "description": {
-    "current_quality": "Évaluation de la description actuelle",
-    "suggested_description": "Proposition de description optimisée (2-3 paragraphes)",
-    "key_features": ["Caractéristique 1", "Caractéristique 2", "Caractéristique 3"],
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "repairability": {
-    "score": 7.5,
-    "ease_of_repair": "facile/moyen/difficile",
-    "spare_parts_availability": "excellente/bonne/moyenne/limitée",
-    "durability_score": 8.0,
-    "repairability_index": "8.5/10",
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "hs_code": {
-    "code": "854230",
-    "description": "Description de la catégorie douanière",
-    "tariff_info": "Informations sur les droits de douane applicables"
-  },
-  "environmental_impact": {
-    "carbon_footprint": "Estimation des émissions CO2",
-    "recyclability_score": 7.5,
-    "eco_certifications": ["Energy Star", "EPEAT Gold"],
-    "energy_efficiency": "A++",
-    "eco_score": 8.0,
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "image_optimization": {
-    "quality_score": 80,
-    "suggested_angles": ["Angle 1", "Angle 2", "Angle 3"],
-    "background_recommendations": "Recommandations pour le fond (couleurs, style, mise en scène)",
-    "lighting_suggestions": "Conseils d'éclairage (naturel, studio, diffus, etc.)",
-    "composition_tips": "Conseils de composition (règle des tiers, point de vue, etc.)",
-    "recommended_colors": ["#FF5733", "#33FF57", "#3357FF"],
-    "photography_style": "Style de photographie recommandé (lifestyle, packshot, ambiance, etc.)",
-    "technical_specs": {
-      "min_resolution": "1200x1200px",
-      "recommended_format": "PNG ou JPEG",
-      "compression_level": "80-90%"
-    },
-    "ai_generation_prompts": [
-      "Prompt 1 pour générer une image d'exemple avec IA",
-      "Prompt 2 pour générer une image d'exemple avec IA"
-    ],
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "tags_categories": {
-    "primary_category": "Catégorie principale",
-    "subcategories": ["Sous-catégorie 1", "Sous-catégorie 2"],
-    "suggested_tags": ["tag1", "tag2", "tag3", "tag4", "tag5"],
-    "odoo_category_id": null,
-    "odoo_category_name": "Si les catégories Odoo sont disponibles, choisis la catégorie la plus appropriée et indique son ID et nom complet, sinon null",
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "customer_reviews": {
-    "sentiment_score": 4.2,
-    "common_praises": ["Point positif 1", "Point positif 2"],
-    "common_complaints": ["Point négatif 1", "Point négatif 2"],
-    "recommendations": ["Recommandation 1", "Recommandation 2"]
-  },
-  "global_report": {
-    "overall_score": 82,
-    "strengths": ["Force 1", "Force 2", "Force 3"],
-    "weaknesses": ["Faiblesse 1", "Faiblesse 2"],
-    "priority_actions": ["Action prioritaire 1", "Action prioritaire 2", "Action prioritaire 3"],
-    "estimated_optimization_impact": "Impact estimé de l'optimisation"
-  }
-}
-
-IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte markdown, sans balises de code, juste l'objet JSON pur.`;
+  return PromptTemplates.initialAnalysis(productInfo, inputType, categories, additionalData);
 };
 
 serve(async (req) => {
@@ -341,29 +212,12 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       return null;
     };
 
-    // Enhanced validation helper
+    // Use the new validation system
     const validateAnalysisCompleteness = (analysis: any): { incomplete: boolean; missingFields: string[] } => {
-      const requiredFields = [
-        { path: 'product_name', check: (v: any) => v && typeof v === 'string' && v.length > 0 },
-        { path: 'seo.score', check: (v: any) => typeof v === 'number' },
-        { path: 'seo.keywords', check: (v: any) => Array.isArray(v) && v.length > 0 },
-        { path: 'pricing.estimated_price', check: (v: any) => v && v !== 'N/A' },
-        { path: 'global_report.overall_score', check: (v: any) => typeof v === 'number' },
-        { path: 'description', check: (v: any) => v && v !== 'N/A' },
-        { path: 'description_long', check: (v: any) => v && v.length > 50 }
-      ];
-      
-      const missing: string[] = [];
-      for (const field of requiredFields) {
-        const value = field.path.split('.').reduce((obj, key) => obj?.[key], analysis);
-        if (!field.check(value)) {
-          missing.push(field.path);
-        }
-      }
-      
+      const validationResult = validateAnalysis(analysis);
       return {
-        incomplete: missing.length > 0,
-        missingFields: missing
+        incomplete: !validationResult.isValid,
+        missingFields: validationResult.missingFields
       };
     };
 
@@ -489,6 +343,16 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       console.log('[PRODUCT-ANALYZER] ⏭️ Image search skipped (includeImages = false)');
     }
 
+    // Validate analysis completeness
+    const validationResult = validateAnalysis(analysisResult);
+    if (!validationResult.isValid) {
+      console.log('[PRODUCT-ANALYZER] ⚠️ Analysis incomplete:', validationResult.missingFields);
+      analysisResult._incomplete = true;
+      analysisResult._missing_fields = validationResult.missingFields;
+      analysisResult._completeness_score = validationResult.completeness_score;
+      analysisResult._confidence_level = validationResult.confidence;
+    }
+
     // Phase 1: Flatten structure - return data directly, not wrapped in "analysis"
     const responseData = {
       ...analysisResult,
@@ -499,7 +363,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       _timestamp: new Date().toISOString(),
       metadata: {
         inputType,
-        hasWebSearch: true, // Ollama native web search enabled
+        hasWebSearch: true,
         hasCategories: categories.length > 0,
         timestamp: new Date().toISOString()
       }
