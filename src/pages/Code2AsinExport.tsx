@@ -15,6 +15,7 @@ export default function Code2AsinExport() {
   const [selectedStatus, setSelectedStatus] = useState<string>("not_started");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [batchSize, setBatchSize] = useState<number>(50000);
 
   // Fetch products with EAN
   const { data: products = [], isLoading } = useQuery({
@@ -75,15 +76,14 @@ export default function Code2AsinExport() {
     setSelectAll(!selectAll);
   };
 
-  const exportEANBatches = (productsToExport: typeof products) => {
-    const BATCH_SIZE = 50000;
+  const exportEANBatches = (productsToExport: typeof products, customBatchSize: number) => {
     const eans = productsToExport
       .filter(p => p.ean)
       .map(p => p.ean);
     
     const batches: string[][] = [];
-    for (let i = 0; i < eans.length; i += BATCH_SIZE) {
-      batches.push(eans.slice(i, i + BATCH_SIZE));
+    for (let i = 0; i < eans.length; i += customBatchSize) {
+      batches.push(eans.slice(i, i + customBatchSize));
     }
     
     batches.forEach((batch, index) => {
@@ -91,11 +91,11 @@ export default function Code2AsinExport() {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `code2asin_export_batch_${index + 1}_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
+      link.download = `code2asin_batch${index + 1}_${customBatchSize}EAN_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`;
       link.click();
     });
     
-    toast.success(`✅ ${batches.length} fichier(s) CSV généré(s) (${eans.length} EAN)`);
+    toast.success(`✅ ${batches.length} fichier(s) CSV généré(s) de ${customBatchSize.toLocaleString()} EAN (total: ${eans.length.toLocaleString()} EAN)`);
   };
 
   const exportSelected = () => {
@@ -104,7 +104,7 @@ export default function Code2AsinExport() {
       toast.error("Veuillez sélectionner au moins un produit");
       return;
     }
-    exportEANBatches(selected);
+    exportEANBatches(selected, batchSize);
   };
 
   const exportAllNonEnriched = () => {
@@ -118,15 +118,17 @@ export default function Code2AsinExport() {
       return;
     }
     
-    exportEANBatches(nonEnriched);
+    exportEANBatches(nonEnriched, batchSize);
   };
 
-  const selectedCount = selectedIds.size;
-  const batchCount = Math.ceil(selectedCount / 50000);
   const nonEnrichedCount = products.filter(p => 
     p.code2asin_enrichment_status === 'not_started' || 
     p.code2asin_enrichment_status === 'failed'
   ).length;
+  
+  const selectedCount = selectedIds.size;
+  const batchCount = Math.ceil(selectedCount / batchSize);
+  const nonEnrichedBatchCount = Math.ceil(nonEnrichedCount / batchSize);
 
   if (isLoading) {
     return (
@@ -147,13 +149,13 @@ export default function Code2AsinExport() {
             📤 Export EAN pour Code2ASIN
           </CardTitle>
           <CardDescription>
-            Exportez vos EAN par paquets de 50 000 pour enrichissement externe via code2asin.com
+            Exportez vos EAN par paquets configurables (de 1 000 à 50 000) pour enrichissement externe via code2asin.com
           </CardDescription>
         </CardHeader>
         
         <CardContent className="space-y-6">
           {/* Filtres */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Catégorie</label>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -184,6 +186,23 @@ export default function Code2AsinExport() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-2 block">Taille des paquets</label>
+              <Select value={batchSize.toString()} onValueChange={(v) => setBatchSize(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1000">1 000 EAN / fichier</SelectItem>
+                  <SelectItem value="2500">2 500 EAN / fichier</SelectItem>
+                  <SelectItem value="5000">5 000 EAN / fichier</SelectItem>
+                  <SelectItem value="10000">10 000 EAN / fichier</SelectItem>
+                  <SelectItem value="25000">25 000 EAN / fichier</SelectItem>
+                  <SelectItem value="50000">50 000 EAN / fichier (défaut)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           
           {/* Stats */}
@@ -191,9 +210,10 @@ export default function Code2AsinExport() {
             <Info className="h-4 w-4" />
             <AlertDescription>
               <strong>{products.length}</strong> produits disponibles • 
-              <strong className="ml-2">{nonEnrichedCount}</strong> non enrichis • 
+              <strong className="ml-2">{nonEnrichedCount}</strong> non enrichis
+              {nonEnrichedCount > 0 && ` (${nonEnrichedBatchCount} fichier${nonEnrichedBatchCount > 1 ? 's' : ''})`} • 
               <strong className="ml-2">{selectedCount}</strong> sélectionnés
-              {selectedCount > 0 && ` • ${batchCount} fichier(s) à générer`}
+              {selectedCount > 0 && ` (${batchCount} fichier${batchCount > 1 ? 's' : ''})`}
             </AlertDescription>
           </Alert>
           
@@ -252,7 +272,7 @@ export default function Code2AsinExport() {
               className="flex-1"
             >
               <Download className="h-4 w-4 mr-2" />
-              Exporter tous les non-enrichis ({nonEnrichedCount})
+              Exporter {nonEnrichedCount} non-enrichis ({nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''})
             </Button>
             <Button
               onClick={exportSelected}
@@ -260,7 +280,7 @@ export default function Code2AsinExport() {
               className="flex-1"
             >
               <Download className="h-4 w-4 mr-2" />
-              Exporter {selectedCount} sélectionnés
+              Exporter {selectedCount} sélectionnés ({batchCount} fichier{batchCount > 1 ? 's' : ''})
             </Button>
           </div>
         </CardContent>
