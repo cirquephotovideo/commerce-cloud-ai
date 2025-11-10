@@ -459,7 +459,7 @@ export default function Code2AsinExport() {
             <Button
               onClick={export25kNonEnriched}
               variant="default"
-              disabled={nonEnrichedCount === 0}
+              disabled={nonEnrichedCount < 25000}
               className="w-full justify-between bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               size="lg"
             >
@@ -468,9 +468,15 @@ export default function Code2AsinExport() {
                 🚀 Export 25 000 non-enrichis (rapide)
               </span>
               <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-medium">
-                {Math.min(nonEnrichedCount, 25000).toLocaleString()} EAN → 1 fichier
+                25 000 EAN → 1 fichier
               </span>
             </Button>
+            
+            {nonEnrichedCount > 0 && nonEnrichedCount < 25000 && (
+              <p className="text-xs text-muted-foreground italic text-center -mt-1">
+                ℹ️ Minimum 25 000 produits non-enrichis requis • Actuellement : {nonEnrichedCount.toLocaleString()}
+              </p>
+            )}
             
             <Button
               onClick={exportAllNonEnriched}
