@@ -48,13 +48,17 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Extract JWT from Authorization header
+    const jwt = authHeader.replace('Bearer ', '');
+
+    // Create admin client with service role key
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // Verify JWT and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
     if (userError || !user) {
       console.error('[auto-link-products] Auth error:', userError?.message || 'No user found');
       return new Response(JSON.stringify({ 
