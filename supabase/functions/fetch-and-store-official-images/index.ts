@@ -83,13 +83,26 @@ serve(async (req) => {
       }
     }
 
-    // Download and store images
-    console.log(`[FETCH-IMAGES] Downloading and storing ${foundImages.length} images...`);
+    // Validate URLs before downloading
+    console.log(`[FETCH-IMAGES] Validating ${foundImages.length} URLs...`);
+    const validatedImages: ImageSource[] = [];
+    
+    for (const imageSource of foundImages) {
+      if (validatedImages.length >= 10) break;
+      
+      if (await validateImageUrl(imageSource.url)) {
+        validatedImages.push(imageSource);
+      }
+    }
+    
+    console.log(`[FETCH-IMAGES] ${validatedImages.length}/${foundImages.length} URLs validated`);
+
+    // Download and store validated images
     const storedImages: { url: string; source: string }[] = [];
     const sources = new Set<string>();
 
-    for (let i = 0; i < Math.min(foundImages.length, 10); i++) {
-      const imageSource = foundImages[i];
+    for (let i = 0; i < validatedImages.length; i++) {
+      const imageSource = validatedImages[i];
       const storedUrl = await downloadAndStoreImage(
         supabase,
         imageSource.url,
@@ -101,6 +114,14 @@ serve(async (req) => {
         storedImages.push({ url: storedUrl, source: imageSource.source });
         sources.add(imageSource.source);
       }
+    }
+
+    // Fallback to placeholder if no images stored
+    if (storedImages.length === 0) {
+      console.log('[FETCH-IMAGES] ⚠️ No valid images, using placeholder');
+      const placeholderUrl = `https://placehold.co/800x800/e2e8f0/1e293b?text=${encodeURIComponent(productName || 'Product')}`;
+      storedImages.push({ url: placeholderUrl, source: 'placeholder' });
+      sources.add('placeholder');
     }
 
     console.log(`[FETCH-IMAGES] ✅ Successfully stored ${storedImages.length} images from: ${Array.from(sources).join(', ')}`);
@@ -127,6 +148,37 @@ serve(async (req) => {
     );
   }
 });
+
+// Validate image URL before download
+async function validateImageUrl(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      redirect: 'follow'
+    });
+    
+    const contentType = response.headers.get('content-type');
+    const contentLength = parseInt(response.headers.get('content-length') || '0');
+    
+    const isValid = (
+      response.ok &&
+      contentType?.startsWith('image/') &&
+      contentLength > 5000 // Au moins 5KB
+    );
+    
+    if (!isValid) {
+      console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}: type=${contentType}, size=${contentLength}`);
+    }
+    
+    return isValid;
+  } catch (error) {
+    console.error(`[VALIDATE] ❌ ${url.slice(0, 80)}:`, error.message);
+    return false;
+  }
+}
 
 // Scrape product page for images
 async function scrapeProductPage(url: string): Promise<string[]> {
@@ -190,18 +242,24 @@ async function searchWithOllamaWeb(productName: string, brand?: string): Promise
       ? `${productName} ${brand} official product images high resolution`
       : `${productName} official product images high resolution`;
 
-    const prompt = `Find official high-resolution product images for: ${searchQuery}
+    const prompt = `Find OFFICIAL high-resolution product images for: ${searchQuery}
 
-CRITICAL: Return ONLY official product images from:
-- Manufacturer's official website
-- Trusted e-commerce sites (Amazon, official retailers)
+CRITICAL REQUIREMENTS:
+1. URLs must be LIVE and ACCESSIBLE (no broken links)
+2. Image resolution: minimum 800x800px
+3. File formats: JPG, PNG, WebP
+4. Sources priority:
+   - Official manufacturer website
+   - Amazon product pages  
+   - Major e-commerce sites (Fnac, Darty, Boulanger)
 
 EXCLUDE:
-- Thumbnails or low-resolution images
-- Generic stock photos
-- Advertisement banners
+- Thumbnails or low-res images (<800px)
+- Watermarked images
+- Pinterest/Google Images cache URLs
+- Social media images
 
-Return ONLY a JSON array of image URLs in this exact format:
+Return ONLY a JSON array of TESTED, working URLs:
 {"images": ["https://url1.jpg", "https://url2.jpg"]}`;
 
     const result = await callAIWithFallback({

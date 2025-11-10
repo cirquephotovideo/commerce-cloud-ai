@@ -319,18 +319,14 @@ Réponds UNIQUEMENT avec un JSON valide contenant TOUS les attributs du référe
 
     console.log(`[enrich-odoo-attributes] ✅ Réponse IA reçue via provider: ${fallbackResponse.provider}`);
     
-    const aiData = fallbackResponse.content;
-    console.log('[enrich-odoo-attributes] Réponse IA reçue');
+    // fallbackResponse.content est déjà une string JSON directement
+    const responseText = fallbackResponse.content;
+    console.log('[enrich-odoo-attributes] 🔍 Type:', typeof responseText);
+    console.log('[enrich-odoo-attributes] 🔍 Preview:', responseText.slice(0, 300));
 
-    // 9. Parser la réponse JSON - PHASE 3: Logs détaillés
+    // 9. Parser la réponse JSON
     let extractedAttributes: Record<string, string> = {};
     try {
-      console.log('[enrich-odoo-attributes] 🔍 Type de réponse IA:', typeof aiData);
-      console.log('[enrich-odoo-attributes] 🔍 Structure aiData:', JSON.stringify(aiData).slice(0, 500));
-      
-      const responseText = aiData.choices?.[0]?.message?.content || aiData.response || '{}';
-      console.log('[enrich-odoo-attributes] 🔍 Response text extrait:', responseText.slice(0, 500));
-      
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         console.log('[enrich-odoo-attributes] 🔍 JSON match trouvé, longueur:', jsonMatch[0].length);

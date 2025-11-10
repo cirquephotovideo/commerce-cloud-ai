@@ -72,9 +72,9 @@ export const GoogleShoppingAnalysis = () => {
       });
 
       if (error) {
-        console.error('Function error:', error);
+        console.error('[GOOGLE-SHOPPING] Function error:', error);
         
-        // Gérer les erreurs spécifiques
+        // Handle specific error types
         if (error.message?.includes('API désactivée') || error.message?.includes('not been used')) {
           setErrorInfo({
             message: data?.error || error.message,
