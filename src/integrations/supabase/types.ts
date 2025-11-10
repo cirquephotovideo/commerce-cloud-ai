@@ -1009,7 +1009,7 @@ export type Database = {
       code2asin_enrichments: {
         Row: {
           amazon_price: number | null
-          analysis_id: string | null
+          analysis_id: string
           asin: string | null
           brand: string | null
           browse_nodes: string | null
@@ -1066,7 +1066,7 @@ export type Database = {
         }
         Insert: {
           amazon_price?: number | null
-          analysis_id?: string | null
+          analysis_id: string
           asin?: string | null
           brand?: string | null
           browse_nodes?: string | null
@@ -1123,7 +1123,7 @@ export type Database = {
         }
         Update: {
           amazon_price?: number | null
-          analysis_id?: string | null
+          analysis_id?: string
           asin?: string | null
           brand?: string | null
           browse_nodes?: string | null
@@ -1182,7 +1182,7 @@ export type Database = {
           {
             foreignKeyName: "code2asin_enrichments_analysis_id_fkey"
             columns: ["analysis_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
           },

@@ -94,6 +94,24 @@ export default function Code2AsinImport() {
           return;
         }
         
+        // Detect duplicates in CSV
+        const eanCounts = data.reduce((acc, row) => {
+          if (row.EAN) {
+            acc[row.EAN] = (acc[row.EAN] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>);
+
+        const duplicates = Object.entries(eanCounts)
+          .filter(([_, count]) => count > 1)
+          .map(([ean]) => ean);
+
+        if (duplicates.length > 0) {
+          toast.warning(`⚠️ ${duplicates.length} EAN en doublon détectés dans le CSV. Seul le premier sera importé.`, {
+            duration: 5000
+          });
+        }
+        
         setCsvData(data);
         toast.success(`✅ ${data.length} produits chargés depuis le CSV`);
       },

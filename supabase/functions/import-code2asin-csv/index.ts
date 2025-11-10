@@ -198,15 +198,15 @@ serve(async (req) => {
             marketplace: row.Marché
           };
           
-          // 6. Upsert code2asin_enrichments
+          // 6. Upsert code2asin_enrichments with proper error handling
           const { error: upsertError } = await supabaseClient
             .from('code2asin_enrichments')
             .upsert(enrichmentData, {
-              onConflict: 'analysis_id',
-              ignoreDuplicates: !options.overwrite
+              onConflict: 'analysis_id'
             });
           
           if (upsertError) {
+            console.error(`Upsert error for EAN ${row.EAN}:`, upsertError);
             results.failed++;
             results.errors.push(`EAN ${row.EAN}: ${upsertError.message}`);
             continue;
