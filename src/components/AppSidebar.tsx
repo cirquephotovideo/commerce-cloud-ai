@@ -14,6 +14,7 @@ import {
   PackageSearch,
   FileSpreadsheet,
   FileUp,
+  Layers,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -63,6 +64,12 @@ const supplierNavigation = [
     url: "/products", 
     icon: PackageSearch,
     description: "Gérez tous vos produits : filtrage, enrichissement et export"
+  },
+  { 
+    title: "Gestion Unifiée", 
+    url: "/unified-products", 
+    icon: Layers,
+    description: "Vue unifiée de toutes vos bases produits avec fusion automatique par EAN"
   },
   { 
     title: "Fournisseurs", 
