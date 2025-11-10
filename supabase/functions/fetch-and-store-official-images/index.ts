@@ -152,30 +152,44 @@ serve(async (req) => {
 // Validate image URL before download
 async function validateImageUrl(url: string): Promise<boolean> {
   try {
-    const response = await fetch(url, { 
+    // Try HEAD request first
+    let response = await fetch(url, { 
       method: 'HEAD',
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'image/*'
       },
       redirect: 'follow'
     });
     
+    // If HEAD fails, try GET
+    if (!response.ok || response.status >= 400) {
+      response = await fetch(url, { 
+        method: 'GET',
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'image/*'
+        }
+      });
+    }
+    
     const contentType = response.headers.get('content-type');
     const contentLength = parseInt(response.headers.get('content-length') || '0');
     
+    // Accept redirections (2xx and 3xx)
     const isValid = (
-      response.ok &&
+      response.status >= 200 && response.status < 400 &&
       contentType?.startsWith('image/') &&
-      contentLength > 5000 // Au moins 5KB
+      contentLength > 1000 // Lowered to 1KB
     );
     
     if (!isValid) {
-      console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}: type=${contentType}, size=${contentLength}`);
+      console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}: status=${response.status}, type=${contentType}, size=${contentLength}`);
     }
     
     return isValid;
   } catch (error) {
-    console.error(`[VALIDATE] ❌ ${url.slice(0, 80)}:`, error.message);
+    console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}:`, error);
     return false;
   }
 }
@@ -245,22 +259,22 @@ async function searchWithOllamaWeb(productName: string, brand?: string): Promise
     const prompt = `Find OFFICIAL high-resolution product images for: ${searchQuery}
 
 CRITICAL REQUIREMENTS:
-1. URLs must be LIVE and ACCESSIBLE (no broken links)
-2. Image resolution: minimum 800x800px
-3. File formats: JPG, PNG, WebP
-4. Sources priority:
-   - Official manufacturer website
-   - Amazon product pages  
-   - Major e-commerce sites (Fnac, Darty, Boulanger)
+1. Only DIRECT image URLs (ending in .jpg, .png, .webp)
+2. From reliable sources:
+   - Official manufacturer websites (e.g., ${brand || 'brand'}.com)
+   - Amazon CDN (m.media-amazon.com/images/I/)
+   - Major retailers CDN (NOT thumbnails)
+3. Minimum 800x800px resolution
+4. Test each URL before returning
 
 EXCLUDE:
-- Thumbnails or low-res images (<800px)
-- Watermarked images
-- Pinterest/Google Images cache URLs
-- Social media images
+- Search engine cached images
+- Pinterest/social media
+- Expired/broken links
+- Thumbnails (<800px)
 
-Return ONLY a JSON array of TESTED, working URLs:
-{"images": ["https://url1.jpg", "https://url2.jpg"]}`;
+Return ONLY valid, tested URLs in JSON:
+{"images": ["https://example.com/image1.jpg", "https://example.com/image2.png"]}`;
 
     const result = await callAIWithFallback({
       messages: [{ role: 'user', content: prompt }],

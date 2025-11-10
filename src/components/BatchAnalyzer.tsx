@@ -34,7 +34,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
   const [autoExport, setAutoExport] = useState(false);
   const [autoAmazonEnrich, setAutoAmazonEnrich] = useState(true);
   const [autoAdvancedEnrich, setAutoAdvancedEnrich] = useState(false);
-  const [autoOdooAttributes, setAutoOdooAttributes] = useState(false);
+  const [autoOdooAttributes, setAutoOdooAttributes] = useState(true);
   const [autoCategories, setAutoCategories] = useState(false);
   const [autoImages, setAutoImages] = useState(false);
   const [autoShopping, setAutoShopping] = useState(false);
@@ -361,7 +361,7 @@ export const BatchAnalyzer = ({ onAnalysisComplete }: BatchAnalyzerProps) => {
                   body: { 
                     analysisId: insertedAnalysis.id,
                     provider: 'lovable',
-                    webSearchEnabled: false
+                    webSearchEnabled: true
                   }
                 });
                 

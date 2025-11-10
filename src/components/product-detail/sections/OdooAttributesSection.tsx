@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Database, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Database, AlertCircle, Sparkles, Loader2 } from "lucide-react";
 import { OdooAttributesDisplay } from "@/components/OdooAttributesDisplay";
+import { useEnrichment } from "@/hooks/useEnrichment";
 
 interface OdooAttributesSectionProps {
   product: any;
@@ -9,6 +11,11 @@ interface OdooAttributesSectionProps {
 }
 
 export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSectionProps) => {
+  const { mutate: triggerEnrichment, isPending } = useEnrichment(
+    analysis?.id,
+    () => window.location.reload()
+  );
+
   const odooAttributes = analysis?.odoo_attributes;
   const category = analysis?.category;
   const isGenericCategory = category === 'generic';
@@ -22,11 +29,31 @@ export const OdooAttributesSection = ({ product, analysis }: OdooAttributesSecti
             Attributs Odoo
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <CardContent className="space-y-4">
+          <Alert>
             <AlertCircle className="h-4 w-4" />
-            <span>Aucun attribut Odoo enrichi. Cliquez sur "Enrichir Attributs Odoo" pour générer.</span>
-          </div>
+            <AlertDescription>
+              Aucun attribut Odoo enrichi pour ce produit.
+            </AlertDescription>
+          </Alert>
+          
+          <Button 
+            onClick={() => triggerEnrichment({ type: 'odoo_attributes', analysisId: analysis?.id })}
+            disabled={isPending}
+            className="w-full"
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Enrichissement en cours...
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-4 w-4" />
+                Enrichir avec Ollama Web Search
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
     );
