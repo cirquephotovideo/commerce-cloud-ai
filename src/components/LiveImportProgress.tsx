@@ -83,6 +83,23 @@ export function LiveImportProgress() {
     return { percentage, speed, eta, elapsedMin };
   };
 
+  const handleRetry = async (job: ImportJob) => {
+    try {
+      await supabase.functions.invoke('process-import-chunk', {
+        body: {
+          import_job_id: job.id,
+          supplier_id: job.supplier_id,
+          platform: 'prestashop',
+          offset: job.progress_current,
+          limit: 25,
+        }
+      });
+      toast.success('Import relancé !');
+    } catch (error: any) {
+      toast.error('Erreur lors du relancement: ' + error.message);
+    }
+  };
+
   const handleStop = async (jobId: string) => {
     await supabase
       .from('import_jobs')
@@ -115,9 +132,9 @@ export function LiveImportProgress() {
   return (
     <div className="space-y-4">
       {jobs.map(job => {
-        const { percentage, speed, eta } = calculateStats(job);
+        const { percentage, speed, eta, elapsedMin } = calculateStats(job);
         const hasErrors = job.products_errors > 0;
-        const isStuck = job.status === 'processing' && speed === 0;
+        const isStuck = job.status === 'processing' && elapsedMin > 5 && speed === 0;
 
         return (
           <Card key={job.id} className="relative overflow-hidden">
@@ -216,8 +233,24 @@ export function LiveImportProgress() {
               {isStuck && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    ⚠️ Import semble bloqué (vitesse = 0). Vérifiez les logs.
+                  <AlertDescription className="flex flex-col gap-2">
+                    <p>⚠️ Import potentiellement bloqué depuis {Math.round(elapsedMin)} minutes (vitesse = 0)</p>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleRetry(job)}
+                      >
+                        🔄 Relancer
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => handleStop(job.id)}
+                      >
+                        ❌ Abandonner
+                      </Button>
+                    </div>
                   </AlertDescription>
                 </Alert>
               )}

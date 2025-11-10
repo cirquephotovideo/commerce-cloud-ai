@@ -97,12 +97,25 @@ serve(async (req) => {
     if (error) {
       console.error('[CHUNK-PROCESSOR] Import error:', error);
       
+      // Extraire les détails de l'erreur
+      let errorDetails: any = { message: error.message };
+      try {
+        if (error.context?.body) {
+          errorDetails = JSON.parse(error.context.body);
+        }
+      } catch {}
+      
       // Get current retry count
       const retryCount = job.metadata?.retry_count || 0;
       
-      if (retryCount < 3) {
-        // Retry this chunk
-        console.log(`[CHUNK-PROCESSOR] Retrying chunk (attempt ${retryCount + 1}/3)...`);
+      // ✅ Retry avec backoff exponentiel pour timeouts (5 tentatives au lieu de 3)
+      const isTimeoutOrNetworkError = 
+        errorDetails.error_code === 'NETWORK_ERROR' || 
+        error.message?.includes('timeout') ||
+        error.message?.includes('AbortError');
+      
+      if (retryCount < 5 && isTimeoutOrNetworkError) {
+        console.log(`[CHUNK-PROCESSOR] Timeout detected, retrying chunk (attempt ${retryCount + 1}/5)...`);
         
         await supabaseClient
           .from('import_jobs')
@@ -110,13 +123,14 @@ serve(async (req) => {
             metadata: {
               ...job.metadata,
               retry_count: retryCount + 1,
-              last_error: error.message,
+              last_error: errorDetails.message || error.message,
+              last_retry_at: new Date().toISOString(),
             },
             updated_at: new Date().toISOString(),
           })
           .eq('id', import_job_id);
         
-        // Retry after exponential backoff
+        // Backoff exponentiel : 5s, 10s, 20s, 40s, 80s
         const delay = 5000 * Math.pow(2, retryCount);
         console.log(`[CHUNK-PROCESSOR] Retrying in ${delay}ms...`);
         
@@ -129,12 +143,16 @@ serve(async (req) => {
         
       } else {
         // Max retries reached - mark as failed
-        console.error('[CHUNK-PROCESSOR] Max retries reached, marking job as failed');
+        const failReason = isTimeoutOrNetworkError 
+          ? `Failed after 5 timeout retries at offset ${offset}`
+          : `Failed after ${retryCount} retries: ${errorDetails.user_message || error.message}`;
+        
+        console.error('[CHUNK-PROCESSOR] Max retries reached or non-timeout error, marking job as failed');
         await supabaseClient
           .from('import_jobs')
           .update({
             status: 'failed',
-            error_message: `Failed after 3 retries: ${error.message}`,
+            error_message: failReason,
             completed_at: new Date().toISOString(),
           })
           .eq('id', import_job_id);
@@ -240,6 +258,9 @@ serve(async (req) => {
         message: `Dispatched next chunk: offset=${data.nextOffset}, limit=${limit}`,
         context: { nextOffset: data.nextOffset, limit }
       });
+      
+      // ✅ Attendre 2 secondes avant de dispatcher le prochain chunk pour éviter surcharge API
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Trigger next chunk (don't await - let it run in background)
       supabaseClient.functions.invoke('process-import-chunk', {

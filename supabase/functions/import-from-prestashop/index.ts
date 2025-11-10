@@ -370,20 +370,28 @@ serve(async (req) => {
     console.log('[PRESTASHOP] Import mode - fetching products with offset:', offset, 'limit:', limit);
     
     // Récupérer les produits avec pagination
-    const chunkLimit = limit || 50;
+    const chunkLimit = limit || 25; // ✅ Réduit de 50 à 25 pour éviter timeouts
     const chunkOffset = offset || 0;
     const productsUrl = `${shopUrl}/api/products?display=full&output_format=JSON&limit=${chunkLimit}&offset=${chunkOffset}`;
     
     try {
+      // ✅ Ajouter timeout explicite de 45 secondes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       const response = await fetch(productsUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Basic ${auth}`,
           'Accept': 'application/json',
         },
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
+        clearTimeout(timeoutId);
         const errorText = await response.text();
         console.error('[PRESTASHOP] Import API error:', response.status, errorText);
         

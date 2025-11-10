@@ -34,7 +34,14 @@ export const useUnlinkedProductsCount = () => {
             }
           );
           const linkedData = await linkedResult.json();
-          const linkedIds = new Set((linkedData || []).map((p: any) => p.supplier_product_id));
+          
+          // ✅ Vérifier que linkedData est bien un tableau avant d'utiliser .map()
+          if (!Array.isArray(linkedData)) {
+            console.warn('[useUnlinkedProductsCount] linkedData is not an array:', linkedData);
+            return 0;
+          }
+          
+          const linkedIds = new Set(linkedData.map((p: any) => p.supplier_product_id));
 
           const totalResult = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/supplier_products?select=id&user_id=eq.${user.id}`,
