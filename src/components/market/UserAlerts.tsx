@@ -51,6 +51,24 @@ export const UserAlerts = () => {
     loadAlerts();
   };
 
+  const handleDeleteAll = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('user_alerts')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (error) {
+      toast.error("Erreur lors de la suppression");
+      return;
+    }
+
+    toast.success(`${alerts.length} alerte(s) supprimée(s)`);
+    loadAlerts();
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case 'critical': return 'destructive';
@@ -71,6 +89,16 @@ export const UserAlerts = () => {
             <Bell className="w-5 h-5" />
             Alertes ({unreadCount} non lues)
           </CardTitle>
+          {alerts.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteAll}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Effacer tous
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>

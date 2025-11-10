@@ -206,6 +206,35 @@ export function EnrichmentProgressMonitor() {
     }
   };
 
+  // Fonction pour regrouper les enrichissements par produit
+  const groupTasksByProduct = (tasks: EnrichmentTask[]) => {
+    const grouped = new Map<string, EnrichmentTask>();
+    
+    tasks.forEach(task => {
+      // Utiliser analysis_id ou supplier_product_id comme clé de regroupement
+      const key = task.analysis_id || task.supplier_product_id || task.id;
+      
+      if (grouped.has(key)) {
+        // Si le produit existe déjà, fusionner les types d'enrichissement
+        const existing = grouped.get(key)!;
+        existing.enrichment_type = [
+          ...existing.enrichment_type,
+          ...task.enrichment_type
+        ];
+        // Garder la date de complétion la plus récente
+        if (task.completed_at && (!existing.completed_at || 
+            new Date(task.completed_at) > new Date(existing.completed_at))) {
+          existing.completed_at = task.completed_at;
+        }
+      } else {
+        // Nouveau produit, ajouter une copie de la tâche
+        grouped.set(key, { ...task });
+      }
+    });
+    
+    return Array.from(grouped.values());
+  };
+
   const calculateProgress = (task: EnrichmentTask) => {
     if (task.status === 'completed') return 100;
     if (task.status === 'failed') return 0;
@@ -811,11 +840,12 @@ export function EnrichmentProgressMonitor() {
               Les produits ont été enrichis avec succès. Consultez les fiches produits pour voir les détails.
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tasks
-                .filter(t => t.status === 'completed')
-                .slice(0, 9)
-                .map((task) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {groupTasksByProduct(
+                tasks.filter(t => t.status === 'completed')
+              )
+              .slice(0, 9)
+              .map((task) => {
                   const Icon = ENRICHMENT_ICONS[task.enrichment_type[0]] || ENRICHMENT_ICONS.default;
                   
                   return (
@@ -888,13 +918,13 @@ export function EnrichmentProgressMonitor() {
                 })}
             </div>
 
-            {tasks.filter(t => t.status === 'completed').length > 9 && (
-              <div className="text-center pt-4">
-                <Button variant="outline" onClick={loadTasks}>
-                  Voir tous les résultats ({tasks.filter(t => t.status === 'completed').length})
-                </Button>
-              </div>
-            )}
+          {groupTasksByProduct(tasks.filter(t => t.status === 'completed')).length > 9 && (
+            <div className="text-center pt-4">
+              <Button variant="outline" onClick={loadTasks}>
+                Voir tous les résultats ({groupTasksByProduct(tasks.filter(t => t.status === 'completed')).length})
+              </Button>
+            </div>
+          )}
           </div>
         )}
 
