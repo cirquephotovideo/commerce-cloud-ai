@@ -78,6 +78,9 @@ export default function Dashboard() {
   const { hasPermission, isLoading: permissionsLoading } = useFeaturePermissions();
   const [supplierCount, setSupplierCount] = useState(0);
   const [code2asinCount, setCode2asinCount] = useState(0);
+  const [displayLimit, setDisplayLimit] = useState(50);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const handleOpenDetail = (analysis: ProductAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -296,10 +299,11 @@ export default function Dashboard() {
 
   const loadAnalyses = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from("product_analyses")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .select("*", { count: 'exact' })
+        .order("created_at", { ascending: false })
+        .range(0, displayLimit - 1);
 
       if (error) throw error;
       
@@ -311,6 +315,7 @@ export default function Dashboard() {
       
       setAnalyses(processedData);
       setFilteredAnalyses(processedData);
+      setHasMore(count ? count > displayLimit : false);
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -319,6 +324,76 @@ export default function Dashboard() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    setIsLoadingMore(true);
+    try {
+      const newLimit = displayLimit + 50;
+      
+      const { data, error, count } = await supabase
+        .from("product_analyses")
+        .select("*", { count: 'exact' })
+        .order("created_at", { ascending: false })
+        .range(0, newLimit - 1);
+
+      if (error) throw error;
+      
+      const processedData = (data || []).map(item => ({
+        ...item,
+        image_urls: Array.isArray(item.image_urls) ? item.image_urls : []
+      })) as ProductAnalysis[];
+      
+      setAnalyses(processedData);
+      setDisplayLimit(newLimit);
+      setHasMore(count ? count > newLimit : false);
+      
+      toast({
+        title: "✅ Chargement réussi",
+        description: `${processedData.length} produits chargés`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadAll = async () => {
+    setIsLoadingMore(true);
+    try {
+      const { data, error } = await supabase
+        .from("product_analyses")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      
+      const processedData = (data || []).map(item => ({
+        ...item,
+        image_urls: Array.isArray(item.image_urls) ? item.image_urls : []
+      })) as ProductAnalysis[];
+      
+      setAnalyses(processedData);
+      setHasMore(false);
+      
+      toast({
+        title: "✅ Chargement complet",
+        description: `${processedData.length} produits chargés`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -793,7 +868,10 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center p-2 bg-primary/5 rounded">
                     <span className="text-sm font-medium">🔍 Produits analysés</span>
-                    <span className="text-lg font-bold">{analyses.length.toLocaleString()}</span>
+                    <span className="text-lg font-bold">
+                      {analyses.length.toLocaleString()}
+                      {hasMore && <span className="text-xs text-muted-foreground ml-1">+</span>}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center p-2 bg-secondary/5 rounded">
                     <span className="text-sm font-medium">📦 Produits fournisseurs</span>
@@ -1164,6 +1242,52 @@ export default function Dashboard() {
                 </Card>
               );
             })}
+
+            {/* Pagination Buttons */}
+            {hasMore && filteredAnalyses.length > 0 && (
+              <div className="flex flex-col items-center gap-3 mt-8 mb-6">
+                <div className="text-sm text-muted-foreground">
+                  📊 Affichage de {filteredAnalyses.length} produits
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button
+                    onClick={loadMore}
+                    disabled={isLoadingMore}
+                    variant="outline"
+                    size="lg"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        Charger 50 de plus
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button
+                    onClick={loadAll}
+                    disabled={isLoadingMore}
+                    variant="secondary"
+                    size="lg"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Chargement...
+                      </>
+                    ) : (
+                      "📦 Tout charger"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
