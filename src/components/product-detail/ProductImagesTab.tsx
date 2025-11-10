@@ -1,6 +1,6 @@
 import { ProductImageGallery } from "@/components/ProductImageGallery";
 import { ThemedImageGenerator } from "@/components/ThemedImageGenerator";
-import { getProductImages, getProductName } from "@/lib/analysisDataExtractors";
+import { getProductImages, getProductName, getImageSources } from "@/lib/analysisDataExtractors";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ProductImagesTabProps {
@@ -10,6 +10,7 @@ interface ProductImagesTabProps {
 export const ProductImagesTab = ({ analysis }: ProductImagesTabProps) => {
   const images = getProductImages(analysis);
   const productName = getProductName(analysis);
+  const imageSources = getImageSources(analysis);
 
   return (
     <div className="space-y-6">
@@ -21,7 +22,7 @@ export const ProductImagesTab = ({ analysis }: ProductImagesTabProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ProductImageGallery images={images} productName={productName} />
+          <ProductImageGallery images={images} productName={productName} imageSources={imageSources} />
         </CardContent>
       </Card>
 

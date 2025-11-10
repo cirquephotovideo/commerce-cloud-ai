@@ -29,6 +29,24 @@ ${inputType === 'url' ? `URL du produit: ${productInfo}\n→ Scrape la page, ana
   inputType === 'barcode' ? `Code-barres: ${productInfo}\n→ Recherche dans les bases de données produits internationales (EAN, UPC)` : 
   `Nom du produit: ${productInfo}\n→ Effectue des recherches web approfondies sur Google, sites e-commerce, avis clients`}
 
+🖼️ **IMAGES OFFICIELLES REQUISES**
+CRUCIAL : Identifie et fournis les URLs exactes des images OFFICIELLES haute résolution du produit :
+1. Visite le site officiel du fabricant
+2. Consulte les e-commerces de confiance (Amazon, sites officiels)
+3. Privilégie :
+   - Images packshot sur fond blanc (haute résolution 1200x1200px min)
+   - Vues multiples (face, profil, détails techniques)
+   - Images lifestyle (produit en contexte d'utilisation)
+   - Schémas techniques si disponibles
+
+⚠️ NE PAS inclure :
+- Images publicitaires génériques ou banners
+- Miniatures basse résolution (<800px)
+- Images de produits similaires mais différents
+- Images avec watermarks intrusifs
+
+Retourne les URLs dans le champ "official_image_urls" du JSON : ["https://url1.jpg", "https://url2.jpg", ...]
+
 ${additionalData ? `
 🔍 **DONNÉES FOURNISSEUR EXISTANTES** (à enrichir, pas à recopier) :
 - Description: ${additionalData.description || 'Aucune'}

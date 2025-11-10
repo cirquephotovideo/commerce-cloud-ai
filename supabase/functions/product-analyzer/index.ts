@@ -311,36 +311,51 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       });
     }
 
-    // Fetch product images if requested
+    // Fetch and store official product images
     let imageUrls: string[] = [];
+    let imageSources: string[] = [];
     if (includeImages) {
       try {
         const productName = analysisResult.product_name || productInput;
-        console.log(`[PRODUCT-ANALYZER] 📸 Fetching images for: "${productName}"`);
+        const brand = analysisResult.brand || additionalData?.brand;
+        const ean = analysisResult.ean_code || additionalData?.ean;
+        const asin = additionalData?.asin;
         
-        const { data: imageData, error: imageError } = await supabaseClient.functions.invoke('search-product-images', {
-          body: { productName }
+        console.log(`[PRODUCT-ANALYZER] 📸 Fetching and storing official images for: "${productName}"`);
+        
+        // Generate a temporary analysis ID for image storage
+        const tempAnalysisId = crypto.randomUUID();
+        
+        const { data: imageData, error: imageError } = await supabaseClient.functions.invoke('fetch-and-store-official-images', {
+          body: { 
+            productName,
+            brand,
+            productUrl: inputType === 'url' ? productInput : null,
+            ean,
+            asin,
+            analysisId: tempAnalysisId
+          }
         });
 
-        console.log('[PRODUCT-ANALYZER] Image search response:', {
+        console.log('[PRODUCT-ANALYZER] Image fetch response:', {
           hasError: !!imageError,
           error: imageError,
-          dataKeys: imageData ? Object.keys(imageData) : [],
           imageCount: imageData?.images?.length || 0,
-          source: imageData?.source
+          sources: imageData?.sources || []
         });
 
         if (!imageError && imageData?.images) {
-          imageUrls = imageData.images.map((img: any) => img.url);
-          console.log(`[PRODUCT-ANALYZER] ✅ Found ${imageUrls.length} images from ${imageData.source}`);
+          imageUrls = imageData.images;
+          imageSources = imageData.sources || [];
+          console.log(`[PRODUCT-ANALYZER] ✅ Stored ${imageUrls.length} images from: ${imageSources.join(', ')}`);
         } else if (imageError) {
-          console.error('[PRODUCT-ANALYZER] ❌ Image search error:', imageError);
+          console.error('[PRODUCT-ANALYZER] ❌ Image fetch error:', imageError);
         }
       } catch (imageError) {
-        console.error('[PRODUCT-ANALYZER] ❌ Image search exception:', imageError);
+        console.error('[PRODUCT-ANALYZER] ❌ Image fetch exception:', imageError);
       }
     } else {
-      console.log('[PRODUCT-ANALYZER] ⏭️ Image search skipped (includeImages = false)');
+      console.log('[PRODUCT-ANALYZER] ⏭️ Image fetch skipped (includeImages = false)');
     }
 
     // Validate analysis completeness
@@ -357,6 +372,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
     const responseData = {
       ...analysisResult,
       imageUrls,
+      imageSources,
       usedProvider: aiResponse.provider,
       _provider: aiResponse.provider,
       _model: preferredModel || 'default',
@@ -365,6 +381,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
         inputType,
         hasWebSearch: true,
         hasCategories: categories.length > 0,
+        imageSourcesUsed: imageSources,
         timestamp: new Date().toISOString()
       }
     };

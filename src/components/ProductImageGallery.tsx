@@ -8,9 +8,10 @@ import { ThemedImageGenerator } from "./ThemedImageGenerator";
 interface ProductImageGalleryProps {
   images: string[];
   productName?: string;
+  imageSources?: string[];
 }
 
-export const ProductImageGallery = ({ images, productName }: ProductImageGalleryProps) => {
+export const ProductImageGallery = ({ images, productName, imageSources = [] }: ProductImageGalleryProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [allImages, setAllImages] = useState<string[]>(images || []);
@@ -84,6 +85,32 @@ export const ProductImageGallery = ({ images, productName }: ProductImageGallery
                 e.currentTarget.src = 'https://via.placeholder.com/800x600?text=Image+non+disponible';
               }}
             />
+            
+            {/* Image Source Badges */}
+            {imageSources.length > 0 && (
+              <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                {imageSources.includes('direct_scraping') && (
+                  <Badge variant="default" className="bg-primary text-primary-foreground">
+                    ✓ Site officiel
+                  </Badge>
+                )}
+                {imageSources.includes('ollama_web_search') && (
+                  <Badge variant="secondary">
+                    🔍 IA Web Search
+                  </Badge>
+                )}
+                {imageSources.includes('amazon') && (
+                  <Badge variant="outline">
+                    📦 Amazon
+                  </Badge>
+                )}
+                {imageSources.includes('google_shopping') && (
+                  <Badge variant="outline">
+                    🛒 Google Shopping
+                  </Badge>
+                )}
+              </div>
+            )}
             
             {/* Navigation Arrows */}
             {validImages.length > 1 && (

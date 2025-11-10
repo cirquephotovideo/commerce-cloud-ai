@@ -100,6 +100,7 @@ export const getProductImages = (analysis: any): string[] => {
                    analysis?.analysis_result?.analysis?.images ||  // NEW FALLBACK
                    analysis?.analysis_result?.image_urls ||
                    analysis?.analysis_result?.analysis?.image_urls ||  // NEW FALLBACK
+                   analysis?.analysis_result?.imageUrls ||
                    [];
     
     const result = Array.isArray(images) ? images : [];
@@ -115,6 +116,21 @@ export const getProductImages = (analysis: any): string[] => {
     return result;
   } catch (error) {
     console.error('[EXTRACTORS] Error extracting product images:', error);
+    return [];
+  }
+};
+
+export const getImageSources = (analysis: any): string[] => {
+  try {
+    // Extract image sources from metadata
+    const sources = analysis?.analysis_result?.imageSources ||
+                   analysis?.analysis_result?.metadata?.imageSourcesUsed ||
+                   analysis?.metadata?.imageSourcesUsed ||
+                   [];
+    
+    return Array.isArray(sources) ? sources : [];
+  } catch (error) {
+    console.error('[EXTRACTORS] Error extracting image sources:', error);
     return [];
   }
 };
