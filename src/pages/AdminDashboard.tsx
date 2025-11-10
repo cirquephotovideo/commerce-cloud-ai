@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell, TestTube2 } from "lucide-react";
+import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell, TestTube2, BarChart2 } from "lucide-react";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
 import { BillingManagement } from "@/components/admin/BillingManagement";
@@ -79,15 +79,26 @@ const AdminDashboard = () => {
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>System Health & Metrics</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => window.location.href = '/admin/system-tests'}
-                    className="gap-2"
-                  >
-                    <TestTube2 className="h-4 w-4" />
-                    Tests Système Complets
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = '/admin/quality'}
+                      className="gap-2"
+                    >
+                      <BarChart2 className="h-4 w-4" />
+                      Qualité Analyses
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = '/admin/system-tests'}
+                      className="gap-2"
+                    >
+                      <TestTube2 className="h-4 w-4" />
+                      Tests Système
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
