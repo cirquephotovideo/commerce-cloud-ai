@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Upload, FileCheck, FileUp, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, FileCheck, FileUp, AlertCircle, CheckCircle2, Package } from "lucide-react";
+import { ImportedProductsList } from "@/components/code2asin/ImportedProductsList";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import Papa from "papaparse";
@@ -67,6 +68,12 @@ export default function Code2AsinImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [lastImportDate, setLastImportDate] = useState<Date | null>(null);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -125,6 +132,7 @@ export default function Code2AsinImport() {
       setImportProgress(100);
 
       if (result.success > 0) {
+        setLastImportDate(new Date());
         toast.success(`✅ Import réussi: ${result.success} produits enrichis`);
       }
       
@@ -318,6 +326,29 @@ export default function Code2AsinImport() {
           )}
         </CardContent>
       </Card>
+
+      {/* Liste des produits importés */}
+      {importResult && importResult.success > 0 && lastImportDate && user && (
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Produits importés ({importResult.success})
+              </CardTitle>
+              <CardDescription>
+                Cliquez sur un produit pour voir tous les 52 champs Code2ASIN enrichis
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImportedProductsList 
+                userId={user.id} 
+                importDate={lastImportDate}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

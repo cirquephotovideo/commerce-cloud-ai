@@ -97,6 +97,12 @@ const enrichmentNavigation = [
     icon: FileUp,
     description: "Importez les données enrichies depuis code2asin.com"
   },
+  { 
+    title: "Produits Code2ASIN", 
+    url: "/code2asin-products", 
+    icon: Package,
+    description: "Tous les produits enrichis Code2ASIN (52 champs)"
+  },
 ];
 
 const marketNavigation = [

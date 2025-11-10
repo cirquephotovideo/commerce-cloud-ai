@@ -9,12 +9,15 @@ interface Code2AsinData {
   manufacturer?: string;
   buybox_price?: number;
   buybox_seller_name?: string;
+  buybox_seller_id?: string;
   buybox_is_fba?: boolean;
   buybox_is_amazon?: boolean;
   amazon_price?: number;
   lowest_fba_new?: number;
   lowest_new?: number;
   lowest_used?: number;
+  lowest_collectible?: number;
+  lowest_refurbished?: number;
   list_price?: number;
   item_length_cm?: number;
   item_width_cm?: number;
@@ -24,14 +27,21 @@ interface Code2AsinData {
   package_width_cm?: number;
   package_height_cm?: number;
   package_weight_g?: number;
+  package_quantity?: number;
   offer_count_new?: number;
   offer_count_used?: number;
+  offer_count_collectible?: number;
+  offer_count_refurbished?: number;
   referral_fee_percentage?: number;
   fulfillment_fee?: number;
   sales_rank?: string;
   color?: string;
   size?: string;
   marketplace?: string;
+  browse_nodes?: string;
+  variation_count?: number;
+  publication_date?: string;
+  release_date?: string;
 }
 
 export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2AsinData }) => {
@@ -81,17 +91,24 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
               <div className="p-3 bg-primary/5 rounded-lg">
                 <span className="text-sm text-muted-foreground">Prix Buy Box</span>
                 <p className="font-semibold text-lg">{enrichmentData.buybox_price.toFixed(2)}€</p>
-                {enrichmentData.buybox_seller_name && (
+              {enrichmentData.buybox_seller_name && (
                   <p className="text-xs text-muted-foreground mt-1 truncate">
                     {enrichmentData.buybox_seller_name}
                   </p>
                 )}
-                {enrichmentData.buybox_is_fba && (
-                  <Badge variant="outline" className="mt-1">FBA</Badge>
+                {enrichmentData.buybox_seller_id && (
+                  <p className="text-xs text-muted-foreground mt-1 font-mono truncate">
+                    ID: {enrichmentData.buybox_seller_id}
+                  </p>
                 )}
-                {enrichmentData.buybox_is_amazon && (
-                  <Badge variant="outline" className="mt-1">Amazon</Badge>
-                )}
+                <div className="flex gap-1 mt-1 flex-wrap">
+                  {enrichmentData.buybox_is_fba && (
+                    <Badge variant="outline">FBA</Badge>
+                  )}
+                  {enrichmentData.buybox_is_amazon && (
+                    <Badge variant="outline">Amazon</Badge>
+                  )}
+                </div>
               </div>
             )}
             
@@ -129,6 +146,20 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
                 <p className="font-semibold">{enrichmentData.lowest_used.toFixed(2)}€</p>
               </div>
             )}
+            
+            {enrichmentData.lowest_collectible && (
+              <div className="p-3 bg-accent/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Min Collection</span>
+                <p className="font-semibold">{enrichmentData.lowest_collectible.toFixed(2)}€</p>
+              </div>
+            )}
+            
+            {enrichmentData.lowest_refurbished && (
+              <div className="p-3 bg-accent/50 rounded-lg">
+                <span className="text-sm text-muted-foreground">Min Reconditionné</span>
+                <p className="font-semibold">{enrichmentData.lowest_refurbished.toFixed(2)}€</p>
+              </div>
+            )}
           </div>
         </div>
         
@@ -158,6 +189,9 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
                   {enrichmentData.package_weight_g && (
                     <p className="text-sm text-muted-foreground">{enrichmentData.package_weight_g}g</p>
                   )}
+                  {enrichmentData.package_quantity && (
+                    <p className="text-sm text-muted-foreground">Quantité: {enrichmentData.package_quantity}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -165,7 +199,8 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
         )}
         
         {/* Offres */}
-        {(enrichmentData.offer_count_new || enrichmentData.offer_count_used) && (
+        {(enrichmentData.offer_count_new || enrichmentData.offer_count_used || 
+          enrichmentData.offer_count_collectible || enrichmentData.offer_count_refurbished) && (
           <div>
             <h4 className="font-semibold mb-2 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -177,6 +212,12 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
               )}
               {enrichmentData.offer_count_used && (
                 <Badge variant="outline">Occasion: {enrichmentData.offer_count_used}</Badge>
+              )}
+              {enrichmentData.offer_count_collectible && (
+                <Badge variant="secondary">Collection: {enrichmentData.offer_count_collectible}</Badge>
+              )}
+              {enrichmentData.offer_count_refurbished && (
+                <Badge variant="outline">Reconditionné: {enrichmentData.offer_count_refurbished}</Badge>
               )}
             </div>
           </div>
@@ -205,7 +246,9 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
         )}
         
         {/* Caractéristiques */}
-        {(enrichmentData.color || enrichmentData.size || enrichmentData.sales_rank) && (
+        {(enrichmentData.color || enrichmentData.size || enrichmentData.sales_rank || 
+          enrichmentData.browse_nodes || enrichmentData.variation_count ||
+          enrichmentData.publication_date || enrichmentData.release_date) && (
           <div>
             <h4 className="font-semibold mb-2">ℹ️ Caractéristiques</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -221,10 +264,34 @@ export const Code2AsinSection = ({ enrichmentData }: { enrichmentData?: Code2Asi
                   <p>{enrichmentData.size}</p>
                 </div>
               )}
+              {enrichmentData.variation_count && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Nombre de variations</span>
+                  <p>{enrichmentData.variation_count}</p>
+                </div>
+              )}
+              {enrichmentData.publication_date && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Date de publication</span>
+                  <p>{new Date(enrichmentData.publication_date).toLocaleDateString()}</p>
+                </div>
+              )}
+              {enrichmentData.release_date && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Date de sortie</span>
+                  <p>{new Date(enrichmentData.release_date).toLocaleDateString()}</p>
+                </div>
+              )}
               {enrichmentData.sales_rank && (
                 <div className="col-span-2">
                   <span className="text-sm text-muted-foreground">Rangs de vente</span>
                   <p className="text-sm">{enrichmentData.sales_rank}</p>
+                </div>
+              )}
+              {enrichmentData.browse_nodes && (
+                <div className="col-span-2">
+                  <span className="text-sm text-muted-foreground">Browse Nodes</span>
+                  <p className="text-sm">{enrichmentData.browse_nodes}</p>
                 </div>
               )}
             </div>
