@@ -61,15 +61,84 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { analysis_id, auto_mode = false } = await req.json();
+    const { analysis_id, auto_mode = false, min_confidence = 95 } = await req.json();
 
+    // MODE GLOBAL: Lier tous les produits analysés avec leurs fournisseurs
     if (!analysis_id) {
-      return new Response(JSON.stringify({ error: 'Missing analysis_id' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.log('[auto-link-products] Mode global activé - linking all products');
+      
+      const { data: allAnalyses, error: analysesError } = await supabase
+        .from('product_analyses')
+        .select('id, ean, analysis_result')
+        .eq('user_id', user.id)
+        .not('ean', 'is', null);
+
+      if (analysesError) throw analysesError;
+
+      const { data: supplierProducts, error: supplierError } = await supabase
+        .from('supplier_products')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (supplierError) throw supplierError;
+
+      let totalLinksCreated = 0;
+      let processedAnalyses = 0;
+
+      for (const analysis of allAnalyses || []) {
+        const productEAN = analysis.ean;
+        const productName = (analysis.analysis_result as any)?.name || '';
+        
+        // Trouver les produits fournisseurs avec le même EAN
+        const matchingSuppliers = (supplierProducts || []).filter(
+          sp => sp.ean && productEAN && sp.ean.toLowerCase() === productEAN.toLowerCase()
+        );
+
+        for (const sp of matchingSuppliers) {
+          // Vérifier si le lien existe déjà
+          const { data: existing } = await supabase
+            .from('product_links')
+            .select('id')
+            .eq('analysis_id', analysis.id)
+            .eq('supplier_product_id', sp.id)
+            .maybeSingle();
+
+          if (!existing) {
+            const { error: insertError } = await supabase
+              .from('product_links')
+              .insert({
+                analysis_id: analysis.id,
+                supplier_product_id: sp.id,
+                link_type: 'auto',
+                confidence_score: 100,
+                user_id: user.id,
+              });
+
+            if (!insertError) {
+              totalLinksCreated++;
+              console.log(`[auto-link-products] Linked ${sp.product_name} to ${productName}`);
+            }
+          }
+        }
+        processedAnalyses++;
+      }
+
+      console.log(`[auto-link-products] Global mode completed: ${totalLinksCreated} links created from ${processedAnalyses} analyses`);
+
+      return new Response(
+        JSON.stringify({
+          links_created: totalLinksCreated,
+          processed_analyses: processedAnalyses,
+          mode: 'global',
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
+    // MODE SIMPLE: Lier un produit spécifique
     const { data: analysis, error: analysisError } = await supabase
       .from('product_analyses')
       .select('ean, analysis_result')
@@ -84,9 +153,9 @@ Deno.serve(async (req) => {
     }
 
     const productEAN = analysis.ean;
-    const productName = analysis.analysis_result?.name || '';
-    const productBrand = analysis.analysis_result?.brand || '';
-    const productModel = analysis.analysis_result?.model || '';
+    const productName = (analysis.analysis_result as any)?.name || '';
+    const productBrand = (analysis.analysis_result as any)?.brand || '';
+    const productModel = (analysis.analysis_result as any)?.model || '';
 
     const { data: supplierProducts, error: supplierError } = await supabase
       .from('supplier_products')
@@ -111,8 +180,8 @@ Deno.serve(async (req) => {
       if (sp.ean && productEAN && sp.ean.toLowerCase() === productEAN.toLowerCase()) {
         score = 100;
         matchType = 'ean_exact';
-      } else if (sp.name && productName) {
-        const nameSimilarity = similarity(sp.name.toLowerCase(), productName.toLowerCase());
+      } else if (sp.product_name && productName) {
+        const nameSimilarity = similarity(sp.product_name.toLowerCase(), productName.toLowerCase());
         if (nameSimilarity >= 0.7) {
           score = Math.round(nameSimilarity * 100);
           matchType = 'name_fuzzy';
@@ -150,7 +219,7 @@ Deno.serve(async (req) => {
 
     let linksCreated = 0;
     if (auto_mode) {
-      const highConfidenceMatches = matches.filter((m) => m.confidence_score >= 95);
+      const highConfidenceMatches = matches.filter((m) => m.confidence_score >= min_confidence);
 
       for (const match of highConfidenceMatches) {
         const { data: existing } = await supabase
@@ -168,7 +237,7 @@ Deno.serve(async (req) => {
               supplier_product_id: match.supplier_product_id,
               link_type: 'auto',
               confidence_score: match.confidence_score,
-              created_by: user.id,
+              user_id: user.id,
             });
 
           if (!insertError) linksCreated++;

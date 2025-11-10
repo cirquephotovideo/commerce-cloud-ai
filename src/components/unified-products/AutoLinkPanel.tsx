@@ -32,6 +32,10 @@ export const AutoLinkPanel = () => {
       queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
       queryClient.invalidateQueries({ queryKey: ["product-analyses"] });
       queryClient.invalidateQueries({ queryKey: ["global-product-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["unlinked-products-count"] });
+      queryClient.invalidateQueries({ queryKey: ["analyses-tab"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers-tab"] });
+      queryClient.invalidateQueries({ queryKey: ["product-links"] });
     } catch (error) {
       console.error("Auto-link error:", error);
       toast.error("Erreur lors de la fusion automatique");
