@@ -187,7 +187,7 @@ export default function Code2AsinExport() {
             📤 Export EAN pour Code2ASIN
           </CardTitle>
           <CardDescription>
-            Exportez vos EAN par paquets configurables (de 1 000 à 50 000) pour enrichissement externe via code2asin.com.
+            Exportez vos EAN par paquets configurables (jusqu'à 50 000 EAN par fichier) pour enrichissement externe via code2asin.com.
             <br />
             <span className="text-xs mt-1 inline-block">
               💡 Le découpage détermine combien d'EAN seront inclus dans chaque fichier CSV exporté
@@ -308,8 +308,8 @@ export default function Code2AsinExport() {
           </div>
           
           {/* Liste produits ou Mode Sélection Rapide */}
-          {products.length <= 1000 ? (
-            // Mode liste normale pour <= 1000 produits
+          {products.length <= 500 ? (
+            // Mode liste normale pour <= 500 produits
             <div className="max-h-96 overflow-y-auto space-y-2">
               {products.map(product => (
                 <div 
@@ -348,7 +348,7 @@ export default function Code2AsinExport() {
             <div className="space-y-4">
               <div className="bg-muted/30 rounded-lg p-4 space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  ⚡ {products.length.toLocaleString()} produits chargés (mode sélection rapide pour optimiser les performances)
+                  ⚡ {products.length.toLocaleString()} produits chargés (utilisez les boutons de sélection rapide ci-dessous)
                 </p>
                 
                 <div className="grid grid-cols-2 gap-3">
@@ -459,7 +459,7 @@ export default function Code2AsinExport() {
             <Button
               onClick={export25kNonEnriched}
               variant="default"
-              disabled={nonEnrichedCount < 25000}
+              disabled={nonEnrichedCount === 0}
               className="w-full justify-between bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               size="lg"
             >
@@ -468,13 +468,13 @@ export default function Code2AsinExport() {
                 🚀 Export 25 000 non-enrichis (rapide)
               </span>
               <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-medium">
-                25 000 EAN → 1 fichier
+                {Math.min(nonEnrichedCount, 25000).toLocaleString()} EAN → 1 fichier
               </span>
             </Button>
             
             {nonEnrichedCount > 0 && nonEnrichedCount < 25000 && (
               <p className="text-xs text-muted-foreground italic text-center -mt-1">
-                ℹ️ Minimum 25 000 produits non-enrichis requis • Actuellement : {nonEnrichedCount.toLocaleString()}
+                ℹ️ Exportera {nonEnrichedCount.toLocaleString()} EAN (maximum 25 000 par export)
               </p>
             )}
             
