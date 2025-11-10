@@ -36,6 +36,8 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useUnlinkedProductsCount } from "@/hooks/useUnlinkedProductsCount";
+import { Badge } from "@/components/ui/badge";
 
 const mainNavigation = [
   { 
@@ -147,6 +149,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { isSuperAdmin } = useUserRole();
   const { toast } = useToast();
+  const { data: unlinkedCount } = useUnlinkedProductsCount();
   
   const isActive = (path: string) => location.pathname === path;
 
@@ -223,13 +226,25 @@ export function AppSidebar() {
                       <SidebarMenuButton asChild isActive={isActive(item.url)}>
                         <NavLink to={item.url}>
                           <item.icon />
-                          <span>{item.title}</span>
+                          <span className="flex items-center gap-2">
+                            {item.title}
+                            {item.url === "/unified-products" && unlinkedCount && unlinkedCount > 0 && (
+                              <Badge variant="destructive" className="h-5 px-1.5 text-xs">
+                                {unlinkedCount}
+                              </Badge>
+                            )}
+                          </span>
                         </NavLink>
                       </SidebarMenuButton>
                     </TooltipTrigger>
                     <TooltipContent side="right" className="max-w-[250px]">
                       <p className="font-semibold">{item.title}</p>
                       <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                      {item.url === "/unified-products" && unlinkedCount && unlinkedCount > 0 && (
+                        <p className="text-xs font-semibold text-destructive mt-2">
+                          ⚠️ {unlinkedCount} produit(s) non lié(s)
+                        </p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 </SidebarMenuItem>
