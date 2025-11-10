@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, Database } from "lucide-react";
+import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, Database, FileSpreadsheet } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ import { RepairabilitySection } from "./product-detail/sections/RepairabilitySec
 import { EnvironmentalSection } from "./product-detail/sections/EnvironmentalSection";
 import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
 import { OdooAttributesSection } from "./product-detail/sections/OdooAttributesSection";
+import { Code2AsinSection } from "./product-detail/sections/Code2AsinSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
@@ -84,6 +85,26 @@ export function ProductDetailModal({
     enabled: !!product?.id && open
   });
 
+  // Récupérer les données Code2ASIN
+  const { data: code2asinData } = useQuery({
+    queryKey: ['code2asin-enrichment', analysis?.id],
+    queryFn: async () => {
+      if (!analysis?.id) return null;
+      const { data, error } = await supabase
+        .from('code2asin_enrichments')
+        .select('*')
+        .eq('analysis_id', analysis.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error fetching code2asin data:', error);
+        return null;
+      }
+      return data;
+    },
+    enabled: !!analysis?.id && open
+  });
+
   // Hook d'enrichissement
   const enrichmentMutation = useEnrichment(product?.id, () => {
     handleRefresh();
@@ -115,6 +136,7 @@ export function ProductDetailModal({
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
     queryClient.invalidateQueries({ queryKey: ['enrichment-queue', analysis?.id] });
+    queryClient.invalidateQueries({ queryKey: ['code2asin-enrichment', analysis?.id] });
     if (onEnrich) onEnrich();
   };
 
@@ -740,6 +762,33 @@ export function ProductDetailModal({
                     </AccordionContent>
                   </AccordionItem>
                 )}
+
+                {/* Code2ASIN - TOUJOURS AFFICHER */}
+                <AccordionItem value="code2asin" id="section-code2asin">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5" />
+                      Code2ASIN
+                      {code2asinData ? (
+                        <Badge variant="default" className="ml-2">Enrichi</Badge>
+                      ) : (
+                        <Badge variant="outline" className="ml-2">Non enrichi</Badge>
+                      )}
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {code2asinData ? (
+                      <Code2AsinSection enrichmentData={code2asinData} />
+                    ) : (
+                      <div className="p-4 text-center text-muted-foreground">
+                        <p className="mb-2">Aucune donnée Code2ASIN disponible</p>
+                        <p className="text-sm">
+                          Exportez vos EAN, enrichissez-les via code2asin.com, puis importez le CSV enrichi.
+                        </p>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
             </ScrollArea>
           </div>
