@@ -68,6 +68,7 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
     
+    const importStartTime = Date.now();
     console.log(`Starting Code2ASIN import for user ${user.id}, ${csvData.length} rows`);
     
     const results = {
@@ -79,11 +80,12 @@ serve(async (req) => {
       errors: [] as string[]
     };
     
-    // Process in batches of 50 for better performance
-    const BATCH_SIZE = 50;
+    // Process in batches of 20 to avoid timeouts
+    const BATCH_SIZE = 20;
     
     for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
       const batch = csvData.slice(i, i + BATCH_SIZE) as Code2AsinRow[];
+      console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(csvData.length / BATCH_SIZE)} (${batch.length} rows)`);
       
       for (const row of batch) {
         try {
@@ -198,15 +200,31 @@ serve(async (req) => {
             marketplace: row.Marché
           };
           
-          // 6. Upsert code2asin_enrichments with proper error handling
-          const { error: upsertError } = await supabaseClient
-            .from('code2asin_enrichments')
-            .upsert(enrichmentData, {
-              onConflict: 'analysis_id'
-            });
-          
+          // 6. Upsert code2asin_enrichments with retry mechanism
+          const maxRetries = 3;
+          let retryCount = 0;
+          let upsertError: any = null;
+
+          while (retryCount < maxRetries) {
+            const { error } = await supabaseClient
+              .from('code2asin_enrichments')
+              .upsert(enrichmentData, {
+                onConflict: 'analysis_id'
+              });
+            
+            if (!error) {
+              upsertError = null;
+              break;
+            }
+            
+            upsertError = error;
+            retryCount++;
+            console.warn(`Retry ${retryCount}/${maxRetries} for EAN ${row.EAN}: ${error.message}`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
+
           if (upsertError) {
-            console.error(`Upsert error for EAN ${row.EAN}:`, upsertError);
+            console.error(`Enrichment upsert failed for EAN ${row.EAN} after ${maxRetries} retries:`, upsertError);
             results.failed++;
             results.errors.push(`EAN ${row.EAN}: ${upsertError.message}`);
             continue;
@@ -241,7 +259,6 @@ serve(async (req) => {
     console.log(`Import completed: ${results.success} success, ${results.failed} failed`);
     
     // Log the import to history
-    const importStartTime = Date.now();
     try {
       await supabaseClient
         .from('code2asin_import_logs')

@@ -19,6 +19,10 @@ export function QuickImportZone({ onImportComplete }: QuickImportZoneProps) {
     failed: number;
     total: number;
   } | null>(null);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   const processCSV = async (csvFile: File) => {
     setIsImporting(true);
@@ -39,6 +43,13 @@ export function QuickImportZone({ onImportComplete }: QuickImportZoneProps) {
             return;
           }
 
+          if (csvData.length > 5000) {
+            toast.error(`Fichier trop volumineux : ${csvData.length} lignes. Maximum autorisé : 5000 lignes. Divisez votre fichier en plusieurs parties.`);
+            setIsImporting(false);
+            return;
+          }
+
+          setImportProgress({ current: 0, total: csvData.length });
           toast.info(`Import de ${csvData.length} lignes en cours...`);
 
           try {
@@ -72,9 +83,17 @@ export function QuickImportZone({ onImportComplete }: QuickImportZoneProps) {
             onImportComplete();
           } catch (error: any) {
             console.error('Import error:', error);
-            toast.error(error.message || "Erreur lors de l'import");
+            
+            if (error.message?.includes('timeout') || error.message?.includes('Failed to send')) {
+              toast.error("⏱️ Timeout : le fichier est trop volumineux. Divisez-le en fichiers de maximum 5000 lignes.");
+            } else if (error.message?.includes('500')) {
+              toast.error("🔧 Erreur serveur. Réessayez dans quelques instants ou contactez le support.");
+            } else {
+              toast.error(error.message || "Erreur lors de l'import");
+            }
           } finally {
             setIsImporting(false);
+            setImportProgress(null);
           }
         },
         error: (error) => {
@@ -134,6 +153,11 @@ export function QuickImportZone({ onImportComplete }: QuickImportZoneProps) {
             <>
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
               <p className="text-sm font-medium">Import en cours...</p>
+              {importProgress && (
+                <p className="text-xs text-muted-foreground">
+                  Traitement des {importProgress.total} lignes en cours
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Veuillez patienter, cela peut prendre quelques instants
               </p>
