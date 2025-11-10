@@ -17,7 +17,7 @@ export default function Code2AsinExport() {
   const [selectAll, setSelectAll] = useState(false);
   const [batchSize, setBatchSize] = useState<number>(50000);
 
-  // Fetch products with EAN
+  // Fetch products with EAN (limite à 50000 pour performance)
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products-with-ean', selectedCategory, selectedStatus],
     queryFn: async () => {
@@ -25,7 +25,8 @@ export default function Code2AsinExport() {
         .from('product_analyses')
         .select('id, ean, analysis_result, category, code2asin_enrichment_status')
         .not('ean', 'is', null)
-        .neq('ean', '');
+        .neq('ean', '')
+        .limit(50000);
 
       if (selectedCategory !== 'all') {
         query = query.eq('category', selectedCategory);
@@ -303,23 +304,36 @@ export default function Code2AsinExport() {
           </div>
           
           {/* Actions */}
-          <div className="flex gap-4 pt-4">
+          <div className="space-y-3 pt-4">
             <Button
               onClick={exportAllNonEnriched}
               variant="outline"
               disabled={nonEnrichedCount === 0}
-              className="flex-1"
+              className="w-full justify-between"
+              size="lg"
             >
-              <Download className="h-4 w-4 mr-2" />
-              Exporter {nonEnrichedCount} non-enrichis ({nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''})
+              <span className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Exporter tous les produits non-enrichis
+              </span>
+              <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-medium">
+                {nonEnrichedCount.toLocaleString()} EAN → {nonEnrichedBatchCount} fichier{nonEnrichedBatchCount > 1 ? 's' : ''}
+              </span>
             </Button>
+            
             <Button
               onClick={exportSelected}
               disabled={selectedCount === 0}
-              className="flex-1"
+              className="w-full justify-between"
+              size="lg"
             >
-              <Download className="h-4 w-4 mr-2" />
-              Exporter {selectedCount} sélectionnés ({batchCount} fichier{batchCount > 1 ? 's' : ''})
+              <span className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Exporter la sélection
+              </span>
+              <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-medium">
+                {selectedCount.toLocaleString()} EAN → {batchCount} fichier{batchCount > 1 ? 's' : ''}
+              </span>
             </Button>
           </div>
         </CardContent>
