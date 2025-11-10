@@ -95,6 +95,12 @@ const supplierNavigation = [
 
 const enrichmentNavigation = [
   { 
+    title: "Suivi Code2ASIN", 
+    url: "/code2asin-tracker", 
+    icon: Package,
+    description: "Suivez vos exports et imports d'enrichissements Amazon"
+  },
+  { 
     title: "Export Code2ASIN", 
     url: "/code2asin-export", 
     icon: FileSpreadsheet,

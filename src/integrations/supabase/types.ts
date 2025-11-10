@@ -1188,6 +1188,51 @@ export type Database = {
           },
         ]
       }
+      code2asin_import_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          created_count: number
+          errors: Json | null
+          failed_count: number
+          filename: string
+          id: string
+          import_duration_ms: number | null
+          success_count: number
+          total_rows: number
+          updated_count: number
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          created_count?: number
+          errors?: Json | null
+          failed_count?: number
+          filename: string
+          id?: string
+          import_duration_ms?: number | null
+          success_count?: number
+          total_rows: number
+          updated_count?: number
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          created_count?: number
+          errors?: Json | null
+          failed_count?: number
+          filename?: string
+          id?: string
+          import_duration_ms?: number | null
+          success_count?: number
+          total_rows?: number
+          updated_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       compatibility_matrix: {
         Row: {
           compatible_products: Json | null

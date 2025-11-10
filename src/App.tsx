@@ -26,6 +26,7 @@ import ProductsManagement from "./pages/ProductsManagement";
 import Code2AsinExport from "./pages/Code2AsinExport";
 import Code2AsinImport from "./pages/Code2AsinImport";
 import Code2AsinProductsList from "./pages/Code2AsinProductsList";
+import Code2AsinTracker from "./pages/Code2AsinTracker";
 import UnifiedProductsManagement from "./pages/UnifiedProductsManagement";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
@@ -71,6 +72,7 @@ const App = () => {
         <Route path="/code2asin-export" element={<ProtectedRoute><DashboardLayout><Code2AsinExport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-import" element={<ProtectedRoute><DashboardLayout><Code2AsinImport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-products" element={<ProtectedRoute><DashboardLayout><Code2AsinProductsList /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/code2asin-tracker" element={<ProtectedRoute><DashboardLayout><Code2AsinTracker /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />

@@ -240,6 +240,28 @@ serve(async (req) => {
     
     console.log(`Import completed: ${results.success} success, ${results.failed} failed`);
     
+    // Log the import to history
+    const importStartTime = Date.now();
+    try {
+      await supabaseClient
+        .from('code2asin_import_logs')
+        .insert({
+          user_id: user.id,
+          filename: options?.filename || 'code2asin_import.csv',
+          total_rows: results.total,
+          success_count: results.success,
+          failed_count: results.failed,
+          created_count: results.created,
+          updated_count: results.updated,
+          errors: results.errors,
+          import_duration_ms: Date.now() - importStartTime,
+          completed_at: new Date().toISOString()
+        });
+    } catch (logError) {
+      console.error('Error logging import:', logError);
+      // Continue even if logging fails
+    }
+    
     return new Response(
       JSON.stringify({
         success: true,
