@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw, Brain } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Clock, Zap, Image, FileText, Tag, Video, ShoppingCart, TrendingUp, PlayCircle, AlertTriangle, Trash2, RotateCcw, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import { ProviderSelector } from './admin/ProviderSelector';
 import { useAIProvider } from '@/hooks/useAIProvider';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { navigateToProduct } from '@/lib/productNavigationEvents';
 import { EnrichmentStatsChart } from './enrichment/EnrichmentStatsChart';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface EnrichmentTask {
   id: string;
@@ -91,9 +92,18 @@ export function EnrichmentProgressMonitor() {
   const [forceProcessing, setForceProcessing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isOpen, setIsOpen] = useState(() => {
+    const saved = localStorage.getItem('enrichment-monitor-open');
+    return saved ? JSON.parse(saved) : false;
+  });
 
   // AI Provider management
   const { provider: currentProvider, updateProvider, fallbackEnabled, updateFallback } = useAIProvider();
+
+  // Save collapse preference
+  useEffect(() => {
+    localStorage.setItem('enrichment-monitor-open', JSON.stringify(isOpen));
+  }, [isOpen]);
 
   // Force le recalcul de la progression toutes les secondes
   useEffect(() => {
@@ -530,83 +540,107 @@ export function EnrichmentProgressMonitor() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-        <CardTitle className="flex items-center gap-2">
-          <Zap className="h-5 w-5" />
-          Progression des Enrichissements
-          <Badge variant="outline" className="text-xs">
-            {tasks.length} tâches chargées
-          </Badge>
-          {isUpdating && (
-            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse text-sm px-2 py-1">
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-              Mise à jour...
-            </Badge>
-          )}
-        </CardTitle>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={`${queueStatus.color} border`}>
-              <queueStatus.icon className="h-3 w-3 mr-1" />
-              {queueStatus.label}
-            </Badge>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                console.log('[ENRICHMENT-MONITOR] 🔄 Manual refresh triggered');
-                loadTasks();
-              }}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Rafraîchir
-            </Button>
-            {stats.failed > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={cleanFailedTasks}
-                className="text-red-600 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Nettoyer les échecs ({stats.failed})
-              </Button>
-            )}
-            {tasks.length > 0 && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={deleteAllTasks}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Tout Supprimer ({tasks.length})
-              </Button>
-            )}
-            {stats.pending > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleForceProcessing}
-                disabled={forceProcessing}
-              >
-                {forceProcessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Traitement...
-                  </>
+    <Card className="border-primary/20">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-accent/5 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Progression des Enrichissements
+                  <Badge variant="outline" className="text-xs">
+                    {tasks.length} tâches chargées
+                  </Badge>
+                  {isUpdating && (
+                    <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 animate-pulse text-sm px-2 py-1">
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Mise à jour...
+                    </Badge>
+                  )}
+                </CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`${queueStatus.color} border`}>
+                  <queueStatus.icon className="h-3 w-3 mr-1" />
+                  {queueStatus.label}
+                </Badge>
+                {isOpen ? (
+                  <ChevronUp className="h-5 w-5 text-muted-foreground" />
                 ) : (
-                  <>
-                    <PlayCircle className="h-4 w-4 mr-2" />
-                    Forcer le traitement
-                  </>
+                  <ChevronDown className="h-5 w-5 text-muted-foreground" />
                 )}
+              </div>
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <CardContent className="space-y-6">
+            <div className="flex items-center gap-2 pb-4 border-b">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('[ENRICHMENT-MONITOR] 🔄 Manual refresh triggered');
+                  loadTasks();
+                }}
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Rafraîchir
               </Button>
-            )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
+              {stats.failed > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cleanFailedTasks();
+                  }}
+                  className="text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Nettoyer les échecs ({stats.failed})
+                </Button>
+              )}
+              {tasks.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteAllTasks();
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Tout Supprimer ({tasks.length})
+                </Button>
+              )}
+              {stats.pending > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleForceProcessing();
+                  }}
+                  disabled={forceProcessing}
+                >
+                  {forceProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Traitement...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="h-4 w-4 mr-2" />
+                      Forcer le traitement
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
         {/* Layout avec Provider à gauche */}
         <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
           {/* COLONNE GAUCHE: Provider IA */}
@@ -1063,7 +1097,9 @@ export function EnrichmentProgressMonitor() {
 
           </div>
         </div>
-      </CardContent>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
