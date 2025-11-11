@@ -6,8 +6,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { ExternalLink, ShoppingCart, Link as LinkIcon } from "lucide-react";
+import { ExternalLink, ShoppingCart, Link as LinkIcon, Eye, Loader2 } from "lucide-react";
 import { LinkProductDialog } from "./LinkProductDialog";
+import { ProductDetailModal } from "@/components/ProductDetailModal";
+import { toast } from "sonner";
 
 interface Code2AsinTabProps {
   searchQuery: string;
@@ -17,6 +19,9 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
   const [page, setPage] = useState(1);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; ean?: string } | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<any>(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
   const itemsPerPage = 50;
 
   const { data, isLoading } = useQuery({
@@ -89,6 +94,31 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
   const handleOpenLinkDialog = (productId: string, productName: string, ean?: string) => {
     setSelectedProduct({ id: productId, name: productName, ean });
     setLinkDialogOpen(true);
+  };
+
+  const handleViewAnalysis = async (analysisId: string) => {
+    setIsLoadingAnalysis(true);
+    try {
+      const { data, error } = await supabase
+        .from('product_analyses')
+        .select('*')
+        .eq('id', analysisId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      if (!data) {
+        toast.error("Analyse introuvable");
+        return;
+      }
+      
+      setSelectedAnalysis(data);
+      setIsDetailModalOpen(true);
+    } catch (error) {
+      console.error('Error loading analysis:', error);
+      toast.error('Erreur lors du chargement de l\'analyse');
+    } finally {
+      setIsLoadingAnalysis(false);
+    }
   };
 
   return (
@@ -187,11 +217,17 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() =>
-                            window.open(`/product/${enrich.product_analyses.id}`, "_blank")
-                          }
+                          onClick={() => handleViewAnalysis(enrich.product_analyses.id)}
+                          disabled={isLoadingAnalysis}
                         >
-                          Voir Analyse
+                          {isLoadingAnalysis ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <Eye className="h-4 w-4 mr-1" />
+                              Voir Analyse
+                            </>
+                          )}
                         </Button>
                       ) : (
                         <Button
@@ -249,6 +285,13 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
           productType="code2asin"
         />
       )}
+
+      {/* Modal de détail de l'analyse */}
+      <ProductDetailModal
+        open={isDetailModalOpen}
+        onOpenChange={setIsDetailModalOpen}
+        product={selectedAnalysis}
+      />
     </div>
   );
 };
