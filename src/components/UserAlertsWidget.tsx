@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, Info, Check, X, ExternalLink, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, Info, Check, X, ExternalLink, Trash2, Search } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -27,6 +29,7 @@ interface UserAlert {
 
 export function UserAlertsWidget() {
   const queryClient = useQueryClient();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: alerts, isLoading } = useQuery<UserAlert[]>({
     queryKey: ['user-alerts'],
@@ -111,6 +114,17 @@ export function UserAlertsWidget() {
 
   const unreadCount = alerts?.filter(a => !a.is_read).length || 0;
 
+  const filteredAlerts = alerts?.filter(alert => {
+    if (!searchQuery) return true;
+    
+    const query = searchQuery.toLowerCase();
+    return (
+      alert.title.toLowerCase().includes(query) ||
+      alert.message.toLowerCase().includes(query) ||
+      alert.alert_type.toLowerCase().includes(query)
+    );
+  }) || [];
+
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'critical': return 'destructive';
@@ -163,30 +177,65 @@ export function UserAlertsWidget() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <span>🔔 Alertes récentes</span>
-            {unreadCount > 0 && (
-              <Badge variant="destructive">{unreadCount}</Badge>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <span>🔔 Alertes récentes</span>
+              {searchQuery ? (
+                <Badge variant="secondary">{filteredAlerts.length}/{alerts.length}</Badge>
+              ) : unreadCount > 0 ? (
+                <Badge variant="destructive">{unreadCount}</Badge>
+              ) : null}
+            </CardTitle>
+            {alerts.length > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => deleteAllAlertsMutation.mutate()}
+                disabled={deleteAllAlertsMutation.isPending}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Effacer tout
+              </Button>
             )}
-          </CardTitle>
-          {alerts.length > 0 && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => deleteAllAlertsMutation.mutate()}
-              disabled={deleteAllAlertsMutation.isPending}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Effacer tout
-            </Button>
-          )}
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Rechercher dans les alertes..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-2"
+                onClick={() => setSearchQuery("")}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px] pr-4">
-          <div className="space-y-3">
-            {alerts.map((alert) => (
+          {filteredAlerts.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                {searchQuery 
+                  ? `Aucune alerte trouvée pour "${searchQuery}"`
+                  : "Aucune alerte"
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredAlerts.map((alert) => (
               <div
                 key={alert.id}
                 className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
@@ -244,8 +293,9 @@ export function UserAlertsWidget() {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </ScrollArea>
       </CardContent>
     </Card>
