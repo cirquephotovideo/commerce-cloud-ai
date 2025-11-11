@@ -42,7 +42,7 @@ export const UnifiedSearchBar = ({ query, onChange }: UnifiedSearchBarProps) => 
             .from("product_analyses")
             .select("*", { count: "exact", head: true })
             .eq("user_id", user.id)
-            .or(`analysis_result->>name.ilike.${searchPattern},ean.ilike.${searchPattern}`),
+            .or(`analysis_result->>product_name.ilike.${searchPattern},ean.ilike.${searchPattern}`),
 
           supabase
             .from("supplier_products")
