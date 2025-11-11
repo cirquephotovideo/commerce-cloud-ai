@@ -607,6 +607,43 @@ export function EnrichmentProgressMonitor() {
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Layout avec Provider à gauche */}
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+          {/* COLONNE GAUCHE: Provider IA */}
+          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-semibold">Provider IA</h3>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              Provider utilisé pour les prochains enrichissements
+            </p>
+            
+            {/* Provider Selector */}
+            <ProviderSelector
+              selected={currentProvider}
+              onSelect={handleProviderChange}
+              onConfigure={handleConfigureProvider}
+            />
+            
+            {/* Options de fallback */}
+            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Fallback Auto</Label>
+                <p className="text-xs text-muted-foreground">
+                  Bascule auto si erreur
+                </p>
+              </div>
+              <Switch
+                checked={fallbackEnabled}
+                onCheckedChange={handleFallbackToggle}
+              />
+            </div>
+          </div>
+
+          {/* COLONNE DROITE: Contenu principal */}
+          <div className="space-y-6">
         {/* Banner d'alerte proéminent pour les enrichissements en cours */}
         {stats.processing > 0 && (
           <Alert className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-2 border-blue-500/50 animate-pulse">
@@ -1021,41 +1058,9 @@ export function EnrichmentProgressMonitor() {
               </Button>
             </div>
           )}
-          </div>
-        )}
+           </div>
+         )}
 
-        {/* Section Sélection du Provider IA */}
-        <div className="mt-8 pt-6 border-t">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">Provider IA pour les Enrichissements</h3>
-            </div>
-            
-            <p className="text-sm text-muted-foreground">
-              Sélectionnez le provider IA qui sera utilisé pour les prochains enrichissements
-            </p>
-            
-            {/* Provider Selector */}
-            <ProviderSelector
-              selected={currentProvider}
-              onSelect={handleProviderChange}
-              onConfigure={handleConfigureProvider}
-            />
-            
-            {/* Options de fallback */}
-            <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Fallback Automatique</Label>
-                <p className="text-xs text-muted-foreground">
-                  Basculer automatiquement vers un autre provider en cas d'erreur
-                </p>
-              </div>
-              <Switch
-                checked={fallbackEnabled}
-                onCheckedChange={handleFallbackToggle}
-              />
-            </div>
           </div>
         </div>
       </CardContent>
