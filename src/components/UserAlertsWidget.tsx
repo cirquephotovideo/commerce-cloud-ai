@@ -88,9 +88,24 @@ export function UserAlertsWidget() {
 
       if (error) throw error;
     },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['user-alerts'] });
+      const previous = queryClient.getQueryData<UserAlert[]>(['user-alerts']);
+      // Optimistic UI: vider immédiatement la liste
+      queryClient.setQueryData<UserAlert[]>(['user-alerts'], []);
+      return { previous } as { previous?: UserAlert[] };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['user-alerts'], context.previous);
+      }
+      toast.error("Échec de la suppression des alertes");
+    },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ['user-alerts'] });
       toast.success('Toutes les alertes ont été supprimées');
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['user-alerts'] });
     },
   });
 
