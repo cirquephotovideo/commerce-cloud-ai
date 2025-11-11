@@ -22,6 +22,7 @@ import { TaxonomyBadges } from "@/components/TaxonomyBadges";
 import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
 import { FloatingChatWidget } from "@/components/FloatingChatWidget";
+import { UnifiedSearchBar } from "@/components/unified-products/UnifiedSearchBar";
 import { 
   Select, 
   SelectContent, 
@@ -771,70 +772,6 @@ export default function Dashboard() {
   return (
     <>
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
-        {/* 🆕 RECHERCHE GLOBALE EN HAUT */}
-        <Card className="mb-4 sm:mb-6 border-primary/20 shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Search className="h-5 w-5 text-primary" />
-              Recherche Produits
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-              <Select value={searchType} onValueChange={(v) => setSearchType(v as "url" | "ean" | "name")}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="name">
-                    <div className="flex items-center gap-2">
-                      <Search className="w-4 h-4" />
-                      Par Nom
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="url">
-                    <div className="flex items-center gap-2">
-                      <Search className="w-4 h-4" />
-                      Par URL
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="ean">
-                    <div className="flex items-center gap-2">
-                      <Barcode className="w-4 h-4" />
-                      Par EAN
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder={
-                  searchType === "name" ? "🔍 Rechercher un produit par nom..." :
-                  searchType === "url" ? "🔗 Rechercher par URL..." : 
-                  "🔢 Rechercher par EAN/Barcode..."
-                }
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 text-base"
-              />
-              {searchQuery && (
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={() => setSearchQuery('')}
-                  className="shrink-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            {searchQuery && (
-              <p className="text-sm text-muted-foreground mt-2">
-                📊 {filteredAnalyses.length} résultat(s) trouvé(s) sur {analyses.length} produit(s)
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="lg:col-span-1 space-y-4">
             <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
@@ -984,6 +921,14 @@ export default function Dashboard() {
             </Card>
           </>
         )}
+
+        {/* 🔍 RECHERCHE UNIFIÉE - Affiche les résultats des 3 bases */}
+        <div className="mb-4 sm:mb-6">
+          <UnifiedSearchBar 
+            query={searchQuery} 
+            onChange={setSearchQuery} 
+          />
+        </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
