@@ -856,7 +856,6 @@ export default function Dashboard() {
             </Card>
 
             <SubscriptionStatus />
-            <UserAlertsWidget />
             <AIProviderManagement />
             
             <Card>
@@ -890,6 +889,7 @@ export default function Dashboard() {
             </Card>
           </div>
           <div className="lg:col-span-2 space-y-4">
+            <UserAlertsWidget />
             <EnrichmentProgressMonitor />
           </div>
         </div>

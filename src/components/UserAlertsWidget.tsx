@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertCircle, Info, Check, X, ExternalLink } from "lucide-react";
+import { AlertCircle, Info, Check, X, ExternalLink, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
@@ -76,6 +76,24 @@ export function UserAlertsWidget() {
     },
   });
 
+  const deleteAllAlertsMutation = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('user_alerts')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-alerts'] });
+      toast.success('Toutes les alertes ont été supprimées');
+    },
+  });
+
   const unreadCount = alerts?.filter(a => !a.is_read).length || 0;
 
   const getSeverityColor = (severity: string) => {
@@ -130,12 +148,25 @@ export function UserAlertsWidget() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>🔔 Alertes récentes</span>
-          {unreadCount > 0 && (
-            <Badge variant="destructive">{unreadCount}</Badge>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <span>🔔 Alertes récentes</span>
+            {unreadCount > 0 && (
+              <Badge variant="destructive">{unreadCount}</Badge>
+            )}
+          </CardTitle>
+          {alerts.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => deleteAllAlertsMutation.mutate()}
+              disabled={deleteAllAlertsMutation.isPending}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Effacer tout
+            </Button>
           )}
-        </CardTitle>
+        </div>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[400px] pr-4">
