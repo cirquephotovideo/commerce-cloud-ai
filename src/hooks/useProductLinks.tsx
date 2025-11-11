@@ -49,7 +49,7 @@ export function useProductLinks(analysisId?: string) {
     }
   };
 
-  const createLink = async (supplierProductId: string, linkType: 'manual' | 'suggested' = 'manual', confidenceScore: number = 100) => {
+  const createLink = async (supplierProductId: string, linkType: 'manual' | 'suggested' = 'manual', confidenceScore: number = 1.0) => {
     if (!analysisId) return null;
     
     try {
