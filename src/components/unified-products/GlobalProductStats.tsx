@@ -1,8 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Package, Boxes, ShoppingCart, TrendingUp } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Package, Boxes, ShoppingCart, TrendingUp, RefreshCw } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Stats {
   analyses: number;
@@ -12,8 +15,12 @@ interface Stats {
 }
 
 export const GlobalProductStats = () => {
-  const { data: stats, isLoading } = useQuery<Stats>({
-    queryKey: ["global-product-stats"],
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+
+  const { data: stats, isLoading, refetch } = useQuery<Stats>({
+    queryKey: ["global-product-stats", lastUpdate.getTime()],
     queryFn: async (): Promise<Stats> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { analyses: 0, suppliers: 0, code2asin: 0, links: 0 };
@@ -60,8 +67,19 @@ export const GlobalProductStats = () => {
         return { analyses: 0, suppliers: 0, code2asin: 0, links: 0 };
       }
     },
-    refetchInterval: 30000,
+    refetchInterval: false,
+    staleTime: 0,
   });
+
+  const handleRefresh = async () => {
+    setLastUpdate(new Date());
+    await queryClient.invalidateQueries({ queryKey: ["global-product-stats"] });
+    await refetch();
+    toast({
+      title: "Statistiques actualisées",
+      description: `Dernière mise à jour : ${new Date().toLocaleTimeString('fr-FR')}`,
+    });
+  };
 
   const statCards = [
     {
@@ -114,7 +132,22 @@ export const GlobalProductStats = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Dernière mise à jour : {lastUpdate.toLocaleTimeString('fr-FR')}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isLoading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
       {statCards.map((stat) => {
         const Icon = stat.icon;
         return (
@@ -130,6 +163,7 @@ export const GlobalProductStats = () => {
           </Card>
         );
       })}
+      </div>
     </div>
   );
 };
