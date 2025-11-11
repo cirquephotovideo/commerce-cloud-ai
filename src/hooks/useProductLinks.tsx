@@ -63,7 +63,7 @@ export function useProductLinks(analysisId?: string) {
           supplier_product_id: supplierProductId,
           link_type: linkType,
           confidence_score: confidenceScore,
-          created_by: user.id
+          user_id: user.id
         })
         .select()
         .single();

@@ -94,7 +94,7 @@ export function SupplierCrossSearch({ product, open, onOpenChange }: SupplierCro
         supplier_product_id: supplierProductId,
         link_type: "manual",
         confidence_score: 100,
-        created_by: user.id,
+        user_id: user.id,
       });
 
       if (linkError) throw linkError;

@@ -7,6 +7,7 @@ import { AnalysesTab } from "@/components/unified-products/AnalysesTab";
 import { SuppliersTab } from "@/components/unified-products/SuppliersTab";
 import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
 import { AutoLinkPanel } from "@/components/unified-products/AutoLinkPanel";
+import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
 
 export default function UnifiedProductsManagement() {
   const [activeTab, setActiveTab] = useState("analyses");
@@ -30,6 +31,9 @@ export default function UnifiedProductsManagement() {
 
       {/* Panneau Fusion Automatique */}
       <AutoLinkPanel />
+
+      {/* Dashboard des Liens */}
+      <ProductLinksDashboard />
 
       {/* Onglets */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

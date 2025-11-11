@@ -87,11 +87,15 @@ export function BulkSupplierProductEditor({
         
         if (analysis) {
           // Créer le lien
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) throw new Error("User not authenticated");
+          
           await supabase.from('product_links').upsert({
             supplier_product_id: productId,
             analysis_id: analysis.id,
             link_type: 'auto',
-            confidence_score: 100
+            confidence_score: 100,
+            user_id: user.id
           }, {
             onConflict: 'supplier_product_id,analysis_id'
           });

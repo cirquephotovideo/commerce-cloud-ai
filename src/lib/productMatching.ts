@@ -123,12 +123,16 @@ export async function createProductLink(
   supplierProductId: string,
   analysisId: string
 ): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
+  
   const { error } = await supabase
     .from('product_links')
     .insert({
       supplier_product_id: supplierProductId,
       analysis_id: analysisId,
       link_type: 'automatic',
+      user_id: user.id,
     });
   
   if (error) throw error;

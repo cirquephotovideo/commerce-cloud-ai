@@ -3490,6 +3490,7 @@ export type Database = {
           id: string
           link_type: string
           supplier_product_id: string | null
+          user_id: string
         }
         Insert: {
           analysis_id?: string | null
@@ -3499,6 +3500,7 @@ export type Database = {
           id?: string
           link_type: string
           supplier_product_id?: string | null
+          user_id: string
         }
         Update: {
           analysis_id?: string | null
@@ -3508,6 +3510,7 @@ export type Database = {
           id?: string
           link_type?: string
           supplier_product_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
