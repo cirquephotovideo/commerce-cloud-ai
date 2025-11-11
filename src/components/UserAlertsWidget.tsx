@@ -88,8 +88,8 @@ export function UserAlertsWidget() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-alerts'] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ['user-alerts'] });
       toast.success('Toutes les alertes ont été supprimées');
     },
   });
