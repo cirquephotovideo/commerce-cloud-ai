@@ -8,10 +8,14 @@ import { SuppliersTab } from "@/components/unified-products/SuppliersTab";
 import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
 import { AutoLinkPanel } from "@/components/unified-products/AutoLinkPanel";
 import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
+import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
 
 export default function UnifiedProductsManagement() {
   const [activeTab, setActiveTab] = useState("analyses");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Activer les notifications temps réel
+  useRealtimeProductLinks();
 
   return (
     <div className="container mx-auto p-6 space-y-6">

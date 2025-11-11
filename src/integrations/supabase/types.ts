@@ -5120,6 +5120,13 @@ export type Database = {
       }
     }
     Functions: {
+      bulk_create_product_links: {
+        Args: { p_user_id: string }
+        Returns: {
+          execution_time_ms: number
+          links_created: number
+        }[]
+      }
       check_and_update_rate_limit: {
         Args: { p_package_id: string; p_user_id: string }
         Returns: Json
