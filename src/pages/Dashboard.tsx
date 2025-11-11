@@ -835,6 +835,16 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* 🔍 RECHERCHE UNIFIÉE - Affiche les résultats des 3 bases */}
+        <div className="mb-4 sm:mb-6">
+          <UnifiedSearchBar 
+            query={searchQuery} 
+            onChange={setSearchQuery} 
+          />
+        </div>
+
+        {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
+        <Tabs value={activeProductTab} onValueChange={setActiveProductTab} className="mb-6">
 
         {/* Section Détails de l'Analyse */}
         {selectedAnalysis && (
@@ -926,16 +936,6 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* 🔍 RECHERCHE UNIFIÉE - Affiche les résultats des 3 bases */}
-        <div className="mb-4 sm:mb-6">
-          <UnifiedSearchBar 
-            query={searchQuery} 
-            onChange={setSearchQuery} 
-          />
-        </div>
-
-        {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
-        <Tabs value={activeProductTab} onValueChange={setActiveProductTab} className="mt-6">
           <TabsList className="grid w-full grid-cols-3 mb-6">
             <TabsTrigger value="analyses" className="flex items-center gap-2">
               <Package className="h-4 w-4" />
