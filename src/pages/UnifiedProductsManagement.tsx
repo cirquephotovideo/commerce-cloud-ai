@@ -22,13 +22,14 @@ export default function UnifiedProductsManagement() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold">🔍 Gestion Unifiée des Produits</h1>
-        <p className="text-muted-foreground">
-          Explorez vos 3 bases de données produits et gérez les liaisons automatiques
-        </p>
       </div>
 
       {/* Recherche Globale Multi-Bases */}
       <UnifiedSearchBar query={searchQuery} onChange={setSearchQuery} />
+
+      <p className="text-muted-foreground">
+        Explorez vos 3 bases de données produits et gérez les liaisons automatiques
+      </p>
 
       {/* Statistiques Globales */}
       <GlobalProductStats />
