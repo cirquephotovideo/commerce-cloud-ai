@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ShoppingCart, Link as LinkIcon } from "lucide-react";
+import { LinkProductDialog } from "./LinkProductDialog";
 
 interface Code2AsinTabProps {
   searchQuery: string;
@@ -14,6 +15,8 @@ interface Code2AsinTabProps {
 
 export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
   const [page, setPage] = useState(1);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; ean?: string } | null>(null);
   const itemsPerPage = 50;
 
   const { data, isLoading } = useQuery({
@@ -63,7 +66,30 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
     );
   }
 
+  if (!data?.enrichments || data.enrichments.length === 0) {
+    return (
+      <Card className="p-6">
+        <div className="text-center space-y-4">
+          <ShoppingCart className="h-12 w-12 mx-auto text-muted-foreground" />
+          <h3 className="text-lg font-semibold">
+            {searchQuery ? "Aucun produit Amazon trouvé" : "Aucun enrichissement Code2ASIN"}
+          </h3>
+          <p className="text-muted-foreground">
+            {searchQuery 
+              ? `Aucun résultat pour "${searchQuery}"`
+              : "Importez des produits depuis Code2ASIN pour les voir ici"}
+          </p>
+        </div>
+      </Card>
+    );
+  }
+
   const totalPages = Math.ceil((data?.count || 0) / itemsPerPage);
+
+  const handleOpenLinkDialog = (productId: string, productName: string, ean?: string) => {
+    setSelectedProduct({ id: productId, name: productName, ean });
+    setLinkDialogOpen(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -156,17 +182,29 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {enrich.product_analyses?.id && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          window.open(`/product/${enrich.product_analyses.id}`, "_blank")
-                        }
-                      >
-                        Voir Analyse
-                      </Button>
-                    )}
+                    <div className="flex gap-2 justify-end">
+                      {enrich.product_analyses?.id ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            window.open(`/product/${enrich.product_analyses.id}`, "_blank")
+                          }
+                        >
+                          Voir Analyse
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => handleOpenLinkDialog(enrich.id, enrich.title || "Produit", enrich.ean)}
+                          className="gap-1"
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                          Lier
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -198,6 +236,18 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Dialog de liaison */}
+      {selectedProduct && (
+        <LinkProductDialog
+          open={linkDialogOpen}
+          onOpenChange={setLinkDialogOpen}
+          productId={selectedProduct.id}
+          productName={selectedProduct.name}
+          productEan={selectedProduct.ean}
+          productType="code2asin"
+        />
       )}
     </div>
   );
