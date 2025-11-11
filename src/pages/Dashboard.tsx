@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes } from "lucide-react";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -23,6 +23,9 @@ import { UserAlertsWidget } from "@/components/UserAlertsWidget";
 import { EnrichmentProgressMonitor } from "@/components/EnrichmentProgressMonitor";
 import { FloatingChatWidget } from "@/components/FloatingChatWidget";
 import { UnifiedSearchBar } from "@/components/unified-products/UnifiedSearchBar";
+import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
+import { SuppliersTab } from "@/components/unified-products/SuppliersTab";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Select, 
   SelectContent, 
@@ -82,6 +85,7 @@ export default function Dashboard() {
   const [displayLimit, setDisplayLimit] = useState(50);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [activeProductTab, setActiveProductTab] = useState("analyses");
 
   const handleOpenDetail = (analysis: ProductAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -930,272 +934,243 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Mes Analyses {searchQuery && `(${filteredAnalyses.length})`}
-          </h1>
-          {analyses.length > 0 && (
-            <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="select-all"
-                  checked={selectedIds.size === filteredAnalyses.length && filteredAnalyses.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                />
-                <label htmlFor="select-all" className="text-xs sm:text-sm cursor-pointer whitespace-nowrap">
-                  Tout ({selectedIds.size}/{filteredAnalyses.length})
-                </label>
-              </div>
-              {selectedIds.size > 0 && (
-                <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-                  <Button
-                    onClick={handleBulkWebEnrichment}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 sm:flex-none bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30"
-                  >
-                    <Sparkles className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline">Web Search ({selectedIds.size})</span>
-                    <span className="sm:hidden">Web</span>
-                  </Button>
-                  <Button
-                    onClick={exportToOdoo}
-                    disabled={isExporting}
-                    variant="default"
-                    size="sm"
-                    className="flex-1 sm:flex-none"
-                  >
-                    {isExporting ? (
-                      <>
-                        <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                        <span className="hidden sm:inline">Export...</span>
-                        <span className="sm:hidden">...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                        <span className="hidden sm:inline">Exporter ({selectedIds.size})</span>
-                        <span className="sm:hidden">Export</span>
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={deleteSelected}
-                    disabled={isDeleting}
-                    variant="destructive"
-                    size="sm"
-                    className="flex-1 sm:flex-none"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                        <span className="hidden sm:inline">Suppression...</span>
-                        <span className="sm:hidden">...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Trash className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
-                        <span className="hidden sm:inline">Supprimer ({selectedIds.size})</span>
-                        <span className="sm:hidden">Suppr</span>
-                      </>
-                    )}
-                  </Button>
+        {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
+        <Tabs value={activeProductTab} onValueChange={setActiveProductTab} className="mt-6">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="analyses" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              <span className="hidden sm:inline">Mes Analyses</span>
+              <span className="sm:hidden">Analyses</span>
+              {searchQuery && <Badge variant="secondary">{filteredAnalyses.length}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="code2asin" className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Amazon (Code2ASIN)</span>
+              <span className="sm:hidden">Amazon</span>
+            </TabsTrigger>
+            <TabsTrigger value="suppliers" className="flex items-center gap-2">
+              <Boxes className="h-4 w-4" />
+              <span className="hidden sm:inline">Fournisseurs</span>
+              <span className="sm:hidden">Fournis.</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab Mes Analyses */}
+          <TabsContent value="analyses">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+              <h2 className="text-xl font-semibold">
+                Mes Analyses {searchQuery && `(${filteredAnalyses.length})`}
+              </h2>
+              {analyses.length > 0 && (
+                <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={selectedIds.size === filteredAnalyses.length && filteredAnalyses.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                    <label htmlFor="select-all" className="text-xs sm:text-sm cursor-pointer whitespace-nowrap">
+                      Tout ({selectedIds.size}/{filteredAnalyses.length})
+                    </label>
+                  </div>
+                  {selectedIds.size > 0 && (
+                    <div className="flex gap-2 w-full sm:w-auto flex-wrap">
+                      <Button
+                        onClick={handleBulkWebEnrichment}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 sm:flex-none bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30"
+                      >
+                        <Sparkles className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                        <span className="hidden sm:inline">Web Search ({selectedIds.size})</span>
+                        <span className="sm:hidden">Web</span>
+                      </Button>
+                      <Button
+                        onClick={exportToOdoo}
+                        disabled={isExporting}
+                        variant="default"
+                        size="sm"
+                        className="flex-1 sm:flex-none"
+                      >
+                        {isExporting ? (
+                          <>
+                            <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                            <span className="hidden sm:inline">Export...</span>
+                            <span className="sm:hidden">...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden sm:inline">Exporter ({selectedIds.size})</span>
+                            <span className="sm:hidden">Export</span>
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        onClick={deleteSelected}
+                        disabled={isDeleting}
+                        variant="destructive"
+                        size="sm"
+                        className="flex-1 sm:flex-none"
+                      >
+                        {isDeleting ? (
+                          <>
+                            <Loader2 className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                            <span className="hidden sm:inline">Suppression...</span>
+                            <span className="sm:hidden">...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Trash className="mr-1 sm:mr-2 h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden sm:inline">Supprimer ({selectedIds.size})</span>
+                            <span className="sm:hidden">Suppr</span>
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
-        
-        {filteredAnalyses.length === 0 ? (
-          <Card className="glass-card">
-            <CardContent className="pt-6">
-              <p className="text-center text-muted-foreground">
-                {searchQuery ? "Aucun résultat trouvé" : "Aucune analyse sauvegardée pour le moment."}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {filteredAnalyses.map((analysis) => {
-                  const productName = analysis.analysis_result?.product_name || 
-                                      analysis.analysis_result?.name || 
-                                      "Produit sans nom";
-              
-              return (
-                <Card 
-                  key={analysis.id} 
-                  className="hover:shadow-xl hover:border-primary/50 transition-all duration-200 cursor-pointer"
-                  onClick={() => handleOpenDetail(analysis)}
-                >
-                  <CardHeader className="pb-3 sm:pb-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 flex-1 min-w-0">
-                        <Checkbox
-                          checked={selectedIds.has(analysis.id)}
-                          onCheckedChange={() => toggleSelect(analysis.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="mt-1 shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <CardTitle 
-                            className="text-sm sm:text-base md:text-lg line-clamp-2"
+            
+            {filteredAnalyses.length === 0 ? (
+              <Card className="glass-card">
+                <CardContent className="pt-6">
+                  <p className="text-center text-muted-foreground">
+                    {searchQuery ? "Aucun résultat trouvé" : "Aucune analyse sauvegardée pour le moment."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                {filteredAnalyses.map((analysis) => {
+                      const productName = analysis.analysis_result?.product_name || 
+                                          analysis.analysis_result?.name || 
+                                          "Produit sans nom";
+                  
+                  return (
+                    <Card 
+                      key={analysis.id} 
+                      className="hover:shadow-xl hover:border-primary/50 transition-all duration-200 cursor-pointer"
+                      onClick={() => handleOpenDetail(analysis)}
+                    >
+                      <CardHeader className="pb-3 sm:pb-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                            <Checkbox
+                              checked={selectedIds.has(analysis.id)}
+                              onCheckedChange={() => toggleSelect(analysis.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-1 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <CardTitle 
+                                className="text-sm sm:text-base md:text-lg line-clamp-2"
+                              >
+                                {productName}
+                              </CardTitle>
+                              {getEnrichmentBadges(analysis)}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavorite(analysis.id, analysis.is_favorite);
+                            }}
+                            className="shrink-0"
                           >
-                            {productName}
-                          </CardTitle>
-                          {getEnrichmentBadges(analysis)}
+                            <Star className={`h-4 w-4 sm:h-5 sm:w-5 ${analysis.is_favorite ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                          </Button>
                         </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(analysis.id, analysis.is_favorite);
-                        }}
-                        className="shrink-0 h-8 w-8 sm:h-10 sm:w-10"
-                      >
-                        <Star className={`h-4 w-4 sm:h-5 sm:w-5 ${analysis.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 sm:space-y-4">
-                    {/* Product Image Preview */}
-                    {analysis.image_urls && analysis.image_urls.length > 0 && (
-                      <div className="relative aspect-video bg-muted rounded-lg overflow-hidden">
-                        <img
-                          src={analysis.image_urls[0]}
-                          alt={productName}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
+                      </CardHeader>
+                      
+                      <CardContent className="space-y-3 sm:space-y-4">
+                        <ProductImageGallery 
+                          images={analysis.image_urls || []} 
+                          productName={productName}
                         />
-                      </div>
-                     )}
-                     
-                     {/* Taxonomy Badges */}
-                     <TaxonomyBadges analysisId={analysis.id} />
-                     
-                     <div className="space-y-2">
-                       {/* Main Actions Row */}
-                       <div className="flex gap-1.5 sm:gap-2 flex-wrap">
-                          <Button 
-                            variant="outline" 
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
+                            <span className="truncate max-w-[200px] sm:max-w-full">{analysis.product_url}</span>
+                          </div>
+                          
+                          <TaxonomyBadges analysisId={analysis.id} />
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                          <Button
+                            variant="outline"
                             size="sm"
+                            className="w-full"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenDetail(analysis);
                             }}
-                            className="text-xs sm:text-sm"
                           >
+                            <FileCheck className="w-4 h-4 mr-2" />
                             Détails
                           </Button>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <ProductSummaryDialog 
-                              analysis={analysis}
+                          
+                          <div className="flex gap-2">
+                            <ProductExportMenu 
+                              analysisId={analysis.id}
                               productName={productName}
                             />
+                            
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="outline" size="sm" className="flex-1">
+                                  <Sparkles className="w-4 h-4 mr-2" />
+                                  Enrichir
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickEnrich(analysis.id, 'amazon');
+                                }}>
+                                  📦 Amazon
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickEnrich(analysis.id, 'heygen');
+                                }}>
+                                  🎥 HeyGen
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickEnrich(analysis.id, 'rsgp');
+                                }}>
+                                  🔧 RSGP
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteAnalysis(analysis.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          {hasPermission('single_export') && (
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <ProductExportMenu analysisId={analysis.id} productName={productName} />
-                            </div>
-                          )}
-                         
-                          {/* Quick Enrich Dropdown */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                disabled={enrichingIds.has(analysis.id)}
-                                className="text-xs sm:text-sm"
-                              >
-                                {enrichingIds.has(analysis.id) ? (
-                                  <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" />
-                                    <span className="hidden sm:inline">Enrichir</span>
-                                    <ChevronDown className="w-3 h-3 sm:ml-1" />
-                                  </>
-                                )}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-background z-50">
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickEnrich(analysis.id, 'amazon');
-                              }}>
-                                <Package className="w-4 h-4 mr-2" />
-                                Données Amazon
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickEnrich(analysis.id, 'heygen');
-                              }}>
-                                <Video className="w-4 h-4 mr-2" />
-                                Vidéo HeyGen
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickEnrich(analysis.id, 'rsgp');
-                              }}>
-                                <FileCheck className="w-4 h-4 mr-2" />
-                                Conformité RSGP
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickEnrich(analysis.id, 'all');
-                              }}>
-                                <Sparkles className="w-4 h-4 mr-2" />
-                                Tout régénérer
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                       </div>
-                       {/* Secondary Actions Row */}
-                       <div className="flex gap-1.5 sm:gap-2 flex-wrap">
-                         {analysis.image_urls && analysis.image_urls.length > 0 && (
-                           <div onClick={(e) => e.stopPropagation()}>
-                             <ProductImageGallery images={analysis.image_urls} productName={productName} />
-                           </div>
-                         )}
-                         {(hasPermission('technical_analysis') || hasPermission('risk_analysis')) && (
-                           <div onClick={(e) => e.stopPropagation()}>
-                             <ProductAnalysisDialog productUrl={analysis.product_url} productName={productName} />
-                           </div>
-                         )}
-                         <div onClick={(e) => e.stopPropagation()}>
-                           <JsonViewer data={analysis.analysis_result} />
-                         </div>
-                         <Button 
-                           variant="outline" 
-                           size="sm" 
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             deleteAnalysis(analysis.id);
-                           }}
-                           className="h-8 w-8 p-0"
-                         >
-                           <Trash2 className="w-4 h-4" />
-                         </Button>
-                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
 
-            {/* Pagination Buttons */}
-            {hasMore && filteredAnalyses.length > 0 && (
-              <div className="flex flex-col items-center gap-3 mt-8 mb-6">
-                <div className="text-sm text-muted-foreground">
-                  📊 Affichage de {filteredAnalyses.length} produits
-                </div>
-                
-                <div className="flex gap-3">
+            {hasMore && filteredAnalyses.length >= displayLimit && (
+              <div className="mt-8 flex justify-center">
+                <div className="flex gap-4">
                   <Button
                     onClick={loadMore}
                     disabled={isLoadingMore}
@@ -1233,8 +1208,18 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+
+          {/* Tab Code2ASIN */}
+          <TabsContent value="code2asin">
+            <Code2AsinTab searchQuery={searchQuery} />
+          </TabsContent>
+
+          {/* Tab Fournisseurs */}
+          <TabsContent value="suppliers">
+            <SuppliersTab searchQuery={searchQuery} />
+          </TabsContent>
+        </Tabs>
       </main>
 
       <ProductDetailModal
