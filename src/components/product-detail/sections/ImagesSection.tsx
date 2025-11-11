@@ -13,9 +13,10 @@ interface ImagesSectionProps {
 export const ImagesSection = ({ analysis, onEnrich }: ImagesSectionProps) => {
   const enrichMutation = useEnrichment(analysis.id, onEnrich);
   
-  const analysisImages = analysis?.image_urls || [];
-  const amazonImages = analysis?.amazon_product_data?.images || [];
-  const aiGeneratedImages = analysis?.generated_images || [];
+  const analysisImages = Array.isArray(analysis?.image_urls) ? analysis.image_urls : [];
+  const amazonData = analysis?.amazon_product_data || null;
+  const amazonImages = amazonData && Array.isArray(amazonData.images) ? amazonData.images : [];
+  const aiGeneratedImages = Array.isArray(analysis?.generated_images) ? analysis.generated_images : [];
   
   const totalImages = analysisImages.length + (Array.isArray(amazonImages) ? amazonImages.length : 0) + aiGeneratedImages.length;
 

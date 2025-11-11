@@ -77,9 +77,9 @@ export function ProductDetailModal({
     queryFn: async () => {
       const { data } = await supabase
         .from('product_analyses')
-        .select('*, amazon_product_data(images)')
+        .select('*, amazon_product_data(*)')
         .eq('id', product.linked_analysis_id || product.id)
-        .single();
+        .maybeSingle();
       return data;
     },
     enabled: !!product?.id && open
@@ -304,7 +304,7 @@ export function ProductDetailModal({
   const hasAmazonData = product.amazon_enriched_at !== null;
   const hasVideoData = product.video_url !== null;
   const analysisImages = Array.isArray(analysis?.image_urls) ? analysis.image_urls : [];
-  const amazonData = Array.isArray(analysis?.amazon_product_data) ? analysis.amazon_product_data[0] : null;
+  const amazonData = analysis?.amazon_product_data || null;
   const amazonImages = Array.isArray(amazonData?.images) ? amazonData.images : [];
   const imageCount = analysisImages.length + amazonImages.length;
   const hasImages = imageCount > 0;

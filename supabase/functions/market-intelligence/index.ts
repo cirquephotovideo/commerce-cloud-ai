@@ -14,7 +14,16 @@ serve(async (req) => {
   }
 
   try {
-    const { action, productName, competitorSiteIds } = await req.json();
+    console.log('[MARKET-INTELLIGENCE] Request received:', {
+      method: req.method,
+      hasAuth: req.headers.get('Authorization') ? 'yes' : 'no',
+      timestamp: new Date().toISOString()
+    });
+
+    const body = await req.json();
+    console.log('[MARKET-INTELLIGENCE] Request body:', JSON.stringify(body, null, 2));
+    
+    const { action, productName, competitorSiteIds } = body;
     
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
