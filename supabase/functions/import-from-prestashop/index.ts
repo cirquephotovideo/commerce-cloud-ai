@@ -424,22 +424,31 @@ serve(async (req) => {
 
       console.log(`[PRESTASHOP] Found ${products.length} products in this chunk`);
 
-      let imported = 0, matched = 0, errors = 0;
+      let imported = 0, matched = 0, errors = 0, skipped = 0;
       const errorDetails: any[] = [];
 
       for (const product of products) {
         try {
           // PrestaShop structure
-          const ean = product.ean13 && isValidEAN13(product.ean13) ? product.ean13 : null;
+          const productName = product.name?.[0]?.value || product.name || '';
           const price = parseFloat(product.price || product.wholesale_price || 0);
+          const reference = product.reference || `ps_${product.id}`;
+          const ean = product.ean13 && isValidEAN13(product.ean13) ? product.ean13 : null;
           const stockQty = parseInt(product.quantity || 0);
+
+          // Skip products with invalid data
+          if (!productName || productName === 'NC' || productName.trim() === '' || price <= 0) {
+            console.log(`[PRESTASHOP] Skipping product ${reference}: invalid data (name: ${productName}, price: ${price})`);
+            skipped++;
+            continue;
+          }
 
           const productData = {
             user_id: userId,
             supplier_id: supplier_id,
-            supplier_reference: product.reference || `ps_${product.id}`,
+            supplier_reference: reference,
             ean: ean,
-            product_name: product.name?.[0]?.value || product.name || 'Product',
+            product_name: productName,
             purchase_price: price,
             stock_quantity: stockQty,
             currency: 'EUR',
@@ -521,7 +530,7 @@ serve(async (req) => {
       const hasMore = products.length === chunkLimit;
       const nextOffset = chunkOffset + chunkLimit;
 
-      console.log(`[PRESTASHOP] Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors, hasMore: ${hasMore}`);
+      console.log(`[PRESTASHOP] Chunk complete: ${imported} imported, ${matched} matched, ${errors} errors, ${skipped} skipped, hasMore: ${hasMore}`);
 
       return new Response(
         JSON.stringify({
@@ -529,6 +538,7 @@ serve(async (req) => {
           matched,
           new: imported - matched,
           errors,
+          skipped,
           errorDetails: errorDetails.slice(0, 10),
           hasMore,
           nextOffset,
@@ -570,6 +580,7 @@ serve(async (req) => {
           matched: 0,
           new: 0,
           errors: 1,
+          skipped: 0,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -585,6 +596,7 @@ serve(async (req) => {
         matched: 0,
         new: 0,
         errors: 1,
+        skipped: 0,
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

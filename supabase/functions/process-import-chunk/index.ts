@@ -170,27 +170,31 @@ serve(async (req) => {
       supplierId: supplier_id,
       functionName: 'process-import-chunk',
       step: 'chunk_complete',
-      message: `Chunk completed: imported=${data.imported || 0}, matched=${data.matched || 0}, errors=${data.errors || 0}`,
+      message: `Chunk completed: imported=${data.imported || 0}, matched=${data.matched || 0}, errors=${data.errors || 0}, skipped=${data.skipped || 0}`,
       context: { 
         offset, 
         limit, 
         imported: data.imported || 0,
         matched: data.matched || 0,
         errors: data.errors || 0,
+        skipped: data.skipped || 0,
         hasMore: data.hasMore, 
         nextOffset: data.nextOffset 
       }
     });
 
-    // Update job progress
-    const currentProgress = offset + (data.imported || 0);
+    // Update job progress - correct calculation: processed = imported + errors + skipped
+    const processed = (data.imported || 0) + (data.errors || 0) + (data.skipped || 0);
+    const currentProgress = (job.progress_current || 0) + processed;
     const chunksCompleted = Math.floor(currentProgress / limit);
     
     console.log('[CHUNK-PROCESSOR] Updating job progress:', {
       currentProgress,
+      processed,
       imported: (job.products_imported || 0) + (data.imported || 0),
       matched: (job.products_matched || 0) + (data.matched || 0),
       errors: (job.products_errors || 0) + (data.errors || 0),
+      skipped: (job.products_skipped || 0) + (data.skipped || 0),
     });
     
     const { error: updateError } = await supabaseClient
@@ -200,6 +204,7 @@ serve(async (req) => {
         products_imported: (job.products_imported || 0) + (data.imported || 0),
         products_matched: (job.products_matched || 0) + (data.matched || 0),
         products_errors: (job.products_errors || 0) + (data.errors || 0),
+        products_skipped: (job.products_skipped || 0) + (data.skipped || 0),
         metadata: {
           ...job.metadata,
           chunks_completed: chunksCompleted,
@@ -291,7 +296,8 @@ serve(async (req) => {
         context: { 
           totalImported: job.products_imported + (data.imported || 0),
           totalMatched: job.products_matched + (data.matched || 0),
-          totalErrors: job.products_errors + (data.errors || 0)
+          totalErrors: job.products_errors + (data.errors || 0),
+          totalSkipped: job.products_skipped + (data.skipped || 0)
         }
       });
       await supabaseClient

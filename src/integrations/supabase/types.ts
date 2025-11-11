@@ -2250,6 +2250,7 @@ export type Database = {
           products_errors: number | null
           products_imported: number | null
           products_matched: number | null
+          products_skipped: number | null
           progress_current: number | null
           progress_total: number | null
           started_at: string | null
@@ -2267,6 +2268,7 @@ export type Database = {
           products_errors?: number | null
           products_imported?: number | null
           products_matched?: number | null
+          products_skipped?: number | null
           progress_current?: number | null
           progress_total?: number | null
           started_at?: string | null
@@ -2284,6 +2286,7 @@ export type Database = {
           products_errors?: number | null
           products_imported?: number | null
           products_matched?: number | null
+          products_skipped?: number | null
           progress_current?: number | null
           progress_total?: number | null
           started_at?: string | null

@@ -129,7 +129,7 @@ export function EmailInboxTable() {
           total: job.progress_total || prev.total,
           processed: job.progress_current || 0,
           success: job.products_imported || 0,
-          skipped: 0,
+          skipped: job.products_skipped || 0,
           errors: job.products_errors || 0,
           current_operation: isFinished 
             ? (job.status === 'completed' ? 'Import terminé ✓' : 'Import échoué ✗')
@@ -207,7 +207,7 @@ export function EmailInboxTable() {
               total: job.progress_total || prev.total,
               processed: job.progress_current || 0,
               success: job.products_imported || 0,
-              skipped: 0,
+              skipped: job.products_skipped || 0,
               errors: job.products_errors || 0,
               current_operation: job.status === 'queued' 
                 ? 'En file d\'attente...' 
