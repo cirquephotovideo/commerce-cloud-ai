@@ -58,14 +58,30 @@ Deno.serve(async (req) => {
 
       console.log(`[auto-link-products] ${potentialMatches} produits analysés avec EAN`);
 
-      // Appeler la fonction SQL batch
-      const { data, error: rpcError } = await supabase
-        .rpc('bulk_create_product_links', { p_user_id: user.id });
+    // Appeler la fonction SQL batch avec timeout handling
+    const { data, error: rpcError } = await supabase
+      .rpc('bulk_create_product_links', { p_user_id: user.id });
 
-      if (rpcError) {
-        console.error('[auto-link-products] RPC error:', rpcError);
-        throw rpcError;
+    if (rpcError) {
+      console.error('[auto-link-products] RPC error:', rpcError);
+      
+      // Handle statement timeout specifically
+      if (rpcError.message?.includes('statement timeout') || rpcError.message?.includes('canceling statement')) {
+        return new Response(
+          JSON.stringify({
+            error: 'Operation timed out. Try processing fewer products at once or contact support.',
+            code: 'TIMEOUT',
+            links_created: 0
+          }),
+          {
+            status: 504,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
+      
+      throw rpcError;
+    }
 
       const result = data?.[0] || { links_created: 0, execution_time_ms: 0 };
       const executionTime = Date.now() - startTime;
