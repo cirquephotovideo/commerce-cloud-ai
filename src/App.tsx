@@ -28,6 +28,9 @@ import Code2AsinImport from "./pages/Code2AsinImport";
 import Code2AsinProductsList from "./pages/Code2AsinProductsList";
 import Code2AsinTracker from "./pages/Code2AsinTracker";
 import UnifiedProductsManagement from "./pages/UnifiedProductsManagement";
+import GeminiRAGDashboard from "./pages/GeminiRAGDashboard";
+import MCPDashboard from "./pages/MCPDashboard";
+import MCPChat from "./pages/MCPChat";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -73,6 +76,9 @@ const App = () => {
         <Route path="/code2asin-import" element={<ProtectedRoute><DashboardLayout><Code2AsinImport /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-products" element={<ProtectedRoute><DashboardLayout><Code2AsinProductsList /></DashboardLayout></ProtectedRoute>} />
         <Route path="/code2asin-tracker" element={<ProtectedRoute><DashboardLayout><Code2AsinTracker /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/gemini-rag" element={<ProtectedRoute><DashboardLayout><GeminiRAGDashboard /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/mcp-dashboard" element={<ProtectedRoute><DashboardLayout><MCPDashboard /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/mcp-chat" element={<ProtectedRoute><DashboardLayout><MCPChat /></DashboardLayout></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />

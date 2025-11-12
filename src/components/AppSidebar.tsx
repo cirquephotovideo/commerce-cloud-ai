@@ -15,6 +15,10 @@ import {
   FileSpreadsheet,
   FileUp,
   Layers,
+  Bot,
+  Plug,
+  MessageSquare,
+  Brain,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -129,6 +133,28 @@ const marketNavigation = [
   },
 ];
 
+const aiNavigation = [
+  { 
+    title: "Chat RAG Gemini", 
+    url: "/gemini-rag", 
+    icon: Bot,
+    description: "Posez des questions en langage naturel sur votre catalogue complet avec RAG natif",
+    badge: "NEW"
+  },
+  { 
+    title: "MCP Integrations", 
+    url: "/mcp-dashboard", 
+    icon: Plug,
+    description: "Gérez vos connexions aux plateformes externes (Odoo, PrestaShop, Amazon, etc.)"
+  },
+  { 
+    title: "MCP Chat", 
+    url: "/mcp-chat", 
+    icon: MessageSquare,
+    description: "Interrogez vos plateformes connectées en langage naturel avec l'IA"
+  },
+];
+
 const configNavigation = [
   { 
     title: "Tarifs", 
@@ -216,12 +242,49 @@ export function AppSidebar() {
                     </TooltipContent>
                   </Tooltip>
                 </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-          <SidebarGroup>
-            <SidebarGroupLabel>Analyse</SidebarGroupLabel>
+        {/* Intelligence IA Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel>
+            <Brain className="h-4 w-4 mr-2 inline" />
+            Intelligence IA
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {aiNavigation.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                        <NavLink to={item.url}>
+                          <item.icon />
+                          <span className="flex items-center gap-2">
+                            {item.title}
+                            {item.badge && (
+                              <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-[250px]">
+                      <p className="font-semibold">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Analyse</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {mainNavigation.map((item) => (

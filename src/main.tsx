@@ -7,6 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { MCPProvider } from "@/contexts/MCPContext";
 import "./i18n/config";
 import App from "./App";
 import "./index.css";
@@ -20,9 +21,11 @@ createRoot(document.getElementById("root")!).render(
         <BrowserRouter>
           <TooltipProvider>
             <SubscriptionProvider>
-              <Toaster />
-              <Sonner />
-              <App />
+              <MCPProvider>
+                <Toaster />
+                <Sonner />
+                <App />
+              </MCPProvider>
             </SubscriptionProvider>
           </TooltipProvider>
         </BrowserRouter>
