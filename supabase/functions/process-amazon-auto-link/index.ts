@@ -48,8 +48,11 @@ Deno.serve(async (req) => {
     const offset = body.offset || 0;
     const batch_size = body.batch_size || 100;
 
+    console.log(`[AMAZON-AUTO-LINK] Starting batch - Job: ${job_id}, Offset: ${offset}, Batch: ${batch_size}`);
+
     // Mark job as processing on first run
     if (offset === 0 && job_id) {
+      console.log(`[AMAZON-AUTO-LINK] Marking job ${job_id} as processing`);
       await supabase
         .from('amazon_auto_link_jobs')
         .update({
@@ -68,9 +71,11 @@ Deno.serve(async (req) => {
       .range(offset, offset + batch_size - 1);
 
     if (analysesError) {
-      console.error('Error fetching analyses:', analysesError);
+      console.error('[AMAZON-AUTO-LINK] Error fetching analyses:', analysesError);
       throw analysesError;
     }
+
+    console.log(`[AMAZON-AUTO-LINK] Found ${analyses?.length || 0} analyses to process`);
 
     // Get Code2ASIN enrichments
     const { data: enrichments, error: enrichmentsError } = await supabase
@@ -80,9 +85,11 @@ Deno.serve(async (req) => {
       .not('ean', 'is', null);
 
     if (enrichmentsError) {
-      console.error('Error fetching enrichments:', enrichmentsError);
+      console.error('[AMAZON-AUTO-LINK] Error fetching enrichments:', enrichmentsError);
       throw enrichmentsError;
     }
+
+    console.log(`[AMAZON-AUTO-LINK] Found ${enrichments?.length || 0} Code2ASIN enrichments`);
 
     // Create EAN index for fast lookup
     const enrichmentsByEan = new Map<string, any[]>();
@@ -125,6 +132,8 @@ Deno.serve(async (req) => {
       }
     }
 
+    console.log(`[AMAZON-AUTO-LINK] Found ${matches.length} matches to create`);
+
     // Insert matches into database
     if (matches.length > 0) {
       const linksToInsert = matches.map(match => ({
@@ -141,9 +150,11 @@ Deno.serve(async (req) => {
         .insert(linksToInsert);
 
       if (insertError) {
-        console.error('Error inserting links:', insertError);
+        console.error('[AMAZON-AUTO-LINK] Error inserting links:', insertError);
         throw insertError;
       }
+      
+      console.log(`[AMAZON-AUTO-LINK] ✅ Successfully created ${matches.length} Amazon links`);
     }
 
     // Update job progress
@@ -160,6 +171,8 @@ Deno.serve(async (req) => {
 
       const totalLinksCreated = (currentJob?.links_created || 0) + matches.length;
 
+      console.log(`[AMAZON-AUTO-LINK] Updating job: processed=${newOffset}, links=${totalLinksCreated}, complete=${isComplete}`);
+
       await supabase
         .from('amazon_auto_link_jobs')
         .update({
@@ -173,6 +186,7 @@ Deno.serve(async (req) => {
 
       // If not complete, invoke next batch
       if (!isComplete) {
+        console.log(`[AMAZON-AUTO-LINK] 🔄 Invoking next batch at offset ${newOffset}`);
         await supabase.functions.invoke('process-amazon-auto-link', {
           body: {
             job_id,
@@ -180,6 +194,8 @@ Deno.serve(async (req) => {
             batch_size
           }
         });
+      } else {
+        console.log(`[AMAZON-AUTO-LINK] ✅ Job ${job_id} completed!`);
       }
     }
 
@@ -194,10 +210,11 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in process-amazon-auto-link:', error);
+    console.error('[AMAZON-AUTO-LINK] ❌ Error:', error);
     
     // Mark job as failed if job_id is available
     if (job_id) {
+      console.log(`[AMAZON-AUTO-LINK] Marking job ${job_id} as failed`);
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
