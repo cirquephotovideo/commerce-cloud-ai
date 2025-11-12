@@ -3469,6 +3469,7 @@ export type Database = {
           matched_on: string | null
           updated_at: string
           user_id: string
+          validation_status: string | null
         }
         Insert: {
           analysis_id: string
@@ -3480,6 +3481,7 @@ export type Database = {
           matched_on?: string | null
           updated_at?: string
           user_id: string
+          validation_status?: string | null
         }
         Update: {
           analysis_id?: string
@@ -3491,6 +3493,7 @@ export type Database = {
           matched_on?: string | null
           updated_at?: string
           user_id?: string
+          validation_status?: string | null
         }
         Relationships: [
           {

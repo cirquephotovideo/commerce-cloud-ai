@@ -10,6 +10,7 @@ import { AutoLinkPanel } from "@/components/unified-products/AutoLinkPanel";
 import { AmazonAutoLinkPanel } from "@/components/unified-products/AmazonAutoLinkPanel";
 import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
 import { AmazonLinksAnalytics } from "@/components/unified-products/AmazonLinksAnalytics";
+import { AmazonLinksMassValidation } from "@/components/unified-products/AmazonLinksMassValidation";
 import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
 import { useRealtimeAmazonLinks } from "@/hooks/useRealtimeAmazonLinks";
 
@@ -46,6 +47,9 @@ export default function UnifiedProductsManagement() {
 
       {/* Analytiques Amazon */}
       <AmazonLinksAnalytics />
+
+      {/* Validation en Masse */}
+      <AmazonLinksMassValidation />
 
       {/* Dashboard des Liens */}
       <ProductLinksDashboard />

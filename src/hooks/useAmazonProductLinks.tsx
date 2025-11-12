@@ -9,6 +9,7 @@ export interface AmazonProductLink {
   link_type: 'automatic' | 'manual';
   confidence_score: number;
   matched_on: string;
+  validation_status?: 'pending' | 'accepted' | 'rejected';
   created_at: string;
   product_analyses?: {
     id: string;
