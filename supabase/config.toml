@@ -94,8 +94,6 @@ verify_jwt = false
 [functions.unlock-all-stuck-products]
 verify_jwt = false
 
-[functions.system-health-check]
-verify_jwt = false
 
 [functions.retry-failed-enrichments]
 verify_jwt = false
