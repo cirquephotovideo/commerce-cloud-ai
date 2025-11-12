@@ -41,6 +41,22 @@ serve(async (req) => {
 
     if (configError) {
       console.error('Error fetching Ollama config:', configError);
+      
+      // Handle PGRST002 (schema cache) error specifically
+      if (configError.code === 'PGRST002') {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Database schema is updating. Please try again in a moment.',
+            code: 'PGRST002'
+          }),
+          { 
+            status: 503,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+      }
+      
       throw configError;
     }
 
