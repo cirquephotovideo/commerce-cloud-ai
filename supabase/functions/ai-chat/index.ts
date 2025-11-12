@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { callAIWithFallback } from '../_shared/ai-fallback.ts';
+import { getCachedOrFetch } from '../_shared/mcp-cache.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -153,23 +154,35 @@ const executeMCPTool = async (
     }
   }
   
-  // Appeler mcp-proxy pour faire la requête
-  const { data, error } = await supabase.functions.invoke('mcp-proxy', {
-    body: {
-      platform_id: platform.id,
-      endpoint,
-      method,
-      body
-    }
-  });
+  // Utiliser le cache avec TTL de 5 minutes
+  const cacheKey = `mcp_${platformType}_${action}_${JSON.stringify(args)}`;
   
-  if (error) {
-    console.error('[AI-CHAT] MCP tool execution error:', error);
-    return { error: error.message };
-  }
+  const { data: cachedData, cached } = await getCachedOrFetch(
+    supabase,
+    cacheKey,
+    async () => {
+      // Appeler mcp-proxy pour faire la requête
+      const { data, error } = await supabase.functions.invoke('mcp-proxy', {
+        body: {
+          platform_id: platform.id,
+          endpoint,
+          method,
+          body
+        }
+      });
+      
+      if (error) {
+        console.error('[AI-CHAT] MCP tool execution error:', error);
+        throw new Error(error.message || 'MCP tool execution failed');
+      }
+      
+      return data;
+    },
+    5 // TTL de 5 minutes
+  );
   
-  console.log('[AI-CHAT] MCP tool result:', data);
-  return data;
+  console.log(`[AI-CHAT] MCP tool result (cached: ${cached}):`, cachedData);
+  return cachedData;
 };
 
 serve(async (req) => {
