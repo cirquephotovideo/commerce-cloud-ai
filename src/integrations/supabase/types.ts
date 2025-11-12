@@ -2812,11 +2812,13 @@ export type Database = {
       }
       mcp_call_logs: {
         Row: {
+          cache_hit: boolean | null
           created_at: string | null
           error_message: string | null
           id: string
           latency_ms: number | null
           package_id: string
+          platform_type: string | null
           request_args: Json | null
           response_data: Json | null
           success: boolean
@@ -2824,11 +2826,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cache_hit?: boolean | null
           created_at?: string | null
           error_message?: string | null
           id?: string
           latency_ms?: number | null
           package_id: string
+          platform_type?: string | null
           request_args?: Json | null
           response_data?: Json | null
           success?: boolean
@@ -2836,11 +2840,13 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cache_hit?: boolean | null
           created_at?: string | null
           error_message?: string | null
           id?: string
           latency_ms?: number | null
           package_id?: string
+          platform_type?: string | null
           request_args?: Json | null
           response_data?: Json | null
           success?: boolean

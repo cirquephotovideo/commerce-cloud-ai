@@ -107,6 +107,15 @@ const AdminDashboard = () => {
                       <DollarSign className="h-4 w-4" />
                       Coûts Gemini
                     </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = '/admin/mcp-logs'}
+                      className="gap-2"
+                    >
+                      <Activity className="h-4 w-4" />
+                      Logs MCP
+                    </Button>
                   </div>
                 </CardTitle>
               </CardHeader>

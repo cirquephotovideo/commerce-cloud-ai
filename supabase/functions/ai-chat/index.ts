@@ -104,85 +104,136 @@ const executeMCPTool = async (
   toolName: string, 
   args: any, 
   platforms: any[], 
-  supabase: any
+  supabase: any,
+  userId: string
 ) => {
   console.log(`[AI-CHAT] Executing MCP tool: ${toolName} with args:`, args);
   
-  // Parser le tool name pour extraire platform et action
-  // Format: mcp_{platform}_{action}
-  const parts = toolName.split('_');
-  if (parts[0] !== 'mcp' || parts.length < 3) {
-    throw new Error('Invalid MCP tool name format');
-  }
+  // Variables pour le logging
+  const startTime = Date.now();
+  let success = false;
+  let responseData = null;
+  let errorMessage = null;
+  let cacheHit = false;
+  let platformType = '';
+  let action = '';
   
-  const platformType = parts[1];
-  const action = parts.slice(2).join('_');
-  
-  // Trouver la config de la plateforme
-  const platform = platforms.find(p => p.platform_type === platformType);
-  if (!platform) {
-    throw new Error(`Platform ${platformType} not found or not active`);
-  }
-  
-  // Construire l'endpoint MCP selon l'action
-  let endpoint = '';
-  let method = 'GET';
-  let body = null;
-  
-  if (platformType === 'odoo') {
-    if (action === 'list_products') {
-      endpoint = `/api/products?limit=${args.limit || 10}`;
-      if (args.search_term) {
-        endpoint += `&search=${encodeURIComponent(args.search_term)}`;
+  try {
+    // Parser le tool name pour extraire platform et action
+    // Format: mcp_{platform}_{action}
+    const parts = toolName.split('_');
+    if (parts[0] !== 'mcp' || parts.length < 3) {
+      throw new Error('Invalid MCP tool name format');
+    }
+    
+    platformType = parts[1];
+    action = parts.slice(2).join('_');
+    
+    // Trouver la config de la plateforme
+    const platform = platforms.find(p => p.platform_type === platformType);
+    if (!platform) {
+      throw new Error(`Platform ${platformType} not found or not active`);
+    }
+    
+    // Construire l'endpoint MCP selon l'action
+    let endpoint = '';
+    let method = 'GET';
+    let body = null;
+    
+    if (platformType === 'odoo') {
+      if (action === 'list_products') {
+        endpoint = `/api/products?limit=${args.limit || 10}`;
+        if (args.search_term) {
+          endpoint += `&search=${encodeURIComponent(args.search_term)}`;
+        }
+      } else if (action === 'search_products') {
+        endpoint = `/api/products/search`;
+        method = 'POST';
+        body = args;
       }
-    } else if (action === 'search_products') {
-      endpoint = `/api/products/search`;
-      method = 'POST';
-      body = args;
+    } else if (platformType === 'prestashop') {
+      if (action === 'get_products') {
+        endpoint = `/api/products?limit=${args.limit || 10}`;
+      }
+    } else if (platformType === 'shopify') {
+      if (action === 'get_products') {
+        endpoint = `/admin/api/2024-01/products.json?limit=${args.limit || 10}`;
+      }
+    } else if (platformType === 'amazon') {
+      if (action === 'search_products') {
+        endpoint = `/api/search?keywords=${encodeURIComponent(args.keywords)}&limit=${args.limit || 10}`;
+      }
     }
-  } else if (platformType === 'prestashop') {
-    if (action === 'get_products') {
-      endpoint = `/api/products?limit=${args.limit || 10}`;
-    }
-  } else if (platformType === 'shopify') {
-    if (action === 'get_products') {
-      endpoint = `/admin/api/2024-01/products.json?limit=${args.limit || 10}`;
-    }
-  } else if (platformType === 'amazon') {
-    if (action === 'search_products') {
-      endpoint = `/api/search?keywords=${encodeURIComponent(args.keywords)}&limit=${args.limit || 10}`;
-    }
-  }
-  
-  // Utiliser le cache avec TTL de 5 minutes
-  const cacheKey = `mcp_${platformType}_${action}_${JSON.stringify(args)}`;
-  
-  const { data: cachedData, cached } = await getCachedOrFetch(
-    supabase,
-    cacheKey,
-    async () => {
-      // Appeler mcp-proxy pour faire la requête
-      const { data, error } = await supabase.functions.invoke('mcp-proxy', {
-        body: {
-          platform_id: platform.id,
-          endpoint,
-          method,
-          body
+    
+    // Utiliser le cache avec TTL de 5 minutes
+    const cacheKey = `mcp_${platformType}_${action}_${JSON.stringify(args)}`;
+    
+    const { data: cachedData, cached } = await getCachedOrFetch(
+      supabase,
+      cacheKey,
+      async () => {
+        // Appeler mcp-proxy pour faire la requête
+        const { data, error } = await supabase.functions.invoke('mcp-proxy', {
+          body: {
+            platform_id: platform.id,
+            endpoint,
+            method,
+            body
+          }
+        });
+        
+        if (error) {
+          console.error('[AI-CHAT] MCP tool execution error:', error);
+          throw new Error(error.message || 'MCP tool execution failed');
+        }
+        
+        return data;
+      },
+      5 // TTL de 5 minutes
+    );
+    
+    // Marquer comme succès
+    success = true;
+    responseData = cachedData;
+    cacheHit = cached;
+    
+    console.log(`[AI-CHAT] MCP tool result (cached: ${cached}):`, cachedData);
+    return cachedData;
+    
+  } catch (error) {
+    // Capturer l'erreur pour le logging
+    success = false;
+    errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[AI-CHAT] MCP tool execution failed:', errorMessage);
+    throw error; // Re-throw pour que l'appelant gère l'erreur
+    
+  } finally {
+    // TOUJOURS logger, même en cas d'erreur
+    const latencyMs = Date.now() - startTime;
+    
+    console.log(`[AI-CHAT] Logging MCP call: ${toolName} (${success ? 'SUCCESS' : 'FAILED'}) - ${latencyMs}ms - Cache: ${cacheHit}`);
+    
+    // Insérer le log dans la base de données (non-bloquant)
+    supabase
+      .from('mcp_call_logs')
+      .insert({
+        user_id: userId,
+        package_id: toolName,
+        platform_type: platformType || null,
+        tool_name: action || null,
+        request_args: args,
+        response_data: responseData,
+        success,
+        error_message: errorMessage,
+        latency_ms: latencyMs,
+        cache_hit: cacheHit
+      })
+      .then(({ error: logError }) => {
+        if (logError) {
+          console.error('[AI-CHAT] Failed to log MCP call:', logError);
         }
       });
-      
-      if (error) {
-        console.error('[AI-CHAT] MCP tool execution error:', error);
-        throw new Error(error.message || 'MCP tool execution failed');
-      }
-      
-      return data;
-    },
-    5 // TTL de 5 minutes
-  );
-  
-  console.log(`[AI-CHAT] MCP tool result (cached: ${cached}):`, cachedData);
-  return cachedData;
+  }
 };
 
 serve(async (req) => {
@@ -393,7 +444,8 @@ ${mcpContextPrompt}
             toolCall.function.name,
             JSON.parse(toolCall.function.arguments),
             platforms,
-            supabase
+            supabase,
+            user.id
           );
           
           toolResults.push({
