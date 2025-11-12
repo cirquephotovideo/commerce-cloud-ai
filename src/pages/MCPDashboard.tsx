@@ -1,15 +1,42 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plug, Settings, Activity } from "lucide-react";
+import { Plug, Settings, Activity, Power } from "lucide-react";
 import { useMCPContext } from "@/contexts/MCPContext";
+import { MCPConnectionDialog } from "@/components/mcp/MCPConnectionDialog";
+import { useToast } from "@/hooks/use-toast";
 
 const MCPDashboard = () => {
-  const { mcpPackages, isLoading } = useMCPContext();
+  const { toast } = useToast();
+  const { mcpPackages, isLoading, disconnectPlatform } = useMCPContext();
+  const [selectedPlatform, setSelectedPlatform] = useState<{ type: string; name: string } | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const activePlatforms = mcpPackages.filter(pkg => pkg.isConfigured);
   const availablePlatforms = mcpPackages.filter(pkg => !pkg.isConfigured);
+
+  const handleDisconnect = async (platformType: string, platformName: string) => {
+    try {
+      await disconnectPlatform(platformType);
+      toast({
+        title: "✅ Plateforme déconnectée",
+        description: `${platformName} a été déconnectée`,
+      });
+    } catch (error) {
+      toast({
+        title: "❌ Erreur",
+        description: "Impossible de déconnecter la plateforme",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleConnect = (platformType: string, platformName: string) => {
+    setSelectedPlatform({ type: platformType, name: platformName });
+    setIsDialogOpen(true);
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 space-y-6">
@@ -132,10 +159,21 @@ const MCPDashboard = () => {
                       </div>
                     )}
 
-                    <Button variant="outline" size="sm" className="w-full mt-2">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Configurer
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1">
+                        <Settings className="h-4 w-4 mr-2" />
+                        Config
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => handleDisconnect(pkg.id, pkg.name)}
+                      >
+                        <Power className="h-4 w-4 mr-2" />
+                        Déconnecter
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -165,7 +203,10 @@ const MCPDashboard = () => {
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <p className="text-sm text-muted-foreground">{pkg.description}</p>
-                    <Button className="w-full">
+                    <Button 
+                      className="w-full"
+                      onClick={() => handleConnect(pkg.id, pkg.name)}
+                    >
                       <Plug className="h-4 w-4 mr-2" />
                       Connecter
                     </Button>
@@ -210,6 +251,16 @@ const MCPDashboard = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de connexion */}
+      {selectedPlatform && (
+        <MCPConnectionDialog
+          open={isDialogOpen}
+          onOpenChange={setIsDialogOpen}
+          platformType={selectedPlatform.type}
+          platformName={selectedPlatform.name}
+        />
+      )}
     </div>
   );
 };

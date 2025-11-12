@@ -2265,6 +2265,48 @@ export type Database = {
         }
         Relationships: []
       }
+      gemini_usage_tracking: {
+        Row: {
+          cost_usd: number | null
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          question: string | null
+          request_type: string
+          success: boolean | null
+          tokens_input: number | null
+          tokens_output: number | null
+          user_id: string
+        }
+        Insert: {
+          cost_usd?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          question?: string | null
+          request_type: string
+          success?: boolean | null
+          tokens_input?: number | null
+          tokens_output?: number | null
+          user_id: string
+        }
+        Update: {
+          cost_usd?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          question?: string | null
+          request_type?: string
+          success?: boolean | null
+          tokens_input?: number | null
+          tokens_output?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_services_config: {
         Row: {
           api_key_encrypted: string | null

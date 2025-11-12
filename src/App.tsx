@@ -31,6 +31,7 @@ import UnifiedProductsManagement from "./pages/UnifiedProductsManagement";
 import GeminiRAGDashboard from "./pages/GeminiRAGDashboard";
 import MCPDashboard from "./pages/MCPDashboard";
 import MCPChat from "./pages/MCPChat";
+import AdminGeminiUsage from "./pages/AdminGeminiUsage";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -82,6 +83,7 @@ const App = () => {
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />
+        <Route path="/admin/gemini-usage" element={<AdminRoute><DashboardLayout><AdminGeminiUsage /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
