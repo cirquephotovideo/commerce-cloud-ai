@@ -11,7 +11,7 @@ import { fr } from "date-fns/locale";
 export const RecentlyImportedProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
 
-  // Récupérer les produits récemment importés
+  // Récupérer les produits récemment importés avec refresh toutes les 10 secondes
   const { data: initialProducts } = useQuery({
     queryKey: ['recently-imported-products'],
     queryFn: async () => {
@@ -20,14 +20,15 @@ export const RecentlyImportedProducts = () => {
 
       const { data, error } = await supabase
         .from('supplier_products')
-        .select('id, product_name, purchase_price, currency, enrichment_status, created_at, supplier_id')
+        .select('id, product_name, purchase_price, currency, enrichment_status, created_at, supplier_id, updated_at')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
         .limit(20);
 
       if (error) throw error;
       return data || [];
     },
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Initialiser les produits
@@ -37,7 +38,7 @@ export const RecentlyImportedProducts = () => {
     }
   }, [initialProducts]);
 
-  // S'abonner aux nouveaux produits en temps réel
+  // S'abonner aux nouveaux produits et mises à jour en temps réel
   useEffect(() => {
     const channel = supabase
       .channel('supplier-products-changes')
@@ -51,6 +52,25 @@ export const RecentlyImportedProducts = () => {
         (payload) => {
           console.log('📦 New product imported:', payload.new);
           setProducts((prev) => [payload.new, ...prev].slice(0, 20));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'supplier_products',
+        },
+        (payload) => {
+          console.log('🔄 Product updated:', payload.new);
+          setProducts((prev) => {
+            const updated = prev.map(p => p.id === payload.new.id ? payload.new : p);
+            // Si le produit n'existe pas encore, l'ajouter en premier
+            if (!prev.some(p => p.id === payload.new.id)) {
+              return [payload.new, ...updated].slice(0, 20);
+            }
+            return updated;
+          });
         }
       )
       .subscribe();
