@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ProductLinksCell } from "./ProductLinksCell";
 import { Link, Eye, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { navigateToProduct } from "@/lib/productNavigationEvents";
 
 interface AnalysesTabProps {
   searchQuery: string;
@@ -18,6 +19,55 @@ export const AnalysesTab = ({ searchQuery }: AnalysesTabProps) => {
   const [page, setPage] = useState(1);
   const itemsPerPage = 50;
   const queryClient = useQueryClient();
+
+  // Helper function to extract product display name
+  const getProductDisplayName = (product: any): string => {
+    const analysisResult = product.analysis_result;
+    
+    // Try various name fields
+    const name = analysisResult?.name || 
+                 analysisResult?.product_name ||
+                 analysisResult?.title;
+    
+    if (name) return name;
+    
+    // Build from brand + description
+    const brand = analysisResult?.brand || '';
+    const description = analysisResult?.description?.suggested_description || 
+                       analysisResult?.description_long || '';
+    
+    if (brand && description) {
+      const shortDesc = description.split('.')[0].substring(0, 50);
+      return `${brand} - ${shortDesc}`;
+    }
+    
+    return brand || 'Produit sans nom';
+  };
+
+  // Helper function to extract product image
+  const getProductImage = (product: any): string | null => {
+    // Try image_urls array at root level
+    if (product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+      return product.image_urls[0];
+    }
+    
+    // Try in analysis_result
+    const analysisResult = product.analysis_result;
+    const images = analysisResult?.images || 
+                   analysisResult?.image_urls ||
+                   [];
+    
+    if (Array.isArray(images) && images.length > 0) {
+      return images[0];
+    }
+    
+    // Try singular image_url
+    if (analysisResult?.image_url) {
+      return analysisResult.image_url;
+    }
+    
+    return null;
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["analyses-tab", searchQuery, page],
@@ -99,60 +149,88 @@ export const AnalysesTab = ({ searchQuery }: AnalysesTabProps) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data?.products.map((product) => (
-              <TableRow key={product.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {(product.analysis_result as any)?.image_url && (
-                      <img
-                        src={(product.analysis_result as any).image_url}
-                        alt={(product.analysis_result as any)?.name || "Product"}
-                        className="h-10 w-10 rounded object-cover"
-                      />
-                    )}
-                    <span className="font-medium">
-                      {(product.analysis_result as any)?.name || "Sans nom"}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {product.ean ? (
-                    <Badge variant="outline">{product.ean}</Badge>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {product.category ? (
-                    <Badge variant="secondary">{product.category}</Badge>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <ProductLinksCell analysisId={product.id} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => autoLinkMutation.mutate(product.id)}
-                      disabled={autoLinkMutation.isPending}
-                    >
-                      {autoLinkMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Link className="h-4 w-4 mr-1" />
-                          Auto-Link
-                        </>
+            {data?.products.map((product) => {
+              const displayName = getProductDisplayName(product);
+              const imageUrl = getProductImage(product);
+              const brand = (product.analysis_result as any)?.brand;
+              
+              return (
+                <TableRow 
+                  key={product.id}
+                  onClick={() => {
+                    navigateToProduct({
+                      productId: product.id,
+                      productName: displayName
+                    });
+                  }}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      {imageUrl && (
+                        <img
+                          src={imageUrl}
+                          alt={displayName}
+                          className="h-12 w-12 rounded object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
                       )}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {displayName}
+                        </span>
+                        {brand && (
+                          <span className="text-xs text-muted-foreground">
+                            {brand}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {product.ean ? (
+                      <Badge variant="outline">{product.ean}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {product.category && product.category !== 'non_categorise' ? (
+                      <Badge variant="secondary">{product.category}</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">À catégoriser</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <ProductLinksCell analysisId={product.id} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent row click
+                          autoLinkMutation.mutate(product.id);
+                        }}
+                        disabled={autoLinkMutation.isPending}
+                      >
+                        {autoLinkMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Link className="h-4 w-4 mr-1" />
+                            Auto-Link
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </Card>

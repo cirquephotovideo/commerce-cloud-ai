@@ -41,6 +41,26 @@ export function ProductLinksDashboard() {
   const [selectedLink, setSelectedLink] = useState<ProductLink | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Helper function to extract product display name
+  const getProductDisplayName = (analysisResult: any): string => {
+    const name = analysisResult?.name || 
+                 analysisResult?.product_name ||
+                 analysisResult?.title;
+    
+    if (name) return name;
+    
+    const brand = analysisResult?.brand || '';
+    const description = analysisResult?.description?.suggested_description || 
+                       analysisResult?.description_long || '';
+    
+    if (brand && description) {
+      const shortDesc = description.split('.')[0].substring(0, 50);
+      return `${brand} - ${shortDesc}`;
+    }
+    
+    return brand || 'Produit sans nom';
+  };
+
   // Fetch product links with pagination (limit to 1000 for performance)
   const { data: links, isLoading, refetch } = useQuery({
     queryKey: ["product-links-dashboard"],
@@ -260,7 +280,7 @@ export function ProductLinksDashboard() {
                               {getConfidenceBadge(link.confidence_score)}
                             </div>
                             <p className="font-medium truncate">
-                              {link.product_analyses?.analysis_result?.name || "Produit sans nom"}
+                              {getProductDisplayName(link.product_analyses?.analysis_result)}
                             </p>
                             <p className="text-sm text-muted-foreground truncate">
                               → {link.supplier_products?.product_name || "Fournisseur inconnu"}
@@ -310,7 +330,7 @@ export function ProductLinksDashboard() {
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <p className="text-sm font-medium text-muted-foreground">Produit Analysé</p>
-                            <p className="font-medium">{link.product_analyses?.analysis_result?.name || "N/A"}</p>
+                            <p className="font-medium">{getProductDisplayName(link.product_analyses?.analysis_result)}</p>
                             <p className="text-sm text-muted-foreground">EAN: {link.product_analyses?.ean || "N/A"}</p>
                           </div>
                           <div>
