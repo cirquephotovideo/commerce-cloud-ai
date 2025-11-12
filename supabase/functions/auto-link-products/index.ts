@@ -134,12 +134,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json();
-    const { mode = 'start', job_id, batch_size = 100, analysis_id, auto_mode } = body;
+    const body = await req.json().catch(() => ({}));
+    const { mode, job_id, batch_size = 100, analysis_id, auto_mode } = body;
 
-    // BACKWARD COMPATIBILITY: Handle old API calls from AnalysesTab and useProductLinks
-    if (auto_mode === true || analysis_id) {
-      console.log('[auto-link-products] Single product link mode');
+    console.log('[auto-link-products] Request params:', { mode, auto_mode, analysis_id, job_id });
+
+    // BACKWARD COMPATIBILITY: Handle old API calls (no mode specified)
+    if (!mode || auto_mode === true || analysis_id) {
+      console.log('[auto-link-products] Single product link mode (backward compatibility)');
       
       const { data, error } = await supabase
         .rpc('bulk_create_product_links_chunked', {
@@ -253,10 +255,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fallback for unknown mode
+    // Invalid mode - log and return error
+    console.error('[auto-link-products] Invalid mode:', mode);
     return new Response(
       JSON.stringify({ 
-        error: 'Invalid mode. Use "start" or "status"' 
+        error: 'Invalid mode. Use "start", "status", or omit mode for single product linking',
+        received_params: { mode, auto_mode, analysis_id }
       }),
       {
         status: 400,

@@ -79,6 +79,13 @@ export const MCPServerConfiguration = () => {
       return;
     }
 
+    // Vérifier l'authentification avant d'appeler le proxy
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      toast.error("Vous devez être connecté pour tester la connexion MCP");
+      return;
+    }
+
     setIsTesting(true);
     setConnectionStatus('disconnected');
     const startTime = Date.now();
@@ -98,9 +105,11 @@ export const MCPServerConfiguration = () => {
       const latency = Date.now() - startTime;
 
       if (error) {
+        console.error('[MCP] Error response:', error);
         throw new Error(error.message || 'Failed to connect to MCP server');
       }
-      const models = data.data?.map((m: any) => m.id) || [];
+      
+      const models = data?.data?.map((m: any) => m.id) || [];
       
       setConfig(prev => ({ ...prev, available_models: models }));
       setConnectionStatus('connected');

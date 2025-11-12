@@ -12,7 +12,10 @@ Deno.serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
+    console.log('[mcp-proxy] Auth header present:', !!authHeader);
+    
     if (!authHeader) {
+      console.error('[mcp-proxy] Missing authorization header');
       return new Response(JSON.stringify({ error: 'Missing authorization' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -26,8 +29,14 @@ Deno.serve(async (req) => {
     );
 
     const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
+    console.log('[mcp-proxy] User auth result:', { hasUser: !!user, error: userError?.message });
+    
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      console.error('[mcp-proxy] Auth failed:', userError?.message);
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized',
+        details: userError?.message 
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
