@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useRealtimeImportExportStats } from "@/hooks/useRealtimeImportExportStats";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AutoExportRules } from "@/components/AutoExportRules";
 import { ExportScheduler } from "@/components/ExportScheduler";
 import { ExportHistoryDialog } from "@/components/ExportHistoryDialog";
 import { PlatformImportSection } from "@/components/import/PlatformImportSection";
+import { ImportFlowChart } from "@/components/import/ImportFlowChart";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,17 +15,33 @@ import { History, Package, TrendingUp, AlertCircle, Calendar, Loader2, Download,
 
 export default function ImportExportDashboard() {
   const [showHistory, setShowHistory] = useState(false);
-  const { liveStats, setLiveStats } = useRealtimeImportExportStats();
 
-  // Stats globales avec temps réel
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['import-export-stats'],
     queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
       const [importsRes, exportsRes, pendingRes, errorsRes] = await Promise.all([
-        supabase.from('supplier_import_logs').select('id', { count: 'exact', head: true }),
-        supabase.from('export_history').select('id', { count: 'exact', head: true }).eq('status', 'success'),
-        supabase.from('supplier_products').select('id', { count: 'exact', head: true }).eq('enrichment_status', 'pending'),
-        supabase.from('export_history').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+        supabase
+          .from('supplier_import_logs')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id),
+        supabase
+          .from('export_history')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'success')
+          .eq('user_id', user.id),
+        supabase
+          .from('supplier_products')
+          .select('id', { count: 'exact', head: true })
+          .eq('enrichment_status', 'pending')
+          .eq('user_id', user.id),
+        supabase
+          .from('export_history')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'failed')
+          .eq('user_id', user.id),
       ]);
 
       return {
@@ -35,14 +51,8 @@ export default function ImportExportDashboard() {
         errors: errorsRes.count || 0,
       };
     },
+    refetchInterval: 5000,
   });
-
-  // Initialiser les stats temps réel avec les données de la base
-  useEffect(() => {
-    if (stats) {
-      setLiveStats(stats);
-    }
-  }, [stats, setLiveStats]);
 
   // Activité récente
   const { data: recentActivity } = useQuery({
@@ -116,7 +126,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold animate-in fade-in-50">{liveStats.totalImports}</div>
+                <div className="text-3xl font-bold animate-in fade-in-50">{stats?.totalImports || 0}</div>
                 <p className="text-sm text-muted-foreground">Imports totaux</p>
               </div>
               <Upload className="h-8 w-8 text-blue-500" />
@@ -127,7 +137,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-green-500 animate-in fade-in-50">{liveStats.successfulExports}</div>
+                <div className="text-3xl font-bold text-green-500 animate-in fade-in-50">{stats?.successfulExports || 0}</div>
                 <p className="text-sm text-muted-foreground">Exports réussis</p>
               </div>
               <Download className="h-8 w-8 text-green-500" />
@@ -138,7 +148,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-orange-500 animate-in fade-in-50">{liveStats.pendingEnrichments}</div>
+                <div className="text-3xl font-bold text-orange-500 animate-in fade-in-50">{stats?.pendingEnrichments || 0}</div>
                 <p className="text-sm text-muted-foreground">En attente</p>
               </div>
               <TrendingUp className="h-8 w-8 text-orange-500" />
@@ -149,7 +159,7 @@ export default function ImportExportDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-3xl font-bold text-red-500 animate-in fade-in-50">{liveStats.errors}</div>
+                <div className="text-3xl font-bold text-red-500 animate-in fade-in-50">{stats?.errors || 0}</div>
                 <p className="text-sm text-muted-foreground">Erreurs</p>
               </div>
               <AlertCircle className="h-8 w-8 text-red-500" />
@@ -157,6 +167,9 @@ export default function ImportExportDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Graphique de flux en temps réel */}
+      <ImportFlowChart />
 
       <Tabs defaultValue="imports" className="w-full">
         <TabsList className="grid w-full grid-cols-4">

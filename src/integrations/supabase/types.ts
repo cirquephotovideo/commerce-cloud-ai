@@ -5171,6 +5171,13 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_import_flow_by_minute: {
+        Args: { p_user_id: string }
+        Returns: {
+          minute: string
+          products_count: number
+        }[]
+      }
       get_retryable_import_errors: {
         Args: never
         Returns: {
