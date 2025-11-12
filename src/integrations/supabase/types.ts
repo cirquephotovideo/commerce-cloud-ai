@@ -196,6 +196,51 @@ export type Database = {
           },
         ]
       }
+      amazon_auto_link_jobs: {
+        Row: {
+          batch_size: number | null
+          completed_at: string | null
+          created_at: string
+          current_offset: number | null
+          error_message: string | null
+          id: string
+          links_created: number | null
+          processed_count: number | null
+          started_at: string | null
+          status: string
+          total_to_process: number | null
+          user_id: string
+        }
+        Insert: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string
+          current_offset?: number | null
+          error_message?: string | null
+          id?: string
+          links_created?: number | null
+          processed_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_to_process?: number | null
+          user_id: string
+        }
+        Update: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string
+          current_offset?: number | null
+          error_message?: string | null
+          id?: string
+          links_created?: number | null
+          processed_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_to_process?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       amazon_credential_rotations: {
         Row: {
           created_at: string | null
@@ -3409,6 +3454,57 @@ export type Database = {
             columns: ["competitor_site_id"]
             isOneToOne: false
             referencedRelation: "competitor_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_amazon_links: {
+        Row: {
+          analysis_id: string
+          confidence_score: number | null
+          created_at: string
+          enrichment_id: string
+          id: string
+          link_type: string
+          matched_on: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          analysis_id: string
+          confidence_score?: number | null
+          created_at?: string
+          enrichment_id: string
+          id?: string
+          link_type?: string
+          matched_on?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string
+          confidence_score?: number | null
+          created_at?: string
+          enrichment_id?: string
+          id?: string
+          link_type?: string
+          matched_on?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_amazon_links_analysis"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "product_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_amazon_links_enrichment"
+            columns: ["enrichment_id"]
+            isOneToOne: false
+            referencedRelation: "code2asin_enrichments"
             referencedColumns: ["id"]
           },
         ]

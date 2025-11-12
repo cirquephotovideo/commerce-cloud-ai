@@ -7,6 +7,7 @@ import { AnalysesTab } from "@/components/unified-products/AnalysesTab";
 import { SuppliersTab } from "@/components/unified-products/SuppliersTab";
 import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
 import { AutoLinkPanel } from "@/components/unified-products/AutoLinkPanel";
+import { AmazonAutoLinkPanel } from "@/components/unified-products/AmazonAutoLinkPanel";
 import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
 import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
 
@@ -36,6 +37,9 @@ export default function UnifiedProductsManagement() {
 
       {/* Panneau Fusion Automatique */}
       <AutoLinkPanel />
+
+      {/* Panneau Fusion Amazon */}
+      <AmazonAutoLinkPanel />
 
       {/* Dashboard des Liens */}
       <ProductLinksDashboard />

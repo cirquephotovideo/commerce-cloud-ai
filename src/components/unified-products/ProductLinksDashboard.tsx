@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link2, TrendingUp, CheckCircle, AlertCircle, Trash2, Eye } from "lucide-react";
+import { Link2, TrendingUp, CheckCircle, AlertCircle, Trash2, Eye, ShoppingCart, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,6 +40,45 @@ interface LinkStats {
 export function ProductLinksDashboard() {
   const [selectedLink, setSelectedLink] = useState<ProductLink | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Fetch Amazon product links
+  const { data: amazonLinks, isLoading: amazonLoading, refetch: refetchAmazon } = useQuery({
+    queryKey: ["amazon-product-links-dashboard"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase
+        .from("product_amazon_links")
+        .select(`
+          *,
+          product_analyses!inner(id, ean, analysis_result),
+          code2asin_enrichments!inner(id, ean, asin, title, brand, buybox_price, image_urls)
+        `)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      if (error) throw error;
+      return data || [];
+    }
+  });
+
+  const deleteAmazonLink = async (linkId: string) => {
+    try {
+      const { error } = await supabase
+        .from('product_amazon_links')
+        .delete()
+        .eq('id', linkId);
+
+      if (error) throw error;
+
+      toast.success("Lien Amazon supprimé");
+      refetchAmazon();
+    } catch (error: any) {
+      toast.error("Erreur: " + error.message);
+    }
+  };
 
   // Helper function to extract product display name
   const getProductDisplayName = (analysisResult: any): string => {
@@ -198,8 +237,9 @@ export function ProductLinksDashboard() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="all-links" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="all-links">🔗 Nouveaux Liens ({stats.total_links})</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="all-links">🔗 Liens Fournisseurs ({stats.total_links})</TabsTrigger>
+              <TabsTrigger value="amazon-links">🛒 Liens Amazon ({amazonLinks?.length || 0})</TabsTrigger>
               <TabsTrigger value="overview">📊 Vue d'ensemble</TabsTrigger>
               <TabsTrigger value="trends">📈 Tendances</TabsTrigger>
             </TabsList>
@@ -381,6 +421,83 @@ export function ProductLinksDashboard() {
                     </div>
                   ))}
                 </div>
+              </ScrollArea>
+            </TabsContent>
+
+            {/* Amazon Links Tab */}
+            <TabsContent value="amazon-links" className="space-y-4">
+              <div className="mb-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-sm text-muted-foreground">
+                  🛒 Les liens ci-dessous connectent vos <strong>Produits Analysés</strong> avec les <strong>Enrichissements Amazon</strong> (Code2ASIN)
+                </p>
+              </div>
+              <ScrollArea className="h-[500px]">
+                {amazonLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : amazonLinks && amazonLinks.length > 0 ? (
+                  <div className="space-y-3">
+                    {amazonLinks.map((link) => (
+                      <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge variant={link.link_type === 'automatic' ? 'default' : 'secondary'}>
+                              {link.link_type === 'automatic' ? '🤖 Automatique' : '✋ Manuel'}
+                            </Badge>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              {link.confidence_score}% confiance
+                            </Badge>
+                            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+                              <ShoppingCart className="h-3 w-3 mr-1" />
+                              Amazon
+                            </Badge>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {new Date(link.created_at).toLocaleDateString('fr-FR', { 
+                                day: '2-digit', 
+                                month: 'short', 
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">🔍 Produit Analysé</p>
+                              <p className="font-medium">{getProductDisplayName(link.product_analyses?.analysis_result)}</p>
+                              <p className="text-sm text-muted-foreground">EAN: {link.product_analyses?.ean || "N/A"}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">🛒 Enrichissement Amazon</p>
+                              <p className="font-medium">{link.code2asin_enrichments?.title || link.code2asin_enrichments?.brand || "N/A"}</p>
+                              <p className="text-sm text-muted-foreground">
+                                ASIN: {link.code2asin_enrichments?.asin || "N/A"} | 
+                                Prix: {link.code2asin_enrichments?.buybox_price ? `${link.code2asin_enrichments.buybox_price}€` : "N/A"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteAmazonLink(link.id)}
+                          className="ml-4 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">Aucun lien Amazon trouvé</p>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      Utilisez le panneau de fusion automatique pour créer des liens
+                    </p>
+                  </div>
+                )}
               </ScrollArea>
             </TabsContent>
 
