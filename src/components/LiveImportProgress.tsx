@@ -31,13 +31,28 @@ export function LiveImportProgress() {
   const { data: jobs, refetch } = useQuery({
     queryKey: ['active-import-jobs-live'],
     queryFn: async () => {
+      // Verify auth explicitly
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('[LiveImportProgress] Auth error:', authError);
+        return [];
+      }
+
+      console.log('[LiveImportProgress] Fetching jobs for user:', user.id);
+      
       const { data, error } = await supabase
         .from('import_jobs')
         .select('*, supplier_configurations(supplier_name)')
+        .eq('user_id', user.id)
         .in('status', ['queued', 'processing'])
         .order('started_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('[LiveImportProgress] Query error:', error);
+        throw error;
+      }
+      
+      console.log('[LiveImportProgress] Found jobs:', data?.length || 0);
       return data as ImportJob[];
     },
     refetchInterval: 2000,

@@ -8,8 +8,10 @@ import { PlatformConfigDialog } from "./PlatformConfigDialog";
 import { AutoSyncToggle } from "./AutoSyncToggle";
 import { RecentlyImportedProducts } from "./RecentlyImportedProducts";
 import { ImportErrorsWidget } from "./ImportErrorsWidget";
+import { ImportHistoryTable } from "./ImportHistoryTable";
 import { usePlatformImport } from "@/hooks/usePlatformImport";
 import { LiveImportProgress } from "@/components/LiveImportProgress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Loader2 } from "lucide-react";
 
 export const PlatformImportSection = () => {
@@ -136,11 +138,26 @@ export const PlatformImportSection = () => {
         </CardHeader>
       </Card>
 
-      {/* Progression des imports en cours */}
-      <LiveImportProgress />
+      {/* Tabs: Imports actifs et Historique */}
+      <Tabs defaultValue="active" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="active">En cours</TabsTrigger>
+          <TabsTrigger value="history">Historique</TabsTrigger>
+          <TabsTrigger value="errors">Erreurs</TabsTrigger>
+        </TabsList>
 
-      {/* Widget des erreurs d'import */}
-      <ImportErrorsWidget />
+        <TabsContent value="active" className="space-y-4">
+          <LiveImportProgress />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <ImportHistoryTable />
+        </TabsContent>
+
+        <TabsContent value="errors">
+          <ImportErrorsWidget />
+        </TabsContent>
+      </Tabs>
 
       {/* Plateformes configurées */}
       {platforms && platforms.length > 0 ? (

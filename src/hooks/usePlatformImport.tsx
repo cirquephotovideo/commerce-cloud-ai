@@ -166,3 +166,81 @@ export const usePlatformImport = () => {
 
   return { importFromPlatform };
 };
+
+export const useRetryImport = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ jobId, supplierId }: { jobId: string; supplierId: string }) => {
+      // Get original job details
+      const { data: job, error: jobError } = await supabase
+        .from('import_jobs')
+        .select('*, supplier_configurations(*)')
+        .eq('id', jobId)
+        .single();
+
+      if (jobError || !job) {
+        throw new Error('Job introuvable');
+      }
+
+      // Get platform configuration
+      const { data: platformConfig, error: configError } = await supabase
+        .from('platform_configurations')
+        .select('*')
+        .eq('id', supplierId)
+        .maybeSingle();
+
+      if (configError || !platformConfig) {
+        throw new Error('Configuration de la plateforme introuvable');
+      }
+
+      // Reconstruct credentials
+      const credentials: Record<string, any> = platformConfig.platform_type === 'odoo' 
+        ? (typeof platformConfig.additional_config === 'object' && platformConfig.additional_config !== null 
+            ? platformConfig.additional_config as Record<string, any>
+            : {})
+        : {
+            apiKey: platformConfig.api_key_encrypted,
+            apiSecret: platformConfig.api_secret_encrypted,
+            accessToken: platformConfig.access_token_encrypted
+          };
+
+      const platformConfigData = platformConfig.platform_type === 'odoo' 
+        ? {
+            platform_url: platformConfig.platform_url,
+            additional_config: credentials
+          }
+        : {
+            url: platformConfig.platform_url,
+            ...credentials
+          };
+
+      // Trigger new import
+      const { data, error } = await supabase.functions.invoke('orchestrate-platform-import', {
+        body: {
+          supplier_id: job.supplier_id,
+          platform: platformConfig.platform_type,
+          options: {
+            config: platformConfigData,
+            importType: 'full',
+            autoEnrich: false,
+            matchByEan: true,
+          }
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Import relancé avec succès');
+      queryClient.invalidateQueries({ queryKey: ['import-history'] });
+      queryClient.invalidateQueries({ queryKey: ['active-import-jobs-live'] });
+      queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
+    },
+    onError: (error: any) => {
+      console.error('[useRetryImport] Error:', error);
+      toast.error(`Erreur lors de la relance: ${error.message}`);
+    }
+  });
+};
