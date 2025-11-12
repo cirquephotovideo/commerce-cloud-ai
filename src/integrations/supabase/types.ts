@@ -2552,6 +2552,78 @@ export type Database = {
         }
         Relationships: []
       }
+      market_intelligence_data: {
+        Row: {
+          ai_confidence_score: number | null
+          ai_reasoning: string | null
+          ai_recommendation: string | null
+          alert_severity: string | null
+          alert_type: string | null
+          amazon_price: number | null
+          check_timestamp: string
+          competitors_count: number | null
+          created_at: string | null
+          current_user_price: number | null
+          google_shopping_avg_price: number | null
+          google_shopping_max_price: number | null
+          google_shopping_min_price: number | null
+          id: string
+          market_demand: string | null
+          market_position: string | null
+          product_ean: string | null
+          product_name: string
+          search_volume_trend: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          ai_reasoning?: string | null
+          ai_recommendation?: string | null
+          alert_severity?: string | null
+          alert_type?: string | null
+          amazon_price?: number | null
+          check_timestamp?: string
+          competitors_count?: number | null
+          created_at?: string | null
+          current_user_price?: number | null
+          google_shopping_avg_price?: number | null
+          google_shopping_max_price?: number | null
+          google_shopping_min_price?: number | null
+          id?: string
+          market_demand?: string | null
+          market_position?: string | null
+          product_ean?: string | null
+          product_name: string
+          search_volume_trend?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          ai_reasoning?: string | null
+          ai_recommendation?: string | null
+          alert_severity?: string | null
+          alert_type?: string | null
+          amazon_price?: number | null
+          check_timestamp?: string
+          competitors_count?: number | null
+          created_at?: string | null
+          current_user_price?: number | null
+          google_shopping_avg_price?: number | null
+          google_shopping_max_price?: number | null
+          google_shopping_min_price?: number | null
+          id?: string
+          market_demand?: string | null
+          market_position?: string | null
+          product_ean?: string | null
+          product_name?: string
+          search_volume_trend?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       market_trends: {
         Row: {
           confidence_score: number | null
