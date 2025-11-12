@@ -11,6 +11,8 @@ import { useQueryClient } from "@tanstack/react-query";
 export const AutoLinkPanel = () => {
   const [isLinking, setIsLinking] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalToProcess, setTotalToProcess] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [summary, setSummary] = useState({
     linksCreated: 0,
@@ -22,67 +24,122 @@ export const AutoLinkPanel = () => {
   const handleAutoLink = async () => {
     setIsLinking(true);
     setProgress(0);
+    setProcessedCount(0);
+    setTotalToProcess(0);
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user || !session) throw new Error("Not authenticated");
-
-      // Animation de progression
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 10, 90));
-      }, 300);
-
-      const invokeWithToken = async (jwt: string) =>
-        await supabase.functions.invoke("auto-link-products", {
-          body: {
-            user_id: user.id,
-            auto_mode: true,
-            min_confidence: 95,
-          },
-          headers: { Authorization: `Bearer ${jwt}` },
-        });
-
-      // First try with current session token
-      let { data, error } = await invokeWithToken(session.access_token);
-
-      // If unauthorized, try refreshing the session once and retry
-      if (error && (error.message?.includes("401") || error.message?.toLowerCase().includes("unauthorized"))) {
-        const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-        if (!refreshError && refreshed?.session?.access_token) {
-          ({ data, error } = await invokeWithToken(refreshed.session.access_token));
-        }
+      
+      if (!session) {
+        toast.error("Vous devez être connecté");
+        setIsLinking(false);
+        return;
       }
 
-      clearInterval(progressInterval);
-      setProgress(100);
-
-      if (error) throw error;
-
-      // Afficher le récapitulatif
-      setSummary({
-        linksCreated: data.links_created || 0,
-        executionTime: data.execution_time_ms || 0,
-        potentialMatches: data.potential_matches || 0,
+      console.log('[AutoLinkPanel] Starting auto-link job');
+      
+      const startTime = Date.now();
+      
+      // Step 1: Start the job
+      const { data: startData, error: startError } = await supabase.functions.invoke('auto-link-products', {
+        body: { mode: 'start', batch_size: 100 },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
       });
-      setShowSummary(true);
+
+      if (startError) {
+        console.error('[AutoLinkPanel] Error starting job:', startError);
+        throw startError;
+      }
+
+      const jobId = startData.job_id;
+      const totalProducts = startData.total_to_process;
+      setTotalToProcess(totalProducts);
       
-      toast.success(`✅ ${data.links_created || 0} produit(s) lié(s) automatiquement`);
+      console.log('[AutoLinkPanel] Job started:', jobId, 'Total products:', totalProducts);
+
+      // Step 2: Poll for status
+      let pollCount = 0;
+      const maxPolls = 300; // 10 minutes max (2s interval)
       
-      // Invalider les caches pour rafraîchir les données
-      queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
-      queryClient.invalidateQueries({ queryKey: ["product-analyses"] });
-      queryClient.invalidateQueries({ queryKey: ["global-product-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["unlinked-products-count"] });
-      queryClient.invalidateQueries({ queryKey: ["analyses-tab"] });
-      queryClient.invalidateQueries({ queryKey: ["suppliers-tab"] });
-      queryClient.invalidateQueries({ queryKey: ["product-links"] });
-    } catch (error) {
-      console.error("Auto-link error:", error);
-      toast.error("Erreur lors de la fusion automatique");
-    } finally {
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        
+        if (pollCount > maxPolls) {
+          clearInterval(pollInterval);
+          toast.error("Timeout - Le traitement prend trop de temps");
+          setIsLinking(false);
+          return;
+        }
+
+        try {
+          const { data: statusData, error: statusError } = await supabase.functions.invoke('auto-link-products', {
+            body: { mode: 'status', job_id: jobId },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`
+            }
+          });
+
+          if (statusError) {
+            console.error('[AutoLinkPanel] Error getting status:', statusError);
+            clearInterval(pollInterval);
+            toast.error("Erreur lors de la vérification du statut");
+            setIsLinking(false);
+            return;
+          }
+
+          const currentProgress = totalProducts > 0 
+            ? Math.round((statusData.processed_count / totalProducts) * 100)
+            : 0;
+          
+          setProgress(currentProgress);
+          setProcessedCount(statusData.processed_count);
+
+          console.log('[AutoLinkPanel] Status:', statusData.status, 'Progress:', currentProgress);
+
+          if (statusData.status === 'completed') {
+            clearInterval(pollInterval);
+            const executionTime = Date.now() - startTime;
+            
+            console.log('[AutoLinkPanel] Job completed:', statusData.links_created, 'links created');
+            
+            toast.success(`✅ ${statusData.links_created} liens créés avec succès !`);
+            
+            setSummary({
+              linksCreated: statusData.links_created,
+              executionTime: executionTime,
+              potentialMatches: totalProducts
+            });
+            setShowSummary(true);
+            
+            queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
+            queryClient.invalidateQueries({ queryKey: ["product-analyses"] });
+            queryClient.invalidateQueries({ queryKey: ["global-product-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["unlinked-products-count"] });
+            queryClient.invalidateQueries({ queryKey: ["analyses-tab"] });
+            queryClient.invalidateQueries({ queryKey: ["suppliers-tab"] });
+            queryClient.invalidateQueries({ queryKey: ["product-links"] });
+            
+            setIsLinking(false);
+          } else if (statusData.status === 'failed') {
+            clearInterval(pollInterval);
+            toast.error('Erreur: ' + (statusData.error_message || 'Le traitement a échoué'));
+            setIsLinking(false);
+          }
+        } catch (pollError: any) {
+          console.error('[AutoLinkPanel] Polling error:', pollError);
+          clearInterval(pollInterval);
+          toast.error("Erreur lors du suivi du traitement");
+          setIsLinking(false);
+        }
+      }, 2000); // Poll every 2 seconds
+      
+    } catch (error: any) {
+      console.error('[AutoLinkPanel] Error:', error);
+      toast.error(error.message || "Erreur lors de la fusion automatique");
       setIsLinking(false);
-      setTimeout(() => setProgress(0), 1000);
+      setProgress(0);
     }
   };
   return (
@@ -124,11 +181,15 @@ export const AutoLinkPanel = () => {
           </Button>
         </div>
         
-        {isLinking && progress > 0 && (
+        {isLinking && (
           <div className="mt-4 space-y-2">
             <Progress value={progress} className="h-2" />
             <p className="text-sm text-muted-foreground text-center">
-              Traitement en cours... {progress}%
+              {progress < 100 ? (
+                <>Traitement en cours... {progress}% ({processedCount.toLocaleString()}/{totalToProcess.toLocaleString()} produits)</>
+              ) : (
+                <>Finalisation...</>
+              )}
             </p>
           </div>
         )}

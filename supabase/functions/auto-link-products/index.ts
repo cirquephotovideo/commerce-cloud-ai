@@ -5,13 +5,107 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Background processing function
+async function processJob(jobId: string, supabase: any) {
+  console.log(`[auto-link-products] Starting background processing for job ${jobId}`);
+  
+  try {
+    // Get job details
+    const { data: job } = await supabase
+      .from('auto_link_jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single();
+
+    if (!job) {
+      console.error('[auto-link-products] Job not found:', jobId);
+      return;
+    }
+
+    // Update job to running
+    await supabase
+      .from('auto_link_jobs')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', jobId);
+
+    let currentOffset = 0;
+    let totalLinksCreated = 0;
+    const batchSize = job.batch_size;
+
+    // Process in chunks
+    while (true) {
+      console.log(`[auto-link-products] Processing chunk at offset ${currentOffset}`);
+      
+      const { data, error } = await supabase
+        .rpc('bulk_create_product_links_chunked', {
+          p_user_id: job.user_id,
+          p_limit: batchSize,
+          p_offset: currentOffset
+        });
+
+      if (error) {
+        console.error('[auto-link-products] RPC error:', error);
+        await supabase
+          .from('auto_link_jobs')
+          .update({ 
+            status: 'failed', 
+            error_message: error.message,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+        break;
+      }
+
+      totalLinksCreated += data[0].links_created;
+      currentOffset += data[0].processed_count;
+
+      // Update progress
+      await supabase
+        .from('auto_link_jobs')
+        .update({
+          processed_count: currentOffset,
+          links_created: totalLinksCreated,
+          current_offset: currentOffset
+        })
+        .eq('id', jobId);
+
+      console.log(`[auto-link-products] Processed ${currentOffset} products, created ${totalLinksCreated} links`);
+
+      // Stop if no more data
+      if (!data[0].has_more) {
+        await supabase
+          .from('auto_link_jobs')
+          .update({ 
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+        console.log(`[auto-link-products] Job completed: ${totalLinksCreated} links created`);
+        break;
+      }
+
+      // Small pause to avoid overloading
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  } catch (error: any) {
+    console.error('[auto-link-products] Processing error:', error);
+    await supabase
+      .from('auto_link_jobs')
+      .update({ 
+        status: 'failed', 
+        error_message: error.message,
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const startTime = Date.now();
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('[auto-link-products] Missing authorization header');
@@ -40,117 +134,55 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('[auto-link-products] Authenticated user:', user.id);
+    const body = await req.json();
+    const { mode = 'start', job_id, batch_size = 100 } = body;
 
-    const { auto_mode = false, batch_size = 50 } = await req.json();
-
-    // MODE GLOBAL OPTIMISÉ: Process in batches to avoid timeout
-    if (auto_mode) {
-      console.log('[auto-link-products] Starting batch processing with batch_size:', batch_size);
+    // MODE 1: START - Create job and start background processing
+    if (mode === 'start') {
+      console.log('[auto-link-products] Starting new job for user:', user.id);
       
-      let totalLinksCreated = 0;
-      let processedBatches = 0;
-      const BATCH_SIZE = batch_size;
+      // Count total products to process
+      const { count } = await supabase
+        .from('product_analyses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('ean', 'is', null)
+        .neq('ean', '');
 
-      // Process in batches until no more links are created
-      while (true) {
-        const batchStartTime = Date.now();
-        
-        // Fetch products that need linking (limited batch)
-        const { data: analyses, error: fetchError } = await supabase
-          .from('product_analyses')
-          .select('id, ean, product_name')
-          .eq('user_id', user.id)
-          .not('ean', 'is', null)
-          .neq('ean', '')
-          .limit(BATCH_SIZE);
+      console.log('[auto-link-products] Total products to process:', count);
 
-        if (fetchError) {
-          console.error('[auto-link-products] Fetch error:', fetchError);
-          throw fetchError;
-        }
+      // Create job record
+      const { data: job, error: jobError } = await supabase
+        .from('auto_link_jobs')
+        .insert({
+          user_id: user.id,
+          status: 'pending',
+          total_to_process: count || 0,
+          batch_size: batch_size
+        })
+        .select()
+        .single();
 
-        if (!analyses || analyses.length === 0) {
-          console.log('[auto-link-products] No more products to process');
-          break;
-        }
-
-        console.log(`[auto-link-products] Processing batch ${processedBatches + 1}: ${analyses.length} products`);
-
-        // Process each product in this batch
-        let batchLinksCreated = 0;
-        for (const analysis of analyses) {
-          // Find matching supplier products by EAN
-          const { data: suppliers, error: supplierError } = await supabase
-            .from('supplier_products')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('ean', analysis.ean)
-            .limit(1);
-
-          if (supplierError) {
-            console.error(`[auto-link-products] Error finding supplier for ${analysis.ean}:`, supplierError);
-            continue;
-          }
-
-          if (suppliers && suppliers.length > 0) {
-            // Check if link already exists
-            const { data: existingLink } = await supabase
-              .from('product_links')
-              .select('id')
-              .eq('analysis_id', analysis.id)
-              .eq('supplier_product_id', suppliers[0].id)
-              .single();
-
-            if (!existingLink) {
-              // Create the link
-              const { error: insertError } = await supabase
-                .from('product_links')
-                .insert({
-                  analysis_id: analysis.id,
-                  supplier_product_id: suppliers[0].id,
-                  link_type: 'automatic',
-                  confidence_score: 100,
-                  user_id: user.id
-                });
-
-              if (!insertError) {
-                batchLinksCreated++;
-              } else {
-                console.error(`[auto-link-products] Insert error for ${analysis.id}:`, insertError);
-              }
-            }
-          }
-        }
-
-        totalLinksCreated += batchLinksCreated;
-        processedBatches++;
-        const batchTime = Date.now() - batchStartTime;
-        
-        console.log(`[auto-link-products] Batch ${processedBatches} completed: ${batchLinksCreated} links created in ${batchTime}ms`);
-
-        // Stop if we processed fewer items than batch size (last batch)
-        if (analyses.length < BATCH_SIZE) {
-          break;
-        }
-
-        // Stop after a reasonable number of batches to prevent infinite loops
-        if (processedBatches >= 20) {
-          console.log('[auto-link-products] Max batches reached, stopping');
-          break;
-        }
+      if (jobError) {
+        console.error('[auto-link-products] Error creating job:', jobError);
+        throw jobError;
       }
 
-      const executionTime = Date.now() - startTime;
+      console.log('[auto-link-products] Created job:', job.id);
 
-      console.log(`[auto-link-products] All batches completed: ${totalLinksCreated} total links created in ${executionTime}ms`);
+      // Start background processing
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+        EdgeRuntime.waitUntil(processJob(job.id, supabase));
+      } else {
+        // Fallback for environments without EdgeRuntime
+        processJob(job.id, supabase);
+      }
 
       return new Response(
         JSON.stringify({
-          links_created: totalLinksCreated,
-          batches_processed: processedBatches,
-          execution_time_ms: executionTime,
-          mode: 'batch_processing',
+          success: true,
+          job_id: job.id,
+          total_to_process: count || 0
         }),
         {
           status: 200,
@@ -159,10 +191,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fallback: mode non-optimisé (pour compatibilité)
+    // MODE 2: STATUS - Get job status
+    if (mode === 'status') {
+      if (!job_id) {
+        return new Response(
+          JSON.stringify({ error: 'job_id required for status mode' }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: job, error: jobError } = await supabase
+        .from('auto_link_jobs')
+        .select('*')
+        .eq('id', job_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (jobError || !job) {
+        return new Response(
+          JSON.stringify({ error: 'Job not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(job),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Fallback for unknown mode
     return new Response(
       JSON.stringify({ 
-        error: 'Mode non supporté. Utilisez auto_mode=true pour la fusion batch.' 
+        error: 'Invalid mode. Use "start" or "status"' 
       }),
       {
         status: 400,

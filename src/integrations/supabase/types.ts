@@ -617,6 +617,51 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_link_jobs: {
+        Row: {
+          batch_size: number | null
+          completed_at: string | null
+          created_at: string | null
+          current_offset: number | null
+          error_message: string | null
+          id: string
+          links_created: number | null
+          processed_count: number | null
+          started_at: string | null
+          status: string
+          total_to_process: number | null
+          user_id: string
+        }
+        Insert: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_offset?: number | null
+          error_message?: string | null
+          id?: string
+          links_created?: number | null
+          processed_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_to_process?: number | null
+          user_id: string
+        }
+        Update: {
+          batch_size?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_offset?: number | null
+          error_message?: string | null
+          id?: string
+          links_created?: number | null
+          processed_count?: number | null
+          started_at?: string | null
+          status?: string
+          total_to_process?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_master_rules: {
         Row: {
           actions: Json
@@ -5130,6 +5175,14 @@ export type Database = {
           links_created: number
         }[]
       }
+      bulk_create_product_links_chunked: {
+        Args: { p_limit?: number; p_offset?: number; p_user_id: string }
+        Returns: {
+          has_more: boolean
+          links_created: number
+          processed_count: number
+        }[]
+      }
       check_and_update_rate_limit: {
         Args: { p_package_id: string; p_user_id: string }
         Returns: Json
@@ -5181,6 +5234,13 @@ export type Database = {
       get_product_enrichment_summary: {
         Args: { p_supplier_product_id: string }
         Returns: Json
+      }
+      get_products_enrichment_batch: {
+        Args: { p_product_ids: string[] }
+        Returns: {
+          enrichment_summary: Json
+          product_id: string
+        }[]
       }
       get_retryable_import_errors: {
         Args: never
