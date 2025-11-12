@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Link2, TrendingUp, CheckCircle, AlertCircle, Trash2, Eye, ShoppingCart, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AmazonLinksFilters } from "./AmazonLinksFilters";
 
 interface ProductLink {
   id: string;
@@ -40,6 +41,7 @@ interface LinkStats {
 export function ProductLinksDashboard() {
   const [selectedLink, setSelectedLink] = useState<ProductLink | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [amazonPeriod, setAmazonPeriod] = useState<'today' | 'week' | 'month' | 'all'>('all');
 
   // Fetch Amazon product links
   const { data: amazonLinks, isLoading: amazonLoading, refetch: refetchAmazon } = useQuery({
@@ -79,6 +81,26 @@ export function ProductLinksDashboard() {
       toast.error("Erreur: " + error.message);
     }
   };
+
+  // Filter Amazon links based on period
+  const filteredAmazonLinks = useMemo(() => {
+    if (!amazonLinks) return [];
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    return amazonLinks.filter(link => {
+      const createdAt = new Date(link.created_at);
+      switch(amazonPeriod) {
+        case 'today': return createdAt >= today;
+        case 'week': return createdAt >= weekAgo;
+        case 'month': return createdAt >= monthAgo;
+        default: return true;
+      }
+    });
+  }, [amazonLinks, amazonPeriod]);
 
   // Helper function to extract product display name
   const getProductDisplayName = (analysisResult: any): string => {
@@ -419,14 +441,20 @@ export function ProductLinksDashboard() {
                   🛒 Les liens ci-dessous connectent vos <strong>Produits Analysés</strong> avec les <strong>Enrichissements Amazon</strong> (Code2ASIN)
                 </p>
               </div>
+              
+              {/* Filters */}
+              <div className="mb-4">
+                <AmazonLinksFilters period={amazonPeriod} setPeriod={setAmazonPeriod} />
+              </div>
+
               <ScrollArea className="h-[500px]">
                 {amazonLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                   </div>
-                ) : amazonLinks && amazonLinks.length > 0 ? (
+                ) : filteredAmazonLinks && filteredAmazonLinks.length > 0 ? (
                   <div className="space-y-3">
-                    {amazonLinks.map((link) => (
+                    {filteredAmazonLinks.map((link) => (
                       <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">

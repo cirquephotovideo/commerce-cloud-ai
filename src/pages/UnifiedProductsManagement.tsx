@@ -9,7 +9,9 @@ import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
 import { AutoLinkPanel } from "@/components/unified-products/AutoLinkPanel";
 import { AmazonAutoLinkPanel } from "@/components/unified-products/AmazonAutoLinkPanel";
 import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
+import { AmazonLinksAnalytics } from "@/components/unified-products/AmazonLinksAnalytics";
 import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
+import { useRealtimeAmazonLinks } from "@/hooks/useRealtimeAmazonLinks";
 
 export default function UnifiedProductsManagement() {
   const [activeTab, setActiveTab] = useState("analyses");
@@ -17,6 +19,7 @@ export default function UnifiedProductsManagement() {
   
   // Activer les notifications temps réel
   useRealtimeProductLinks();
+  useRealtimeAmazonLinks();
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -40,6 +43,9 @@ export default function UnifiedProductsManagement() {
 
       {/* Panneau Fusion Amazon */}
       <AmazonAutoLinkPanel />
+
+      {/* Analytiques Amazon */}
+      <AmazonLinksAnalytics />
 
       {/* Dashboard des Liens */}
       <ProductLinksDashboard />

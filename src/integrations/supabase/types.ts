@@ -5426,6 +5426,15 @@ export type Database = {
         Args: { p_supplier_id: string }
         Returns: undefined
       }
+      get_amazon_links_analytics: {
+        Args: { p_period?: string; p_user_id: string }
+        Returns: {
+          automatic_count: number
+          date: string
+          links_created: number
+          manual_count: number
+        }[]
+      }
       get_enrichment_tasks_with_products: {
         Args: { since_param: string; user_id_param: string }
         Returns: {
