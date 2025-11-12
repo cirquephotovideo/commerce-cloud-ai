@@ -64,6 +64,7 @@ interface ImportResult {
 export default function Code2AsinImport() {
   const [csvData, setCsvData] = useState<Code2AsinRow[] | null>(null);
   const [fileName, setFileName] = useState<string>("");
+  const [rawFile, setRawFile] = useState<File | null>(null);
   const [overwriteExisting, setOverwriteExisting] = useState(true);
   const [createMissing, setCreateMissing] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -131,6 +132,7 @@ export default function Code2AsinImport() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setRawFile(file);
     setFileName(file.name);
     setImportResult(null);
 
@@ -174,7 +176,7 @@ export default function Code2AsinImport() {
   };
 
   const startImport = async () => {
-    if (!csvData) return;
+    if (!csvData || !rawFile) return;
 
     setIsImporting(true);
     setImportProgress(0);
@@ -187,9 +189,32 @@ export default function Code2AsinImport() {
         throw new Error("Non authentifié");
       }
 
+      // 1️⃣ Upload du fichier vers Storage
+      const timestamp = Date.now();
+      const filePath = `code2asin-imports/${user!.id}/${timestamp}_${fileName}`;
+      
+      toast.info('📤 Upload du fichier en cours...');
+      console.log(`Uploading CSV to storage: ${filePath}`);
+      
+      const { error: uploadError } = await supabase.storage
+        .from('supplier-imports')
+        .upload(filePath, rawFile, {
+          contentType: 'text/csv',
+          cacheControl: '3600',
+          upsert: false
+        });
+      
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new Error(`Échec de l'upload: ${uploadError.message}`);
+      }
+      
+      toast.success('✅ Fichier uploadé, démarrage du traitement...');
+
+      // 2️⃣ Appeler l'edge function avec seulement le filePath
       const response = await supabase.functions.invoke('import-code2asin-csv', {
         body: {
-          csvData,
+          filePath,
           options: {
             overwrite: overwriteExisting,
             createMissing,
@@ -205,7 +230,7 @@ export default function Code2AsinImport() {
       }
 
       setJobId(response.data.job_id);
-      toast.success(`Import démarré en arrière-plan`);
+      toast.success(`🚀 Import démarré en arrière-plan (${response.data.total_rows} produits)`);
 
     } catch (error: any) {
       console.error('Import error:', error);

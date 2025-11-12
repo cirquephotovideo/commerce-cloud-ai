@@ -54,7 +54,7 @@ serve(async (req) => {
   }
 
   try {
-    const { csvData, options } = await req.json();
+    const { filePath, options } = await req.json();
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -67,6 +67,63 @@ serve(async (req) => {
     
     if (!user) {
       throw new Error('Unauthorized');
+    }
+    
+    // 1. Download CSV from storage
+    console.log(`Downloading CSV from storage: ${filePath}`);
+    const { data: fileData, error: downloadError } = await supabaseClient.storage
+      .from('supplier-imports')
+      .download(filePath);
+
+    if (downloadError) {
+      console.error('Storage download error:', downloadError);
+      throw new Error(`Échec du téléchargement: ${downloadError.message}`);
+    }
+
+    // 2. Parse CSV content
+    console.log('Parsing CSV content...');
+    const csvText = await fileData.text();
+
+    // Simple CSV parser
+    const lines = csvText.split('\n').filter(line => line.trim());
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+    const csvData = lines.slice(1).map((line) => {
+      // Handle CSV with quoted values
+      const values: string[] = [];
+      let currentValue = '';
+      let insideQuotes = false;
+      
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim()); // Last value
+      
+      const row: any = {};
+      headers.forEach((header, i) => {
+        row[header] = values[i]?.replace(/^"|"$/g, '') || undefined;
+      });
+      return row;
+    });
+
+    console.log(`Parsed ${csvData.length} rows from CSV`);
+
+    // Validation
+    if (csvData.length === 0) {
+      throw new Error('CSV vide ou invalide');
+    }
+
+    // Vérifier que la colonne EAN existe
+    if (!csvData[0].EAN && !csvData[0].ean) {
+      throw new Error("Colonne 'EAN' manquante dans le CSV");
     }
     
     console.log(`Starting Code2ASIN import for user ${user.id}, ${csvData.length} rows`);
