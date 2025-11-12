@@ -200,12 +200,7 @@ Deno.serve(async (req) => {
       console.log('[auto-link-products] Created job:', job.id);
 
       // Start background processing
-      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-        EdgeRuntime.waitUntil(processJob(job.id, supabase));
-      } else {
-        // Fallback for environments without EdgeRuntime
-        processJob(job.id, supabase);
-      }
+      EdgeRuntime.waitUntil(processJob(job.id, supabase));
 
       return new Response(
         JSON.stringify({
