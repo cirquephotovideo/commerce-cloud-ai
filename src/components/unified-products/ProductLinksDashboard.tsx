@@ -197,10 +197,10 @@ export function ProductLinksDashboard() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="overview" className="space-y-6">
+          <Tabs defaultValue="all-links" className="space-y-6">
             <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all-links">🔗 Nouveaux Liens ({stats.total_links})</TabsTrigger>
               <TabsTrigger value="overview">📊 Vue d'ensemble</TabsTrigger>
-              <TabsTrigger value="all-links">🔗 Tous les liens ({stats.total_links})</TabsTrigger>
               <TabsTrigger value="trends">📈 Tendances</TabsTrigger>
             </TabsList>
 
@@ -318,26 +318,43 @@ export function ProductLinksDashboard() {
 
             {/* All Links Tab */}
             <TabsContent value="all-links" className="space-y-4">
+              <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  ℹ️ Les liens ci-dessous connectent vos <strong>Produits Analysés</strong> avec votre base <strong>Fournisseurs</strong>
+                </p>
+              </div>
               <ScrollArea className="h-[500px]">
                 <div className="space-y-3">
                   {links?.map((link) => (
-                    <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50">
+                    <div key={link.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
                           {getLinkTypeBadge(link.link_type)}
                           {getConfidenceBadge(link.confidence_score)}
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                            📦 Base Fournisseurs
+                          </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {new Date(link.created_at).toLocaleDateString('fr-FR', { 
+                              day: '2-digit', 
+                              month: 'short', 
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </span>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <p className="text-sm font-medium text-muted-foreground">Produit Analysé</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">🔍 Produit Analysé</p>
                             <p className="font-medium">{getProductDisplayName(link.product_analyses?.analysis_result)}</p>
                             <p className="text-sm text-muted-foreground">EAN: {link.product_analyses?.ean || "N/A"}</p>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-muted-foreground">Produit Fournisseur</p>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">📦 Produit Fournisseur</p>
                             <p className="font-medium">{link.supplier_products?.product_name || "N/A"}</p>
                             <p className="text-sm text-muted-foreground">
-                              Prix: {link.supplier_products?.purchase_price?.toFixed(2)}€
+                              Prix: {link.supplier_products?.purchase_price?.toFixed(2)}€ | EAN: {link.supplier_products?.ean || "N/A"}
                             </p>
                           </div>
                         </div>
