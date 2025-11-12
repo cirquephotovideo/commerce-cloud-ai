@@ -1,14 +1,17 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, Loader2, Link2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { ShoppingCart, Loader2, Link2, CheckCircle, XCircle } from "lucide-react";
 import { useAmazonProductLinks } from "@/hooks/useAmazonProductLinks";
+import { useAmazonAutoLinkJob } from "@/hooks/useAmazonAutoLinkJob";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export function AmazonAutoLinkPanel() {
   const { startAutoLink } = useAmazonProductLinks();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const { currentJob, isJobRunning, progress, reloadJob } = useAmazonAutoLinkJob();
+  const [isStarting, setIsStarting] = useState(false);
   const [stats, setStats] = useState({
     total_analyses: 0,
     total_enrichments: 0,
@@ -19,6 +22,13 @@ export function AmazonAutoLinkPanel() {
   useEffect(() => {
     loadStats();
   }, []);
+
+  // Reload stats when job completes
+  useEffect(() => {
+    if (currentJob?.status === 'completed') {
+      loadStats();
+    }
+  }, [currentJob?.status]);
 
   const loadStats = async () => {
     try {
@@ -56,16 +66,14 @@ export function AmazonAutoLinkPanel() {
   };
 
   const handleAutoLink = async () => {
-    setIsProcessing(true);
+    setIsStarting(true);
     try {
       await startAutoLink();
-      // Reload stats after a delay
-      setTimeout(() => {
-        loadStats();
-        setIsProcessing(false);
-      }, 3000);
+      await reloadJob();
     } catch (error) {
-      setIsProcessing(false);
+      console.error('Error starting auto-link:', error);
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -100,39 +108,110 @@ export function AmazonAutoLinkPanel() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200">
-          <div className="flex-1">
-            <h4 className="font-semibold text-orange-900 mb-1">
-              Lien automatique par EAN
-            </h4>
-            <p className="text-sm text-orange-700">
-              Le système va matcher automatiquement les produits ayant le même code EAN
-            </p>
-            {stats.potential_matches > 0 && (
-              <Badge variant="secondary" className="mt-2">
-                <Link2 className="h-3 w-3 mr-1" />
-                {stats.potential_matches} correspondance{stats.potential_matches > 1 ? 's' : ''} potentielle{stats.potential_matches > 1 ? 's' : ''}
+        {isJobRunning ? (
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                <h4 className="font-semibold text-blue-900">
+                  Fusion Amazon en cours...
+                </h4>
+              </div>
+              <Badge variant="secondary">
+                {progress}%
               </Badge>
-            )}
+            </div>
+            
+            <Progress value={progress} className="h-2" />
+            
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Traités :</span>
+                <span className="font-medium ml-2">{currentJob?.processed_count || 0}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Liens créés :</span>
+                <span className="font-medium ml-2 text-green-600">{currentJob?.links_created || 0}</span>
+              </div>
+            </div>
           </div>
-          <Button
-            onClick={handleAutoLink}
-            disabled={isProcessing || stats.potential_matches === 0}
-            className="ml-4"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Fusion en cours...
-              </>
-            ) : (
-              <>
-                <Link2 className="h-4 w-4 mr-2" />
-                Lancer la Fusion
-              </>
-            )}
-          </Button>
-        </div>
+        ) : currentJob?.status === 'completed' ? (
+          <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <h4 className="font-semibold text-green-900">
+                Fusion Terminée
+              </h4>
+            </div>
+            <p className="text-sm text-green-700">
+              {currentJob.links_created} nouveau{currentJob.links_created > 1 ? 'x' : ''} lien{currentJob.links_created > 1 ? 's' : ''} Amazon créé{currentJob.links_created > 1 ? 's' : ''}
+            </p>
+            <Button
+              onClick={handleAutoLink}
+              disabled={isStarting || stats.potential_matches === 0}
+              className="mt-3"
+              size="sm"
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Relancer
+            </Button>
+          </div>
+        ) : currentJob?.status === 'failed' ? (
+          <div className="p-4 bg-gradient-to-r from-red-50 to-rose-50 rounded-lg border border-red-200">
+            <div className="flex items-center gap-2 mb-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              <h4 className="font-semibold text-red-900">
+                Erreur de Fusion
+              </h4>
+            </div>
+            <p className="text-sm text-red-700 mb-3">
+              {currentJob.error_message || 'Une erreur est survenue'}
+            </p>
+            <Button
+              onClick={handleAutoLink}
+              disabled={isStarting}
+              variant="destructive"
+              size="sm"
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Réessayer
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200">
+            <div className="flex-1">
+              <h4 className="font-semibold text-orange-900 mb-1">
+                Lien automatique par EAN
+              </h4>
+              <p className="text-sm text-orange-700">
+                Le système va matcher automatiquement les produits ayant le même code EAN
+              </p>
+              {stats.potential_matches > 0 && (
+                <Badge variant="secondary" className="mt-2">
+                  <Link2 className="h-3 w-3 mr-1" />
+                  {stats.potential_matches} correspondance{stats.potential_matches > 1 ? 's' : ''} potentielle{stats.potential_matches > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
+            <Button
+              onClick={handleAutoLink}
+              disabled={isStarting || stats.potential_matches === 0}
+              className="ml-4"
+            >
+              {isStarting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Démarrage...
+                </>
+              ) : (
+                <>
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Lancer la Fusion
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

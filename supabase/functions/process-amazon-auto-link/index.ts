@@ -17,6 +17,8 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let job_id: string | undefined;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -41,7 +43,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { job_id, offset = 0, batch_size = 100 } = await req.json();
+    const body = await req.json();
+    job_id = body.job_id;
+    const offset = body.offset || 0;
+    const batch_size = body.batch_size || 100;
+
+    // Mark job as processing on first run
+    if (offset === 0 && job_id) {
+      await supabase
+        .from('amazon_auto_link_jobs')
+        .update({
+          status: 'processing',
+          started_at: new Date().toISOString()
+        })
+        .eq('id', job_id);
+    }
 
     // Get product analyses without Amazon links
     const { data: analyses, error: analysesError } = await supabase
@@ -135,11 +151,20 @@ Deno.serve(async (req) => {
       const newOffset = offset + batch_size;
       const isComplete = !analyses || analyses.length < batch_size;
 
+      // Get current links_created count
+      const { data: currentJob } = await supabase
+        .from('amazon_auto_link_jobs')
+        .select('links_created')
+        .eq('id', job_id)
+        .single();
+
+      const totalLinksCreated = (currentJob?.links_created || 0) + matches.length;
+
       await supabase
         .from('amazon_auto_link_jobs')
         .update({
           processed_count: newOffset,
-          links_created: matches.length,
+          links_created: totalLinksCreated,
           current_offset: newOffset,
           status: isComplete ? 'completed' : 'processing',
           completed_at: isComplete ? new Date().toISOString() : null
@@ -170,6 +195,23 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error in process-amazon-auto-link:', error);
+    
+    // Mark job as failed if job_id is available
+    if (job_id) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      await supabase
+        .from('amazon_auto_link_jobs')
+        .update({
+          status: 'failed',
+          error_message: error.message,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job_id);
+    }
+    
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

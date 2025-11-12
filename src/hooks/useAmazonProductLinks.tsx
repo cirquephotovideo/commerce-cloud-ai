@@ -142,12 +142,20 @@ export function useAmazonProductLinks() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      // Count total analyses to process
+      const { count: totalCount } = await supabase
+        .from('product_analyses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .not('ean', 'is', null);
+
       // Create job
       const { data: job, error: jobError } = await supabase
         .from('amazon_auto_link_jobs')
         .insert({
           user_id: user.id,
-          status: 'pending'
+          status: 'pending',
+          total_to_process: totalCount || 0
         })
         .select()
         .single();
