@@ -1284,6 +1284,63 @@ export type Database = {
         }
         Relationships: []
       }
+      code2asin_import_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_count: number
+          error_message: string | null
+          errors: Json | null
+          failed_count: number
+          filename: string
+          id: string
+          processed_rows: number
+          started_at: string | null
+          status: string
+          success_count: number
+          total_rows: number
+          updated_at: string
+          updated_count: number
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_count?: number
+          error_message?: string | null
+          errors?: Json | null
+          failed_count?: number
+          filename: string
+          id?: string
+          processed_rows?: number
+          started_at?: string | null
+          status?: string
+          success_count?: number
+          total_rows?: number
+          updated_at?: string
+          updated_count?: number
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_count?: number
+          error_message?: string | null
+          errors?: Json | null
+          failed_count?: number
+          filename?: string
+          id?: string
+          processed_rows?: number
+          started_at?: string | null
+          status?: string
+          success_count?: number
+          total_rows?: number
+          updated_at?: string
+          updated_count?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       code2asin_import_logs: {
         Row: {
           completed_at: string | null

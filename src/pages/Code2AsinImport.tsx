@@ -71,10 +71,61 @@ export default function Code2AsinImport() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [lastImportDate, setLastImportDate] = useState<Date | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [processedRows, setProcessedRows] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
   }, []);
+
+  // Subscribe to job updates
+  useEffect(() => {
+    if (!jobId || !user) return;
+
+    const channel = supabase
+      .channel(`job-${jobId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'code2asin_import_jobs',
+          filter: `id=eq.${jobId}`
+        },
+        (payload) => {
+          const job = payload.new as any;
+          setProcessedRows(job.processed_rows);
+          
+          if (job.status === 'completed') {
+            setImportResult({
+              total: job.total_rows,
+              success: job.success_count,
+              failed: job.failed_count,
+              created: job.created_count,
+              updated: job.updated_count,
+              errors: job.errors || []
+            });
+            setImportProgress(100);
+            setIsImporting(false);
+            setLastImportDate(new Date());
+            toast.success(`✅ Import terminé: ${job.success_count} produits enrichis`);
+            channel.unsubscribe();
+          } else if (job.status === 'failed') {
+            toast.error(`Erreur d'import: ${job.error_message}`);
+            setIsImporting(false);
+            channel.unsubscribe();
+          } else if (job.status === 'processing') {
+            const progress = Math.round((job.processed_rows / job.total_rows) * 100);
+            setImportProgress(progress);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [jobId, user]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -127,6 +178,8 @@ export default function Code2AsinImport() {
 
     setIsImporting(true);
     setImportProgress(0);
+    setProcessedRows(0);
+    setImportResult(null);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -139,35 +192,24 @@ export default function Code2AsinImport() {
           csvData,
           options: {
             overwrite: overwriteExisting,
-            createMissing
+            createMissing,
+            filename: fileName
           }
         }
       });
 
       if (response.error) throw response.error;
 
-      // Vérifier que results existe
-      if (!response.data || !response.data.results) {
-        throw new Error('Format de réponse invalide: résultats manquants');
+      if (!response.data || !response.data.started) {
+        throw new Error('Format de réponse invalide');
       }
 
-      const result = response.data.results as ImportResult;
-      setImportResult(result);
-      setImportProgress(100);
-
-      if (result.success > 0) {
-        setLastImportDate(new Date());
-        toast.success(`✅ Import réussi: ${result.success} produits enrichis`);
-      }
-      
-      if (result.failed > 0) {
-        toast.warning(`⚠️ ${result.failed} produits ont échoué`);
-      }
+      setJobId(response.data.job_id);
+      toast.success(`Import démarré en arrière-plan`);
 
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(`Erreur d'import: ${error.message}`);
-    } finally {
       setIsImporting(false);
     }
   };
@@ -303,8 +345,17 @@ export default function Code2AsinImport() {
                 <div className="space-y-2">
                   <Progress value={importProgress} />
                   <p className="text-sm text-center text-muted-foreground">
-                    Traitement des données en cours...
+                    {processedRows > 0 ? (
+                      <>Traitement: {processedRows} / {csvData.length} produits</>
+                    ) : (
+                      <>Démarrage de l'import...</>
+                    )}
                   </p>
+                  {processedRows > 0 && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      {Math.round(importProgress)}% terminé
+                    </p>
+                  )}
                 </div>
               )}
               

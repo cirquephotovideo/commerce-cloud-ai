@@ -69,227 +69,282 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
     
-    const importStartTime = Date.now();
     console.log(`Starting Code2ASIN import for user ${user.id}, ${csvData.length} rows`);
     
-    const results = {
-      total: csvData.length,
-      success: 0,
-      failed: 0,
-      created: 0,
-      updated: 0,
-      errors: [] as string[]
-    };
+    // Create job record immediately
+    const { data: job, error: jobError } = await supabaseClient
+      .from('code2asin_import_jobs')
+      .insert({
+        user_id: user.id,
+        filename: options?.filename || 'code2asin_import.csv',
+        total_rows: csvData.length,
+        status: 'pending'
+      })
+      .select('id')
+      .single();
     
-    // Process function
+    if (jobError || !job) {
+      throw new Error('Failed to create import job');
+    }
+    
+    const jobId = job.id;
+    const importStartTime = Date.now();
+    
+    // Background processing function
     const processRows = async () => {
-      const BATCH_SIZE = 20;
+      const results = {
+        total: csvData.length,
+        success: 0,
+        failed: 0,
+        created: 0,
+        updated: 0,
+        errors: [] as string[]
+      };
       
-      for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
-        const batch = csvData.slice(i, i + BATCH_SIZE) as Code2AsinRow[];
-        console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(csvData.length / BATCH_SIZE)} (${batch.length} rows)`);
+      try {
+        // Update job to processing
+        await supabaseClient
+          .from('code2asin_import_jobs')
+          .update({ status: 'processing', started_at: new Date().toISOString() })
+          .eq('id', jobId);
+        const BATCH_SIZE = 20;
         
-        for (const row of batch) {
-          try {
-            if (!row.EAN) {
-              results.failed++;
-              results.errors.push(`Ligne ${i + 1}: EAN manquant`);
-              continue;
-            }
-            
-            // 1. Find analysis by EAN
-            const { data: analysis } = await supabaseClient
-              .from('product_analyses')
-              .select('id')
-              .eq('ean', row.EAN)
-              .eq('user_id', user.id)
-              .maybeSingle();
-            
-            let analysisId = analysis?.id;
-            
-            // 2. Create analysis if not found and option enabled
-            if (!analysisId && options.createMissing) {
-              const { data: newAnalysis, error: createError } = await supabaseClient
-                .from('product_analyses')
-                .insert({
-                  user_id: user.id,
-                  product_url: row.ASIN ? `https://amazon.fr/dp/${row.ASIN}` : `ean:${row.EAN}`,
-                  ean: row.EAN,
-                  analysis_result: {
-                    product_name: row.Titre || 'Produit importé Code2ASIN',
-                    brand: row.Marque,
-                    ean: row.EAN
-                  },
-                  code2asin_enrichment_status: 'pending'
-                })
-                .select('id')
-                .single();
-              
-              if (createError) {
+        for (let i = 0; i < csvData.length; i += BATCH_SIZE) {
+          const batch = csvData.slice(i, i + BATCH_SIZE) as Code2AsinRow[];
+          console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(csvData.length / BATCH_SIZE)} (${batch.length} rows)`);
+          
+          // Batch fetch existing analyses
+          const batchEans = batch.map(r => r.EAN).filter(Boolean);
+          const { data: existingAnalyses } = await supabaseClient
+            .from('product_analyses')
+            .select('id, ean')
+            .eq('user_id', user.id)
+            .in('ean', batchEans);
+          
+          const analysisMap = new Map(
+            existingAnalyses?.map(a => [a.ean, a.id]) || []
+          );
+          
+          for (const row of batch) {
+            try {
+              if (!row.EAN) {
                 results.failed++;
-                results.errors.push(`EAN ${row.EAN}: ${createError.message}`);
+                results.errors.push(`EAN manquant`);
                 continue;
               }
               
-              analysisId = newAnalysis?.id;
-              results.created++;
-            }
-            
-            if (!analysisId) {
-              results.failed++;
-              results.errors.push(`EAN ${row.EAN}: Analyse non trouvée`);
-              continue;
-            }
-            
-            // 3. Parse images
-            const imageUrls = row.Images ? 
-              row.Images.split(',').map((url: string) => url.trim()).filter(Boolean) : [];
-            
-            // 4. Parse numeric values safely
-            const parseFloat = (value?: string) => {
-              if (!value) return null;
-              const cleaned = value.replace(',', '.');
-              const parsed = Number(cleaned);
-              return isNaN(parsed) ? null : parsed;
-            };
-            
-            const parseInt = (value?: string) => {
-              if (!value) return null;
-              const parsed = Number(value);
-              return isNaN(parsed) ? null : parsed;
-            };
-            
-            // 5. Prepare enrichment data
-            const enrichmentData = {
-              user_id: user.id,
-              analysis_id: analysisId,
-              asin: row.ASIN,
-              ean: row.EAN,
-              upc: row.UPC,
-              part_number: row['Numéro de pièce'],
-              title: row.Titre,
-              brand: row.Marque,
-              manufacturer: row.Fabricant,
-              product_group: row['Groupe de produits'],
-              product_type: row.Type,
-              browse_nodes: row['Parcourir les nœuds'],
-              buybox_price: parseFloat(row['Prix Buy Box Nouvelle (€)']),
-              buybox_seller_name: row["Nom du vendeur dans l'offre Buy Box Nouvelle"],
-              buybox_is_fba: row["La Buy Box Nouvelle est-elle gérée par Amazon ?"] === 'TRUE',
-              buybox_is_amazon: row["La Buy Box Nouvelle est-elle d'Amazon ?"] === 'TRUE',
-              amazon_price: parseFloat(row['Prix Amazon (€)']),
-              lowest_fba_new: parseFloat(row["Prix le plus bas FBA en 'Neuf' (€)"]),
-              lowest_new: parseFloat(row["Prix le plus bas en 'Neuf' (€)"]),
-              lowest_used: parseFloat(row["Prix le plus bas en 'D'occasion' (€)"]),
-              list_price: parseFloat(row['Prix de liste (€)']),
-              image_urls: imageUrls,
-              item_length_cm: parseFloat(row["Longueur de l'article (cm)"]),
-              item_width_cm: parseFloat(row["Largeur de l'article (cm)"]),
-              item_height_cm: parseFloat(row["Hauteur de l'article (cm)"]),
-              item_weight_g: parseFloat(row["Poids de l'article (g)"]),
-              package_length_cm: parseFloat(row["Longueur du paquet (cm)"]),
-              package_width_cm: parseFloat(row["Largeur du paquet (cm)"]),
-              package_height_cm: parseFloat(row["Hauteur du paquet (cm)"]),
-              package_weight_g: parseFloat(row["Poids de l'emballage (g)"]),
-              offer_count_new: parseInt(row["Nombre d'offres en 'Neuf'"]),
-              offer_count_used: parseInt(row["Nombre d'offres en 'D'occasion'"]),
-              referral_fee_percentage: parseFloat(row['Pourcentage de commission de référence']),
-              fulfillment_fee: parseFloat(row["Frais de préparation et d'emballage (€)"]),
-              sales_rank: row['Rangs de vente'],
-              color: row.Couleur,
-              size: row.Taille,
-              features: row.Fonctionnalités,
-              marketplace: row.Marché
-            };
-            
-            // 6. Upsert code2asin_enrichments with retry mechanism
-            const maxRetries = 3;
-            let retryCount = 0;
-            let upsertError: any = null;
-
-            while (retryCount < maxRetries) {
-              const { error } = await supabaseClient
+              // Get analysis from batch map
+              let analysisId = analysisMap.get(row.EAN);
+              
+              // Create analysis if not found and option enabled
+              if (!analysisId && options.createMissing) {
+                const { data: newAnalysis, error: createError } = await supabaseClient
+                  .from('product_analyses')
+                  .insert({
+                    user_id: user.id,
+                    product_url: row.ASIN ? `https://amazon.fr/dp/${row.ASIN}` : `ean:${row.EAN}`,
+                    ean: row.EAN,
+                    analysis_result: {
+                      product_name: row.Titre || 'Produit importé Code2ASIN',
+                      brand: row.Marque,
+                      ean: row.EAN
+                    },
+                    code2asin_enrichment_status: 'pending'
+                  })
+                  .select('id')
+                  .single();
+                
+                if (createError) {
+                  results.failed++;
+                  results.errors.push(`EAN ${row.EAN}: ${createError.message}`);
+                  continue;
+                }
+                
+                analysisId = newAnalysis?.id;
+                analysisMap.set(row.EAN, analysisId);
+                results.created++;
+              }
+              
+              if (!analysisId) {
+                results.failed++;
+                results.errors.push(`EAN ${row.EAN}: Analyse non trouvée`);
+                continue;
+              }
+              
+              // Parse images
+              const imageUrls = row.Images ? 
+                row.Images.split(',').map((url: string) => url.trim()).filter(Boolean) : [];
+              
+              // Parse numeric values safely
+              const parseFloat = (value?: string) => {
+                if (!value) return null;
+                const cleaned = value.replace(',', '.');
+                const parsed = Number(cleaned);
+                return isNaN(parsed) ? null : parsed;
+              };
+              
+              const parseInt = (value?: string) => {
+                if (!value) return null;
+                const parsed = Number(value);
+                return isNaN(parsed) ? null : parsed;
+              };
+              
+              // Prepare enrichment data
+              const enrichmentData = {
+                user_id: user.id,
+                analysis_id: analysisId,
+                asin: row.ASIN,
+                ean: row.EAN,
+                upc: row.UPC,
+                part_number: row['Numéro de pièce'],
+                title: row.Titre,
+                brand: row.Marque,
+                manufacturer: row.Fabricant,
+                product_group: row['Groupe de produits'],
+                product_type: row.Type,
+                browse_nodes: row['Parcourir les nœuds'],
+                buybox_price: parseFloat(row['Prix Buy Box Nouvelle (€)']),
+                buybox_seller_name: row["Nom du vendeur dans l'offre Buy Box Nouvelle"],
+                buybox_is_fba: row["La Buy Box Nouvelle est-elle gérée par Amazon ?"] === 'TRUE',
+                buybox_is_amazon: row["La Buy Box Nouvelle est-elle d'Amazon ?"] === 'TRUE',
+                amazon_price: parseFloat(row['Prix Amazon (€)']),
+                lowest_fba_new: parseFloat(row["Prix le plus bas FBA en 'Neuf' (€)"]),
+                lowest_new: parseFloat(row["Prix le plus bas en 'Neuf' (€)"]),
+                lowest_used: parseFloat(row["Prix le plus bas en 'D'occasion' (€)"]),
+                list_price: parseFloat(row['Prix de liste (€)']),
+                image_urls: imageUrls,
+                item_length_cm: parseFloat(row["Longueur de l'article (cm)"]),
+                item_width_cm: parseFloat(row["Largeur de l'article (cm)"]),
+                item_height_cm: parseFloat(row["Hauteur de l'article (cm)"]),
+                item_weight_g: parseFloat(row["Poids de l'article (g)"]),
+                package_length_cm: parseFloat(row["Longueur du paquet (cm)"]),
+                package_width_cm: parseFloat(row["Largeur du paquet (cm)"]),
+                package_height_cm: parseFloat(row["Hauteur du paquet (cm)"]),
+                package_weight_g: parseFloat(row["Poids de l'emballage (g)"]),
+                offer_count_new: parseInt(row["Nombre d'offres en 'Neuf'"]),
+                offer_count_used: parseInt(row["Nombre d'offres en 'D'occasion'"]),
+                referral_fee_percentage: parseFloat(row['Pourcentage de commission de référence']),
+                fulfillment_fee: parseFloat(row["Frais de préparation et d'emballage (€)"]),
+                sales_rank: row['Rangs de vente'],
+                color: row.Couleur,
+                size: row.Taille,
+                features: row.Fonctionnalités,
+                marketplace: row.Marché
+              };
+              
+              // Upsert enrichment
+              const { error: upsertError } = await supabaseClient
                 .from('code2asin_enrichments')
                 .upsert(enrichmentData, {
                   onConflict: 'analysis_id'
                 });
-              
-              if (!error) {
-                upsertError = null;
-                break;
+
+              if (upsertError) {
+                console.error(`Enrichment failed for EAN ${row.EAN}:`, upsertError);
+                results.failed++;
+                results.errors.push(`EAN ${row.EAN}: ${upsertError.message}`);
+                continue;
               }
               
-              upsertError = error;
-              retryCount++;
-              console.warn(`Retry ${retryCount}/${maxRetries} for EAN ${row.EAN}: ${error.message}`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-            }
-
-            if (upsertError) {
-              console.error(`Enrichment upsert failed for EAN ${row.EAN} after ${maxRetries} retries:`, upsertError);
+              // Update product_analyses
+              await supabaseClient
+                .from('product_analyses')
+                .update({
+                  code2asin_enrichment_status: 'completed',
+                  code2asin_enriched_at: new Date().toISOString(),
+                  image_urls: imageUrls.length > 0 ? imageUrls : undefined
+                })
+                .eq('id', analysisId);
+              
+              results.success++;
+              results.updated++;
+              
+            } catch (error: any) {
               results.failed++;
-              results.errors.push(`EAN ${row.EAN}: ${upsertError.message}`);
-              continue;
+              results.errors.push(`EAN ${row.EAN}: ${error.message}`);
+              console.error(`Error processing EAN ${row.EAN}:`, error);
             }
-            
-            // 7. Update product_analyses
-            await supabaseClient
-              .from('product_analyses')
-              .update({
-                code2asin_enrichment_status: 'completed',
-                code2asin_enriched_at: new Date().toISOString(),
-                image_urls: imageUrls.length > 0 ? imageUrls : undefined
-              })
-              .eq('id', analysisId);
-            
-            results.success++;
-            results.updated++;
-            
-          } catch (error: any) {
-            results.failed++;
-            results.errors.push(`EAN ${row.EAN}: ${error.message}`);
-            console.error(`Error processing EAN ${row.EAN}:`, error);
+          }
+          
+          // Update job progress
+          await supabaseClient
+            .from('code2asin_import_jobs')
+            .update({
+              processed_rows: i + batch.length,
+              success_count: results.success,
+              failed_count: results.failed,
+              created_count: results.created,
+              updated_count: results.updated
+            })
+            .eq('id', jobId);
+          
+          // Small delay between batches
+          if (i + BATCH_SIZE < csvData.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
         
-        // Small delay between batches to avoid rate limiting
-        if (i + BATCH_SIZE < csvData.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-      
-      console.log(`Import completed: ${results.success} success, ${results.failed} failed`);
-      
-      // Log the import to history
-      try {
+        console.log(`Import completed: ${results.success} success, ${results.failed} failed`);
+        
+        // Update job to completed
         await supabaseClient
-          .from('code2asin_import_logs')
-          .insert({
-            user_id: user.id,
-            filename: options?.filename || 'code2asin_import.csv',
-            total_rows: results.total,
-            success_count: results.success,
-            failed_count: results.failed,
-            created_count: results.created,
-            updated_count: results.updated,
-            errors: results.errors,
-            import_duration_ms: Date.now() - importStartTime,
+          .from('code2asin_import_jobs')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            errors: results.errors
+          })
+          .eq('id', jobId);
+        
+        // Log to history
+        try {
+          await supabaseClient
+            .from('code2asin_import_logs')
+            .insert({
+              user_id: user.id,
+              filename: options?.filename || 'code2asin_import.csv',
+              total_rows: results.total,
+              success_count: results.success,
+              failed_count: results.failed,
+              created_count: results.created,
+              updated_count: results.updated,
+              errors: results.errors,
+              import_duration_ms: Date.now() - importStartTime,
+              completed_at: new Date().toISOString()
+            });
+        } catch (logError) {
+          console.error('Error logging import:', logError);
+        }
+      } catch (error: any) {
+        console.error('Background processing error:', error);
+        await supabaseClient
+          .from('code2asin_import_jobs')
+          .update({
+            status: 'failed',
+            error_message: error.message,
             completed_at: new Date().toISOString()
-          });
-      } catch (logError) {
-        console.error('Error logging import:', logError);
+          })
+          .eq('id', jobId);
       }
     };
     
-    // Process synchronously to return complete results
-    await processRows();
+    // Start background processing
+    // @ts-ignore - Deno Deploy waitUntil
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(processRows());
+    } else {
+      processRows().catch(console.error);
+    }
     
-    // Return complete results
+    // Return immediately with job info
     return new Response(
       JSON.stringify({
         success: true,
-        results: results,
-        message: `Import completed: ${results.success}/${results.total} products enriched`
+        started: true,
+        job_id: jobId,
+        total_rows: csvData.length,
+        message: `Import started in background`
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

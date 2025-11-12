@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,15 +20,17 @@ export const ImportedProductsList = ({ userId, importDate }: ImportedProductsLis
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("date");
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [displayLimit, setDisplayLimit] = useState(100);
 
   const { data: products, isLoading } = useQuery({
-    queryKey: ['code2asin-imported-products', userId, importDate],
+    queryKey: ['code2asin-imported-products', userId, importDate, displayLimit],
     queryFn: async () => {
       let query = supabase
         .from('code2asin_enrichments')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(displayLimit);
       
       if (importDate) {
         query = query
@@ -192,6 +195,18 @@ export const ImportedProductsList = ({ userId, importDate }: ImportedProductsLis
       {sortedProducts?.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">Aucun produit trouvé</p>
+        </div>
+      )}
+
+      {/* Load more button */}
+      {products && products.length >= displayLimit && (
+        <div className="flex justify-center mt-6">
+          <Button
+            variant="outline"
+            onClick={() => setDisplayLimit(prev => prev + 100)}
+          >
+            Charger 100 produits supplémentaires
+          </Button>
         </div>
       )}
 
