@@ -86,22 +86,20 @@ export const MCPServerConfiguration = () => {
     try {
       console.log('[MCP] Test de connexion à:', config.server_url);
       
-      // Tester la connexion au serveur MCP
-      const response = await fetch(`${config.server_url}/v1/models`, {
-        method: 'GET',
-        headers: {
-          'Authorization': config.api_key ? `Bearer ${config.api_key}` : '',
-          'Content-Type': 'application/json'
+      // Use proxy edge function to avoid CORS issues with ngrok
+      const { data, error } = await supabase.functions.invoke('mcp-proxy', {
+        body: {
+          mcp_url: config.server_url,
+          endpoint: '/v1/models',
+          method: 'GET'
         }
       });
 
       const latency = Date.now() - startTime;
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (error) {
+        throw new Error(error.message || 'Failed to connect to MCP server');
       }
-
-      const data = await response.json();
       const models = data.data?.map((m: any) => m.id) || [];
       
       setConfig(prev => ({ ...prev, available_models: models }));

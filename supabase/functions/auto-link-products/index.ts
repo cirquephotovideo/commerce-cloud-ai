@@ -135,7 +135,36 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { mode = 'start', job_id, batch_size = 100 } = body;
+    const { mode = 'start', job_id, batch_size = 100, analysis_id, auto_mode } = body;
+
+    // BACKWARD COMPATIBILITY: Handle old API calls from AnalysesTab and useProductLinks
+    if (auto_mode === true || analysis_id) {
+      console.log('[auto-link-products] Single product link mode');
+      
+      const { data, error } = await supabase
+        .rpc('bulk_create_product_links_chunked', {
+          p_user_id: user.id,
+          p_limit: analysis_id ? 1 : 100,
+          p_offset: 0
+        });
+
+      if (error) {
+        console.error('[auto-link-products] Single link error:', error);
+        throw error;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          links_created: data[0].links_created,
+          processed_count: data[0].processed_count
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
 
     // MODE 1: START - Create job and start background processing
     if (mode === 'start') {
