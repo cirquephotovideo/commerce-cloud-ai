@@ -41,37 +41,64 @@ export function ProductLinksDashboard() {
   const [selectedLink, setSelectedLink] = useState<ProductLink | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Fetch all product links with details
+  // Fetch product links with pagination (limit to 1000 for performance)
   const { data: links, isLoading, refetch } = useQuery({
     queryKey: ["product-links-dashboard"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      console.log('[ProductLinksDashboard] Current user ID:', user?.id);
+      
       if (!user) throw new Error("Not authenticated");
 
+      // First, get total count
+      const { count } = await supabase
+        .from("product_links")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      console.log('[ProductLinksDashboard] Total links count:', count);
+
+      // Then fetch limited data with relations
       const { data, error } = await supabase
         .from("product_links")
         .select(`
           *,
-          product_analyses(ean, analysis_result),
-          supplier_products(product_name, ean, purchase_price)
+          product_analyses!inner(ean, analysis_result),
+          supplier_products!inner(product_name, ean, purchase_price)
         `)
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(1000);
+
+      console.log('[ProductLinksDashboard] Query result:', {
+        count: data?.length,
+        error: error?.message,
+        user_id: user.id
+      });
 
       if (error) throw error;
+      
+      // Add total count to metadata
+      if (data && count) {
+        (data as any)._total = count;
+      }
+      
       return data as ProductLink[];
     },
     refetchInterval: 30000,
   });
 
   // Calculate statistics
+  const totalCount = (links as any)?._total || links?.length || 0;
+  
   const stats: LinkStats = {
-    total_links: links?.length || 0,
+    total_links: totalCount,
     auto_links: links?.filter(l => l.link_type === "auto").length || 0,
     manual_links: links?.filter(l => l.link_type === "manual").length || 0,
     suggested_links: links?.filter(l => l.link_type === "suggested").length || 0,
     avg_confidence: links?.length
-      ? Math.round(links.reduce((sum, l) => sum + l.confidence_score, 0) / links.length)
+      ? Math.round(links.reduce((sum, l) => sum + (l.confidence_score * 100), 0) / links.length)
       : 0,
     links_by_day: [],
   };
@@ -117,10 +144,11 @@ export function ProductLinksDashboard() {
   };
 
   const getConfidenceBadge = (score: number) => {
-    if (score >= 95) return <Badge className="bg-green-500">Excellent ({score}%)</Badge>;
-    if (score >= 85) return <Badge className="bg-blue-500">Bon ({score}%)</Badge>;
-    if (score >= 70) return <Badge className="bg-yellow-500">Moyen ({score}%)</Badge>;
-    return <Badge variant="destructive">Faible ({score}%)</Badge>;
+    const scorePercent = Math.round(score * 100);
+    if (scorePercent >= 95) return <Badge className="bg-green-500">Excellent ({scorePercent}%)</Badge>;
+    if (scorePercent >= 85) return <Badge className="bg-blue-500">Bon ({scorePercent}%)</Badge>;
+    if (scorePercent >= 70) return <Badge className="bg-yellow-500">Moyen ({scorePercent}%)</Badge>;
+    return <Badge variant="destructive">Faible ({scorePercent}%)</Badge>;
   };
 
   if (isLoading) {
