@@ -27,7 +27,7 @@ interface PendingLink {
     asin: string;
     title: string;
     brand: string;
-    buy_box_price: number;
+    buybox_price: number;
     image_urls: string[];
   };
 }
@@ -64,7 +64,7 @@ export function AmazonLinksMassValidation() {
             asin,
             title,
             brand,
-            buy_box_price,
+            buybox_price,
             image_urls
           )
         `)
@@ -316,11 +316,11 @@ export function AmazonLinksMassValidation() {
                     </div>
                   )}
 
-                  {enrichment?.buy_box_price && (
+                  {enrichment?.buybox_price && (
                     <div>
                       <p className="text-sm text-muted-foreground">Prix BuyBox</p>
                       <p className="text-2xl font-bold text-orange-600">
-                        {enrichment.buy_box_price.toFixed(2)} €
+                        {enrichment.buybox_price.toFixed(2)} €
                       </p>
                     </div>
                   )}
