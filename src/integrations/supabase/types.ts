@@ -2226,6 +2226,45 @@ export type Database = {
         }
         Relationships: []
       }
+      gemini_file_search_stores: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          gemini_store_id: string
+          id: string
+          last_sync_at: string
+          product_count: number | null
+          store_name: string
+          sync_status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          gemini_store_id: string
+          id?: string
+          last_sync_at?: string
+          product_count?: number | null
+          store_name: string
+          sync_status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          gemini_store_id?: string
+          id?: string
+          last_sync_at?: string
+          product_count?: number | null
+          store_name?: string
+          sync_status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       google_services_config: {
         Row: {
           api_key_encrypted: string | null
