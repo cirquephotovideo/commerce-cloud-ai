@@ -19,10 +19,12 @@ export function SupplierSyncHealth() {
     retryFailedEnrichments, 
     pauseEnrichments, 
     skipFailedProducts,
+    unlockAllStuckProducts,
     isFixing, 
     isRetrying, 
     isPausing, 
-    isSkipping 
+    isSkipping,
+    isUnlockingAll
   } = useSupplierSync();
   
   const [isRunningDiagnostic, setIsRunningDiagnostic] = useState(false);
@@ -237,19 +239,35 @@ export function SupplierSyncHealth() {
               <p>• <strong>{healthData.statusCounts.enriching} produits bloqués</strong> en statut "enriching"</p>
             )}
             <div className="flex flex-wrap gap-2 mt-2">
-              <Button 
-                size="sm" 
-                variant="destructive" 
-                onClick={() => fixStuckEnrichments.mutate()}
-                disabled={isFixing}
-              >
-                {isFixing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Débloquer tout ({healthData.statusCounts.enriching})
-              </Button>
+              {healthData.statusCounts.enriching > 10000 ? (
+                <Button 
+                  size="sm" 
+                  variant="destructive" 
+                  onClick={() => unlockAllStuckProducts.mutate()}
+                  disabled={isUnlockingAll}
+                >
+                  {isUnlockingAll ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                  )}
+                  🚀 Déblocage complet automatique ({healthData.statusCounts.enriching.toLocaleString()})
+                </Button>
+              ) : (
+                <Button 
+                  size="sm" 
+                  variant="destructive" 
+                  onClick={() => fixStuckEnrichments.mutate()}
+                  disabled={isFixing}
+                >
+                  {isFixing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Débloquer tout ({healthData.statusCounts.enriching})
+                </Button>
+              )}
               {healthData.statusCounts.failed > 0 && (
                 <>
                   <Button 
