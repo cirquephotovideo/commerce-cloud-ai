@@ -196,6 +196,43 @@ Deno.serve(async (req) => {
         });
       } else {
         console.log(`[AMAZON-AUTO-LINK] ✅ Job ${job_id} completed!`);
+        
+        // Send completion email notification
+        const completedJob = await supabase
+          .from('amazon_auto_link_jobs')
+          .select('*')
+          .eq('id', job_id)
+          .single();
+
+        if (completedJob.data) {
+          const durationMinutes = completedJob.data.started_at && completedJob.data.completed_at
+            ? Math.round((new Date(completedJob.data.completed_at).getTime() - new Date(completedJob.data.started_at).getTime()) / 60000)
+            : 0;
+
+          const successRate = completedJob.data.total_to_process > 0
+            ? Math.round((completedJob.data.links_created / completedJob.data.total_to_process) * 100)
+            : 0;
+
+          console.log(`[AMAZON-AUTO-LINK] Sending completion email to user ${user.id}`);
+          
+          await supabase.functions.invoke('send-notification', {
+            body: {
+              userId: user.id,
+              type: 'amazon_auto_link_complete',
+              data: {
+                job_id: job_id,
+                status: completedJob.data.status,
+                total_to_process: completedJob.data.total_to_process,
+                processed_count: completedJob.data.processed_count,
+                links_created: completedJob.data.links_created,
+                duration_minutes: durationMinutes,
+                success_rate: successRate,
+                started_at: completedJob.data.started_at,
+                completed_at: completedJob.data.completed_at
+              }
+            }
+          });
+        }
       }
     }
 
@@ -218,15 +255,57 @@ Deno.serve(async (req) => {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
       const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      await supabase
+
+      const { data: failedJob } = await supabase
         .from('amazon_auto_link_jobs')
         .update({
           status: 'failed',
-          error_message: error.message,
-          completed_at: new Date().toISOString()
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         })
-        .eq('id', job_id);
+        .eq('id', job_id)
+        .select()
+        .single();
+
+      // Send failure email notification
+      if (failedJob) {
+        const durationMinutes = failedJob.started_at
+          ? Math.round((new Date().getTime() - new Date(failedJob.started_at).getTime()) / 60000)
+          : 0;
+
+        try {
+          const authHeader = req.headers.get('Authorization');
+          if (authHeader) {
+            const token = authHeader.replace('Bearer ', '');
+            const { data: { user } } = await supabase.auth.getUser(token);
+            
+            if (user) {
+              console.log(`[AMAZON-AUTO-LINK] Sending failure email to user ${user.id}`);
+              await supabase.functions.invoke('send-notification', {
+                body: {
+                  userId: user.id,
+                  type: 'amazon_auto_link_complete',
+                  data: {
+                    job_id: job_id,
+                    status: 'failed',
+                    total_to_process: failedJob.total_to_process,
+                    processed_count: failedJob.processed_count,
+                    links_created: failedJob.links_created,
+                    duration_minutes: durationMinutes,
+                    success_rate: 0,
+                    error_message: error instanceof Error ? error.message : 'Unknown error',
+                    started_at: failedJob.started_at,
+                    completed_at: failedJob.completed_at
+                  }
+                }
+              });
+            }
+          }
+        } catch (emailError) {
+          console.error('[AMAZON-AUTO-LINK] Failed to send failure email:', emailError);
+        }
+      }
     }
     
     return new Response(
