@@ -280,22 +280,15 @@ serve(async (req) => {
       }
     };
     
-    // Start background processing
-    // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
-    if (typeof EdgeRuntime !== 'undefined') {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(processRows());
-    } else {
-      // Fallback for local development
-      await processRows();
-    }
+    // Process synchronously to return complete results
+    await processRows();
     
-    // Return immediately with acknowledgment
+    // Return complete results
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Import started for ${csvData.length} rows. Processing in background...`,
-        total_rows: csvData.length
+        results: results,
+        message: `Import completed: ${results.success}/${results.total} products enriched`
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

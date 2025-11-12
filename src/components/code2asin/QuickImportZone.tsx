@@ -72,6 +72,11 @@ export function QuickImportZone({ onImportComplete }: QuickImportZoneProps) {
 
             if (error) throw error;
 
+            // Vérifier que results existe
+            if (!data || !data.results) {
+              throw new Error('Format de réponse invalide: résultats manquants');
+            }
+
             const result = data.results;
             setImportResult({
               success: result.success,

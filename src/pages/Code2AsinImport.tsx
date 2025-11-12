@@ -146,6 +146,11 @@ export default function Code2AsinImport() {
 
       if (response.error) throw response.error;
 
+      // Vérifier que results existe
+      if (!response.data || !response.data.results) {
+        throw new Error('Format de réponse invalide: résultats manquants');
+      }
+
       const result = response.data.results as ImportResult;
       setImportResult(result);
       setImportProgress(100);
