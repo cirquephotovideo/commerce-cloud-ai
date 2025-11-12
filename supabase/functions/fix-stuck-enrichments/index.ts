@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.10';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,10 +21,9 @@ Deno.serve(async (req) => {
     // 1. Trouver TOUS les produits en statut "enriching" (orphelins potentiels)
     const { data: allEnrichingProducts, error: enrichingError } = await supabaseClient
       .from('supplier_products')
-      .select('id, supplier_id, user_id, ean, product_name, last_updated')
+      .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
-      .order('last_updated', { ascending: true })
-      .limit(10000);
+      .limit(2000);
 
     if (enrichingError) throw enrichingError;
 
@@ -47,14 +46,12 @@ Deno.serve(async (req) => {
     }
 
     // 2. Trouver les produits vraiment bloqués (>10 min)
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { data: stuckProducts, error: stuckError } = await supabaseClient
       .from('supplier_products')
-      .select('id, supplier_id, user_id, ean, product_name, last_updated')
+      .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
-      .lt('last_updated', tenMinutesAgo)
-      .order('last_updated', { ascending: true })
-      .limit(1000);
+      .lt('last_updated', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+      .limit(100);
 
     if (stuckError) throw stuckError;
 
@@ -70,25 +67,11 @@ Deno.serve(async (req) => {
     console.log(`⏰ ${stuckProducts?.length || 0} produits vraiment bloqués (>10 min)`);
     console.log(`❌ ${failedProducts?.length || 0} produits en erreur trouvés`);
 
-    // 📊 Diagnostic détaillé
-    console.log(`📊 Diagnostic des produits bloqués:`, {
-      total_enriching: allEnrichingProducts?.length || 0,
-      orphans: orphanProducts.length,
-      stuck: stuckProducts?.length || 0,
-      failed: failedProducts?.length || 0,
-      oldest_stuck: allEnrichingProducts?.[0]?.last_updated,
-      sample_products: allEnrichingProducts?.slice(0, 5).map(p => ({
-        id: p.id,
-        name: p.product_name,
-        last_updated: p.last_updated
-      }))
-    });
-
     // Combiner tous les produits à corriger (priorité aux orphelins)
     const allProductsToFix = [
       ...orphanProducts,
       ...(stuckProducts || []).filter(s => !orphanProducts.some(o => o.id === s.id)),
-      ...(failedProducts || []).filter(f => !orphanProducts.some(o => o.id === f.id) && !(stuckProducts || []).some(s => s.id === f.id)),
+      ...(failedProducts || []),
     ];
 
     if (allProductsToFix.length === 0) {
@@ -103,46 +86,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4. 🚀 Traitement par batch (500 produits à la fois)
-    console.log(`🔧 Total produits à corriger: ${allProductsToFix.length}`);
-    
+    // 4. Pour chaque produit, vérifier s'il a une tâche et la créer si nécessaire
     let fixedCount = 0;
     let createdTasks = 0;
-    const BATCH_SIZE = 500;
 
-    for (let i = 0; i < allProductsToFix.length; i += BATCH_SIZE) {
-      const batch = allProductsToFix.slice(i, i + BATCH_SIZE);
-      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(allProductsToFix.length / BATCH_SIZE);
-      
-      console.log(`📦 Traitement batch ${batchNum}/${totalBatches}: ${batch.length} produits`);
-      
-      // 1. Créer toutes les tâches en une seule requête (avec gestion des conflits)
-      const tasksToCreate = batch.map(product => ({
-        user_id: product.user_id,
-        supplier_product_id: product.id,
-        enrichment_type: ['ai_analysis', 'amazon_data', 'specifications'],
-        priority: 'high',
-        status: 'pending',
-      }));
-      
-      const { data: createdTasksData, error: taskError } = await supabaseClient
+    for (const product of allProductsToFix) {
+      // Vérifier si une tâche existe déjà
+      const { data: existingTask } = await supabaseClient
         .from('enrichment_queue')
-        .upsert(tasksToCreate, { 
-          onConflict: 'supplier_product_id',
-          ignoreDuplicates: false 
-        })
-        .select('id');
-      
-      if (taskError) {
-        console.error(`❌ Erreur création tâches batch ${batchNum}:`, taskError);
-      } else {
-        const tasksCreatedInBatch = createdTasksData?.length || 0;
-        createdTasks += tasksCreatedInBatch;
-        console.log(`✅ ${tasksCreatedInBatch} tâches créées pour batch ${batchNum}`);
+        .select('id')
+        .eq('supplier_product_id', product.id)
+        .in('status', ['pending', 'processing'])
+        .maybeSingle();
+
+      if (!existingTask) {
+        // Créer une tâche d'enrichissement
+        const { error: insertError } = await supabaseClient
+          .from('enrichment_queue')
+          .insert({
+            user_id: product.user_id,
+            supplier_product_id: product.id,
+            enrichment_type: ['ai_analysis', 'amazon_data', 'specifications'],
+            priority: 'high',
+            status: 'pending',
+          });
+
+        if (!insertError) {
+          createdTasks++;
+          console.log(`✅ Tâche créée pour produit ${product.id}`);
+        } else {
+          console.error(`❌ Erreur création tâche pour ${product.id}:`, insertError);
+        }
       }
-      
-      // 2. Réinitialiser tous les statuts en une seule requête
+
+      // Réinitialiser le statut du produit et effacer le message d'erreur
       const { error: updateError } = await supabaseClient
         .from('supplier_products')
         .update({ 
@@ -150,17 +127,16 @@ Deno.serve(async (req) => {
           enrichment_error_message: null,
           last_updated: new Date().toISOString()
         })
-        .in('id', batch.map(p => p.id));
-      
-      if (updateError) {
-        console.error(`❌ Erreur mise à jour batch ${batchNum}:`, updateError);
+        .eq('id', product.id);
+
+      if (!updateError) {
+        fixedCount++;
       } else {
-        fixedCount += batch.length;
-        console.log(`✅ ${batch.length} produits réinitialisés (batch ${batchNum})`);
+        console.error(`❌ Erreur mise à jour produit ${product.id}:`, updateError);
       }
     }
 
-    console.log(`✅ Traitement par batch terminé: ${fixedCount} produits corrigés, ${createdTasks} tâches créées`);
+    console.log(`✅ ${fixedCount} produits débloqués/réinitialisés, ${createdTasks} tâches créées`);
 
     // 4. Déclencher le traitement de la queue
     if (createdTasks > 0) {

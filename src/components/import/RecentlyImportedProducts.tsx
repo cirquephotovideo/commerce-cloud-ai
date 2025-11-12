@@ -12,47 +12,41 @@ export const RecentlyImportedProducts = () => {
   const [products, setProducts] = useState<any[]>([]);
 
   // Récupérer les produits récemment importés avec enrichissement détaillé
-  const { data: initialProducts, error } = useQuery({
+  const { data: initialProducts } = useQuery({
     queryKey: ['recently-imported-products'],
     queryFn: async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return [];
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
 
-        const { data, error } = await supabase
-          .from('supplier_products')
-          .select('id, product_name, purchase_price, currency, enrichment_status, created_at, supplier_id, last_updated')
-          .eq('user_id', user.id)
-          .order('last_updated', { ascending: false })
-          .limit(20);
+      const { data, error } = await supabase
+        .from('supplier_products')
+        .select('id, product_name, purchase_price, currency, enrichment_status, created_at, supplier_id, last_updated')
+        .eq('user_id', user.id)
+        .order('last_updated', { ascending: false })
+        .limit(20);
 
-        if (error) throw error;
-        if (!data || data.length === 0) return [];
-        
-        // ✅ UN SEUL appel RPC pour tous les produits
-        const productIds = data.map(p => p.id);
-        const { data: enrichmentBatch } = await supabase.rpc(
-          'get_products_enrichment_batch',
-          { p_product_ids: productIds }
+      if (error) throw error;
+      
+      // Récupérer les détails d'enrichissement pour chaque produit
+      if (data) {
+        const productsWithEnrichment = await Promise.all(
+          data.map(async (product) => {
+            const { data: enrichmentData } = await supabase.rpc(
+              'get_product_enrichment_summary',
+              { p_supplier_product_id: product.id }
+            );
+            return {
+              ...product,
+              enrichment_details: enrichmentData || { total: 0, items: {} }
+            };
+          })
         );
-
-        // Mapper les enrichissements aux produits
-        const enrichmentMap = new Map(
-          enrichmentBatch?.map((item: any) => [item.product_id, item.enrichment_summary]) || []
-        );
-
-        return data.map(product => ({
-          ...product,
-          enrichment_details: enrichmentMap.get(product.id) || { total: 0, items: {} }
-        }));
-      } catch (err) {
-        console.error('Error loading products:', err);
-        return [];
+        return productsWithEnrichment;
       }
+      
+      return data || [];
     },
-    refetchInterval: 10000,
-    retry: 3,
-    retryDelay: 1000,
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
 
   // Initialiser les produits
@@ -64,14 +58,6 @@ export const RecentlyImportedProducts = () => {
 
   // S'abonner aux nouveaux produits et mises à jour en temps réel
   useEffect(() => {
-    const fetchEnrichmentDetails = async (productId: string) => {
-      const { data } = await supabase.rpc(
-        'get_products_enrichment_batch',
-        { p_product_ids: [productId] }
-      );
-      return data?.[0]?.enrichment_summary || { total: 0, items: {} };
-    };
-
     const channel = supabase
       .channel('supplier-products-changes')
       .on(
@@ -83,8 +69,16 @@ export const RecentlyImportedProducts = () => {
         },
         async (payload) => {
           console.log('📦 New product imported:', payload.new);
-          const enrichment_details = await fetchEnrichmentDetails(payload.new.id);
-          setProducts((prev) => [{...payload.new, enrichment_details}, ...prev].slice(0, 20));
+          // Récupérer les détails d'enrichissement pour le nouveau produit
+          const { data: enrichmentData } = await supabase.rpc(
+            'get_product_enrichment_summary',
+            { p_supplier_product_id: payload.new.id }
+          );
+          const productWithEnrichment = {
+            ...payload.new,
+            enrichment_details: enrichmentData || { total: 0, items: {} }
+          };
+          setProducts((prev) => [productWithEnrichment, ...prev].slice(0, 20));
         }
       )
       .on(
@@ -96,10 +90,18 @@ export const RecentlyImportedProducts = () => {
         },
         async (payload) => {
           console.log('🔄 Product updated:', payload.new);
-          const enrichment_details = await fetchEnrichmentDetails(payload.new.id);
-          const productWithEnrichment = {...payload.new, enrichment_details};
+          // Récupérer les détails d'enrichissement pour le produit mis à jour
+          const { data: enrichmentData } = await supabase.rpc(
+            'get_product_enrichment_summary',
+            { p_supplier_product_id: payload.new.id }
+          );
+          const productWithEnrichment = {
+            ...payload.new,
+            enrichment_details: enrichmentData || { total: 0, items: {} }
+          };
           setProducts((prev) => {
             const updated = prev.map(p => p.id === payload.new.id ? productWithEnrichment : p);
+            // Si le produit n'existe pas encore, l'ajouter en premier
             if (!prev.some(p => p.id === payload.new.id)) {
               return [productWithEnrichment, ...updated].slice(0, 20);
             }

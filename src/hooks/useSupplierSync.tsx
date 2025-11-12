@@ -97,42 +97,16 @@ export const useSupplierSync = () => {
     }
   });
 
-  const unlockAllStuckProducts = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('unlock-all-stuck-products');
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      const message = data.completed 
-        ? `✅ ${data.total_fixed} produits débloqués en ${data.passes} passes`
-        : `⚠️ ${data.total_fixed} produits débloqués, ${data.remaining_stuck} restent bloqués`;
-      
-      toast.success(message, {
-        description: `${data.tasks_created} tâches créées`
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
-      queryClient.invalidateQueries({ queryKey: ['enrichment-queue'] });
-      queryClient.invalidateQueries({ queryKey: ['supplier-sync-health'] });
-    },
-    onError: (error: Error) => {
-      toast.error(`❌ Erreur de déblocage complet : ${error.message}`);
-    }
-  });
-
   return {
     syncSingleProduct,
     fixStuckEnrichments,
     retryFailedEnrichments,
     pauseEnrichments,
     skipFailedProducts,
-    unlockAllStuckProducts,
     isSyncing: syncSingleProduct.isPending,
     isFixing: fixStuckEnrichments.isPending,
     isRetrying: retryFailedEnrichments.isPending,
     isPausing: pauseEnrichments.isPending,
     isSkipping: skipFailedProducts.isPending,
-    isUnlockingAll: unlockAllStuckProducts.isPending,
   };
 };

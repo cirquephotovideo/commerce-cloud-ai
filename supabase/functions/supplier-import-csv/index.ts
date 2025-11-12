@@ -1,6 +1,5 @@
-// CSV Import Edge Function - Handles supplier product imports from CSV files
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -57,27 +56,6 @@ serve(async (req) => {
 
     console.log('[IMPORT-CSV] Starting import for user:', user.id);
     console.log('[IMPORT-CSV] File path:', filePath);
-    console.log('[IMPORT-CSV] Column mapping:', columnMapping);
-
-    // Validate required fields in mapping
-    if (!columnMapping.product_name || !columnMapping.supplier_reference) {
-      console.error('[IMPORT-CSV] Invalid mapping: missing required fields', {
-        has_product_name: !!columnMapping.product_name,
-        has_supplier_reference: !!columnMapping.supplier_reference
-      });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Invalid column mapping',
-          details: 'Both product_name and supplier_reference are required',
-          productsQueued: 0
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
 
     // 1. Download file from Storage
     console.log('[IMPORT-CSV] Downloading file from Storage...');
@@ -103,7 +81,6 @@ serve(async (req) => {
     let buffer = '';
     let lineNumber = 0;
     let processedCount = 0;
-    let skippedCount = 0;
     let currentBatch: string[] = [];
     let batchNumber = 1;
     let headerRow: string[] = [];
@@ -151,19 +128,7 @@ serve(async (req) => {
               const reference = extractField(columns, columnMapping.supplier_reference);
               const name = extractField(columns, columnMapping.product_name);
 
-              if (!reference || !name) {
-                skippedCount++;
-                if (skippedCount <= 5) {
-                  console.warn(`[IMPORT-CSV] Skipping row ${lineNumber}: missing required fields`, {
-                    hasReference: !!reference,
-                    hasName: !!name,
-                    firstColumns: columns.slice(0, 3)
-                  });
-                }
-                if (skippedCount === 100) {
-                  console.error('[IMPORT-CSV] ⚠️ More than 100 products skipped - invalid mapping likely');
-                }
-              } else {
+              if (reference && name) {
                 const ean = extractField(columns, columnMapping.ean);
                 const description = extractField(columns, columnMapping.description);
                 
@@ -241,17 +206,6 @@ serve(async (req) => {
           const name = extractField(columns, columnMapping.product_name);
 
           if (!reference || !name) {
-            skippedCount++;
-            if (skippedCount <= 5) {
-              console.warn(`[IMPORT-CSV] Skipping row ${lineNumber}: missing required fields`, {
-                hasReference: !!reference,
-                hasName: !!name,
-                firstColumns: columns.slice(0, 3)
-              });
-            }
-            if (skippedCount === 100) {
-              console.error('[IMPORT-CSV] ⚠️ More than 100 products skipped - invalid mapping likely');
-            }
             continue;
           }
 
@@ -308,13 +262,7 @@ serve(async (req) => {
       }
       
       console.log('[IMPORT-CSV] Streaming complete. Total products:', processedCount);
-      console.log('[IMPORT-CSV] Total skipped:', skippedCount);
       console.log('[IMPORT-CSV] Total batches written:', batchNumber - 1);
-      
-      // Alert if too many skips
-      if (skippedCount > processedCount * 0.9) {
-        console.error('[IMPORT-CSV] ❌ Critical: >90% of products were skipped - invalid mapping detected');
-      }
       
     } finally {
       reader.releaseLock();

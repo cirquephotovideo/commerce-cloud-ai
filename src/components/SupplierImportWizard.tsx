@@ -235,21 +235,12 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       return;
     }
 
-    // Validate required mappings - stricter validation
+    // Validate required mappings
     const hasName = columnMapping.product_name !== null && columnMapping.product_name !== undefined;
-    const hasReference = columnMapping.supplier_reference !== null && columnMapping.supplier_reference !== undefined;
     const hasPrice = columnMapping.purchase_price !== null && columnMapping.purchase_price !== undefined;
     
-    if (!hasName || !hasReference) {
-      toast.error("❌ Mapping incomplet", {
-        description: "Les champs 'Nom du produit' et 'Référence fournisseur' sont obligatoires pour l'import.",
-        duration: 6000
-      });
-      return;
-    }
-    
-    if (!hasPrice) {
-      toast.error("Veuillez mapper au minimum le prix d'achat");
+    if (!hasName || !hasPrice) {
+      toast.error("Veuillez mapper au minimum le nom du produit et le prix d'achat");
       return;
     }
 
@@ -348,16 +339,6 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
       console.log('[WIZARD] Import response:', data);
       
-      // Check if import started but no products were queued (mapping issue)
-      if (data.productsQueued === 0) {
-        toast.error("❌ Aucun produit trouvé", {
-          description: "Vérifiez le mapping des colonnes (Nom du produit, Référence fournisseur).",
-          duration: 8000
-        });
-        setImportProgress(prev => ({ ...prev, status: 'error', message: 'Aucun produit valide détecté' }));
-        return;
-      }
-      
       setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.message}` });
       toast.success(`✅ ${data.message || 'Import démarré avec succès'}`);
       
@@ -409,10 +390,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   };
 
   const canProceedToStep3 = file && preview.length > 0;
-  const canImport = 
-    columnMapping.product_name !== null && 
-    columnMapping.supplier_reference !== null && 
-    columnMapping.purchase_price !== null;
+  const canImport = columnMapping.product_name !== null && columnMapping.purchase_price !== null;
 
   return (
     <Dialog open={true} onOpenChange={onClose}>

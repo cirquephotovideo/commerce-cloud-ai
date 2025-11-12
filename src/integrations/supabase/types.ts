@@ -5182,13 +5182,6 @@ export type Database = {
         Args: { p_supplier_product_id: string }
         Returns: Json
       }
-      get_products_enrichment_batch: {
-        Args: { p_product_ids: string[] }
-        Returns: {
-          enrichment_summary: Json
-          product_id: string
-        }[]
-      }
       get_retryable_import_errors: {
         Args: never
         Returns: {
