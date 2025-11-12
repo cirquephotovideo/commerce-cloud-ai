@@ -31,10 +31,23 @@ export const MarketIntelligenceDashboard = () => {
   const [data, setData] = useState<MarketIntelligenceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setIsAuthenticated(!!session);
+    return !!session;
+  };
 
   const loadData = async () => {
     try {
+      const hasSession = await checkAuth();
+      if (!hasSession) {
+        setLoading(false);
+        return;
+      }
+
       const { data: marketData, error } = await supabase
         .from('market_intelligence_data')
         .select('*')
@@ -60,8 +73,15 @@ export const MarketIntelligenceDashboard = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('Non authentifié');
+        toast({
+          title: "Non authentifié",
+          description: "Vous devez être connecté pour lancer l'analyse",
+          variant: "destructive"
+        });
+        return;
       }
+
+      console.log('[MARKET-INTELLIGENCE] Starting analysis...');
 
       const { data: result, error } = await supabase.functions.invoke(
         'market-intelligence-scheduler',
@@ -72,7 +92,12 @@ export const MarketIntelligenceDashboard = () => {
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        console.error('[MARKET-INTELLIGENCE] Error:', error);
+        throw error;
+      }
+
+      console.log('[MARKET-INTELLIGENCE] Analysis result:', result);
 
       toast({
         title: "Analyse terminée",
@@ -81,10 +106,10 @@ export const MarketIntelligenceDashboard = () => {
 
       await loadData();
     } catch (error) {
-      console.error('Error running analysis:', error);
+      console.error('[MARKET-INTELLIGENCE] Error running analysis:', error);
       toast({
-        title: "Erreur",
-        description: "Échec de l'analyse de marché",
+        title: "Erreur d'analyse",
+        description: error.message || "Échec de l'analyse de marché. Vérifiez que vous êtes bien connecté.",
         variant: "destructive"
       });
     } finally {
@@ -143,6 +168,20 @@ export const MarketIntelligenceDashboard = () => {
       <Card className="p-6">
         <div className="flex items-center justify-center">
           <RefreshCw className="h-6 w-6 animate-spin" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Card className="p-6">
+        <div className="text-center py-12">
+          <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-orange-500" />
+          <h3 className="text-lg font-semibold mb-2">Authentification requise</h3>
+          <p className="text-muted-foreground">
+            Vous devez être connecté pour accéder à l'intelligence marché
+          </p>
         </div>
       </Card>
     );
