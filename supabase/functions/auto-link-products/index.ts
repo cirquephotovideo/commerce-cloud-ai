@@ -42,59 +42,115 @@ Deno.serve(async (req) => {
 
     console.log('[auto-link-products] Authenticated user:', user.id);
 
-    const { auto_mode = false } = await req.json();
+    const { auto_mode = false, batch_size = 50 } = await req.json();
 
-    // MODE GLOBAL OPTIMISÉ: Utiliser la fonction SQL batch
+    // MODE GLOBAL OPTIMISÉ: Process in batches to avoid timeout
     if (auto_mode) {
-      console.log('[auto-link-products] Mode global optimisé - utilisation de bulk_create_product_links');
+      console.log('[auto-link-products] Starting batch processing with batch_size:', batch_size);
       
-      // Compter le nombre potentiel de correspondances
-      const { count: potentialMatches } = await supabase
-        .from('product_analyses')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .not('ean', 'is', null)
-        .neq('ean', '');
+      let totalLinksCreated = 0;
+      let processedBatches = 0;
+      const BATCH_SIZE = batch_size;
 
-      console.log(`[auto-link-products] ${potentialMatches} produits analysés avec EAN`);
+      // Process in batches until no more links are created
+      while (true) {
+        const batchStartTime = Date.now();
+        
+        // Fetch products that need linking (limited batch)
+        const { data: analyses, error: fetchError } = await supabase
+          .from('product_analyses')
+          .select('id, ean, product_name')
+          .eq('user_id', user.id)
+          .not('ean', 'is', null)
+          .neq('ean', '')
+          .limit(BATCH_SIZE);
 
-    // Appeler la fonction SQL batch avec timeout handling
-    const { data, error: rpcError } = await supabase
-      .rpc('bulk_create_product_links', { p_user_id: user.id });
+        if (fetchError) {
+          console.error('[auto-link-products] Fetch error:', fetchError);
+          throw fetchError;
+        }
 
-    if (rpcError) {
-      console.error('[auto-link-products] RPC error:', rpcError);
-      
-      // Handle statement timeout specifically
-      if (rpcError.message?.includes('statement timeout') || rpcError.message?.includes('canceling statement')) {
-        return new Response(
-          JSON.stringify({
-            error: 'Operation timed out. Try processing fewer products at once or contact support.',
-            code: 'TIMEOUT',
-            links_created: 0
-          }),
-          {
-            status: 504,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        if (!analyses || analyses.length === 0) {
+          console.log('[auto-link-products] No more products to process');
+          break;
+        }
+
+        console.log(`[auto-link-products] Processing batch ${processedBatches + 1}: ${analyses.length} products`);
+
+        // Process each product in this batch
+        let batchLinksCreated = 0;
+        for (const analysis of analyses) {
+          // Find matching supplier products by EAN
+          const { data: suppliers, error: supplierError } = await supabase
+            .from('supplier_products')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('ean', analysis.ean)
+            .limit(1);
+
+          if (supplierError) {
+            console.error(`[auto-link-products] Error finding supplier for ${analysis.ean}:`, supplierError);
+            continue;
           }
-        );
-      }
-      
-      throw rpcError;
-    }
 
-      const result = data?.[0] || { links_created: 0, execution_time_ms: 0 };
+          if (suppliers && suppliers.length > 0) {
+            // Check if link already exists
+            const { data: existingLink } = await supabase
+              .from('product_links')
+              .select('id')
+              .eq('analysis_id', analysis.id)
+              .eq('supplier_product_id', suppliers[0].id)
+              .single();
+
+            if (!existingLink) {
+              // Create the link
+              const { error: insertError } = await supabase
+                .from('product_links')
+                .insert({
+                  analysis_id: analysis.id,
+                  supplier_product_id: suppliers[0].id,
+                  link_type: 'automatic',
+                  confidence_score: 100,
+                  user_id: user.id
+                });
+
+              if (!insertError) {
+                batchLinksCreated++;
+              } else {
+                console.error(`[auto-link-products] Insert error for ${analysis.id}:`, insertError);
+              }
+            }
+          }
+        }
+
+        totalLinksCreated += batchLinksCreated;
+        processedBatches++;
+        const batchTime = Date.now() - batchStartTime;
+        
+        console.log(`[auto-link-products] Batch ${processedBatches} completed: ${batchLinksCreated} links created in ${batchTime}ms`);
+
+        // Stop if we processed fewer items than batch size (last batch)
+        if (analyses.length < BATCH_SIZE) {
+          break;
+        }
+
+        // Stop after a reasonable number of batches to prevent infinite loops
+        if (processedBatches >= 20) {
+          console.log('[auto-link-products] Max batches reached, stopping');
+          break;
+        }
+      }
+
       const executionTime = Date.now() - startTime;
 
-      console.log(`[auto-link-products] Batch completed: ${result.links_created} links created in ${result.execution_time_ms}ms (total: ${executionTime}ms)`);
+      console.log(`[auto-link-products] All batches completed: ${totalLinksCreated} total links created in ${executionTime}ms`);
 
       return new Response(
         JSON.stringify({
-          links_created: result.links_created,
-          potential_matches: potentialMatches,
+          links_created: totalLinksCreated,
+          batches_processed: processedBatches,
           execution_time_ms: executionTime,
-          sql_execution_time_ms: result.execution_time_ms,
-          mode: 'batch_optimized',
+          mode: 'batch_processing',
         }),
         {
           status: 200,
