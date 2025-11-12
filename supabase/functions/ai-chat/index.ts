@@ -129,6 +129,40 @@ const executeMCPTool = async (
     platformType = parts[1];
     action = parts.slice(2).join('_');
     
+    // 🚦 RATE LIMITING - Vérifier les quotas avant l'appel
+    console.log(`[AI-CHAT] Checking rate limit for user ${userId}, package: ${toolName}`);
+    const { data: rateLimitResult, error: rateLimitError } = await supabase.rpc(
+      'check_and_update_rate_limit',
+      {
+        p_user_id: userId,
+        p_package_id: toolName
+      }
+    );
+    
+    if (rateLimitError) {
+      console.error('[AI-CHAT] Rate limit check failed:', rateLimitError);
+      throw new Error('Rate limit check failed');
+    }
+    
+    if (rateLimitResult && !rateLimitResult.allowed) {
+      const retryAfter = rateLimitResult.retry_after_seconds || 3600;
+      const resetAt = rateLimitResult.reset_at ? new Date(rateLimitResult.reset_at).toLocaleString('fr-FR') : 'bientôt';
+      
+      console.warn(`[AI-CHAT] ⛔ Rate limit exceeded for ${toolName}: ${rateLimitResult.current_count}/${rateLimitResult.limit}`);
+      
+      throw new Error(
+        `Limite de requêtes atteinte pour ${platformType} (${rateLimitResult.current_count}/${rateLimitResult.limit}). ` +
+        `Réinitialisation à ${resetAt}. Réessayez dans ${Math.ceil(retryAfter / 60)} minutes.`
+      );
+    }
+    
+    if (rateLimitResult) {
+      console.log(
+        `[AI-CHAT] ✅ Rate limit OK: ${rateLimitResult.current_count}/${rateLimitResult.limit} ` +
+        `(reset at ${rateLimitResult.reset_at ? new Date(rateLimitResult.reset_at).toLocaleString('fr-FR') : 'N/A'})`
+      );
+    }
+    
     // Trouver la config de la plateforme
     const platform = platforms.find(p => p.platform_type === platformType);
     if (!platform) {
