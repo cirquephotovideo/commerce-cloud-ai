@@ -88,7 +88,7 @@ serve(async (req) => {
     const lines = csvText.split('\n').filter(line => line.trim());
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
 
-    const csvData = lines.slice(1).map((line) => {
+    const csvData: Code2AsinRow[] = lines.slice(1).map((line) => {
       // Handle CSV with quoted values
       const values: string[] = [];
       let currentValue = '';
