@@ -5178,6 +5178,10 @@ export type Database = {
           products_count: number
         }[]
       }
+      get_product_enrichment_summary: {
+        Args: { p_supplier_product_id: string }
+        Returns: Json
+      }
       get_retryable_import_errors: {
         Args: never
         Returns: {
