@@ -30,6 +30,7 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
 
   const isFinished = progress.status === 'completed' || progress.status === 'failed';
   const hasNoProducts = progress.success === 0 && progress.processed > 0;
+  const hasInvalidMapping = progress.success === 0 && progress.skipped > progress.total * 0.9 && progress.processed > 0;
 
   // Calculate estimated time remaining
   useEffect(() => {
@@ -140,8 +141,22 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
             </Card>
           </div>
 
-          {/* Warning if 0 products imported */}
-          {hasNoProducts && isFinished && (
+          {/* Warning if invalid mapping detected */}
+          {hasInvalidMapping && isFinished && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <p className="text-sm font-medium text-destructive">⚠️ Mapping des colonnes invalide</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Plus de 90% des produits ont été ignorés car les champs obligatoires 
+                (Nom du produit, Référence fournisseur) ne sont pas correctement mappés.
+              </p>
+              <p className="text-xs font-medium text-destructive mt-2">
+                → Relancez l'import avec le bon mapping des colonnes
+              </p>
+            </div>
+          )}
+          
+          {/* Warning if 0 products imported (other reasons) */}
+          {hasNoProducts && !hasInvalidMapping && isFinished && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
               <p className="text-sm font-medium text-destructive">⚠️ Aucun produit importé</p>
               <p className="text-xs text-muted-foreground mt-1">
@@ -149,7 +164,6 @@ export const ImportProgressDialog = ({ open, progress, processingLogs }: ImportP
                 Causes possibles:
               </p>
               <ul className="text-xs text-muted-foreground mt-2 list-disc list-inside space-y-1">
-                <li>Mapping des colonnes incorrect</li>
                 <li>Format de fichier non conforme</li>
                 <li>Données manquantes (références, noms de produits)</li>
                 <li>Valeurs "NC" ou vides sur toutes les lignes</li>
