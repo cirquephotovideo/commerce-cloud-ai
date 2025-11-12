@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Package, Boxes, ShoppingCart } from "lucide-react";
+import { Package, Boxes, ShoppingCart, Bot } from "lucide-react";
 import { UnifiedSearchBar } from "@/components/unified-products/UnifiedSearchBar";
 import { GlobalProductStats } from "@/components/unified-products/GlobalProductStats";
 import { AnalysesTab } from "@/components/unified-products/AnalysesTab";
@@ -11,6 +11,7 @@ import { AmazonAutoLinkPanel } from "@/components/unified-products/AmazonAutoLin
 import { ProductLinksDashboard } from "@/components/unified-products/ProductLinksDashboard";
 import { AmazonLinksAnalytics } from "@/components/unified-products/AmazonLinksAnalytics";
 import { AmazonLinksMassValidation } from "@/components/unified-products/AmazonLinksMassValidation";
+import { ProductChatRAG } from "@/components/unified-products/ProductChatRAG";
 import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
 import { useRealtimeAmazonLinks } from "@/hooks/useRealtimeAmazonLinks";
 
@@ -56,7 +57,7 @@ export default function UnifiedProductsManagement() {
 
       {/* Onglets */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="analyses">
             <Package className="h-4 w-4 mr-2" />
             Produits Analysés
@@ -68,6 +69,10 @@ export default function UnifiedProductsManagement() {
           <TabsTrigger value="code2asin">
             <ShoppingCart className="h-4 w-4 mr-2" />
             Enrichissements Amazon
+          </TabsTrigger>
+          <TabsTrigger value="chat">
+            <Bot className="h-4 w-4 mr-2" />
+            🤖 Chat IA
           </TabsTrigger>
         </TabsList>
 
@@ -81,6 +86,10 @@ export default function UnifiedProductsManagement() {
 
         <TabsContent value="code2asin">
           <Code2AsinTab searchQuery={searchQuery} />
+        </TabsContent>
+
+        <TabsContent value="chat">
+          <ProductChatRAG />
         </TabsContent>
       </Tabs>
     </div>
