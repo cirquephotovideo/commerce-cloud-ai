@@ -18,6 +18,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminSystemTests from "./pages/AdminSystemTests";
 import AdminQuality from "./pages/AdminQuality";
+import SystemObservability from "./pages/SystemObservability";
 import SubscriptionWelcome from "./pages/SubscriptionWelcome";
 import NotFound from "./pages/NotFound";
 import Demo from "./pages/Demo";
@@ -76,6 +77,7 @@ const App = () => {
         <Route path="/admin" element={<AdminRoute><DashboardLayout><AdminDashboard /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/system-tests" element={<AdminRoute><DashboardLayout><AdminSystemTests /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />
+        <Route path="/observability" element={<AdminRoute><DashboardLayout><SystemObservability /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
