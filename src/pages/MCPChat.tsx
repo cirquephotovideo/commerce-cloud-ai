@@ -4,27 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MessageSquare, Send, Plug, Sparkles } from "lucide-react";
+import { MessageSquare, Send, Plug, Sparkles, Trash2 } from "lucide-react";
 import { useMCPContext } from "@/contexts/MCPContext";
 import { useToast } from "@/hooks/use-toast";
-
-interface MCPMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-}
+import { useMCPChat } from "@/hooks/useMCPChat";
 
 const MCPChat = () => {
   const { toast } = useToast();
   const { mcpPackages, getMCPSuggestions } = useMCPContext();
-  const [messages, setMessages] = useState<MCPMessage[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
 
   const activePlatforms = mcpPackages.filter(pkg => pkg.isConfigured);
   const suggestions = getMCPSuggestions();
+  
+  // Utiliser le hook MCP Chat
+  const { messages, isLoading, sendMessage, clearMessages } = useMCPChat(selectedPlatforms);
 
   const togglePlatform = (platformId: string) => {
     setSelectedPlatforms(prev => 
@@ -34,7 +29,7 @@ const MCPChat = () => {
     );
   };
 
-  const sendMessage = async (question: string) => {
+  const handleSendMessage = async (question: string) => {
     if (!question.trim()) return;
 
     if (selectedPlatforms.length === 0 && activePlatforms.length > 0) {
@@ -46,56 +41,37 @@ const MCPChat = () => {
       return;
     }
 
-    const userMessage: MCPMessage = {
-      id: Date.now().toString(),
-      role: "user",
-      content: question,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
     setInput("");
-    setIsLoading(true);
-
-    try {
-      // Simuler une réponse pour Phase 1
-      // Dans Phase 3, on appellera l'edge function ai-chat avec mcpContext
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const assistantMessage: MCPMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `🔌 Réponse MCP simulée pour la question : "${question}"\n\nLes plateformes sélectionnées sont : ${selectedPlatforms.map(id => mcpPackages.find(p => p.id === id)?.name).join(", ") || "aucune"}.\n\n⚠️ L'intégration complète avec les plateformes MCP sera disponible en Phase 3.`,
-        timestamp: new Date(),
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      toast({
-        title: "❌ Erreur",
-        description: error instanceof Error ? error.message : "Erreur inconnue",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    await sendMessage(question);
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    sendMessage(suggestion);
+    handleSendMessage(suggestion);
   };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 h-[calc(100vh-8rem)] flex flex-col gap-4">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <MessageSquare className="h-8 w-8 text-primary" />
-          MCP Chat
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Interrogez vos plateformes connectées en langage naturel
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <MessageSquare className="h-8 w-8 text-primary" />
+            MCP Chat
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Interrogez vos plateformes connectées en langage naturel
+          </p>
+        </div>
+        {messages.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={clearMessages}
+            disabled={isLoading}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Effacer
+          </Button>
+        )}
       </div>
 
       {/* Sélection des plateformes */}
@@ -160,12 +136,30 @@ const MCPChat = () => {
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                      <p className="text-xs opacity-70 mt-1">
-                        {msg.timestamp.toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
+                      
+                      {msg.role === "assistant" && msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {msg.toolsUsed.map((tool, idx) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              🔧 {tool.replace('mcp_', '').replace(/_/g, ' ')}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between mt-1">
+                        <p className="text-xs opacity-70">
+                          {msg.timestamp.toLocaleTimeString("fr-FR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        {msg.provider && (
+                          <p className="text-xs opacity-50">
+                            {msg.provider}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -212,7 +206,7 @@ const MCPChat = () => {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  sendMessage(input);
+                  handleSendMessage(input);
                 }
               }}
               placeholder="Posez une question sur vos plateformes MCP..."
@@ -220,7 +214,7 @@ const MCPChat = () => {
               disabled={isLoading || activePlatforms.length === 0}
             />
             <Button
-              onClick={() => sendMessage(input)}
+              onClick={() => handleSendMessage(input)}
               disabled={isLoading || !input.trim() || activePlatforms.length === 0}
               size="icon"
               className="h-[60px] w-[60px] shrink-0"
