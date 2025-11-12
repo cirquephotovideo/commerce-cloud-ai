@@ -210,18 +210,6 @@ export function ProductLinksDashboard() {
     return <Badge variant="destructive">Faible ({scorePercent}%)</Badge>;
   };
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>📊 Dashboard des Liens</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">Chargement...</div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <>
