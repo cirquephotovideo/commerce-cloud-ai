@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Deno.serve is used instead of the old serve import
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -50,7 +50,7 @@ interface Code2AsinRow {
 
 const BATCH_SIZE = 100; // Process 100 products at a time
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -288,8 +288,15 @@ serve(async (req) => {
   } catch (error) {
     console.error('[CHUNK-PROCESSOR] Error:', error);
     
-    // Mark chunk as failed
-    const { chunkId } = await req.json();
+    // Try to extract chunkId from error context if available
+    let chunkId;
+    try {
+      const body = await req.clone().json();
+      chunkId = body.chunkId;
+    } catch {
+      console.error('[CHUNK-PROCESSOR] Could not extract chunkId from request');
+    }
+    
     if (chunkId) {
       const supabaseClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
