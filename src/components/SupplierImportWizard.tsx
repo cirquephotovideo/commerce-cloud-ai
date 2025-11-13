@@ -149,12 +149,12 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const headerRowIdx = detectHeaderRow(jsonData);
       const firstRow = jsonData[0] || [];
       
-      // Smart detection: if first row contains mostly numbers/codes, likely no header
-      const hasNumbers = firstRow.filter((cell: any) => {
-        const str = String(cell || '').trim();
-        return /^\d+$/.test(str) || /^[\d.,]+$/.test(str);
+      // Smart detection: if first row looks like typical column names, it's a header
+      const hasTypicalHeaders = firstRow.some((cell: any) => {
+        const str = String(cell || '').toLowerCase().trim();
+        return ['nom', 'name', 'référence', 'ref', 'prix', 'price', 'ean', 'code', 'description', 'stock', 'quantité', 'quantity'].includes(str);
       });
-      const likelyNoHeader = hasNumbers.length > firstRow.length * 0.5;
+      const likelyNoHeader = !hasTypicalHeaders;
       
       setDetectedHeaderRow(likelyNoHeader ? -1 : headerRowIdx);
       setHasHeaderRow(!likelyNoHeader);
@@ -163,9 +163,10 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       console.log('[WIZARD] File analysis:', {
         totalRows: jsonData.length,
         firstRowValues: firstRow,
-        hasNumbers: hasNumbers.length,
+        hasTypicalHeaders,
         likelyNoHeader,
-        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx
+        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx,
+        skipRowsWillBe: likelyNoHeader ? 0 : 1
       });
       
       // Show first 10 rows including headers for preview
@@ -182,12 +183,12 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const headerRowIdx = detectHeaderRow(parsed);
       const firstRow = parsed[0] || [];
       
-      // Smart detection: if first row contains mostly numbers/codes, likely no header
-      const hasNumbers = firstRow.filter((cell: any) => {
-        const str = String(cell || '').trim();
-        return /^\d+$/.test(str) || /^[\d.,]+$/.test(str);
+      // Smart detection: if first row looks like typical column names, it's a header
+      const hasTypicalHeaders = firstRow.some((cell: any) => {
+        const str = String(cell || '').toLowerCase().trim();
+        return ['nom', 'name', 'référence', 'ref', 'prix', 'price', 'ean', 'code', 'description', 'stock', 'quantité', 'quantity'].includes(str);
       });
-      const likelyNoHeader = hasNumbers.length > firstRow.length * 0.5;
+      const likelyNoHeader = !hasTypicalHeaders;
       
       setDetectedHeaderRow(likelyNoHeader ? -1 : headerRowIdx);
       setHasHeaderRow(!likelyNoHeader);
@@ -196,9 +197,10 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       console.log('[WIZARD] File analysis:', {
         totalRows: parsed.length,
         firstRowValues: firstRow,
-        hasNumbers: hasNumbers.length,
+        hasTypicalHeaders,
         likelyNoHeader,
-        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx
+        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx,
+        skipRowsWillBe: likelyNoHeader ? 0 : 1
       });
       
       // Show first 10 rows including headers for preview
@@ -526,6 +528,19 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Preview of first row */}
+                  <div className="p-3 bg-muted/30 rounded-lg border">
+                    <div className="text-sm font-medium mb-2">📄 Aperçu de la ligne 1 :</div>
+                    <div className="text-xs font-mono overflow-x-auto">
+                      {rawRows[0]?.slice(0, 5).map((cell, idx) => (
+                        <span key={idx} className="mr-4">
+                          [{idx + 1}]: <span className="text-primary">{String(cell || '(vide)').substring(0, 30)}</span>
+                        </span>
+                      ))}
+                      {rawRows[0]?.length > 5 && <span className="text-muted-foreground">... ({rawRows[0].length - 5} autres colonnes)</span>}
+                    </div>
+                  </div>
+                  
                   <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                     <div className="space-y-1">
                       <Label htmlFor="has-header" className="text-base font-medium">
@@ -533,8 +548,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                       </Label>
                       <p className="text-sm text-muted-foreground">
                         {hasHeaderRow 
-                          ? "La première ligne contient les noms de colonnes" 
-                          : "La première ligne contient déjà des données produit"}
+                          ? "✓ La ligne 1 contient les noms de colonnes (Référence, Nom, Prix...)" 
+                          : "✗ La ligne 1 contient déjà des données produit"}
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -555,12 +570,23 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                     </label>
                   </div>
                   
-                  <Alert>
-                    <AlertDescription className="flex items-center justify-between">
-                      <span>
-                        <strong>Lignes totales:</strong> {rawRows.length} • 
-                        <strong className="ml-2">Lignes à traiter:</strong> {Math.max(0, rawRows.length - (hasHeaderRow ? 1 : 0))} produits
-                      </span>
+                  <Alert className={hasHeaderRow ? "" : "border-amber-500/50 bg-amber-500/10"}>
+                    <AlertDescription className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span>
+                          <strong>Lignes totales:</strong> {rawRows.length}
+                        </span>
+                        <span>
+                          <strong>Lignes à traiter:</strong> {Math.max(0, rawRows.length - (hasHeaderRow ? 1 : 0))} produits
+                        </span>
+                      </div>
+                      <div className="text-sm">
+                        {hasHeaderRow ? (
+                          <span className="text-green-600">✓ Ligne 1 = En-tête, Lignes 2-{rawRows.length} = Données</span>
+                        ) : (
+                          <span className="text-amber-600">⚠️ Ligne 1 = DONNÉES (pas d'en-tête détecté), Lignes 1-{rawRows.length} = Toutes les données</span>
+                        )}
+                      </div>
                     </AlertDescription>
                   </Alert>
                   
