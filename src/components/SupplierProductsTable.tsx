@@ -357,27 +357,28 @@ export function SupplierProductsTable() {
         <CardContent>
           {products?.length > 0 && (
             <div className="flex items-center justify-between mb-4 pb-4 border-b">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSelectAll}
-                className="gap-2"
-              >
-                {selectedProductIds.size === products.length ? (
-                  <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
                     <CheckSquare className="h-4 w-4" />
-                    Tout désélectionner
-                  </>
-                ) : (
-                  <>
-                    <Square className="h-4 w-4" />
-                    Tout sélectionner
-                  </>
-                )}
-              </Button>
+                    Tout sélectionner ▼
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={handleSelectCurrentPage}>
+                    📄 Page actuelle ({products.length} produits)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSelectAllFiltered}>
+                    🌐 Tous les produits filtrés ({totalCount.toLocaleString()} produits)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {selectedProductIds.size > 0 && (
                 <Badge variant="secondary" className="text-sm">
-                  {selectedProductIds.size} sélectionné{selectedProductIds.size > 1 ? "s" : ""}
+                  {selectAllMode 
+                    ? `${selectedProductIds.size.toLocaleString()} sélectionné(s) (toutes pages)`
+                    : `${selectedProductIds.size} sélectionné(s) (page actuelle)`
+                  }
                 </Badge>
               )}
             </div>
