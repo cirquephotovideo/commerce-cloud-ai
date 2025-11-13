@@ -20,13 +20,26 @@ function extractField(columns: string[], mapping: any): string | null {
   
   // Handle numeric index
   if (typeof mapping === 'number') {
-    return columns[mapping] ?? null;
+    let value = columns[mapping];
+    // 1-based index fallback for legacy templates
+    if (value === undefined && mapping > 0 && columns[mapping - 1] !== undefined) {
+      console.log(`[EXTRACT-FIELD] 1-based fallback: index ${mapping} -> ${mapping - 1}`);
+      value = columns[mapping - 1];
+    }
+    return value ?? null;
   }
   
   // Handle string index
   if (typeof mapping === 'string') {
     const index = parseInt(mapping, 10);
-    return isNaN(index) ? null : (columns[index] ?? null);
+    if (isNaN(index)) return null;
+    let value = columns[index];
+    // 1-based index fallback for legacy templates
+    if (value === undefined && index > 0 && columns[index - 1] !== undefined) {
+      console.log(`[EXTRACT-FIELD] 1-based fallback: index ${index} -> ${index - 1}`);
+      value = columns[index - 1];
+    }
+    return value ?? null;
   }
   
   // Handle object with fields array
@@ -307,6 +320,17 @@ serve(async (req) => {
           acc[key] = typeof columnMapping[key];
           return acc;
         }, {}));
+        
+        // Add first data row sample if available
+        if (buffer.trim()) {
+          const sampleColumns = buffer.split(detectedDelimiter);
+          console.error('[IMPORT-CSV] First data row columns:', sampleColumns);
+          console.error('[IMPORT-CSV] Resolved values from mapping:');
+          console.error('  - product_name:', extractField(sampleColumns, columnMapping.product_name));
+          console.error('  - supplier_reference:', extractField(sampleColumns, columnMapping.supplier_reference));
+          console.error('  - ean:', extractField(sampleColumns, columnMapping.ean));
+          console.error('  - purchase_price:', extractField(sampleColumns, columnMapping.purchase_price));
+        }
       }
       
     } finally {
@@ -387,7 +411,8 @@ serve(async (req) => {
           skip_config: {},
           excluded_columns: [],
           offset: 0,
-          limit: 1000
+          limit: 1000,
+          storage_bucket: 'supplier-imports' // Use supplier-imports bucket for CSV imports
         }
       });
 

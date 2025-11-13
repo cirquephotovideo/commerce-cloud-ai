@@ -23,6 +23,7 @@ interface ChunkRequest {
   limit: number;
   correlation_id?: string;
   retry_count?: number;
+  storage_bucket?: string; // Allow configurable bucket (default: 'email-attachments')
 }
 
 serve(async (req) => {
@@ -48,7 +49,8 @@ serve(async (req) => {
     excluded_columns = [],
     offset, limit,
     correlation_id = crypto.randomUUID(),
-    retry_count = 0
+    retry_count = 0,
+    storage_bucket = 'email-attachments' // Default to email-attachments for backward compatibility
   } = requestBody;
 
   try {
@@ -56,7 +58,9 @@ serve(async (req) => {
     console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, { 
       job_id, offset, limit, retry: retry_count,
       skip_config,
-      excluded_columns
+      excluded_columns,
+      storage_bucket,
+      ndjson_path
     });
 
     const supabase = createClient(
@@ -71,7 +75,7 @@ serve(async (req) => {
 
     while (downloadAttempts < maxDownloadRetries && !ndjsonFile) {
       const { data, error } = await supabase.storage
-        .from('email-attachments')
+        .from(storage_bucket)
         .download(ndjson_path);
 
       if (error) {
