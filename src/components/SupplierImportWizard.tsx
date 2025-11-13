@@ -158,6 +158,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       
       setDetectedHeaderRow(likelyNoHeader ? -1 : headerRowIdx);
       setHasHeaderRow(!likelyNoHeader);
+      // Force skipRows=0 when there's no header to prevent accidental row skipping
       setSkipRows(likelyNoHeader ? 0 : 1);
       
       console.log('[WIZARD] File analysis:', {
