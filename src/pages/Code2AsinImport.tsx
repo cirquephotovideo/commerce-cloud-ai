@@ -177,6 +177,11 @@ export default function Code2AsinImport() {
 
   const startImport = async () => {
     if (!csvData || !rawFile) return;
+    
+    if (!user) {
+      toast.error("❌ Utilisateur non authentifié. Veuillez rafraîchir la page.");
+      return;
+    }
 
     setIsImporting(true);
     setImportProgress(0);
@@ -191,7 +196,7 @@ export default function Code2AsinImport() {
 
       // 1️⃣ Upload du fichier vers Storage
       const timestamp = Date.now();
-      const filePath = `code2asin-imports/${user!.id}/${timestamp}_${fileName}`;
+      const filePath = `code2asin-imports/${user.id}/${timestamp}_${fileName}`;
       
       toast.info('📤 Upload du fichier en cours...');
       console.log(`Uploading CSV to storage: ${filePath}`);
@@ -348,7 +353,7 @@ export default function Code2AsinImport() {
               {/* Bouton d'import */}
               <Button
                 onClick={startImport}
-                disabled={!csvData || isImporting}
+                disabled={!csvData || isImporting || !user}
                 className="w-full"
                 size="lg"
               >
