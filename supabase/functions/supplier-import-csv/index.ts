@@ -261,8 +261,26 @@ serve(async (req) => {
         batchNumber++;
       }
       
-      console.log('[IMPORT-CSV] Streaming complete. Total products:', processedCount);
+      console.log('[IMPORT-CSV] ===== STREAMING COMPLETE =====');
+      console.log('[IMPORT-CSV] Total lines read:', lineNumber);
+      console.log('[IMPORT-CSV] Skip rows configured:', skipRows);
+      console.log('[IMPORT-CSV] Header row line number:', (skipRows || 0) + 1);
+      console.log('[IMPORT-CSV] Data rows processed:', lineNumber - (skipRows || 0) - 1);
+      console.log('[IMPORT-CSV] Products extracted:', processedCount);
       console.log('[IMPORT-CSV] Total batches written:', batchNumber - 1);
+      console.log('[IMPORT-CSV] ===========================');
+      
+      // Warning if no products detected
+      if (processedCount === 0) {
+        console.warn('[IMPORT-CSV] ⚠️ WARNING: 0 products were extracted from the file!');
+        console.warn('[IMPORT-CSV] Possible causes:');
+        console.warn('[IMPORT-CSV]   1. skipRows is set too high (current:', skipRows, ')');
+        console.warn('[IMPORT-CSV]   2. File has no header row but skipRows=1 was used');
+        console.warn('[IMPORT-CSV]   3. Column mapping does not match the file structure');
+        console.warn('[IMPORT-CSV]   4. Required fields (supplier_reference, product_name) are empty');
+        console.warn('[IMPORT-CSV] First 3 lines of file:');
+        // Note: we can't easily log the first lines here as they've been streamed
+      }
       
     } finally {
       reader.releaseLock();
@@ -291,6 +309,13 @@ serve(async (req) => {
     console.log('[IMPORT-CSV] Found batches:', sortedFiles.length);
 
     // 4. Create import job
+    console.log('[IMPORT-CSV] Creating import job with:', {
+      products: processedCount,
+      batches: sortedFiles.length,
+      skipRows,
+      hasColumnMapping: !!columnMapping
+    });
+    
     const { data: job, error: jobError } = await supabase
       .from('import_jobs')
       .insert({
