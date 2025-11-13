@@ -350,6 +350,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         filePath,  // ✅ Just the path, not the content
         columnMapping,
         skipRows,
+        hasHeaderRow, // ✅ Indicate if file has header row
       };
       
       if (!isXLSX) {
@@ -379,6 +380,22 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       }
 
       console.log('[WIZARD] Import response:', data);
+      
+      // Check if 0 products processed
+      if (data.processedCount === 0 || data.message?.includes('0 produits')) {
+        const helpMessage = `
+⚠️ 0 produits traités. Vérifications :
+• Votre mapping utilise des indices numériques : ✓ supporté
+• Assurez-vous de mapper au moins "Nom du produit"
+• Vérifiez que votre fichier ${hasHeaderRow ? 'a bien' : "n'a pas"} d'en-tête
+• Délimiteur utilisé : "${delimiter || 'détection auto'}"
+• Nombre de lignes ignorées : ${skipRows}
+        `.trim();
+        
+        toast.error(helpMessage, { duration: 10000 });
+        setImportProgress({ current: 100, total: 100, status: 'error', message: '⚠️ 0 produits traités' });
+        return;
+      }
       
       setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.message}` });
       toast.success(`✅ ${data.message || 'Import démarré avec succès'}`);
