@@ -1,14 +1,27 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
-import { RefreshCw, CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Chunk = Database['public']['Tables']['code2asin_import_chunks']['Row'];
+interface ChunkRow {
+  id: string;
+  job_id: string;
+  chunk_index: number;
+  start_row: number;
+  end_row: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  processed_rows: number;
+  retry_count: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
 
 interface ChunksProgressProps {
   jobId: string;
@@ -16,13 +29,29 @@ interface ChunksProgressProps {
 }
 
 export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProps) {
-  const [chunks, setChunks] = useState<Chunk[]>([]);
+  const [chunks, setChunks] = useState<ChunkRow[]>([]);
   const [isRetrying, setIsRetrying] = useState(false);
+
+  const loadChunks = async () => {
+    const { data, error } = await supabase
+      .from('code2asin_import_chunks' as any)
+      .select('*')
+      .eq('job_id', jobId)
+      .order('chunk_index');
+
+    if (error) {
+      console.error('Error loading chunks:', error);
+      return;
+    }
+
+    if (data) {
+      setChunks(data as ChunkRow[]);
+    }
+  };
 
   useEffect(() => {
     loadChunks();
-    
-    // Subscribe to real-time updates
+
     const channel = supabase
       .channel(`chunks-${jobId}`)
       .on(
@@ -33,8 +62,7 @@ export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProp
           table: 'code2asin_import_chunks',
           filter: `job_id=eq.${jobId}`
         },
-        (payload) => {
-          console.log('[CHUNKS-REALTIME] Update:', payload);
+        () => {
           loadChunks();
         }
       )
@@ -44,21 +72,6 @@ export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProp
       supabase.removeChannel(channel);
     };
   }, [jobId]);
-
-  const loadChunks = async () => {
-    const { data, error } = await supabase
-      .from('code2asin_import_chunks')
-      .select('*')
-      .eq('job_id', jobId)
-      .order('chunk_index', { ascending: true });
-
-    if (error) {
-      console.error('Error loading chunks:', error);
-      return;
-    }
-
-    setChunks(data || []);
-  };
 
   const retryFailedChunks = async () => {
     setIsRetrying(true);
