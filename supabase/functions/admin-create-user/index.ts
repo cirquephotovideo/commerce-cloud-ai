@@ -98,11 +98,29 @@ Deno.serve(async (req) => {
 
     if (createError) {
       console.error('User creation failed:', createError);
+      
+      // Handle specific error cases with French messages
+      let errorMessage = 'Erreur lors de la création de l\'utilisateur';
+      let statusCode = 400;
+      
+      if (createError.message?.includes('already been registered') || 
+          createError.message?.includes('email address already exists')) {
+        errorMessage = 'Un utilisateur avec cet email existe déjà. Veuillez utiliser une autre adresse email.';
+        statusCode = 409; // Conflict
+      } else if (createError.message?.includes('invalid email')) {
+        errorMessage = 'Adresse email invalide.';
+      } else if (createError.message?.includes('password')) {
+        errorMessage = 'Le mot de passe ne respecte pas les critères de sécurité requis.';
+      } else {
+        errorMessage = createError.message || errorMessage;
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: createError.message || 'Erreur lors de la création de l\'utilisateur' 
+          error: errorMessage,
+          code: createError.code || 'USER_CREATION_ERROR'
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
