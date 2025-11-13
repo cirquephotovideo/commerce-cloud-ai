@@ -272,15 +272,16 @@ serve(async (req) => {
           const productData = {
             supplier_id: supplierId,
             user_id: user.id,
-            reference,
-            name,
+            supplier_reference: reference,
+            product_name: name,
             ean: ean || null,
             description: description || null,
             purchase_price: purchase_price || null,
-            stock: stock || null,
+            stock_quantity: stock || null,
             currency: 'EUR',
             brand: extractField(columns, columnMapping.brand) || null,
             category: extractField(columns, columnMapping.category) || null,
+            vat_rate: extractField(columns, columnMapping.vat_rate) || null,
             last_sync_at: new Date().toISOString()
           };
 
