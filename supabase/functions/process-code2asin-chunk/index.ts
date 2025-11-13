@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     const { data: job, error: jobFetchError } = await supabaseClient
       .from('code2asin_import_jobs')
-      .select('user_id, options')
+      .select('user_id')
       .eq('id', jobId)
       .maybeSingle();
 
@@ -131,7 +131,6 @@ Deno.serve(async (req) => {
     }
 
     const userId = job.user_id;
-    const options = job.options || {};
 
     let processedCount = 0;
     let successCount = 0;
@@ -167,7 +166,8 @@ Deno.serve(async (req) => {
 
           let analysisId = existingMap.get(ean.toLowerCase());
 
-          if (!analysisId && options.createMissing) {
+          // Always try to create missing analyses
+          if (!analysisId) {
             const { data: newAnalysis } = await supabaseClient
               .from('product_analyses')
               .insert({

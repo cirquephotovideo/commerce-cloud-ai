@@ -105,8 +105,7 @@ Deno.serve(async (req) => {
         success_count: 0,
         failed_count: 0,
         created_count: 0,
-        updated_count: 0,
-        options: options || {}
+        updated_count: 0
       })
       .select()
       .maybeSingle();
