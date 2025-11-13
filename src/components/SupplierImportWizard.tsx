@@ -49,6 +49,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [excludedColumns, setExcludedColumns] = useState<string[]>([]);
   const [detectedHeaderRow, setDetectedHeaderRow] = useState(0);
   const [rawRows, setRawRows] = useState<any[][]>([]);
+  const [hasHeaderRow, setHasHeaderRow] = useState(true);
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers"],
@@ -144,9 +145,28 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       // Store all raw rows for unified mapper
       setRawRows(jsonData);
       
-      // Detect header row
+      // Detect header row and check if file has headers
       const headerRowIdx = detectHeaderRow(jsonData);
-      setDetectedHeaderRow(headerRowIdx);
+      const firstRow = jsonData[0] || [];
+      
+      // Smart detection: if first row contains mostly numbers/codes, likely no header
+      const hasNumbers = firstRow.filter((cell: any) => {
+        const str = String(cell || '').trim();
+        return /^\d+$/.test(str) || /^[\d.,]+$/.test(str);
+      });
+      const likelyNoHeader = hasNumbers.length > firstRow.length * 0.5;
+      
+      setDetectedHeaderRow(likelyNoHeader ? -1 : headerRowIdx);
+      setHasHeaderRow(!likelyNoHeader);
+      setSkipRows(likelyNoHeader ? 0 : 1);
+      
+      console.log('[WIZARD] File analysis:', {
+        totalRows: jsonData.length,
+        firstRowValues: firstRow,
+        hasNumbers: hasNumbers.length,
+        likelyNoHeader,
+        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx
+      });
       
       // Show first 10 rows including headers for preview
       setPreview(jsonData.slice(0, 10));
@@ -158,9 +178,28 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       // Store all raw rows for unified mapper
       setRawRows(parsed);
       
-      // Detect header row
+      // Detect header row and check if file has headers
       const headerRowIdx = detectHeaderRow(parsed);
-      setDetectedHeaderRow(headerRowIdx);
+      const firstRow = parsed[0] || [];
+      
+      // Smart detection: if first row contains mostly numbers/codes, likely no header
+      const hasNumbers = firstRow.filter((cell: any) => {
+        const str = String(cell || '').trim();
+        return /^\d+$/.test(str) || /^[\d.,]+$/.test(str);
+      });
+      const likelyNoHeader = hasNumbers.length > firstRow.length * 0.5;
+      
+      setDetectedHeaderRow(likelyNoHeader ? -1 : headerRowIdx);
+      setHasHeaderRow(!likelyNoHeader);
+      setSkipRows(likelyNoHeader ? 0 : 1);
+      
+      console.log('[WIZARD] File analysis:', {
+        totalRows: parsed.length,
+        firstRowValues: firstRow,
+        hasNumbers: hasNumbers.length,
+        likelyNoHeader,
+        detectedHeaderRow: likelyNoHeader ? -1 : headerRowIdx
+      });
       
       // Show first 10 rows including headers for preview
       const lines = allLines.slice(0, 10);
@@ -478,6 +517,63 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
           {/* Step 3: Unified Mapping Configuration */}
           {step === 3 && (
             <div className="space-y-6">
+              {/* Header Row Detection Card */}
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Détection de l'en-tête
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                    <div className="space-y-1">
+                      <Label htmlFor="has-header" className="text-base font-medium">
+                        Mon fichier a une ligne d'en-tête
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {hasHeaderRow 
+                          ? "La première ligne contient les noms de colonnes" 
+                          : "La première ligne contient déjà des données produit"}
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        id="has-header"
+                        type="checkbox"
+                        checked={hasHeaderRow}
+                        onChange={(e) => {
+                          const newValue = e.target.checked;
+                          setHasHeaderRow(newValue);
+                          setSkipRows(newValue ? 1 : 0);
+                          setDetectedHeaderRow(newValue ? 0 : -1);
+                          console.log('[WIZARD] Header toggle changed:', { hasHeaderRow: newValue, skipRows: newValue ? 1 : 0 });
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                  </div>
+                  
+                  <Alert>
+                    <AlertDescription className="flex items-center justify-between">
+                      <span>
+                        <strong>Lignes totales:</strong> {rawRows.length} • 
+                        <strong className="ml-2">Lignes à traiter:</strong> {Math.max(0, rawRows.length - (hasHeaderRow ? 1 : 0))} produits
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  {!hasHeaderRow && (
+                    <Alert variant="default" className="border-amber-500/50 bg-amber-500/10">
+                      <AlertDescription>
+                        ⚠️ Sans en-tête, assurez-vous que le mapping correspond exactement à l'ordre des colonnes dans votre fichier.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+              
               {/* Row Filtering */}
               <RowFilterConfig
                 skipRowsTop={skipRowsTop}
