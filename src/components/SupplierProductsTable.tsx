@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle, Sparkles, CheckSquare, Square, X, Loader2 } from "lucide-react";
+import { Search, Link2, ExternalLink, Package, Euro, TrendingUp, AlertCircle, Sparkles, CheckSquare, Square, X, Loader2, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +15,10 @@ import { BatchEnrichmentDialog } from "./BatchEnrichmentDialog";
 import { BulkSupplierProductEditor } from "./BulkSupplierProductEditor";
 import { SupplierCrossSearch } from "./SupplierCrossSearch";
 import { toast } from "sonner";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 
 export function SupplierProductsTable() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,6 +35,14 @@ export function SupplierProductsTable() {
   const [enrichingProductIds, setEnrichingProductIds] = useState<Set<string>>(new Set());
   const [searchProduct, setSearchProduct] = useState<any>(null);
   const [enrichingProduct, setEnrichingProduct] = useState<string | null>(null);
+  const [selectAllMode, setSelectAllMode] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [showDeletionProgress, setShowDeletionProgress] = useState(false);
+  const [deletionProgress, setDeletionProgress] = useState({
+    deleted: 0,
+    total: 0,
+    status: 'pending' as 'pending' | 'processing' | 'completed' | 'failed'
+  });
 
   // Fetch suppliers for filter
   const { data: suppliers } = useQuery({
@@ -90,11 +102,115 @@ export function SupplierProductsTable() {
   const totalCount = productsData?.totalCount || 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  const handleSelectAll = () => {
+  const handleSelectCurrentPage = () => {
+    setSelectAllMode(false);
     if (selectedProductIds.size === products.length) {
       setSelectedProductIds(new Set());
     } else {
       setSelectedProductIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handleSelectAllFiltered = async () => {
+    setSelectAllMode(true);
+    
+    let query = supabase
+      .from("supplier_products")
+      .select('id');
+    
+    if (searchQuery) {
+      query = query.or(`ean.ilike.%${searchQuery}%,product_name.ilike.%${searchQuery}%,supplier_reference.ilike.%${searchQuery}%`);
+    }
+    if (supplierFilter !== "all") {
+      query = query.eq("supplier_id", supplierFilter);
+    }
+    
+    const { data, error } = await query;
+    if (error) {
+      toast.error("Erreur lors de la récupération des produits");
+      return;
+    }
+    
+    let filteredIds = data?.map(p => p.id) || [];
+    
+    if (statusFilter !== "all") {
+      const { data: productsWithLinks } = await supabase
+        .from("supplier_products")
+        .select('id, product_links(id)')
+        .in('id', filteredIds);
+      
+      filteredIds = productsWithLinks?.filter(p => {
+        const hasLink = p.product_links && p.product_links.length > 0;
+        if (statusFilter === "linked") return hasLink;
+        if (statusFilter === "unlinked") return !hasLink;
+        if (statusFilter === "unlinked_with_ean") return !hasLink && p.ean;
+        if (statusFilter === "unlinked_no_ean") return !hasLink && !p.ean;
+        return true;
+      }).map(p => p.id) || [];
+    }
+    
+    setSelectedProductIds(new Set(filteredIds));
+    toast.success(`${filteredIds.length} produit(s) sélectionné(s)`);
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    setBulkDeleteDialogOpen(false);
+    setShowDeletionProgress(true);
+    setDeletionProgress({
+      deleted: 0,
+      total: selectedProductIds.size,
+      status: 'processing'
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('bulk-delete-supplier-products', {
+        body: { productIds: Array.from(selectedProductIds) }
+      });
+
+      if (error) throw error;
+
+      const jobId = data.job_id;
+
+      const channel = supabase
+        .channel(`product-deletion-${jobId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'bulk_product_deletion_jobs',
+            filter: `id=eq.${jobId}`
+          },
+          (payload: any) => {
+            console.log('Deletion progress update:', payload.new);
+            
+            setDeletionProgress({
+              deleted: payload.new.deleted_products,
+              total: payload.new.total_products,
+              status: payload.new.status
+            });
+
+            if (payload.new.status === 'completed') {
+              toast.success(`✅ ${payload.new.deleted_products.toLocaleString()} produits supprimés`);
+              channel.unsubscribe();
+            }
+
+            if (payload.new.status === 'failed' || payload.new.status === 'completed_with_errors') {
+              toast.error(`❌ ${payload.new.error_message || 'Erreur lors de la suppression'}`);
+              channel.unsubscribe();
+            }
+          }
+        )
+        .subscribe();
+
+    } catch (error: any) {
+      console.error('Error starting bulk deletion:', error);
+      toast.error(`❌ Erreur : ${error.message}`);
+      setDeletionProgress({
+        deleted: 0,
+        total: selectedProductIds.size,
+        status: 'failed'
+      });
     }
   };
 
