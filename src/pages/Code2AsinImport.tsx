@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Upload, FileCheck, FileUp, AlertCircle, CheckCircle2, Package } from "lucide-react";
 import { ImportedProductsList } from "@/components/code2asin/ImportedProductsList";
+import { ChunksProgressDashboard } from "@/components/code2asin/ChunksProgressDashboard";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import Papa from "papaparse";
@@ -387,6 +388,14 @@ export default function Code2AsinImport() {
                     </p>
                   )}
                 </div>
+              )}
+              
+              {/* Chunks Progress Dashboard */}
+              {jobId && csvData && (
+                <ChunksProgressDashboard 
+                  jobId={jobId} 
+                  totalRows={csvData.length}
+                />
               )}
               
               {/* Résumé d'import */}
