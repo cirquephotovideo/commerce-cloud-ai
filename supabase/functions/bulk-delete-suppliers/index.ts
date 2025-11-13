@@ -6,9 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 100; // Réduit de 500 à 100 pour éviter les timeouts
-const PROGRESS_UPDATE_INTERVAL = 10; // Update tous les 10 batches
-const SUPPLIER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max par fournisseur
+// Configuration - Optimized for large datasets to prevent SQL timeouts
+const BATCH_SIZE = 25; // Reduced to 25 to prevent SQL statement timeouts
+const PROGRESS_UPDATE_INTERVAL = 5; // Update progress every 5 batches
+const DELAY_BETWEEN_BATCHES = 500; // 500ms delay between batches to let DB breathe
+const DELAY_BETWEEN_SUPPLIERS = 5000; // 5 seconds delay between suppliers
+const SUPPLIER_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes max per supplier
 
 interface DeleteSupplierRequest {
   supplierIds: string[];
@@ -153,8 +156,8 @@ async function deleteInBatches(
       await onProgress(totalDeleted);
     }
 
-    // Small delay between batches
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Delay between batches to let DB breathe
+    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
   }
 
   // Final progress update
@@ -176,9 +179,17 @@ async function processDeletersAsync(
   const errors: Array<{ supplier: string; error: string }> = [];
 
   try {
-    for (const supplier of supplierData) {
+    for (let i = 0; i < supplierData.length; i++) {
+      const supplier = supplierData[i];
+      
+      // Add delay between suppliers to let DB finalize transactions
+      if (i > 0) {
+        console.log(`[DELAY] Waiting ${DELAY_BETWEEN_SUPPLIERS}ms before processing next supplier...`);
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_SUPPLIERS));
+      }
+      
       const supplierStartTime = Date.now();
-      console.log(`Processing supplier: ${supplier.name} (${supplier.productCount} products)`);
+      console.log(`[${i + 1}/${supplierData.length}] Processing supplier: ${supplier.name} (${supplier.productCount} products)`);
 
       // Update current supplier
       await retryWithBackoff(
