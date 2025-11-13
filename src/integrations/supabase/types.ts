@@ -1019,6 +1019,60 @@ export type Database = {
           },
         ]
       }
+      bulk_deletion_jobs: {
+        Row: {
+          completed_at: string | null
+          completed_suppliers: number | null
+          created_at: string | null
+          current_supplier_id: string | null
+          current_supplier_name: string | null
+          deleted_products: number | null
+          error_message: string | null
+          errors: Json | null
+          id: string
+          status: string
+          supplier_ids: string[]
+          total_products: number | null
+          total_suppliers: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completed_suppliers?: number | null
+          created_at?: string | null
+          current_supplier_id?: string | null
+          current_supplier_name?: string | null
+          deleted_products?: number | null
+          error_message?: string | null
+          errors?: Json | null
+          id?: string
+          status?: string
+          supplier_ids: string[]
+          total_products?: number | null
+          total_suppliers: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completed_suppliers?: number | null
+          created_at?: string | null
+          current_supplier_id?: string | null
+          current_supplier_name?: string | null
+          deleted_products?: number | null
+          error_message?: string | null
+          errors?: Json | null
+          id?: string
+          status?: string
+          supplier_ids?: string[]
+          total_products?: number | null
+          total_suppliers?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       bulk_operations: {
         Row: {
           changes: Json
@@ -1057,6 +1111,60 @@ export type Database = {
           processed_count?: number | null
           status?: string | null
           target_ids?: string[]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      bulk_product_deletion_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_batch: number | null
+          deleted_links: number | null
+          deleted_products: number | null
+          deleted_variants: number | null
+          error_message: string | null
+          errors: Json | null
+          id: string
+          product_ids: string[]
+          status: string
+          total_batches: number | null
+          total_products: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_batch?: number | null
+          deleted_links?: number | null
+          deleted_products?: number | null
+          deleted_variants?: number | null
+          error_message?: string | null
+          errors?: Json | null
+          id?: string
+          product_ids: string[]
+          status?: string
+          total_batches?: number | null
+          total_products: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_batch?: number | null
+          deleted_links?: number | null
+          deleted_products?: number | null
+          deleted_variants?: number | null
+          error_message?: string | null
+          errors?: Json | null
+          id?: string
+          product_ids?: string[]
+          status?: string
+          total_batches?: number | null
+          total_products?: number
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1328,6 +1436,62 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      code2asin_import_chunks: {
+        Row: {
+          chunk_index: number
+          completed_at: string | null
+          created_at: string | null
+          end_row: number
+          error_message: string | null
+          id: string
+          job_id: string
+          processed_rows: number | null
+          retry_count: number | null
+          start_row: number
+          started_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          chunk_index: number
+          completed_at?: string | null
+          created_at?: string | null
+          end_row: number
+          error_message?: string | null
+          id?: string
+          job_id: string
+          processed_rows?: number | null
+          retry_count?: number | null
+          start_row: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          chunk_index?: number
+          completed_at?: string | null
+          created_at?: string | null
+          end_row?: number
+          error_message?: string | null
+          id?: string
+          job_id?: string
+          processed_rows?: number | null
+          retry_count?: number | null
+          start_row?: number
+          started_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "code2asin_import_chunks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "code2asin_import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       code2asin_import_jobs: {
         Row: {
