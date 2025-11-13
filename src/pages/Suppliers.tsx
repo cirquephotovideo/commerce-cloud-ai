@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail, AlertCircle, Settings, Package } from "lucide-react";
+import { Truck, Plus, Upload, Trash2, Loader2, Clock, CheckCircle, Eye, Mail, AlertCircle, Settings, Package, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,6 +12,7 @@ import { OllamaHealthDashboard } from "@/components/OllamaHealthDashboard";
 import { LiveImportProgress } from "@/components/LiveImportProgress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -83,6 +84,13 @@ export default function Suppliers() {
   const [selectedSupplierType, setSelectedSupplierType] = useState<'email' | 'ftp' | 'file' | 'api'>('file');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [supplierToDelete, setSupplierToDelete] = useState<string | null>(null);
+  
+  // Bulk delete states
+  const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState({ current: 0, total: 0 });
+  const [totalProductsToDelete, setTotalProductsToDelete] = useState(0);
 
   // Manual email poll handler
   const handleManualEmailPoll = async () => {
@@ -381,17 +389,25 @@ export default function Suppliers() {
       
       if (supplierProducts && supplierProducts.length > 0) {
         // 2. Delete product_links first
-        await supabase
+        const { error: linksError } = await supabase
           .from('product_links')
           .delete()
           .in('supplier_product_id', supplierProducts.map(p => p.id));
+        
+        if (linksError) {
+          console.error('Error deleting product links:', linksError);
+        }
       }
 
       // 3. Delete email inbox entries
-      await supabase
+      const { error: emailError } = await supabase
         .from('email_inbox')
         .delete()
         .eq('supplier_id', supplierToDelete);
+      
+      if (emailError) {
+        console.error('Error deleting emails:', emailError);
+      }
 
       // 4. Delete supplier products
       const { error: productsError } = await supabase
@@ -418,6 +434,144 @@ export default function Suppliers() {
       setDeleteDialogOpen(false);
       setSupplierToDelete(null);
     }
+  };
+
+  // Bulk selection handlers
+  const toggleSupplierSelection = (supplierId: string) => {
+    setSelectedSupplierIds(prev => 
+      prev.includes(supplierId) 
+        ? prev.filter(id => id !== supplierId)
+        : [...prev, supplierId]
+    );
+  };
+
+  const toggleAllSuppliers = () => {
+    if (selectedSupplierIds.length === suppliers?.length) {
+      setSelectedSupplierIds([]);
+    } else {
+      setSelectedSupplierIds(suppliers?.map(s => s.id) || []);
+    }
+  };
+
+  // Calculate total products to delete
+  const calculateTotalProducts = async (supplierIds: string[]) => {
+    try {
+      const { count } = await supabase
+        .from('supplier_products')
+        .select('id', { count: 'exact', head: true })
+        .in('supplier_id', supplierIds);
+      
+      return count || 0;
+    } catch (error) {
+      console.error('Error calculating products:', error);
+      return 0;
+    }
+  };
+
+  const handleBulkDeleteClick = async () => {
+    if (selectedSupplierIds.length === 0) return;
+    
+    const totalProducts = await calculateTotalProducts(selectedSupplierIds);
+    setTotalProductsToDelete(totalProducts);
+    setBulkDeleteDialogOpen(true);
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedSupplierIds.length === 0) return;
+    
+    setIsBulkDeleting(true);
+    setBulkDeleteProgress({ current: 0, total: selectedSupplierIds.length });
+    
+    const results = {
+      success: [] as string[],
+      failed: [] as { id: string; name: string; error: string }[]
+    };
+
+    for (let i = 0; i < selectedSupplierIds.length; i++) {
+      const supplierId = selectedSupplierIds[i];
+      setBulkDeleteProgress({ current: i + 1, total: selectedSupplierIds.length });
+      
+      try {
+        // Get supplier name for error reporting
+        const { data: supplierData } = await supabase
+          .from('supplier_configurations')
+          .select('supplier_name')
+          .eq('id', supplierId)
+          .single();
+        
+        const supplierName = supplierData?.supplier_name || 'Inconnu';
+
+        // 1. Get all supplier products
+        const { data: supplierProducts } = await supabase
+          .from('supplier_products')
+          .select('id')
+          .eq('supplier_id', supplierId);
+        
+        if (supplierProducts && supplierProducts.length > 0) {
+          // 2. Delete product_links first
+          const { error: linksError } = await supabase
+            .from('product_links')
+            .delete()
+            .in('supplier_product_id', supplierProducts.map(p => p.id));
+          
+          if (linksError) {
+            console.error(`Error deleting links for ${supplierName}:`, linksError);
+          }
+        }
+
+        // 3. Delete email inbox entries
+        const { error: emailError } = await supabase
+          .from('email_inbox')
+          .delete()
+          .eq('supplier_id', supplierId);
+        
+        if (emailError) {
+          console.error(`Error deleting emails for ${supplierName}:`, emailError);
+        }
+
+        // 4. Delete supplier products
+        const { error: productsError } = await supabase
+          .from('supplier_products')
+          .delete()
+          .eq('supplier_id', supplierId);
+
+        if (productsError) throw productsError;
+
+        // 5. Delete supplier configuration
+        const { error: supplierError } = await supabase
+          .from('supplier_configurations')
+          .delete()
+          .eq('id', supplierId);
+
+        if (supplierError) throw supplierError;
+
+        results.success.push(supplierName);
+      } catch (error: any) {
+        console.error(`Failed to delete supplier ${supplierId}:`, error);
+        const supplierName = suppliers?.find(s => s.id === supplierId)?.supplier_name || 'Inconnu';
+        results.failed.push({
+          id: supplierId,
+          name: supplierName,
+          error: error.message || 'Erreur inconnue'
+        });
+      }
+    }
+
+    // Show results
+    if (results.success.length > 0) {
+      toast.success(`✅ ${results.success.length} fournisseur(s) supprimé(s) avec succès`);
+    }
+    
+    if (results.failed.length > 0) {
+      toast.error(`❌ ${results.failed.length} fournisseur(s) n'ont pas pu être supprimés`, {
+        description: results.failed.map(f => `${f.name}: ${f.error}`).join('\n')
+      });
+    }
+
+    setIsBulkDeleting(false);
+    setBulkDeleteDialogOpen(false);
+    setSelectedSupplierIds([]);
+    refetchSuppliers();
   };
 
   return (
@@ -622,6 +776,12 @@ export default function Suppliers() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={selectedSupplierIds.length === suppliers?.length && suppliers?.length > 0}
+                        onCheckedChange={toggleAllSuppliers}
+                      />
+                    </TableHead>
                     <TableHead>Nom</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Statut</TableHead>
@@ -633,7 +793,16 @@ export default function Suppliers() {
                 </TableHeader>
                 <TableBody>
                   {suppliers?.map((supplier) => (
-                  <TableRow key={supplier.id}>
+                  <TableRow 
+                    key={supplier.id}
+                    className={selectedSupplierIds.includes(supplier.id) ? "bg-accent/50" : ""}
+                  >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedSupplierIds.includes(supplier.id)}
+                          onCheckedChange={() => toggleSupplierSelection(supplier.id)}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
@@ -1049,6 +1218,80 @@ export default function Suppliers() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>🗑️ Supprimer {selectedSupplierIds.length} fournisseur(s) ?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p className="font-semibold text-foreground">Cette action supprimera :</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{selectedSupplierIds.length} fournisseur(s)</li>
+                <li>{totalProductsToDelete} produit(s) associé(s)</li>
+                <li>Tous les liens et historiques</li>
+              </ul>
+              <p className="text-destructive font-semibold mt-4">⚠️ Cette action est irréversible !</p>
+              
+              {isBulkDeleting && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span>Progression :</span>
+                    <span className="font-semibold">{bulkDeleteProgress.current} / {bulkDeleteProgress.total}</span>
+                  </div>
+                  <Progress value={(bulkDeleteProgress.current / bulkDeleteProgress.total) * 100} />
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDeleteConfirm}
+              disabled={isBulkDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isBulkDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Suppression en cours...
+                </>
+              ) : (
+                'Supprimer définitivement'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Action Bar */}
+      {selectedSupplierIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5">
+          <Card className="shadow-2xl border-2">
+            <CardContent className="flex items-center gap-4 p-4">
+              <Badge variant="secondary" className="text-base px-4 py-2">
+                {selectedSupplierIds.length} fournisseur(s) sélectionné(s)
+              </Badge>
+              <Button 
+                variant="destructive" 
+                onClick={handleBulkDeleteClick}
+                className="gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Supprimer la sélection
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setSelectedSupplierIds([])}
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                Annuler
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Unified Mapping Wizard Dialog */}
       {showMappingWizard && selectedSupplierId && (
