@@ -1,9 +1,14 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { retryWithBackoff } from '../_shared/retry-with-backoff.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const BATCH_SIZE = 100; // Réduit de 500 à 100 pour éviter les timeouts
+const PROGRESS_UPDATE_INTERVAL = 10; // Update tous les 10 batches
+const SUPPLIER_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max par fournisseur
 
 interface DeleteSupplierRequest {
   supplierIds: string[];
@@ -110,6 +115,56 @@ Deno.serve(async (req) => {
   }
 });
 
+// Fonction générique pour suppression en batch avec retry
+async function deleteInBatches(
+  supabase: any,
+  table: string,
+  filterField: string,
+  filterValue: string,
+  ids: string[],
+  jobId: string,
+  onProgress?: (deletedCount: number) => Promise<void>
+): Promise<number> {
+  let totalDeleted = 0;
+  let batchCount = 0;
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    
+    await retryWithBackoff(
+      async () => {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .in(filterField, batch);
+
+        if (error) throw error;
+      },
+      3,
+      1000,
+      `Delete ${table} batch ${batchCount + 1}`
+    );
+
+    totalDeleted += batch.length;
+    batchCount++;
+
+    // Update progress every PROGRESS_UPDATE_INTERVAL batches
+    if (batchCount % PROGRESS_UPDATE_INTERVAL === 0 && onProgress) {
+      await onProgress(totalDeleted);
+    }
+
+    // Small delay between batches
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  // Final progress update
+  if (onProgress && totalDeleted > 0) {
+    await onProgress(totalDeleted);
+  }
+
+  return totalDeleted;
+}
+
 async function processDeletersAsync(
   supabase: any,
   jobId: string,
@@ -122,94 +177,164 @@ async function processDeletersAsync(
 
   try {
     for (const supplier of supplierData) {
+      const supplierStartTime = Date.now();
       console.log(`Processing supplier: ${supplier.name} (${supplier.productCount} products)`);
 
       // Update current supplier
-      await supabase
-        .from('bulk_deletion_jobs')
-        .update({
-          current_supplier_id: supplier.id,
-          current_supplier_name: supplier.name,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', jobId);
+      await retryWithBackoff(
+        async () => {
+          await supabase
+            .from('bulk_deletion_jobs')
+            .update({
+              current_supplier_id: supplier.id,
+              current_supplier_name: supplier.name,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+        },
+        3,
+        1000,
+        'Update current supplier'
+      );
 
       try {
-        // 1. Delete product_links in batches
-        const BATCH_SIZE = 500;
-        const { data: products } = await supabase
-          .from('supplier_products')
-          .select('id')
-          .eq('supplier_id', supplier.id);
+        // 1. Get all product IDs for this supplier
+        const { data: products } = await retryWithBackoff(
+          async () => {
+            const { data, error } = await supabase
+              .from('supplier_products')
+              .select('id')
+              .eq('supplier_id', supplier.id);
+            
+            if (error) throw error;
+            return { data };
+          },
+          3,
+          1000,
+          'Fetch product IDs'
+        );
 
-        if (products && products.length > 0) {
+        if (!products || products.length === 0) {
+          console.log(`No products found for ${supplier.name}`);
+        } else {
           const productIds = products.map((p: any) => p.id);
-          
-          for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-            const batch = productIds.slice(i, i + BATCH_SIZE);
-            
-            await supabase
-              .from('product_links')
+          console.log(`Found ${productIds.length} products for ${supplier.name}`);
+
+          // 2. Delete enrichment_queue entries (FIRST!)
+          console.log('Deleting enrichment_queue entries...');
+          await deleteInBatches(
+            supabase,
+            'enrichment_queue',
+            'supplier_product_id',
+            supplier.id,
+            productIds,
+            jobId
+          );
+
+          // 3. Delete product_links
+          console.log('Deleting product_links...');
+          const linksDeleted = await deleteInBatches(
+            supabase,
+            'product_links',
+            'supplier_product_id',
+            supplier.id,
+            productIds,
+            jobId,
+            async (count) => {
+              deletedProducts = count;
+              await supabase
+                .from('bulk_deletion_jobs')
+                .update({
+                  deleted_products: deletedProducts,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', jobId);
+            }
+          );
+          console.log(`Deleted ${linksDeleted} product links`);
+
+          // 4. Delete supplier_price_variants in batches
+          console.log('Deleting supplier_price_variants...');
+          const { data: variants } = await retryWithBackoff(
+            async () => {
+              const { data, error } = await supabase
+                .from('supplier_price_variants')
+                .select('id')
+                .eq('supplier_id', supplier.id);
+              
+              if (error) throw error;
+              return { data };
+            },
+            3,
+            1000,
+            'Fetch variant IDs'
+          );
+
+          if (variants && variants.length > 0) {
+            const variantIds = variants.map((v: any) => v.id);
+            console.log(`Found ${variantIds.length} price variants`);
+            await deleteInBatches(
+              supabase,
+              'supplier_price_variants',
+              'id',
+              supplier.id,
+              variantIds,
+              jobId
+            );
+          }
+
+          // 5. Delete supplier_products in batches
+          console.log('Deleting supplier_products...');
+          await deleteInBatches(
+            supabase,
+            'supplier_products',
+            'id',
+            supplier.id,
+            productIds,
+            jobId
+          );
+        }
+
+        // 6. Delete email_inbox entries
+        console.log('Deleting email_inbox entries...');
+        await retryWithBackoff(
+          async () => {
+            const { error } = await supabase
+              .from('email_inbox')
               .delete()
-              .in('supplier_product_id', batch);
-
-            deletedProducts += batch.length;
+              .eq('detected_supplier_name', supplier.name);
             
-            // Update progress
-            await supabase
-              .from('bulk_deletion_jobs')
-              .update({
-                deleted_products: deletedProducts,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', jobId);
-          }
-        }
+            if (error) throw error;
+          },
+          3,
+          1000,
+          'Delete email_inbox'
+        );
 
-        // 2. Delete supplier_price_variants
-        await supabase
-          .from('supplier_price_variants')
-          .delete()
-          .eq('supplier_id', supplier.id);
-
-        // 3. Delete supplier_products in batches
-        let remainingProducts = supplier.productCount;
-        while (remainingProducts > 0) {
-          const { error: deleteError } = await supabase
-            .from('supplier_products')
-            .delete()
-            .eq('supplier_id', supplier.id)
-            .limit(BATCH_SIZE);
-
-          if (deleteError) {
-            console.error(`Error deleting products for ${supplier.name}:`, deleteError);
-            break;
-          }
-
-          remainingProducts -= BATCH_SIZE;
-          
-          // Small delay to avoid overwhelming the database
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        // 4. Delete email_inbox entries
-        await supabase
-          .from('email_inbox')
-          .delete()
-          .eq('detected_supplier_name', supplier.name);
-
-        // 5. Delete supplier configuration
-        const { error: supplierDeleteError } = await supabase
-          .from('supplier_configurations')
-          .delete()
-          .eq('id', supplier.id);
-
-        if (supplierDeleteError) {
-          throw supplierDeleteError;
-        }
+        // 7. Delete supplier configuration
+        console.log('Deleting supplier configuration...');
+        await retryWithBackoff(
+          async () => {
+            const { error } = await supabase
+              .from('supplier_configurations')
+              .delete()
+              .eq('id', supplier.id);
+            
+            if (error) throw error;
+          },
+          3,
+          1000,
+          'Delete supplier configuration'
+        );
 
         completedSuppliers++;
-        console.log(`✅ Supplier ${supplier.name} deleted successfully`);
+        const elapsed = Math.round((Date.now() - supplierStartTime) / 1000);
+        console.log(`✅ Supplier ${supplier.name} deleted successfully in ${elapsed}s`);
+
+        // Check timeout
+        if (Date.now() - supplierStartTime > SUPPLIER_TIMEOUT_MS) {
+          throw new Error(`Timeout: Supplier deletion took more than 10 minutes`);
+        }
 
       } catch (error) {
         console.error(`❌ Error deleting supplier ${supplier.name}:`, error);
@@ -220,33 +345,47 @@ async function processDeletersAsync(
       }
 
       // Update progress after each supplier
-      await supabase
-        .from('bulk_deletion_jobs')
-        .update({
-          completed_suppliers: completedSuppliers,
-          deleted_products: deletedProducts,
-          errors: errors,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', jobId);
+      await retryWithBackoff(
+        async () => {
+          await supabase
+            .from('bulk_deletion_jobs')
+            .update({
+              completed_suppliers: completedSuppliers,
+              deleted_products: deletedProducts,
+              errors: errors,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', jobId);
+        },
+        3,
+        1000,
+        'Update job progress'
+      );
     }
 
     // Mark job as completed
     const finalStatus = errors.length === 0 ? 'completed' : 'completed_with_errors';
-    await supabase
-      .from('bulk_deletion_jobs')
-      .update({
-        status: finalStatus,
-        completed_suppliers: completedSuppliers,
-        deleted_products: deletedProducts,
-        errors: errors,
-        error_message: errors.length > 0 
-          ? `${errors.length} fournisseur(s) n'ont pas pu être supprimés`
-          : null,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', jobId);
+    await retryWithBackoff(
+      async () => {
+        await supabase
+          .from('bulk_deletion_jobs')
+          .update({
+            status: finalStatus,
+            completed_suppliers: completedSuppliers,
+            deleted_products: deletedProducts,
+            errors: errors,
+            error_message: errors.length > 0 
+              ? `${errors.length} fournisseur(s) n'ont pas pu être supprimés`
+              : null,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', jobId);
+      },
+      3,
+      1000,
+      'Mark job as completed'
+    );
 
     console.log(`✅ Job ${jobId} completed: ${completedSuppliers}/${supplierData.length} suppliers deleted`);
 
