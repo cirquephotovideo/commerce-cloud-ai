@@ -136,7 +136,7 @@ export function SupplierProductsTable() {
     if (statusFilter !== "all") {
       const { data: productsWithLinks } = await supabase
         .from("supplier_products")
-        .select('id, product_links(id)')
+        .select('id, ean, product_links(id)')
         .in('id', filteredIds);
       
       filteredIds = productsWithLinks?.filter(p => {
