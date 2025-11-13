@@ -114,13 +114,19 @@ Deno.serve(async (req) => {
       return row;
     });
 
-    const { data: job } = await supabaseClient
+    const { data: job, error: jobFetchError } = await supabaseClient
       .from('code2asin_import_jobs')
       .select('user_id, options')
       .eq('id', jobId)
-      .single();
+      .maybeSingle();
+
+    if (jobFetchError) {
+      console.error('[CHUNK-PROCESSOR] Failed to fetch job:', jobFetchError);
+      throw new Error(`Failed to fetch job: ${jobFetchError.message}`);
+    }
 
     if (!job) {
+      console.error('[CHUNK-PROCESSOR] Job not found:', jobId);
       throw new Error('Job not found');
     }
 
