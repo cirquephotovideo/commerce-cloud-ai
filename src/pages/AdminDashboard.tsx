@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell, TestTube2, BarChart2, DollarSign } from "lucide-react";
+import { Users, Package, CreditCard, LineChart, Settings, Server, ShoppingCart, Brain, Key, Shield, Mail, Bell, TestTube2, BarChart2, DollarSign, Activity } from "lucide-react";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { PlanManagement } from "@/components/admin/PlanManagement";
 import { BillingManagement } from "@/components/admin/BillingManagement";
