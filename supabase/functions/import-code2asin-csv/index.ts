@@ -109,11 +109,16 @@ Deno.serve(async (req) => {
         options: options || {}
       })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (jobError || !job) {
+    if (jobError) {
       console.error('[ORCHESTRATOR] Failed to create job:', jobError);
-      throw new Error('Échec de la création du job d\'import');
+      throw new Error(`Échec de la création du job: ${jobError.message || jobError.toString()}`);
+    }
+
+    if (!job) {
+      console.error('[ORCHESTRATOR] Job creation returned no data');
+      throw new Error('Échec de la création du job: Aucune donnée retournée');
     }
 
     const jobId = job.id;
