@@ -161,8 +161,9 @@ export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProp
           {/* Chunks List */}
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {chunks.map((chunk) => {
-              const chunkProgress = chunk.total_rows > 0 
-                ? Math.round(((chunk.processed_rows || 0) / chunk.total_rows) * 100) 
+              const totalRows = chunk.end_row - chunk.start_row;
+              const chunkProgress = totalRows > 0 
+                ? Math.round(((chunk.processed_rows || 0) / totalRows) * 100) 
                 : 0;
 
               return (
@@ -185,7 +186,7 @@ export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProp
                   <div>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted-foreground">
-                        {chunk.processed_rows || 0}/{chunk.total_rows} produits
+                        {chunk.processed_rows || 0}/{totalRows} produits
                       </span>
                       <span className="font-medium">{chunkProgress}%</span>
                     </div>
