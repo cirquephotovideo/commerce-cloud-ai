@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ export function ChunksProgressDashboard({ jobId, totalRows }: ChunksProgressProp
     }
 
     if (data) {
-      setChunks(data as ChunkRow[]);
+      setChunks(data as unknown as ChunkRow[]);
     }
   };
 
