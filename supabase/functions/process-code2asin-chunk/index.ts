@@ -194,36 +194,52 @@ Deno.serve(async (req) => {
             analysis_id: analysisId,
             user_id: userId,
             asin: row.ASIN,
+            ean: ean,
+            upc: row.UPC,
+            part_number: row['Numéro de pièce'],
             title: row.Titre,
             brand: row.Marque,
             manufacturer: row.Fabricant,
-            buy_box_price: parseFloat(row['Prix Buy Box Nouvelle (€)'] || '0') || null,
+            product_group: row['Groupe de produits'],
+            product_type: row.Type,
+            browse_nodes: row['Parcourir les nœuds'],
+            
+            // Prix - noms corrigés
+            buybox_price: parseFloat(row['Prix Buy Box Nouvelle (€)'] || '0') || null,
+            buybox_seller_name: row["Nom du vendeur dans l'offre Buy Box Nouvelle"],
+            buybox_is_fba: row["La Buy Box Nouvelle est-elle gérée par Amazon ?"] === 'OUI',
+            buybox_is_amazon: row["La Buy Box Nouvelle est-elle d'Amazon ?"] === 'OUI',
             amazon_price: parseFloat(row['Prix Amazon (€)'] || '0') || null,
-            lowest_fba_price: parseFloat(row["Prix le plus bas FBA en 'Neuf' (€)"] || '0') || null,
-            lowest_new_price: parseFloat(row["Prix le plus bas en 'Neuf' (€)"] || '0') || null,
-            lowest_used_price: parseFloat(row["Prix le plus bas en 'D'occasion' (€)"] || '0') || null,
+            lowest_fba_new: parseFloat(row["Prix le plus bas FBA en 'Neuf' (€)"] || '0') || null,
+            lowest_new: parseFloat(row["Prix le plus bas en 'Neuf' (€)"] || '0') || null,
+            lowest_used: parseFloat(row["Prix le plus bas en 'D'occasion' (€)"] || '0') || null,
             list_price: parseFloat(row['Prix de liste (€)'] || '0') || null,
-            image_urls: row.Images ? [row.Images] : null,
-            item_length: parseFloat(row["Longueur de l'article (cm)"] || '0') || null,
-            item_width: parseFloat(row["Largeur de l'article (cm)"] || '0') || null,
-            item_height: parseFloat(row["Hauteur de l'article (cm)"] || '0') || null,
-            item_weight: parseFloat(row["Poids de l'article (g)"] || '0') || null,
-            package_length: parseFloat(row["Longueur du paquet (cm)"] || '0') || null,
-            package_width: parseFloat(row["Largeur du paquet (cm)"] || '0') || null,
-            package_height: parseFloat(row["Hauteur du paquet (cm)"] || '0') || null,
-            package_weight: parseFloat(row["Poids de l'emballage (g)"] || '0') || null,
-            new_offers_count: parseInt(row["Nombre d'offres en 'Neuf'"] || '0') || null,
-            used_offers_count: parseInt(row["Nombre d'offres en 'D'occasion'"] || '0') || null,
+            
+            // Dimensions - suffixes _cm et _g ajoutés
+            item_length_cm: parseFloat(row["Longueur de l'article (cm)"] || '0') || null,
+            item_width_cm: parseFloat(row["Largeur de l'article (cm)"] || '0') || null,
+            item_height_cm: parseFloat(row["Hauteur de l'article (cm)"] || '0') || null,
+            item_weight_g: parseFloat(row["Poids de l'article (g)"] || '0') || null,
+            package_length_cm: parseFloat(row["Longueur du paquet (cm)"] || '0') || null,
+            package_width_cm: parseFloat(row["Largeur du paquet (cm)"] || '0') || null,
+            package_height_cm: parseFloat(row["Hauteur du paquet (cm)"] || '0') || null,
+            package_weight_g: parseFloat(row["Poids de l'emballage (g)"] || '0') || null,
+            
+            // Offres - préfixe offer_count_ au lieu de suffixe _count
+            offer_count_new: parseInt(row["Nombre d'offres en 'Neuf'"] || '0') || null,
+            offer_count_used: parseInt(row["Nombre d'offres en 'D'occasion'"] || '0') || null,
+            
+            // Frais
             referral_fee_percentage: parseFloat(row['Pourcentage de commission de référence'] || '0') || null,
-            fba_fees: parseFloat(row["Frais de préparation et d'emballage (€)"] || '0') || null,
+            fulfillment_fee: parseFloat(row["Frais de préparation et d'emballage (€)"] || '0') || null,
+            
+            // Autres
+            image_urls: row.Images ? [row.Images] : null,
             sales_rank: row['Rangs de vente'],
             color: row.Couleur,
             size: row.Taille,
             features: row.Fonctionnalités,
-            marketplace: row.Marché,
-            product_group: row['Groupe de produits'],
-            product_type: row.Type,
-            browse_nodes: row['Parcourir les nœuds']
+            marketplace: row.Marché
           };
 
           enrichments.push(enrichmentData);
