@@ -16,14 +16,28 @@ function decodeHtmlEntities(text: string): string {
 }
 
 function extractField(columns: string[], mapping: any): string | null {
-  if (!mapping) return null;
+  if (mapping === null || mapping === undefined) return null;
   
-  if (typeof mapping === 'string') {
-    return columns[parseInt(mapping)] || null;
+  // Handle numeric index
+  if (typeof mapping === 'number') {
+    return columns[mapping] ?? null;
   }
   
-  if (typeof mapping === 'object' && mapping.fields) {
-    return mapping.fields.map((f: any) => columns[f.index]).filter(Boolean).join(' ');
+  // Handle string index
+  if (typeof mapping === 'string') {
+    const index = parseInt(mapping, 10);
+    return isNaN(index) ? null : (columns[index] ?? null);
+  }
+  
+  // Handle object with fields array
+  if (typeof mapping === 'object' && Array.isArray(mapping.fields)) {
+    return mapping.fields
+      .map((f: any) => {
+        const idx = typeof f === 'number' ? f : (typeof f.index === 'number' ? f.index : parseInt(String(f.index || f), 10));
+        return isNaN(idx) ? null : columns[idx];
+      })
+      .filter(Boolean)
+      .join(' ');
   }
   
   return null;
@@ -52,10 +66,15 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { supplierId, filePath, delimiter, skipRows, columnMapping } = await req.json();
+    const { supplierId, filePath, delimiter, skipRows, columnMapping, hasHeaderRow = true } = await req.json();
 
     console.log('[IMPORT-CSV] Starting import for user:', user.id);
     console.log('[IMPORT-CSV] File path:', filePath);
+    console.log('[IMPORT-CSV] Mapping types:', Object.keys(columnMapping).reduce((acc, key) => {
+      acc[key] = typeof columnMapping[key];
+      return acc;
+    }, {} as Record<string, string>));
+    console.log('[IMPORT-CSV] Skip rows:', skipRows, '| Has header:', hasHeaderRow);
 
     // 1. Download file from Storage
     console.log('[IMPORT-CSV] Downloading file from Storage...');
@@ -184,16 +203,22 @@ serve(async (req) => {
           // Skip initial rows
           if (lineNumber <= (skipRows || 0)) continue;
           
-          // Header row
-          if (lineNumber === (skipRows || 0) + 1) {
+          // Header row (only if file has header)
+          if (hasHeaderRow && lineNumber === (skipRows || 0) + 1) {
             // Auto-detect delimiter from header
             if (!delimiter) {
-              detectedDelimiter = trimmedLine.includes('\t') ? '\t' : ',';
+              detectedDelimiter = trimmedLine.includes('\t') ? '\t' : (trimmedLine.includes(';') ? ';' : ',');
             }
             headerRow = trimmedLine.split(detectedDelimiter).map(h => h.trim());
             console.log('[IMPORT-CSV] Header row:', headerRow);
             console.log('[IMPORT-CSV] Using delimiter:', detectedDelimiter);
             continue;
+          }
+          
+          // Auto-detect delimiter from first data line if no header
+          if (!hasHeaderRow && lineNumber === (skipRows || 0) + 1 && !delimiter) {
+            detectedDelimiter = trimmedLine.includes('\t') ? '\t' : (trimmedLine.includes(';') ? ';' : ',');
+            console.log('[IMPORT-CSV] No header - detected delimiter:', detectedDelimiter);
           }
           
           // Parse data row
@@ -202,14 +227,18 @@ serve(async (req) => {
             return decodeHtmlEntities(cleaned);
           });
 
-          const reference = extractField(columns, columnMapping.supplier_reference);
+          const rawRef = extractField(columns, columnMapping.supplier_reference);
           const name = extractField(columns, columnMapping.product_name);
+          const ean = extractField(columns, columnMapping.ean);
 
-          if (!reference || !name) {
+          // Accept row if it has at least a name
+          if (!name && !rawRef && !ean) {
             continue;
           }
+          
+          // Deduce reference from EAN or name if not provided
+          const reference = rawRef || ean || (name ? String(name).slice(0, 64) : null);
 
-          const ean = extractField(columns, columnMapping.ean);
           const description = extractField(columns, columnMapping.description);
           
           // Parse price
@@ -222,7 +251,7 @@ serve(async (req) => {
 
           // Parse stock
           let stock = null;
-          const stockStr = extractField(columns, columnMapping.stock);
+          const stockStr = extractField(columns, columnMapping.stock ?? columnMapping.stock_quantity);
           if (stockStr) {
             stock = parseInt(stockStr.replace(/\D/g, ''));
           }
@@ -263,23 +292,21 @@ serve(async (req) => {
       
       console.log('[IMPORT-CSV] ===== STREAMING COMPLETE =====');
       console.log('[IMPORT-CSV] Total lines read:', lineNumber);
-      console.log('[IMPORT-CSV] Skip rows configured:', skipRows);
-      console.log('[IMPORT-CSV] Header row line number:', (skipRows || 0) + 1);
-      console.log('[IMPORT-CSV] Data rows processed:', lineNumber - (skipRows || 0) - 1);
+      console.log('[IMPORT-CSV] Skip rows configured:', skipRows, '| Has header:', hasHeaderRow);
       console.log('[IMPORT-CSV] Products extracted:', processedCount);
       console.log('[IMPORT-CSV] Total batches written:', batchNumber - 1);
       console.log('[IMPORT-CSV] ===========================');
       
-      // Warning if no products detected
+      // Diagnostic if no products detected
       if (processedCount === 0) {
-        console.warn('[IMPORT-CSV] ⚠️ WARNING: 0 products were extracted from the file!');
-        console.warn('[IMPORT-CSV] Possible causes:');
-        console.warn('[IMPORT-CSV]   1. skipRows is set too high (current:', skipRows, ')');
-        console.warn('[IMPORT-CSV]   2. File has no header row but skipRows=1 was used');
-        console.warn('[IMPORT-CSV]   3. Column mapping does not match the file structure');
-        console.warn('[IMPORT-CSV]   4. Required fields (supplier_reference, product_name) are empty');
-        console.warn('[IMPORT-CSV] First 3 lines of file:');
-        // Note: we can't easily log the first lines here as they've been streamed
+        console.error('[IMPORT-CSV] ⚠️ 0 products processed!');
+        console.error('[IMPORT-CSV] Mapping:', JSON.stringify(columnMapping, null, 2));
+        console.error('[IMPORT-CSV] Has header:', hasHeaderRow, '| Skip rows:', skipRows);
+        console.error('[IMPORT-CSV] Total lines read:', lineNumber);
+        console.error('[IMPORT-CSV] Mapping types:', Object.keys(columnMapping).reduce((acc: Record<string, string>, key) => {
+          acc[key] = typeof columnMapping[key];
+          return acc;
+        }, {}));
       }
       
     } finally {
