@@ -106,84 +106,31 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     try {
       addLog('Validation de la configuration…');
 
-      // Pour l'instant, seul Import Fichier est implémenté
       if (wizardState.operationType !== 'import') {
         addLog('❌ Type d\'opération non encore implémenté');
         setStatus('error');
         return;
       }
 
-      if (wizardState.source?.type !== 'file') {
-        addLog('❌ Source non encore implémentée (seul fichier est supporté pour l\'instant)');
-        setStatus('error');
-        return;
-      }
-
-      // Validation des données requises
-      const { supplierId } = wizardState.source;
-      const { filePath, fileType, columnMapping, skipRows = 0, delimiter } = wizardState.configuration;
-
-      if (!supplierId) {
-        addLog('❌ Fournisseur manquant');
-        setStatus('error');
-        return;
-      }
-
-      if (!filePath) {
-        addLog('❌ Fichier non uploadé');
-        setStatus('error');
-        return;
-      }
-
-      if (!fileType) {
-        addLog('❌ Type de fichier manquant');
-        setStatus('error');
-        return;
-      }
-
-      addLog(`📁 Fichier détecté: ${filePath}`);
-      
-      // Déterminer la fonction edge à appeler
-      const functionName = fileType === 'xlsx' ? 'supplier-import-xlsx' : 'supplier-import-csv';
-      addLog(`🚀 Appel de la fonction d'import: ${functionName}…`);
-
-      // Construire le body
-      const body: any = {
-        supplierId,
-        filePath,
-        columnMapping: columnMapping || {},
-        skipRows
-      };
-
-      if (fileType === 'csv' && delimiter) {
-        body.delimiter = delimiter;
-      }
-
-      // Appel de la fonction
-      const { data, error } = await supabase.functions.invoke(functionName, { body });
-
-      if (error) {
-        addLog(`❌ Erreur: ${error.message}`);
-        setStatus('error');
-        return;
-      }
-
-      if (data?.error) {
-        addLog(`❌ Erreur serveur: ${data.error}`);
-        setStatus('error');
-        return;
-      }
-
-      // Succès de l'import
-      addLog(`✅ Import terminé avec succès`);
-      if (data?.processed) {
-        addLog(`📊 ${data.processed} produits traités`);
-      }
-      if (data?.created) {
-        addLog(`➕ ${data.created} nouveaux produits créés`);
-      }
-      if (data?.updated) {
-        addLog(`🔄 ${data.updated} produits mis à jour`);
+      // Router vers la bonne logique d'import selon la source
+      switch (wizardState.source?.type) {
+        case 'file':
+          await handleFileImport(addLog, setStatus);
+          break;
+        case 'ftp':
+        case 'sftp':
+          await handleFtpImport(addLog, setStatus);
+          break;
+        case 'email':
+          await handleEmailImport(addLog, setStatus);
+          break;
+        case 'api':
+          await handleApiImport(addLog, setStatus);
+          break;
+        default:
+          addLog('❌ Type de source non reconnu');
+          setStatus('error');
+          return;
       }
 
       // Option: Enchaîner l'enrichissement si demandé
@@ -229,6 +176,142 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
       setStatus('error');
       console.error('Launch operation error:', error);
     }
+  };
+
+  const handleFileImport = async (
+    addLog: (msg: string) => void,
+    setStatus: (status: 'idle' | 'processing' | 'completed' | 'error') => void
+  ) => {
+    const { supplierId } = wizardState.source;
+    const { filePath, fileType, columnMapping, skipRows = 0, delimiter } = wizardState.configuration;
+
+    if (!supplierId || !filePath || !fileType) {
+      addLog('❌ Configuration fichier incomplète');
+      setStatus('error');
+      return;
+    }
+
+    addLog(`📁 Fichier détecté: ${filePath}`);
+    const functionName = fileType === 'xlsx' ? 'supplier-import-xlsx' : 'supplier-import-csv';
+    addLog(`🚀 Appel de la fonction: ${functionName}…`);
+
+    const body: any = { supplierId, filePath, columnMapping: columnMapping || {}, skipRows };
+    if (fileType === 'csv' && delimiter) body.delimiter = delimiter;
+
+    const { data, error } = await supabase.functions.invoke(functionName, { body });
+
+    if (error || data?.error) {
+      addLog(`❌ Erreur: ${error?.message || data?.error}`);
+      setStatus('error');
+      return;
+    }
+
+    addLog(`✅ Import terminé avec succès`);
+    if (data?.processed) addLog(`📊 ${data.processed} produits traités`);
+    if (data?.created) addLog(`➕ ${data.created} créés`);
+    if (data?.updated) addLog(`🔄 ${data.updated} mis à jour`);
+  };
+
+  const handleFtpImport = async (
+    addLog: (msg: string) => void,
+    setStatus: (status: 'idle' | 'processing' | 'completed' | 'error') => void
+  ) => {
+    const { supplierId } = wizardState.source;
+    const config = wizardState.configuration;
+
+    if (!supplierId || !config.host || !config.username) {
+      addLog('❌ Configuration FTP incomplète');
+      setStatus('error');
+      return;
+    }
+
+    addLog(`🖥️ Connexion FTP à ${config.host}...`);
+    
+    const { data, error } = await supabase.functions.invoke('supplier-sync-ftp', {
+      body: {
+        supplierId,
+        host: config.host,
+        port: config.port || 21,
+        username: config.username,
+        password: config.password,
+        secure: config.secure || false,
+        remoteFilePath: config.filePath || config.remote_path
+      }
+    });
+
+    if (error || data?.error) {
+      addLog(`❌ Erreur FTP: ${error?.message || data?.error}`);
+      setStatus('error');
+      return;
+    }
+
+    addLog(`✅ Import FTP terminé`);
+    if (data?.imported) addLog(`📊 ${data.imported} produits importés`);
+    if (data?.matched) addLog(`🔄 ${data.matched} mis à jour`);
+  };
+
+  const handleEmailImport = async (
+    addLog: (msg: string) => void,
+    setStatus: (status: 'idle' | 'processing' | 'completed' | 'error') => void
+  ) => {
+    const { supplierId } = wizardState.source;
+
+    if (!supplierId) {
+      addLog('❌ ID fournisseur manquant');
+      setStatus('error');
+      return;
+    }
+
+    addLog(`📧 Traitement des emails...`);
+    
+    const { data, error } = await supabase.functions.invoke('batch-process-emails', {
+      body: { supplier_id: supplierId, maxConcurrent: 5 }
+    });
+
+    if (error || data?.error) {
+      addLog(`❌ Erreur Email: ${error?.message || data?.error}`);
+      setStatus('error');
+      return;
+    }
+
+    addLog(`✅ Emails traités`);
+    if (data?.processed) addLog(`📊 ${data.processed} emails traités`);
+    if (data?.successful) addLog(`✅ ${data.successful} importés`);
+  };
+
+  const handleApiImport = async (
+    addLog: (msg: string) => void,
+    setStatus: (status: 'idle' | 'processing' | 'completed' | 'error') => void
+  ) => {
+    const { supplierId } = wizardState.source;
+    const config = wizardState.configuration;
+
+    if (!supplierId || !config.api_url) {
+      addLog('❌ Configuration API incomplète');
+      setStatus('error');
+      return;
+    }
+
+    addLog(`🔗 Appel API ${config.api_url}...`);
+    
+    const { data, error } = await supabase.functions.invoke('supplier-sync-api', {
+      body: {
+        supplierId,
+        apiEndpoint: config.api_url,
+        apiKey: config.api_key,
+        method: config.method || 'GET',
+        headers: config.headers || {}
+      }
+    });
+
+    if (error || data?.error) {
+      addLog(`❌ Erreur API: ${error?.message || data?.error}`);
+      setStatus('error');
+      return;
+    }
+
+    addLog(`✅ Import API terminé`);
+    if (data?.imported) addLog(`📊 ${data.imported} produits importés`);
   };
 
   const resetWizard = () => {
