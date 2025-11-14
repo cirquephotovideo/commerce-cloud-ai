@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, FileText, ArrowLeft, ArrowRight, Save, FolderOpen } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ interface SupplierImportWizardProps {
 }
 
 export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [supplierId, setSupplierId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
@@ -69,11 +70,15 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data, error } = await (supabase as any)
-        .from("supplier_mapping_templates")
+      const { data, error } = await supabase
+        .from("mapping_templates")
         .select("*")
+        .eq("user_id", user.id)
         .order("template_name");
-      if (error) throw error;
+      if (error) {
+        console.error('[WIZARD] Error loading templates:', error);
+        return [];
+      }
       return data;
     },
   });
@@ -415,8 +420,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
   const handleLoadTemplate = async (templateId: string) => {
     const template = templates?.find(t => t.id === templateId);
-    if (template?.column_mapping) {
-      setColumnMapping(template.column_mapping);
+    if (template?.mapping_config) {
+      setColumnMapping(template.mapping_config as Record<string, number | null>);
       toast.success(`Template "${template.template_name}" chargé`);
     }
   };
@@ -430,21 +435,28 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
       
-      await (supabase as any)
-        .from("supplier_mapping_templates")
+      const { error } = await supabase
+        .from("mapping_templates")
         .insert({
+          user_id: user.id,
           template_name: templateName,
-          template_description: templateDescription,
-          column_mapping: columnMapping,
+          description: templateDescription,
+          mapping_config: columnMapping,
+          is_default: false,
         });
+      
+      if (error) throw error;
       
       toast.success("Template sauvegardé avec succès");
       setShowSaveTemplate(false);
       setTemplateName("");
       setTemplateDescription("");
-    } catch (error) {
-      console.error("Save template error:", error);
-      toast.error("Erreur lors de la sauvegarde du template");
+      
+      // Recharger la liste des templates
+      queryClient.invalidateQueries({ queryKey: ["mapping-templates"] });
+    } catch (error: any) {
+      console.error('[WIZARD] Error saving template:', error);
+      toast.error("Erreur lors de la sauvegarde : " + error.message);
     }
   };
 
@@ -682,9 +694,9 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
                               <div className="flex items-center gap-2">
                                 <FolderOpen className="h-4 w-4" />
                                 {t.template_name}
-                                {t.template_description && (
+                                {t.description && (
                                   <span className="text-xs text-muted-foreground">
-                                    - {t.template_description}
+                                    - {t.description}
                                   </span>
                                 )}
                               </div>
