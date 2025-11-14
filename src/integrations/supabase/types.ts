@@ -5669,6 +5669,15 @@ export type Database = {
           processed_count: number
         }[]
       }
+      bulk_create_product_links_cursor: {
+        Args: { p_after?: string; p_limit?: number; p_user_id: string }
+        Returns: {
+          has_more: boolean
+          last_id: string
+          links_created: number
+          processed_count: number
+        }[]
+      }
       check_and_update_rate_limit: {
         Args: { p_package_id: string; p_user_id: string }
         Returns: Json

@@ -31,17 +31,19 @@ async function processJob(jobId: string, supabase: any) {
     let currentOffset = 0;
     let totalLinksCreated = 0;
     const batchSize = job.batch_size;
-
+    let lastId: string | null = null;
     // Process in chunks
     while (true) {
       console.log(`[auto-link-products] Processing chunk at offset ${currentOffset}`);
       
-      const { data, error } = await supabase
-        .rpc('bulk_create_product_links_chunked', {
+      const rpcRes = await supabase
+        .rpc('bulk_create_product_links_cursor', {
           p_user_id: job.user_id,
           p_limit: batchSize,
-          p_offset: currentOffset
+          p_after: lastId
         });
+      const data = rpcRes.data as any;
+      const error = rpcRes.error as any;
 
       if (error) {
         console.error('[auto-link-products] RPC error:', error);
@@ -56,9 +58,9 @@ async function processJob(jobId: string, supabase: any) {
         break;
       }
 
-      totalLinksCreated += data[0].links_created;
-      currentOffset += data[0].processed_count;
-
+      totalLinksCreated += data?.[0]?.links_created ?? 0;
+      currentOffset += data?.[0]?.processed_count ?? 0;
+      lastId = data?.[0]?.last_id ?? lastId;
       // Update progress
       await supabase
         .from('auto_link_jobs')
@@ -202,7 +204,20 @@ Deno.serve(async (req) => {
       console.log('[auto-link-products] Created job:', job.id);
 
       // Start background processing
-      EdgeRuntime.waitUntil(processJob(job.id, supabase));
+      // Start background processing with safe guard for environments without EdgeRuntime
+      try {
+        // @ts-ignore - EdgeRuntime is provided in the Edge environment
+        if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+          // @ts-ignore
+          EdgeRuntime.waitUntil(processJob(job.id, supabase));
+        } else {
+          // Fallback: fire-and-forget
+          // no-await to avoid blocking the response
+          void processJob(job.id, supabase);
+        }
+      } catch (_) {
+        void processJob(job.id, supabase);
+      }
 
       return new Response(
         JSON.stringify({
