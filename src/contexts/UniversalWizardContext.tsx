@@ -17,13 +17,14 @@ interface WizardState {
     preview: any | null;
     logs: string[];
     status: 'idle' | 'processing' | 'completed' | 'error';
-    importStats?: {
-      found?: number;
-      imported?: number;
-      matched?: number;
-      errors?: number;
-      supplierId?: string;
-    };
+  importStats?: {
+    found?: number;
+    imported?: number;
+    matched?: number;
+    errors?: number;
+    analysesUpdated?: number;
+    supplierId?: string;
+  };
   };
 }
 
@@ -256,6 +257,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     if (data?.found) addLog(`📦 ${data.found} produits trouvés dans le fichier`);
     if (data?.imported) addLog(`➕ ${data.imported} nouveaux produits créés`);
     if (data?.matched) addLog(`🔄 ${data.matched} produits existants mis à jour`);
+    if (data?.analysesUpdated) addLog(`📊 ${data.analysesUpdated} fiches produits mises à jour`);
     if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
     
     setWizardState(prev => ({
@@ -266,6 +268,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
           found: data?.found,
           imported: data?.imported,
           matched: data?.matched,
+          analysesUpdated: data?.analysesUpdated,
           errors: data?.errors,
           supplierId
         }
@@ -301,6 +304,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     if (data?.found) addLog(`📦 ${data.found} emails trouvés`);
     if (data?.processed) addLog(`📊 ${data.processed} emails traités`);
     if (data?.successful) addLog(`➕ ${data.successful} produits importés`);
+    if (data?.analysesUpdated) addLog(`📊 ${data.analysesUpdated} fiches produits mises à jour`);
     if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
     
     setWizardState(prev => ({
@@ -311,6 +315,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
           found: data?.found,
           imported: data?.successful,
           matched: data?.matched,
+          analysesUpdated: data?.analysesUpdated,
           errors: data?.errors,
           supplierId
         }
@@ -353,6 +358,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     if (data?.found) addLog(`📦 ${data.found} produits trouvés`);
     if (data?.imported) addLog(`➕ ${data.imported} nouveaux produits créés`);
     if (data?.matched) addLog(`🔄 ${data.matched} produits existants mis à jour`);
+    if (data?.analysesUpdated) addLog(`📊 ${data.analysesUpdated} fiches produits mises à jour`);
     if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
     
     setWizardState(prev => ({
@@ -363,6 +369,7 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
           found: data?.found,
           imported: data?.imported,
           matched: data?.matched,
+          analysesUpdated: data?.analysesUpdated,
           errors: data?.errors,
           supplierId
         }

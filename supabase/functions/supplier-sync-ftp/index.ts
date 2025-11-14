@@ -420,6 +420,7 @@ serve(async (req) => {
     let imported = 0;
     let matched = 0;
     let errors = 0;
+    let analysesUpdated = 0;
 
     for (const product of products) {
       try {
@@ -430,6 +431,8 @@ serve(async (req) => {
           .eq('supplier_id', supplierId)
           .eq('supplier_reference', product.supplier_reference)
           .maybeSingle();
+
+        let supplierProductId: string | null = null;
 
         if (existing) {
           // Update existing
@@ -449,10 +452,11 @@ serve(async (req) => {
             errors++;
           } else {
             matched++;
+            supplierProductId = existing.id;
           }
         } else {
           // Insert new
-          const { error: insertError } = await supabase
+          const { data: newProduct, error: insertError } = await supabase
             .from('supplier_products')
             .insert({
               supplier_id: supplierId,
@@ -463,13 +467,40 @@ serve(async (req) => {
               purchase_price: product.purchase_price,
               currency: 'EUR',
               stock_quantity: product.stock_quantity,
-            });
+            })
+            .select('id')
+            .single();
 
           if (insertError) {
             console.error('[FTP-SYNC] Insert error:', insertError);
             errors++;
           } else {
             imported++;
+            supplierProductId = newProduct?.id || null;
+          }
+        }
+
+        // Update linked product_analyses with new purchase price
+        if (supplierProductId) {
+          const { data: linkedAnalyses } = await supabase
+            .from('product_analyses')
+            .select('id')
+            .eq('supplier_product_id', supplierProductId);
+
+          if (linkedAnalyses && linkedAnalyses.length > 0) {
+            for (const analysis of linkedAnalyses) {
+              const { error: analysisUpdateError } = await supabase
+                .from('product_analyses')
+                .update({
+                  purchase_price: product.purchase_price,
+                  last_price_update: new Date().toISOString(),
+                })
+                .eq('id', analysis.id);
+
+              if (!analysisUpdateError) {
+                analysesUpdated++;
+              }
+            }
           }
         }
       } catch (error) {
@@ -478,7 +509,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[FTP-SYNC] ✅ Complete: ${products.length} found, ${imported} imported, ${matched} matched, ${errors} errors`);
+    console.log(`[FTP-SYNC] ✅ Complete: ${products.length} found, ${imported} imported, ${matched} matched, ${analysesUpdated} analyses updated, ${errors} errors`);
 
     // Update supplier last_synced_at
     await supabase
@@ -493,9 +524,10 @@ serve(async (req) => {
         imported,
         matched,
         errors,
+        analysesUpdated,
         message: errors > 0 
-          ? `⚠️ Synchronisation avec erreurs: ${imported} importés, ${matched} mis à jour, ${errors} erreurs`
-          : `✅ Synchronisation réussie: ${imported} importés, ${matched} mis à jour`
+          ? `⚠️ Synchronisation avec erreurs: ${imported} importés, ${matched} mis à jour, ${analysesUpdated} fiches produits mises à jour, ${errors} erreurs`
+          : `✅ Synchronisation réussie: ${imported} importés, ${matched} mis à jour, ${analysesUpdated} fiches produits mises à jour`
       }),
       { 
         status: 200,

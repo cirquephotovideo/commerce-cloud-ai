@@ -6,6 +6,7 @@ interface ImportStatsCardProps {
     found?: number;
     imported?: number;
     matched?: number;
+    analysesUpdated?: number;
     errors?: number;
   };
 }
@@ -44,6 +45,16 @@ export const ImportStatsCard = ({ stats }: ImportStatsCardProps) => {
               <div>
                 <div className="text-2xl font-bold">{stats.matched}</div>
                 <div className="text-sm text-muted-foreground">Mis à jour</div>
+              </div>
+            </div>
+          )}
+          
+          {stats.analysesUpdated !== undefined && stats.analysesUpdated > 0 && (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-blue-500" />
+              <div>
+                <div className="text-2xl font-bold">{stats.analysesUpdated}</div>
+                <div className="text-sm text-muted-foreground">Fiches MAJ</div>
               </div>
             </div>
           )}
