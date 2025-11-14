@@ -131,17 +131,83 @@ async function testFTPConnection(host: string, port: number, username: string, p
             }
           });
         } else {
-          // LIST/NLST format
+          // LIST/NLST format - try multiple parsers
           const lines = fileList.split(/\r?\n/).filter(l => l.trim());
-          lines.forEach(line => {
-            const isDir = line.startsWith('d');
-            const parts = line.split(/\s+/);
-            const name = parts[parts.length - 1];
-            if (name && name !== '.' && name !== '..') {
-              if (isDir) dirs.push(name);
-              else files.push(name);
+          
+          console.log(`[FTP-TEST] Trying parsers on ${lines.length} lines...`);
+          
+          // Helper function: Parse Unix format (drwxr-xr-x)
+          const parseUnixFormat = (lines: string[]) => {
+            const dirs: string[] = [];
+            const files: string[] = [];
+            lines.forEach(line => {
+              const isDir = line.startsWith('d');
+              const parts = line.split(/\s+/);
+              const name = parts[parts.length - 1];
+              if (name && name !== '.' && name !== '..') {
+                if (isDir) dirs.push(name);
+                else files.push(name);
+              }
+            });
+            return { dirs, files };
+          };
+          
+          // Helper function: Parse Windows format (MM-DD-YY HH:MM)
+          const parseWindowsFormat = (lines: string[]) => {
+            const dirs: string[] = [];
+            const files: string[] = [];
+            lines.forEach(line => {
+              // Windows: "11-14-25  10:30AM       <DIR>          incoming"
+              // or:      "11-14-25  10:30AM              1234 file.csv"
+              const dirMatch = line.match(/\s+<DIR>\s+(.+)$/);
+              const fileMatch = line.match(/\s+\d+\s+(.+)$/);
+              if (dirMatch) dirs.push(dirMatch[1].trim());
+              else if (fileMatch) files.push(fileMatch[1].trim());
+            });
+            return { dirs, files };
+          };
+          
+          // Helper function: Parse NLST format (simple names)
+          const parseNLSTFormat = (lines: string[]) => {
+            const dirs: string[] = [];
+            const files: string[] = [];
+            lines.forEach(line => {
+              const name = line.trim();
+              if (name && name !== '.' && name !== '..') {
+                // Heuristic: no extension likely means directory
+                if (!name.includes('.')) dirs.push(name);
+                else files.push(name);
+              }
+            });
+            return { dirs, files };
+          };
+          
+          // Try Unix parser first
+          let result = parseUnixFormat(lines);
+          if (result.files.length + result.dirs.length > 0) {
+            console.log(`[FTP-TEST] ✅ Unix parser: ${result.files.length} files, ${result.dirs.length} dirs`);
+            dirs = result.dirs;
+            files = result.files;
+          } else {
+            // Try Windows parser
+            result = parseWindowsFormat(lines);
+            if (result.files.length + result.dirs.length > 0) {
+              console.log(`[FTP-TEST] ✅ Windows parser: ${result.files.length} files, ${result.dirs.length} dirs`);
+              dirs = result.dirs;
+              files = result.files;
+            } else {
+              // Try NLST parser (fallback)
+              result = parseNLSTFormat(lines);
+              console.log(`[FTP-TEST] ✅ NLST parser (fallback): ${result.files.length} files, ${result.dirs.length} dirs`);
+              dirs = result.dirs;
+              files = result.files;
             }
-          });
+          }
+          
+          // Log sample for diagnostics
+          if (lines.length > 0) {
+            console.log(`[FTP-TEST] Sample raw line: "${lines[0]}"`);
+          }
         }
         
         break;
@@ -152,9 +218,21 @@ async function testFTPConnection(host: string, port: number, username: string, p
     }
   }
   
+  // Check if parsing failed despite having data
+  if (fileList.trim() && files.length === 0 && dirs.length === 0) {
+    console.error(`[FTP-TEST] ❌ Parsing failed! Raw response (first 500 chars):`);
+    console.error(fileList.substring(0, 500));
+    conn.close();
+    throw new Error(
+      `Connexion réussie mais parsing de la liste a échoué. ` +
+      `Le serveur FTP utilise peut-être un format non-standard. ` +
+      `Réponse brute (${fileList.length} bytes) : "${fileList.substring(0, 200)}..."`
+    );
+  }
+  
   if (!fileList.trim()) {
     conn.close();
-    throw new Error(`No files found in ${path} with any LIST method. Try a different directory.`);
+    throw new Error(`Le dossier ${path} est vide ou n'existe pas`);
   }
   
   console.log(`[FTP-TEST] ✅ Success with ${successMethod}`);
@@ -309,7 +387,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `✅ Connexion réussie! ${result.files.length} fichiers et ${result.dirs.length} dossiers trouvés`,
+        message: `✅ ${result.files.length} fichiers et ${result.dirs.length} dossiers dans "${path}" (méthode: ${result.method})`,
         files: result.files,
         dirs: result.dirs,
         method: result.method,
