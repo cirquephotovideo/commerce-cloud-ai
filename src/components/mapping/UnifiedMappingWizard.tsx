@@ -116,6 +116,21 @@ export function UnifiedMappingWizard({
     }
   };
 
+  const detectDelimiter = (rows: any[][]): string | null => {
+    // Si on a une seule colonne, on doit détecter le délimiteur
+    if (rows.length > 0 && rows[0].length === 1) {
+      const firstRow = String(rows[0][0] || '');
+      const delimiters = ['|', ';', '\t', ','];
+      
+      for (const delimiter of delimiters) {
+        if (firstRow.split(delimiter).length > 1) {
+          return delimiter;
+        }
+      }
+    }
+    return null;
+  };
+
   const parseFile = async (data: File | ArrayBuffer) => {
     try {
       let arrayBuffer: ArrayBuffer;
@@ -130,7 +145,25 @@ export function UnifiedMappingWizard({
       
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const allRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      let allRows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+      // Détecter si le fichier utilise un délimiteur non standard
+      const customDelimiter = detectDelimiter(allRows);
+      
+      if (customDelimiter) {
+        // Re-parser avec le délimiteur détecté
+        allRows = allRows.map(row => {
+          if (row.length === 1 && typeof row[0] === 'string') {
+            return row[0].split(customDelimiter);
+          }
+          return row;
+        });
+        
+        toast({
+          title: "Délimiteur détecté",
+          description: `Fichier parsé avec le délimiteur "${customDelimiter}"`,
+        });
+      }
 
       setRawRows(allRows);
       
