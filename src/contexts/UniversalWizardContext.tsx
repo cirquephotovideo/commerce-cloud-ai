@@ -17,6 +17,13 @@ interface WizardState {
     preview: any | null;
     logs: string[];
     status: 'idle' | 'processing' | 'completed' | 'error';
+    importStats?: {
+      found?: number;
+      imported?: number;
+      matched?: number;
+      errors?: number;
+      supplierId?: string;
+    };
   };
 }
 
@@ -246,8 +253,24 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     }
 
     addLog(`✅ Import FTP terminé`);
-    if (data?.imported) addLog(`📊 ${data.imported} produits importés`);
-    if (data?.matched) addLog(`🔄 ${data.matched} mis à jour`);
+    if (data?.found) addLog(`📦 ${data.found} produits trouvés dans le fichier`);
+    if (data?.imported) addLog(`➕ ${data.imported} nouveaux produits créés`);
+    if (data?.matched) addLog(`🔄 ${data.matched} produits existants mis à jour`);
+    if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
+    
+    setWizardState(prev => ({
+      ...prev,
+      results: {
+        ...prev.results,
+        importStats: {
+          found: data?.found,
+          imported: data?.imported,
+          matched: data?.matched,
+          errors: data?.errors,
+          supplierId
+        }
+      }
+    }));
   };
 
   const handleEmailImport = async (
@@ -275,8 +298,24 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     }
 
     addLog(`✅ Emails traités`);
+    if (data?.found) addLog(`📦 ${data.found} emails trouvés`);
     if (data?.processed) addLog(`📊 ${data.processed} emails traités`);
-    if (data?.successful) addLog(`✅ ${data.successful} importés`);
+    if (data?.successful) addLog(`➕ ${data.successful} produits importés`);
+    if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
+    
+    setWizardState(prev => ({
+      ...prev,
+      results: {
+        ...prev.results,
+        importStats: {
+          found: data?.found,
+          imported: data?.successful,
+          matched: data?.matched,
+          errors: data?.errors,
+          supplierId
+        }
+      }
+    }));
   };
 
   const handleApiImport = async (
@@ -311,7 +350,24 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     }
 
     addLog(`✅ Import API terminé`);
-    if (data?.imported) addLog(`📊 ${data.imported} produits importés`);
+    if (data?.found) addLog(`📦 ${data.found} produits trouvés`);
+    if (data?.imported) addLog(`➕ ${data.imported} nouveaux produits créés`);
+    if (data?.matched) addLog(`🔄 ${data.matched} produits existants mis à jour`);
+    if (data?.errors > 0) addLog(`⚠️ ${data.errors} erreurs rencontrées`);
+    
+    setWizardState(prev => ({
+      ...prev,
+      results: {
+        ...prev.results,
+        importStats: {
+          found: data?.found,
+          imported: data?.imported,
+          matched: data?.matched,
+          errors: data?.errors,
+          supplierId
+        }
+      }
+    }));
   };
 
   const resetWizard = () => {
