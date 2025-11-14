@@ -91,11 +91,18 @@ export const Step4ProductSelection = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-2">Sélection Produits</h2>
-        <p className="text-muted-foreground">
-          Choisissez les produits à traiter ({selected.size} sélectionné{selected.size > 1 ? 's' : ''})
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Sélection Produits</h2>
+          <p className="text-muted-foreground">
+            Choisissez les produits à traiter
+          </p>
+        </div>
+        {selected.size > 0 && (
+          <Badge variant="secondary" className="text-base px-4 py-2">
+            {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+          </Badge>
+        )}
       </div>
 
       <div className="relative">
@@ -107,6 +114,41 @@ export const Step4ProductSelection = () => {
           className="pl-9"
         />
       </div>
+
+      {!loading && products.length > 0 && (
+        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {selected.size} / {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const allIds = filteredProducts.map((p) => p.id);
+                setSelected(new Set(allIds));
+                selectProducts(allIds);
+              }}
+              disabled={selected.size === filteredProducts.length}
+            >
+              Tout sélectionner
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelected(new Set());
+                selectProducts([]);
+              }}
+              disabled={selected.size === 0}
+            >
+              Tout désélectionner
+            </Button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
