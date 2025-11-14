@@ -11,33 +11,52 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export const Step4ProductSelection = () => {
-  const { state, selectProducts, goToStep } = useWizard();
+  const { state, selectProducts, goToStep, updateConfiguration } = useWizard();
   const [products, setProducts] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set(state.selectedProducts));
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(500);
+  const [totalCount, setTotalCount] = useState(0);
+  const [bulkSelect, setBulkSelect] = useState(false);
 
   useEffect(() => {
     fetchProducts();
-  }, [state.operationType]);
+  }, [state.operationType, page, search]);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
       // Pour import/enrichment/export : charger les produits existants
       if (state.operationType === 'import' || state.operationType === 'enrichment' || state.operationType === 'export') {
-        const { data, error } = await supabase
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        let query = supabase
           .from('product_analyses')
-          .select('id, analysis_result, image_urls, created_at')
+          .select('id, analysis_result, image_urls, created_at', { count: 'exact' })
           .order('created_at', { ascending: false })
-          .limit(100);
+          .range(from, to);
+
+        // Filtrer côté serveur si recherche active
+        if (search.trim()) {
+          const q = search.trim();
+          query = query.or(
+            `analysis_result->>product_name.ilike.%${q}%,analysis_result->>ean_barcode.ilike.%${q}%,analysis_result->>description.ilike.%${q}%`
+          );
+        }
+
+        const { data, count, error } = await query;
         
         if (error) throw error;
         setProducts(data || []);
+        setTotalCount(count || 0);
       }
       // Pour analysis : pas besoin de sélection (un seul produit analysé)
       else if (state.operationType === 'analysis') {
         setProducts([]);
+        setTotalCount(0);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -58,11 +77,59 @@ export const Step4ProductSelection = () => {
     selectProducts(Array.from(newSelected));
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.analysis_result?.product_name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.analysis_result?.ean_barcode?.includes(search) ||
-    p.analysis_result?.description?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Le filtrage se fait côté serveur maintenant, pas besoin de filtrer à nouveau
+  const filteredProducts = products;
+
+  const handleSelectAll = () => {
+    const newSelected = new Set(selected);
+    filteredProducts.forEach(p => newSelected.add(p.id));
+    setSelected(newSelected);
+    selectProducts(Array.from(newSelected));
+  };
+
+  const handleDeselectAll = () => {
+    const currentPageIds = new Set(filteredProducts.map(p => p.id));
+    const newSelected = new Set(Array.from(selected).filter(id => !currentPageIds.has(id)));
+    setSelected(newSelected);
+    selectProducts(Array.from(newSelected));
+  };
+
+  const handleBulkSelectAll = () => {
+    setBulkSelect(true);
+    setSelected(new Set());
+    selectProducts([]);
+    updateConfiguration({
+      selectionMode: search ? 'filtered' : 'all',
+      selectionFilter: search || null,
+      selectionCount: totalCount,
+    });
+  };
+
+  const handleCancelBulkSelect = () => {
+    setBulkSelect(false);
+    updateConfiguration({
+      selectionMode: 'manual',
+      selectionFilter: null,
+      selectionCount: selected.size,
+    });
+  };
+
+  const handleContinue = () => {
+    if (bulkSelect) {
+      updateConfiguration({
+        selectionMode: search ? 'filtered' : 'all',
+        selectionFilter: search || null,
+        selectionCount: totalCount,
+      });
+    } else {
+      updateConfiguration({
+        selectionMode: 'manual',
+        selectionFilter: null,
+        selectionCount: selected.size,
+      });
+    }
+    goToStep(5);
+  };
 
   // Pour l'analyse, passer directement à l'étape 5
   if (state.operationType === 'analysis') {
@@ -95,60 +162,76 @@ export const Step4ProductSelection = () => {
         <div>
           <h2 className="text-2xl font-bold mb-2">Sélection Produits</h2>
           <p className="text-muted-foreground">
-            Choisissez les produits à traiter
+            {bulkSelect
+              ? `Tous les ${totalCount.toLocaleString()} produits sélectionnés`
+              : `${selected.size} / ${totalCount.toLocaleString()} produits sélectionnés`}
           </p>
         </div>
-        {selected.size > 0 && (
-          <Badge variant="secondary" className="text-base px-4 py-2">
-            {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+        {(bulkSelect || selected.size > 0) && (
+          <Badge variant={bulkSelect ? "default" : "secondary"} className="text-base px-4 py-2">
+            {bulkSelect ? `Tous (${totalCount.toLocaleString()})` : `${selected.size} sélectionné${selected.size > 1 ? 's' : ''}`}
           </Badge>
         )}
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Rechercher par nom ou EAN..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
-      </div>
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Rechercher par nom, EAN ou description..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0); // Reset à la page 1 lors d'une recherche
+              setBulkSelect(false); // Annuler la sélection globale
+            }}
+            className="pl-10"
+          />
+        </div>
 
-      {!loading && products.length > 0 && (
-        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {selected.size} / {filteredProducts.length} produit{filteredProducts.length > 1 ? 's' : ''} sélectionné{selected.size > 1 ? 's' : ''}
-            </span>
+        {/* Barre d'actions de sélection */}
+        <div className="flex flex-wrap gap-2 items-center justify-between p-4 bg-muted/50 rounded-lg">
+          <div className="flex flex-wrap gap-2">
+            {!bulkSelect ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAll}
+                >
+                  Sélectionner la page ({filteredProducts.length})
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDeselectAll}
+                  disabled={selected.size === 0}
+                >
+                  Désélectionner la page
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleBulkSelectAll}
+                >
+                  Sélectionner tous les {totalCount.toLocaleString()} produits
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCancelBulkSelect}
+              >
+                Annuler sélection globale
+              </Button>
+            )}
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const allIds = filteredProducts.map((p) => p.id);
-                setSelected(new Set(allIds));
-                selectProducts(allIds);
-              }}
-              disabled={selected.size === filteredProducts.length}
-            >
-              Tout sélectionner
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSelected(new Set());
-                selectProducts([]);
-              }}
-              disabled={selected.size === 0}
-            >
-              Tout désélectionner
-            </Button>
+          <div className="text-sm text-muted-foreground">
+            Affichage {page * pageSize + 1}-{Math.min((page + 1) * pageSize, totalCount)} sur {totalCount.toLocaleString()}
           </div>
         </div>
-      )}
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center p-12">
@@ -226,13 +309,37 @@ export const Step4ProductSelection = () => {
         </div>
       )}
 
+      {/* Contrôles de pagination */}
+      {!loading && totalCount > pageSize && (
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <Button
+            variant="outline"
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            Page précédente
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} sur {Math.ceil(totalCount / pageSize)}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => setPage(p => p + 1)}
+            disabled={(page + 1) * pageSize >= totalCount}
+          >
+            Page suivante
+          </Button>
+        </div>
+      )}
+
+      {/* Boutons de navigation */}
       <div className="flex gap-2 justify-end">
         <Button variant="outline" onClick={() => goToStep(3)}>Précédent</Button>
-        <Button 
-          onClick={() => goToStep(5)} 
-          disabled={selected.size === 0}
+        <Button
+          onClick={handleContinue}
+          disabled={!bulkSelect && selected.size === 0}
         >
-          Continuer {selected.size > 0 && `(${selected.size})`}
+          Continuer {bulkSelect ? `(tous: ${totalCount.toLocaleString()})` : (selected.size > 0 ? `(${selected.size})` : '')}
         </Button>
       </div>
     </div>
