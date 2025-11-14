@@ -103,40 +103,47 @@ export const Step3Configuration = () => {
   const renderConfigForm = () => {
     // Import operations
     if (state.operationType === 'import' && state.source) {
-      const sourceType = state.source.type;
-
-      if (sourceType === 'email') {
-        return (
-          <SupplierEmailConfig
-            supplierId={state.source.id}
-            config={state.configuration}
-            onConfigChange={(config) => updateConfiguration(config)}
-          />
-        );
-      }
-
-      if (sourceType === 'ftp' || sourceType === 'sftp') {
-        return (
-          <SupplierConnectionConfig
-            supplierType={sourceType}
-            config={state.configuration}
-            onConfigChange={(config) => updateConfiguration(config)}
-          />
-        );
-      }
-
-      if (sourceType === 'api') {
-        return (
-          <SupplierConnectionConfig
-            supplierType="api"
-            config={state.configuration}
-            onConfigChange={(config) => updateConfiguration(config)}
-          />
-        );
-      }
-
-      if (sourceType === 'file') {
-        return <FileUploadConfig />;
+      switch (state.source.type) {
+        case 'file':
+          return <FileUploadConfig />;
+        
+        case 'ftp':
+        case 'sftp':
+          return (
+            <SupplierConnectionConfig
+              supplierType={state.source.type}
+              config={state.configuration}
+              onConfigChange={(config) => updateConfiguration(config)}
+            />
+          );
+        
+        case 'email':
+          return (
+            <SupplierEmailConfig
+              supplierId={state.source.id}
+              config={state.configuration}
+              onConfigChange={(config) => updateConfiguration(config)}
+            />
+          );
+        
+        case 'api':
+          return (
+            <SupplierConnectionConfig
+              supplierType="api"
+              config={state.configuration}
+              onConfigChange={(config) => updateConfiguration(config)}
+            />
+          );
+        
+        default:
+          return (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Type de source non supporté: {state.source.type}
+              </AlertDescription>
+            </Alert>
+          );
       }
     }
 
