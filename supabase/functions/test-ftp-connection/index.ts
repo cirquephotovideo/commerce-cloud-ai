@@ -111,16 +111,20 @@ async function testFTPConnection(host: string, port: number, username: string, p
           // MLSD format: type=file;size=123;modify=...; filename
           const lines = fileList.split(/\r?\n/).filter(l => l.trim());
           lines.forEach(line => {
-            // Extract type and filename
-            const typeMatch = line.match(/type=([^;]+)/);
+            console.log(`[FTP-TEST] Parsing MLSD line: "${line}"`);
+            
+            // Extract type and filename (case-insensitive)
+            const typeMatch = line.match(/type=([^;]+)/i);
             const type = typeMatch ? typeMatch[1].toLowerCase() : '';
             
             // Skip current/parent directory entries
             if (type === 'cdir' || type === 'pdir') return;
             
-            // Extract filename (after last semicolon + space)
-            const parts = line.split(/;\s*/);
-            const filename = parts[parts.length - 1].trim();
+            // Extract filename after last semicolon
+            const lastSemicolon = line.lastIndexOf(';');
+            const filename = lastSemicolon !== -1 
+              ? line.substring(lastSemicolon + 1).trim() 
+              : '';
             
             if (filename && filename !== '.' && filename !== '..') {
               if (type === 'dir') {
