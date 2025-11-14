@@ -5675,6 +5675,7 @@ export type Database = {
       }
       check_enrichment_timeouts: { Args: never; Returns: undefined }
       cleanup_old_amazon_logs: { Args: never; Returns: undefined }
+      cleanup_stuck_amazon_jobs: { Args: never; Returns: undefined }
       decrypt_email_password: {
         Args: { encrypted_password: string }
         Returns: string
