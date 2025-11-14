@@ -122,7 +122,7 @@ export function ProductLinksDashboard() {
     return brand || 'Produit sans nom';
   };
 
-  // Fetch product links with pagination (limit to 1000 for performance)
+  // Fetch product links with optimized pagination
   const { data: links, isLoading, refetch } = useQuery({
     queryKey: ["product-links-dashboard"],
     queryFn: async () => {
@@ -132,28 +132,26 @@ export function ProductLinksDashboard() {
       
       if (!user) throw new Error("Not authenticated");
 
-      // First, get total count
-      const { count } = await supabase
-        .from("product_links")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-
-      console.log('[ProductLinksDashboard] Total links count:', count);
-
-      // Then fetch limited data with relations
-      const { data, error } = await supabase
+      // Optimized query: fetch only what we need with proper indexes
+      const { data, error, count } = await supabase
         .from("product_links")
         .select(`
-          *,
+          id,
+          analysis_id,
+          supplier_product_id,
+          link_type,
+          confidence_score,
+          created_at,
           product_analyses!inner(ean, analysis_result),
           supplier_products!inner(product_name, ean, purchase_price)
-        `)
+        `, { count: "exact" })
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
-        .limit(1000);
+        .limit(500);
 
       console.log('[ProductLinksDashboard] Query result:', {
         count: data?.length,
+        total: count,
         error: error?.message,
         user_id: user.id
       });
