@@ -54,8 +54,35 @@ serve(async (req) => {
   } = requestBody;
 
   try {
+    // ✅ CRITICAL: Validate ndjson_path before using it
+    if (!ndjson_path || ndjson_path.trim() === '') {
+      console.error('[IMPORT-CHUNK] Missing or empty ndjson_path parameter');
+      
+      // Mark job as failed
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      await supabase
+        .from('import_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          metadata: { error: 'Missing ndjson_path parameter - file path is required for import' }
+        })
+        .eq('id', job_id);
+      
+      return new Response(JSON.stringify({ 
+        error: 'Missing ndjson_path parameter',
+        details: 'File path is required for import processing'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
     
-    console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, { 
+    console.log(`[IMPORT-CHUNK][${correlation_id}] Starting chunk:`, {
       job_id, offset, limit, retry: retry_count,
       skip_config,
       excluded_columns,
