@@ -160,11 +160,19 @@ export function SupplierColumnMapper({
       ? Object.values(confidence).reduce((a, b) => a + b, 0) / Object.values(confidence).length
       : 0;
     
-    return Math.round(
+    // Check for duplicate column assignments
+    const assignedCols = Object.values(mapping).filter(col => col !== null);
+    const uniqueCols = new Set(assignedCols).size;
+    const hasDuplicates = assignedCols.length !== uniqueCols;
+    
+    const baseScore = Math.round(
       (requiredMapped ? 40 : 0) +
       (optionalMapped / OPTIONAL_FIELDS.length) * 30 +
       (avgConfidence * 0.3)
     );
+    
+    // Penalize for duplicate columns
+    return hasDuplicates ? Math.max(0, baseScore - 30) : baseScore;
   };
 
   // Count invalid data
@@ -187,7 +195,7 @@ export function SupplierColumnMapper({
 
   const mappingQuality = calculateMappingQuality();
 
-  // Auto-detect columns on mount with confidence scoring
+  // Auto-detect columns on mount with uniqueness constraint
   useEffect(() => {
     if (previewData.length === 0 || Object.keys(initialMapping).length > 0) return;
 
@@ -195,14 +203,19 @@ export function SupplierColumnMapper({
     const detectedConfidence: Record<string, number> = {};
     const detected: string[] = [];
     const headers = Object.keys(previewData[0] || {});
+    const assignedColumns = new Set<number>(); // Track assigned columns
 
-    // Try to auto-detect each field with confidence scoring
-    [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS].forEach(field => {
-      const patterns = SMART_PATTERNS[field.key] || [];
+    // Process fields in priority order: required first, then optional
+    const allFields = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+
+    allFields.forEach(field => {
       let bestMatch = -1;
       let bestScore = 0;
 
       headers.forEach((header, index) => {
+        // Skip if column already assigned
+        if (assignedColumns.has(index)) return;
+
         const columnValues = previewData.map(row => row[header]);
         const score = calculateConfidence(field.key, header, columnValues);
 
@@ -212,15 +225,29 @@ export function SupplierColumnMapper({
         }
       });
 
+      // Only assign if confidence is good enough
       if (bestMatch !== -1 && bestScore > 30) {
         detectedMapping[field.key] = bestMatch;
         detectedConfidence[field.key] = bestScore;
         detected.push(field.key);
+        assignedColumns.add(bestMatch); // Mark as used
+        
+        console.log(`[AUTO-DETECT] ${field.key} → Column ${bestMatch} (${headers[bestMatch]}) - Score: ${bestScore}`);
       } else {
         detectedMapping[field.key] = null;
         detectedConfidence[field.key] = 0;
       }
     });
+
+    // Log any conflicts detected
+    const columnUsage = Object.entries(detectedMapping).filter(([_, col]) => col !== null);
+    const duplicates = columnUsage.filter(([field, col], i) => 
+      columnUsage.findIndex(([_, c]) => c === col) !== i
+    );
+    
+    if (duplicates.length > 0) {
+      console.warn('[AUTO-DETECT] ⚠️ Duplicate column assignments detected:', duplicates);
+    }
 
     setMapping(detectedMapping);
     setConfidence(detectedConfidence);
@@ -241,6 +268,18 @@ export function SupplierColumnMapper({
 
   const handleMappingChange = (field: string, value: string) => {
     const columnIndex = (value === '' || value === '__ignore__') ? null : parseInt(value);
+    
+    // Check if column is already used by another field
+    if (columnIndex !== null) {
+      const existingField = Object.entries(mapping).find(
+        ([key, col]) => key !== field && col === columnIndex
+      );
+      
+      if (existingField) {
+        console.warn(`[MANUAL-MAP] Column ${columnIndex} already used by ${existingField[0]} - reassigning`);
+      }
+    }
+    
     setMapping(prev => ({
       ...prev,
       [field]: columnIndex
@@ -279,8 +318,23 @@ export function SupplierColumnMapper({
     );
   }
 
+  // Detect duplicate column assignments
+  const assignedColumns = Object.values(mapping).filter(col => col !== null);
+  const hasDuplicates = assignedColumns.length !== new Set(assignedColumns).size;
+
   return (
     <div className="space-y-6">
+      {/* Duplicate Warning */}
+      {hasDuplicates && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>⚠️ Colonnes assignées en double</AlertTitle>
+          <AlertDescription>
+            Certaines colonnes sont assignées à plusieurs champs. Veuillez vérifier le mapping ci-dessous.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Mapping Quality Score */}
       <Card className="border-2" style={{ borderColor: mappingQuality > 80 ? 'hsl(var(--primary))' : 'hsl(var(--orange))' }}>
         <CardHeader>
