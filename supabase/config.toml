@@ -1,5 +1,10 @@
 project_id = "ayjdtstugbqoadgipzon"
 
+[functions.process-amazon-auto-link]
+verify_jwt = true
+timeout_sec = 300
+memory_mb = 512
+
 [functions.admin-create-user]
 verify_jwt = true
 
