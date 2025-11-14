@@ -4,6 +4,8 @@ import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useWizard } from '@/contexts/UniversalWizardContext';
 import { ProductPreviewCard } from './ProductPreviewCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ImportStatsCard } from './ImportStatsCard';
+import { RecentImportedProducts } from './RecentImportedProducts';
 
 export const ResultsPanel = () => {
   const { state } = useWizard();
@@ -27,6 +29,18 @@ export const ResultsPanel = () => {
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[calc(100vh-350px)]">
+          {results.importStats && (
+            <div className="mb-6">
+              <ImportStatsCard stats={results.importStats} />
+            </div>
+          )}
+          
+          {results.importStats?.supplierId && (
+            <div className="mb-6">
+              <RecentImportedProducts supplierId={results.importStats.supplierId} />
+            </div>
+          )}
+          
           {selectedProducts.length > 0 && results.preview && (
             <div className="space-y-4">
               <ProductPreviewCard analysisId={selectedProducts[0]} />
@@ -46,7 +60,7 @@ export const ResultsPanel = () => {
             </div>
           )}
 
-          {results.status === 'idle' && selectedProducts.length === 0 && (
+          {results.status === 'idle' && selectedProducts.length === 0 && !results.importStats && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="text-4xl mb-4">🔮</div>
               <p className="text-muted-foreground">
