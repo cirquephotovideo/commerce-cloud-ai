@@ -135,10 +135,10 @@ Deno.serve(async (req) => {
         const marketData: MarketData = {
           productName: product.product_name,
           productEan: product.ean,
-          amazonPrice: null, // À implémenter avec Amazon MCP
-          googleShoppingMinPrice,
-          googleShoppingMaxPrice,
-          googleShoppingAvgPrice,
+          amazonPrice: undefined, // À implémenter avec Amazon MCP
+          googleShoppingMinPrice: googleShoppingMinPrice ?? undefined,
+          googleShoppingMaxPrice: googleShoppingMaxPrice ?? undefined,
+          googleShoppingAvgPrice: googleShoppingAvgPrice ?? undefined,
           currentUserPrice: product.purchase_price,
           competitorsCount: prices.length,
           marketPosition: aiAnalysis.marketPosition,
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
           aiReasoning: aiAnalysis.reasoning,
           searchVolumeTrend: 'stable',
           marketDemand: aiAnalysis.marketDemand,
-          alertType: aiAnalysis.alertType,
+          alertType: aiAnalysis.alertType ?? undefined,
           alertSeverity: aiAnalysis.alertSeverity
         };
 
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[MARKET-INTELLIGENCE] Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

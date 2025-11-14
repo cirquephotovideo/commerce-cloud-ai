@@ -87,8 +87,9 @@ serve(async (req) => {
             margin_percentage,
             stock_quantity,
             supplier_reference,
-            product_links!inner(
-              analysis:product_analyses(
+            product_links(
+              analysis_id,
+              product_analyses(
                 id,
                 ean,
                 analysis_result,
@@ -105,7 +106,8 @@ serve(async (req) => {
               )
             )
           `)
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .not('product_links', 'is', null);
 
         if (productsError) throw productsError;
         if (!products || products.length === 0) {
@@ -143,7 +145,7 @@ serve(async (req) => {
         // Upload products as documents
         let uploadedCount = 0;
         for (const product of products.slice(0, 100)) { // Limit to 100 for initial version
-          const analysis = product.product_links?.[0]?.analysis;
+          const analysis = product.product_links?.[0]?.product_analyses?.[0];
           
           const documentContent = {
             product_id: product.id,

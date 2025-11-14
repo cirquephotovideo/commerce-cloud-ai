@@ -192,8 +192,8 @@ Deno.serve(async (req) => {
       console.log('[ORCHESTRATOR] All chunks launched');
     };
 
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      EdgeRuntime.waitUntil(launchChunks());
+    if (typeof (globalThis as any).EdgeRuntime !== 'undefined' && (globalThis as any).EdgeRuntime?.waitUntil) {
+      (globalThis as any).EdgeRuntime.waitUntil(launchChunks());
     } else {
       launchChunks().catch(err => {
         console.error('[ORCHESTRATOR] Background task error:', err);

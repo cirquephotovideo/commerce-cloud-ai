@@ -132,7 +132,7 @@ serve(async (req) => {
             body: {
               userId: rule.user_id,
               alertType: 'automation_error',
-              message: `Erreur dans l'automatisation "${rule.rule_name}": ${error.message}`,
+              message: `Erreur dans l'automatisation "${rule.rule_name}": ${error instanceof Error ? error.message : String(error)}`,
             },
           });
         }

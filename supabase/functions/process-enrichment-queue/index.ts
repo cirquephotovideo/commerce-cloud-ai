@@ -287,7 +287,7 @@ serve(async (req) => {
         console.log('[ENRICHMENT-QUEUE] Enrichment types to process:', enrichmentTypes);
 
         // Créer un tableau de promesses pour tous les enrichissements
-        const enrichmentPromises = enrichmentTypes.map(async (type) => {
+        const enrichmentPromises = enrichmentTypes.map(async (type: string) => {
           try {
             console.log(`[ENRICHMENT-QUEUE] Processing enrichment type: ${type}`);
 

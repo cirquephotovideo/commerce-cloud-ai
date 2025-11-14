@@ -7,14 +7,14 @@ export async function getCachedOrFetch<T>(
   ttlMinutes: number = 5
 ): Promise<{ data: T; cached: boolean }> {
   // Try to get from cache
-  const { data: cached } = await supabaseClient
+  const { data: cached, error: cacheError } = await supabaseClient
     .from('mcp_cache')
     .select('cache_value, expires_at')
     .eq('cache_key', cacheKey)
     .gt('expires_at', new Date().toISOString())
     .maybeSingle();
 
-  if (cached) {
+  if (!cacheError && cached && 'cache_value' in cached) {
     console.log(`[CACHE] HIT: ${cacheKey}`);
     return { data: cached.cache_value as T, cached: true };
   }

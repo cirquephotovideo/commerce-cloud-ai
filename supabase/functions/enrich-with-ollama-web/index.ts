@@ -153,7 +153,7 @@ Réponds UNIQUEMENT avec un JSON valide suivant ce format exact :
             { role: 'user', content: prompt }
           ],
           web_search: webSearchToUse
-        }, { skipProviders: ['ollama'] }); // Skip Ollama since it already failed
+        }); // Fallback to other providers
 
         if (!fallbackResponse.success) {
           throw new Error(`All fallback providers failed: ${fallbackResponse.error}`);

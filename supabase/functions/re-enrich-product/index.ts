@@ -150,7 +150,7 @@ serve(async (req) => {
     console.log(`[RE-ENRICH] Product data resolved - supplier: ${!!supplierProduct}, analysis: ${!!analysis}`);
 
     // If we have analysis but no supplier product, we can still work with analysis data
-    const productData = supplierProduct || {
+    let productData = supplierProduct || {
       name: analysis?.analysis_result?.product_name || 'Unknown Product',
       ean: analysis?.analysis_result?.ean || null,
       description: analysis?.analysis_result?.description || null
@@ -192,16 +192,16 @@ serve(async (req) => {
           .eq('id', analysis.id);
         
         console.log('[RE-ENRICH] ✅ Created temporary supplier product:', tempProduct.id);
+        
+        // Update productData
+        productData = supplierProduct || {
+          name: analysis?.analysis_result?.product_name || 'Unknown Product',
+          ean: analysis?.analysis_result?.ean || null,
+          description: analysis?.analysis_result?.description || null,
+          purchase_price: analysis?.analysis_result?.purchase_price || null
+        };
       }
     }
-
-    // Define productData for later use
-    const productData = supplierProduct || {
-      name: analysis?.analysis_result?.product_name || 'Unknown Product',
-      ean: analysis?.analysis_result?.ean || null,
-      description: analysis?.analysis_result?.description || null,
-      purchase_price: analysis?.analysis_result?.purchase_price || null
-    };
 
     // Add to enrichment queue with high priority
     const { data: queueEntry, error: queueError } = await supabase
