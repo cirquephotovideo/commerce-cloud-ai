@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in bulk-delete-suppliers:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
@@ -351,7 +351,7 @@ async function processDeletersAsync(
         console.error(`❌ Error deleting supplier ${supplier.name}:`, error);
         errors.push({
           supplier: supplier.name,
-          error: error.message
+          error: error instanceof Error ? error.message : String(error)
         });
       }
 
@@ -406,7 +406,7 @@ async function processDeletersAsync(
       .from('bulk_deletion_jobs')
       .update({
         status: 'failed',
-        error_message: error.message,
+        error_message: error instanceof Error ? error.message : String(error),
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })

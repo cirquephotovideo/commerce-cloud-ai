@@ -187,7 +187,7 @@ async function validateImageUrl(url: string): Promise<boolean> {
       console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}: status=${response.status}, type=${contentType}, size=${contentLength}`);
     }
     
-    return isValid;
+    return isValid ?? false;
   } catch (error) {
     console.log(`[VALIDATE] ❌ ${url.slice(0, 80)}:`, error);
     return false;

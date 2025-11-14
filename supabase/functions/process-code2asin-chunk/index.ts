@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
         success: true,
         chunkId,
         processed: processedCount,
-        success: successCount,
+        successCount,
         failed: failedCount
       }),
       {

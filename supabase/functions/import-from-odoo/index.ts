@@ -582,7 +582,7 @@ serve(async (req) => {
       console.log('[ODOO] 🔍 First product to insert:', {
         product_name: productsToInsert[0].product_name,
         template_id: productsToInsert[0].additional_data.odoo_template_id,
-        has_image_1920: !!productsToInsert[0].additional_data.image_1920,
+        has_image_1920: !!(productsToInsert[0].additional_data as any).image_1920,
         has_description: !!productsToInsert[0].description,
         category: productsToInsert[0].additional_data.category_name,
       });
@@ -608,11 +608,11 @@ serve(async (req) => {
       console.log(`[ODOO] ✅ ${imported} products upserted successfully`);
 
       // Phase 3: Batch matching par EAN (1 SELECT + 1 UPDATE)
-      const productsWithEan = insertedProducts?.filter(p => p.ean) || [];
+      const productsWithEan = insertedProducts?.filter((p: any) => p.ean) || [];
       if (productsWithEan.length > 0) {
         console.log(`[ODOO] 🔍 Matching ${productsWithEan.length} products by EAN...`);
         
-        const eanList = productsWithEan.map(p => p.ean);
+        const eanList = productsWithEan.map((p: any) => p.ean);
         
         // Récupérer tous les product_analyses qui ont ces EAN (1 seule requête)
         const { data: analysesToMatch } = await supabaseClient
@@ -625,16 +625,16 @@ serve(async (req) => {
         if (analysesToMatch && analysesToMatch.length > 0) {
           // Créer un map EAN -> supplier_product info
           const eanToProductInfo = new Map(
-            productsWithEan.map(p => [p.ean, { id: p.id, price: p.purchase_price }])
+            productsWithEan.map((p: any) => [p.ean, { id: p.id, price: p.purchase_price }])
           );
           
           // Préparer les updates en batch
-          const updates = analysesToMatch.map(analysis => {
-            const productInfo = eanToProductInfo.get(analysis.ean);
+          const updates = analysesToMatch.map((analysis: any) => {
+            const productInfo = eanToProductInfo.get(analysis.ean) as { id: string; price: number } | undefined;
             return {
               id: analysis.id,
-              supplier_product_id: productInfo?.id,
-              purchase_price: productInfo?.price,
+              supplier_product_id: productInfo?.id ?? null,
+              purchase_price: productInfo?.price ?? null,
               purchase_currency: 'EUR',
               updated_at: new Date().toISOString()
             };

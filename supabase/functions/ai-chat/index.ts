@@ -10,7 +10,7 @@ const corsHeaders = {
 
 // Définir les tools MCP disponibles par plateforme
 const getMCPTools = (platforms: any[]) => {
-  const tools = [];
+  const tools: any[] = [];
   
   platforms.forEach(platform => {
     if (platform.platform_type === 'odoo') {
@@ -262,7 +262,7 @@ const executeMCPTool = async (
         latency_ms: latencyMs,
         cache_hit: cacheHit
       })
-      .then(({ error: logError }) => {
+      .then(({ error: logError }: { error: any }) => {
         if (logError) {
           console.error('[AI-CHAT] Failed to log MCP call:', logError);
         }
@@ -523,7 +523,7 @@ ${mcpContextPrompt}
             success: true, 
             response: finalContent,
             provider: finalResult.provider,
-            toolsUsed: toolCalls.map(t => t.function.name)
+            toolsUsed: toolCalls.map((t: any) => t.function.name)
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         );

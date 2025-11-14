@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     console.log(`📦 ${allEnrichingProducts?.length || 0} produits en statut enriching trouvés`);
 
     // Vérifier lesquels n'ont PAS de tâche dans la queue (orphelins)
-    let orphanProducts = [];
+    let orphanProducts: any[] = [];
     if (allEnrichingProducts && allEnrichingProducts.length > 0) {
       const productIds = allEnrichingProducts.map(p => p.id);
       const { data: existingTasks } = await supabaseClient

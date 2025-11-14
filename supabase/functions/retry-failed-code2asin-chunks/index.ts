@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
           .from('code2asin_import_chunks')
           .update({ 
             status: 'failed',
-            error_message: `Retry ${retryCount} error: ${error.message}`,
+            error_message: `Retry ${retryCount} error: ${error instanceof Error ? error.message : String(error)}`,
             updated_at: new Date().toISOString()
           })
           .eq('id', chunk.id);
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[RETRY-CHUNKS] Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

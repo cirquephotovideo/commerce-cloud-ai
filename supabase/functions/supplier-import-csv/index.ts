@@ -121,7 +121,7 @@ serve(async (req) => {
 
     // Helper function to write batch to storage
     async function writeBatchToStorage(batch: string[], batchNum: number) {
-      if (batch.length === 0) return;
+      if (batch.length === 0 || !user) return;
       
       const batchPath = `${user.id}/${jobId}_batch${batchNum}.ndjson`;
       const batchContent = batch.join('\n') + '\n';
@@ -463,7 +463,7 @@ serve(async (req) => {
     console.error('[IMPORT-CSV] Fatal error:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         details: 'Voir les logs pour plus de détails'
       }),
       { 

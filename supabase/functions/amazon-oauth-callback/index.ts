@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('OAuth callback error:', error);
     const errorUrl = new URL('/admin', Deno.env.get('SUPABASE_URL')?.replace('/functions/v1', '') || '');
-    errorUrl.searchParams.set('amazon_error', error.message);
+    errorUrl.searchParams.set('amazon_error', error instanceof Error ? error.message : String(error));
     return Response.redirect(errorUrl.toString(), 302);
   }
 });
