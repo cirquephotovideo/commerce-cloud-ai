@@ -288,15 +288,42 @@ Return ONLY valid, tested URLs in JSON:
       return [];
     }
 
-    // Parse JSON response
-    const jsonMatch = result.content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return [];
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    const images = parsed.images || [];
+    // ✅ ROBUST JSON PARSING with fallbacks
+    let parsed: any = null;
+    
+    try {
+      // Try 1: Direct JSON parse (if response is clean JSON)
+      parsed = JSON.parse(result.content);
+    } catch (directError) {
+      try {
+        // Try 2: Extract JSON from mixed text using regex
+        const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          // Clean up common issues before parsing
+          let jsonString = jsonMatch[0]
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control chars
+            .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+          
+          parsed = JSON.parse(jsonString);
+        }
+      } catch (regexError) {
+        console.error('[OLLAMA-WEB] JSON parsing failed:', {
+          directError: directError instanceof Error ? directError.message : String(directError),
+          regexError: regexError instanceof Error ? regexError.message : String(regexError),
+          contentPreview: result.content.substring(0, 200)
+        });
+      }
+    }
+    
+    if (!parsed || !parsed.images) {
+      console.log('[OLLAMA-WEB] No valid images in response');
+      return [];
+    }
+    
+    const images = Array.isArray(parsed.images) ? parsed.images : [];
     
     return images
-      .filter((url: string) => url.startsWith('http'))
+      .filter((url: string) => typeof url === 'string' && url.startsWith('http'))
       .slice(0, 5);
 
   } catch (error) {
