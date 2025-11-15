@@ -325,3 +325,23 @@ verify_jwt = true
 timeout_sec = 120
 memory_mb = 512
 
+[functions.enrich-environmental-impact]
+verify_jwt = true
+
+[functions.enrich-hs-code]
+verify_jwt = true
+
+[functions.enrich-product-images]
+verify_jwt = true
+
+[functions.enrich-short-description]
+verify_jwt = true
+
+[functions.enrich-pricing]
+verify_jwt = true
+
+[functions.enrich-all-sections]
+verify_jwt = true
+timeout_sec = 180
+memory_mb = 512
+

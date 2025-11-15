@@ -33,6 +33,7 @@ import { OdooAttributesSection } from "./product-detail/sections/OdooAttributesS
 import { Code2AsinSection } from "./product-detail/sections/Code2AsinSection";
 import { HeyGenVideoWizard } from "./product-detail/HeyGenVideoWizard";
 import { useEnrichment } from "@/hooks/useEnrichment";
+import { useEnrichAll } from "@/hooks/useEnrichAll";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
 import { EnrichmentProviderSelector, AIProvider } from "./product-detail/EnrichmentProviderSelector";
 
@@ -107,6 +108,11 @@ export function ProductDetailModal({
 
   // Hook d'enrichissement
   const enrichmentMutation = useEnrichment(product?.id, () => {
+    handleRefresh();
+  });
+
+  // Hook d'enrichissement complet
+  const enrichAllMutation = useEnrichAll(analysis?.id || product?.id, () => {
     handleRefresh();
   });
 
@@ -422,6 +428,23 @@ export function ProductDetailModal({
               >
                 <Database className="h-4 w-4 mr-2" />
                 Enrichir Attributs Odoo
+              </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    await enrichAllMutation.mutateAsync({
+                      sections: ['environmental', 'hs_code', 'images', 'description', 'pricing']
+                    });
+                  } catch (error: any) {
+                    // Error already handled by the hook
+                  }
+                }}
+                disabled={enrichAllMutation.isPending}
+                variant="default"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {enrichAllMutation.isPending ? 'Enrichissement...' : 'Enrichir Tout'}
               </Button>
               <Button
                 onClick={async () => {
