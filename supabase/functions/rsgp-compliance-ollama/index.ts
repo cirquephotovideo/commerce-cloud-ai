@@ -265,14 +265,22 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
 
     console.log('[RSGP-OLLAMA] Ollama response received');
 
+    // Vérifier si la réponse est valide
+    if (!ollamaResponse.success) {
+      throw new Error(`Ollama proxy failed: ${ollamaResponse.error || 'Unknown error'}`);
+    }
+
+    // Extraire la réponse réelle depuis le wrapper d'ollama-proxy
+    const actualResponse = ollamaResponse.response;
+    
     // Parser la réponse JSON
     let rsgpData;
     try {
       // Récupérer le texte depuis différentes structures possibles
       const responseText = (
-        ollamaResponse?.content ??
-        ollamaResponse?.message?.content ??
-        ollamaResponse?.choices?.[0]?.message?.content ??
+        actualResponse?.content ??
+        actualResponse?.message?.content ??
+        actualResponse?.choices?.[0]?.message?.content ??
         ''
       );
 
@@ -338,9 +346,11 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
     } catch (parseError) {
       console.error('[RSGP-OLLAMA] JSON parse error:', parseError);
       console.error('[RSGP-OLLAMA] Raw response shape:', {
-        hasContent: Boolean((ollamaResponse as any)?.content),
-        hasMessage: Boolean((ollamaResponse as any)?.message?.content),
-        hasChoices: Array.isArray((ollamaResponse as any)?.choices),
+        hasSuccess: Boolean(ollamaResponse?.success),
+        hasResponse: Boolean(ollamaResponse?.response),
+        hasContent: Boolean(actualResponse?.content),
+        hasMessage: Boolean(actualResponse?.message?.content),
+        hasChoices: Array.isArray(actualResponse?.choices),
       });
       throw new Error('Failed to parse Ollama JSON response');
     }
