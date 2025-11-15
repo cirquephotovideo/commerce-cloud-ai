@@ -64,15 +64,22 @@ IMPORTANT: La description doit être accrocheuse, professionnelle et optimisée 
 
     console.log('[SHORT-DESC] Normalized data:', normalizedData);
 
-    // Mettre à jour product_analyses
+    // Mettre à jour product_analyses avec merge du JSONB
+    const { data: currentAnalysis } = await supabase
+      .from('product_analyses')
+      .select('analysis_result')
+      .eq('id', analysisId)
+      .single();
+
+    const updatedAnalysisResult = {
+      ...(currentAnalysis?.analysis_result || {}),
+      description: normalizedData
+    };
+
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: supabase.rpc('jsonb_set', {
-          target: 'analysis_result',
-          path: '{description}',
-          new_value: JSON.stringify(normalizedData)
-        }),
+        analysis_result: updatedAnalysisResult,
         updated_at: new Date().toISOString()
       })
       .eq('id', analysisId);

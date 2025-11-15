@@ -32,12 +32,27 @@ serve(async (req) => {
     // Récupérer les données du produit
     const { data: analysis, error: analysisError } = await supabase
       .from('product_analyses')
-      .select('*, supplier_products!product_links(purchase_price)')
+      .select('*')
       .eq('id', analysisId)
       .single();
 
     if (analysisError || !analysis) {
+      console.error('[ENRICH-ALL] Analysis not found:', analysisError);
       throw new Error('Product analysis not found');
+    }
+
+    console.log('[ENRICH-ALL] Analysis found:', analysis.id);
+
+    // Récupérer le prix d'achat depuis product_links -> supplier_products
+    let purchasePrice = null;
+    const { data: linkedProduct } = await supabase
+      .from('product_links')
+      .select('supplier_products(purchase_price)')
+      .eq('analysis_id', analysisId)
+      .maybeSingle();
+    
+    if (linkedProduct?.supplier_products) {
+      purchasePrice = (linkedProduct.supplier_products as any).purchase_price;
     }
 
     // Préparer les données produit
@@ -48,8 +63,6 @@ serve(async (req) => {
       category: analysis.analysis_result?.category,
       description: analysis.long_description
     };
-
-    const purchasePrice = analysis.supplier_products?.[0]?.purchase_price;
 
     console.log('[ENRICH-ALL] Product data:', productData);
 

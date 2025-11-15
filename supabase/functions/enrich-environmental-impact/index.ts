@@ -69,15 +69,22 @@ IMPORTANT: Retourne UNIQUEMENT le JSON, sans texte avant ou après.`;
 
     console.log('[ENV-IMPACT] Normalized data:', normalizedData);
 
-    // Mettre à jour product_analyses
+    // Mettre à jour product_analyses avec merge du JSONB
+    const { data: currentAnalysis } = await supabase
+      .from('product_analyses')
+      .select('analysis_result')
+      .eq('id', analysisId)
+      .single();
+
+    const updatedAnalysisResult = {
+      ...(currentAnalysis?.analysis_result || {}),
+      environmental_impact: normalizedData
+    };
+
     const { error: updateError } = await supabase
       .from('product_analyses')
       .update({
-        analysis_result: supabase.rpc('jsonb_set', {
-          target: 'analysis_result',
-          path: '{environmental_impact}',
-          new_value: JSON.stringify(normalizedData)
-        }),
+        analysis_result: updatedAnalysisResult,
         updated_at: new Date().toISOString()
       })
       .eq('id', analysisId);
