@@ -146,6 +146,39 @@ export function ProductDetailModal({
     if (onEnrich) onEnrich();
   };
 
+  // Polling automatique pour détecter la fin des enrichissements
+  useEffect(() => {
+    if (!open || !analysis?.id) return;
+    
+    console.log('[MODAL] 🔄 Starting enrichment polling for analysis:', analysis.id);
+    
+    const checkEnrichmentStatus = async () => {
+      const { data: pendingEnrichments } = await supabase
+        .from('enrichment_queue')
+        .select('status')
+        .eq('analysis_id', analysis.id)
+        .in('status', ['pending', 'processing']);
+      
+      if (pendingEnrichments && pendingEnrichments.length === 0) {
+        console.log('[MODAL] ✅ No pending enrichments, refreshing data...');
+        handleRefresh();
+      } else {
+        console.log(`[MODAL] ⏳ ${pendingEnrichments?.length || 0} enrichments still in progress`);
+      }
+    };
+    
+    // Vérification immédiate
+    checkEnrichmentStatus();
+    
+    // Puis polling toutes les 3 secondes
+    const interval = setInterval(checkEnrichmentStatus, 3000);
+    
+    return () => {
+      console.log('[MODAL] 🛑 Stopping enrichment polling');
+      clearInterval(interval);
+    };
+  }, [open, analysis?.id]);
+
   // Écouter les changements d'onglet depuis l'extérieur
   useEffect(() => {
     const handleTabNavigation = (e: CustomEvent) => {

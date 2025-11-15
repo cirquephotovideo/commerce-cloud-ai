@@ -17,9 +17,13 @@ serve(async (req) => {
 
   try {
     const { analysisId, productData, preferred_model, web_search_enabled } = await req.json();
+    const startTime = Date.now();
+    
+    console.log('[ENRICH-SPECS] 🚀 Starting specifications enrichment');
+    console.log('[ENRICH-SPECS] Analysis ID:', analysisId);
+    console.log('[ENRICH-SPECS] Product:', productData?.name || 'N/A');
+    console.log('[ENRICH-SPECS] Model:', preferred_model || 'auto');
     console.log('[ENRICH-SPECS] Web search:', web_search_enabled || false);
-    console.log('[ENRICH-SPECS] Starting enrichment for analysis:', analysisId);
-    console.log('[ENRICH-SPECS] Preferred model:', preferred_model || 'auto');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -44,12 +48,15 @@ serve(async (req) => {
       .update({ enrichment_status: enrichmentStatus })
       .eq('id', analysisId);
 
-    console.log('[ENRICH-SPECS] Status set to processing');
+    console.log('[ENRICH-SPECS] ⏳ Status set to processing');
 
     // Use the new comprehensive specifications prompt
     const existingSpecs = currentAnalysis.analysis_result?.specifications;
     const prompt = PromptTemplates.specifications(productData, existingSpecs);
 
+    console.log('[ENRICH-SPECS] 🤖 Calling AI with fallback...');
+    const aiCallStart = Date.now();
+    
     // ✅ Use callAIWithFallback with web_search for Ollama
     const aiResponse = await callAIWithFallback({
       model: preferred_model || 'gpt-oss:20b-cloud',
@@ -62,6 +69,9 @@ serve(async (req) => {
       web_search: web_search_enabled || false  // Utiliser le paramètre utilisateur
     });
 
+    const aiCallDuration = Date.now() - aiCallStart;
+    console.log(`[ENRICH-SPECS] ✅ AI responded in ${aiCallDuration}ms`);
+
     if (!aiResponse.success) {
       throw new Error(aiResponse.error || 'AI call failed');
     }
@@ -69,7 +79,7 @@ serve(async (req) => {
     console.log(`[ENRICH-SPECS] ✅ Provider used: ${aiResponse.provider}`);
     const specificationsRaw = aiResponse.content;
     
-    console.log('[ENRICH-SPECS] AI response length:', specificationsRaw?.length || 0);
+    console.log('[ENRICH-SPECS] 📊 AI response length:', specificationsRaw?.length || 0, 'chars');
 
     // Try to parse JSON and validate
     let specifications;
@@ -78,15 +88,18 @@ serve(async (req) => {
     
     try {
       specifications = JSON.parse(specificationsRaw);
+      console.log('[ENRICH-SPECS] ✅ JSON parsed successfully');
       
       // Validate the enrichment quality
       const validation = validateEnrichment('specifications', specifications);
       if (!validation.isValid) {
         validationIssues = validation.issues;
-        console.warn('[ENRICH-SPECS] Validation issues found:', validationIssues);
+        console.warn('[ENRICH-SPECS] ⚠️ Validation issues:', validationIssues);
+      } else {
+        console.log('[ENRICH-SPECS] ✅ Validation passed');
       }
     } catch (e) {
-      console.warn('[ENRICH-SPECS] Failed to parse JSON, storing as string');
+      console.warn('[ENRICH-SPECS] ⚠️ Failed to parse JSON, storing as string');
       specifications = specificationsRaw;
       parseError = e instanceof Error ? e.message : 'JSON parse error';
     }
@@ -102,6 +115,8 @@ serve(async (req) => {
       ...(validationIssues.length > 0 && { specifications_validation_issues: validationIssues })
     };
 
+    console.log('[ENRICH-SPECS] 💾 Saving to database...');
+
     // Update status to completed
     enrichmentStatus.specifications = 'completed';
 
@@ -116,7 +131,10 @@ serve(async (req) => {
 
     if (updateError) throw updateError;
 
-    console.log('[ENRICH-SPECS] Specifications saved successfully → completed');
+    const totalDuration = Date.now() - startTime;
+    console.log(`[ENRICH-SPECS] ✅ Specifications saved successfully in ${totalDuration}ms`);
+    console.log(`[ENRICH-SPECS] 💾 Saved data preview:`, JSON.stringify(specifications).substring(0, 200) + '...');
+    console.log('[ENRICH-SPECS] Status → completed');
 
     return new Response(
       JSON.stringify({ 
