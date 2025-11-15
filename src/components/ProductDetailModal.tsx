@@ -725,15 +725,7 @@ export function ProductDetailModal({
                     </div>
                   </AccordionTrigger>
                   <AccordionContent>
-                    {hasRSGPData && analysis ? (
-                      <RSGPSection analysis={analysis} />
-                    ) : (
-                      <EnrichmentPrompt 
-                        type="rsgp" 
-                        onEnrich={() => handleEnrich('rsgp')}
-                        isLoading={enrichmentMutation.isPending}
-                      />
-                    )}
+                    <RSGPSection analysis={analysis} onEnrich={handleRefresh} />
                   </AccordionContent>
                 </AccordionItem>
 
