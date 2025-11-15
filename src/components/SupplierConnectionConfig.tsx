@@ -36,16 +36,65 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
       return;
     }
 
-    // Clean and validate host
-    const cleanedHost = config.host
-      .trim()
-      .replace(/^(ftp|ftps):\/\//, '')
-      .split('/')[0];
+    // Robust host and port parsing
+    let cleanedHost = '';
+    let extractedPort: number | null = null;
+    let scheme = '';
 
-    if (!cleanedHost || cleanedHost.length < 3) {
+    try {
+      const hostValue = config.host.trim();
+      
+      // Detect SFTP (not supported)
+      if (hostValue.toLowerCase().startsWith('sftp://') || hostValue.toLowerCase().startsWith('sftp:')) {
+        toast({
+          title: "❌ SFTP non supporté",
+          description: "Ce connecteur supporte FTP/FTPS uniquement. SFTP n'est pas encore supporté.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Try parsing as URL if contains ://
+      if (hostValue.includes('://')) {
+        const url = new URL(hostValue);
+        scheme = url.protocol.replace(':', '');
+        cleanedHost = url.hostname;
+        if (url.port) {
+          extractedPort = parseInt(url.port, 10);
+        }
+      } else {
+        // Manual parsing: remove any scheme prefix
+        let cleaned = hostValue.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+        // Remove path
+        cleaned = cleaned.split('/')[0];
+        // Extract port if present (host:port)
+        if (cleaned.includes(':')) {
+          const [hostPart, portPart] = cleaned.split(':');
+          cleanedHost = hostPart.trim();
+          extractedPort = parseInt(portPart, 10);
+        } else {
+          cleanedHost = cleaned.trim();
+        }
+      }
+
+      // Validate cleaned host
+      if (!cleanedHost || cleanedHost.length < 3) {
+        toast({
+          title: "❌ Hôte invalide",
+          description: `Le nom d'hôte "${config.host}" n'est pas valide. Utilisez un domaine comme ftp.secomp.fr`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update port config if extracted from host
+      if (extractedPort && extractedPort !== config.port) {
+        updateConfig('port', extractedPort);
+      }
+    } catch (error) {
       toast({
-        title: "❌ Hôte invalide",
-        description: `Le nom d'hôte "${config.host}" n'est pas valide. Utilisez uniquement le domaine (ex: ftp.secomp.fr)`,
+        title: "❌ Format d'hôte invalide",
+        description: `Impossible d'analyser "${config.host}". Utilisez un format valide (ex: ftp.secomp.fr)`,
         variant: "destructive",
       });
       return;
@@ -56,10 +105,12 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
     setConnectionSuccess(false);
     
     try {
+      const finalPort = extractedPort || config.port || 21;
+      
       const { data, error } = await supabase.functions.invoke('test-ftp-connection', {
         body: {
           host: cleanedHost,
-          port: config.port || 21,
+          port: finalPort,
           username: config.username,
           password: config.password,
           path: pathToTest,
@@ -81,9 +132,16 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
         setConnectionSuccess(false);
         setAvailableFiles([]);
         setAvailableDirs([]);
+        
+        // Provide clearer error messages for DNS issues
+        let errorMessage = data.message || data.error || "Erreur inconnue";
+        if (errorMessage.includes('failed to lookup address') || errorMessage.includes('Name or service not known')) {
+          errorMessage = `Impossible de résoudre le nom d'hôte "${cleanedHost}". Vérifiez l'orthographe ou utilisez l'adresse IP directe.`;
+        }
+        
         toast({
           title: "❌ Échec de connexion",
-          description: data.message || data.error,
+          description: errorMessage,
           variant: "destructive",
         });
       }
@@ -167,7 +225,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
               placeholder="ftp.secomp.fr"
             />
             <p className="text-xs text-muted-foreground">
-              Entrez uniquement le nom de domaine (ex: ftp.example.com). Le chemin du dossier se configure ci-dessous.
+              Entrez un domaine FTP/FTPS (ex: ftp.secomp.fr ou ftp.example.com:2121). SFTP non supporté. Le chemin se configure ci-dessous.
             </p>
           </div>
 
