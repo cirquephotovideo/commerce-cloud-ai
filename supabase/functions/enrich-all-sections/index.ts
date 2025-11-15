@@ -91,7 +91,7 @@ serve(async (req) => {
 
     console.log('[ENRICH-ALL] Product data:', productData);
 
-    // Définir les fonctions d'enrichissement
+    // Définir les fonctions d'enrichissement (sans Amazon)
     const enrichmentFunctions: Record<string, string> = {
       environmental: 'enrich-environmental-impact',
       hs_code: 'enrich-hs-code',
@@ -99,6 +99,8 @@ serve(async (req) => {
       description: 'enrich-short-description',
       pricing: 'enrich-pricing'
     };
+
+    console.log('[ENRICH-ALL] Available enrichments:', Object.keys(enrichmentFunctions));
 
     // Lancer tous les enrichissements en parallèle
     const enrichmentPromises = sections.map(async (section: string) => {
