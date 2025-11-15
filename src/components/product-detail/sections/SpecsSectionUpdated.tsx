@@ -11,6 +11,11 @@ interface SpecsSectionProps {
 }
 
 export const SpecsSection = ({ analysis }: SpecsSectionProps) => {
+  // Vérification de sécurité
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const enrichMutation = useEnrichment(analysis.id);
   
   // Données existantes avec fallback sur colonnes dédiées

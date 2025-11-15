@@ -16,6 +16,11 @@ interface VideoSectionProps {
 }
 
 export const VideoSection = ({ analysis, onEnrich }: VideoSectionProps) => {
+  // Vérification de sécurité
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const [showWizard, setShowWizard] = useState(false);
   const [generating, setGenerating] = useState(false);
   const videoUrl = analysis?.video_url;
