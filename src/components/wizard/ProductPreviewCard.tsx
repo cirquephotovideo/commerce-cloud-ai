@@ -56,7 +56,11 @@ export const ProductPreviewCard = ({ analysisId }: ProductPreviewCardProps) => {
   const imageUrl = product.image_urls?.[0] || '/placeholder.svg';
   const productName = product.analysis_result?.name || 'Produit sans nom';
   const ean = product.analysis_result?.ean || product.analysis_result?.barcode || 'N/A';
-  const enrichmentScore = product.analysis_result?.enrichment_score || 0;
+  
+  // Handle both old (number) and new (object) enrichment_score formats
+  const enrichmentScoreValue = typeof product.analysis_result?.enrichment_score === 'object'
+    ? product.analysis_result?.enrichment_score?.overall || 0
+    : product.analysis_result?.enrichment_score || 0;
 
   return (
     <Card>
@@ -73,9 +77,9 @@ export const ProductPreviewCard = ({ analysisId }: ProductPreviewCardProps) => {
           <div className="flex-1 space-y-1">
             <h3 className="font-semibold">{productName}</h3>
             <p className="text-sm text-muted-foreground">EAN: {ean}</p>
-            {enrichmentScore > 0 && (
-              <Badge variant={enrichmentScore > 80 ? 'default' : 'secondary'}>
-                ✨ Score: {enrichmentScore}/100
+            {enrichmentScoreValue > 0 && (
+              <Badge variant={enrichmentScoreValue > 80 ? 'default' : 'secondary'}>
+                ✨ Score: {enrichmentScoreValue}/100
               </Badge>
             )}
           </div>
