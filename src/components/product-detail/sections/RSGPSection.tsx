@@ -232,6 +232,12 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
             <TabsContent value="detailed" className="mt-4">
               <RSGPDetailedView data={rsgpData} />
             </TabsContent>
+            
+            <TabsContent value="json" className="mt-4">
+              <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-[600px] text-xs">
+                {JSON.stringify(rsgpData, null, 2)}
+              </pre>
+            </TabsContent>
           </Tabs>
         ) : (
           <>
