@@ -8,8 +8,20 @@ const corsHeaders = {
 
 // Helper to connect to FTP
 async function connectFTP(host: string, port: number, username: string, password: string) {
-  console.log(`[BG-SYNC] Connecting to ${host}:${port}...`);
-  const cleanHost = host.replace(/^(ftp|ftps):\/\//, '');
+  // Robust hostname cleaning (same as test-ftp-connection)
+  const cleanHost = (() => {
+    try {
+      if (host.includes('://')) {
+        const url = new URL(host.startsWith('ftp') ? host : `ftp://${host}`);
+        return url.hostname;
+      }
+      return host.trim().split('/')[0];
+    } catch {
+      return host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+    }
+  })();
+  
+  console.log(`[BG-SYNC] Connecting to ${cleanHost}:${port}...`);
   const conn = await Deno.connect({ hostname: cleanHost, port });
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();

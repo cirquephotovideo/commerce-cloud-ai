@@ -8,7 +8,24 @@ const corsHeaders = {
 async function testFTPConnection(host: string, port: number, username: string, password: string, path: string = '/') {
   console.log(`[FTP-TEST] Connecting to ${host}:${port} path="${path}"...`);
   
-  const cleanHost = host.replace(/^(ftp|ftps):\/\//, '');
+  // Robust hostname cleaning
+  const cleanHost = (() => {
+    try {
+      // If it's a full URL, parse with URL
+      if (host.includes('://')) {
+        const url = new URL(host.startsWith('ftp') ? host : `ftp://${host}`);
+        return url.hostname;
+      }
+      // Otherwise, clean spaces and extract hostname
+      const cleaned = host.trim();
+      return cleaned.split('/')[0];
+    } catch {
+      // Fallback: manual cleaning
+      return host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+    }
+  })();
+  
+  console.log(`[FTP-TEST] Original host: "${host}" → Cleaned: "${cleanHost}"`);
   
   const conn = await Deno.connect({ hostname: cleanHost, port });
   const encoder = new TextEncoder();
@@ -353,16 +370,26 @@ serve(async (req) => {
   try {
     const { host, port = 21, username, password, path = '/' } = await req.json();
 
+    console.log(`[FTP-TEST] Received params:`, {
+      host: `"${host}"`,
+      port,
+      username: username ? '***' : '(empty)',
+      password: password ? '***' : '(empty)',
+      path,
+    });
+
     if (!host || !username || !password) {
+      const missing = [];
+      if (!host) missing.push('host');
+      if (!username) missing.push('username');
+      if (!password) missing.push('password');
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Missing required parameters: host, username, password' 
+          error: `Paramètres manquants: ${missing.join(', ')}`
         }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 

@@ -36,6 +36,21 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
       return;
     }
 
+    // Clean and validate host
+    const cleanedHost = config.host
+      .trim()
+      .replace(/^(ftp|ftps):\/\//, '')
+      .split('/')[0];
+
+    if (!cleanedHost || cleanedHost.length < 3) {
+      toast({
+        title: "❌ Hôte invalide",
+        description: `Le nom d'hôte "${config.host}" n'est pas valide. Utilisez uniquement le domaine (ex: ftp.secomp.fr)`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const pathToTest = customPath || currentPath;
     setTesting(true);
     setConnectionSuccess(false);
@@ -43,7 +58,7 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
     try {
       const { data, error } = await supabase.functions.invoke('test-ftp-connection', {
         body: {
-          host: config.host,
+          host: cleanedHost,
           port: config.port || 21,
           username: config.username,
           password: config.password,
@@ -149,8 +164,11 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
               id="host"
               value={config.host || ''}
               onChange={(e) => updateConfig('host', e.target.value)}
-              placeholder="ftp.example.com ou ftp://eavs-groupe.fr"
+              placeholder="ftp.secomp.fr"
             />
+            <p className="text-xs text-muted-foreground">
+              Entrez uniquement le nom de domaine (ex: ftp.example.com). Le chemin du dossier se configure ci-dessous.
+            </p>
           </div>
 
           <div className="space-y-2">
