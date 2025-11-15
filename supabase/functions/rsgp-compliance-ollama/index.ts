@@ -262,21 +262,80 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
     // Parser la réponse JSON
     let rsgpData;
     try {
-      const responseText = ollamaResponse.content || ollamaResponse.message?.content || '';
-      
-      // Nettoyer la réponse (enlever markdown, etc.)
-      let cleanedResponse = responseText.trim();
-      if (cleanedResponse.startsWith('```json')) {
-        cleanedResponse = cleanedResponse.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-      } else if (cleanedResponse.startsWith('```')) {
-        cleanedResponse = cleanedResponse.replace(/^```\n?/, '').replace(/\n?```$/, '');
+      // Récupérer le texte depuis différentes structures possibles
+      const responseText = (
+        ollamaResponse?.content ??
+        ollamaResponse?.message?.content ??
+        ollamaResponse?.choices?.[0]?.message?.content ??
+        ''
+      );
+
+      // Helpers de normalisation / extraction
+      const normalizeText = (t: string) => t
+        .replace(/\r/g, '')
+        .replace(/^\s*```json\s*|\s*```\s*$/g, '')
+        .replace(/^\s*```\s*|\s*```\s*$/g, '')
+        .trim();
+
+      const stripTrailingCommas = (t: string) => t.replace(/,\s*([}\]])/g, '$1');
+
+      const extractBalancedJson = (t: string) => {
+        const firstBrace = t.indexOf('{');
+        const firstBracket = t.indexOf('[');
+        let start = -1, openChar = '{', closeChar = '}';
+        if (firstBrace === -1 && firstBracket === -1) return null;
+        if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+          start = firstBracket; openChar = '['; closeChar = ']';
+        } else { start = firstBrace; }
+        let depth = 0; let inString = false; let escape = false;
+        for (let i = start; i < t.length; i++) {
+          const ch = t[i];
+          if (inString) {
+            if (escape) { escape = false; }
+            else if (ch === '\\') { escape = true; }
+            else if (ch === '"') { inString = false; }
+            continue;
+          }
+          if (ch === '"') { inString = true; continue; }
+          if (ch === openChar) depth++;
+          else if (ch === closeChar) {
+            depth--;
+            if (depth === 0) return t.slice(start, i + 1);
+          }
+        }
+        return null;
+      };
+
+      // Nettoyer et tenter un parse direct
+      let cleaned = normalizeText(responseText);
+      try {
+        rsgpData = JSON.parse(cleaned);
+      } catch {}
+
+      // Fallback: extraire le premier bloc JSON équilibré et réparer les virgules finales et guillemets typographiques
+      if (!rsgpData) {
+        const balanced = extractBalancedJson(cleaned) ?? extractBalancedJson(responseText);
+        if (balanced) {
+          const fixed = stripTrailingCommas(balanced)
+            .replace(/[“”]/g, '"')
+            .replace(/[‘’]/g, "'");
+          try { rsgpData = JSON.parse(fixed); } catch {}
+        }
       }
-      
-      rsgpData = JSON.parse(cleanedResponse);
+
+      if (!rsgpData) {
+        console.error('[RSGP-OLLAMA] JSON parse failed. Response snippet:', (responseText || '').slice(0, 500));
+        throw new Error('Failed to parse Ollama JSON response');
+      }
+
       console.log('[RSGP-OLLAMA] JSON parsed successfully');
     } catch (parseError) {
       console.error('[RSGP-OLLAMA] JSON parse error:', parseError);
-      console.error('[RSGP-OLLAMA] Raw response:', ollamaResponse);
+      console.error('[RSGP-OLLAMA] Raw response shape:', {
+        hasContent: Boolean((ollamaResponse as any)?.content),
+        hasMessage: Boolean((ollamaResponse as any)?.message?.content),
+        hasChoices: Array.isArray((ollamaResponse as any)?.choices),
+      });
       throw new Error('Failed to parse Ollama JSON response');
     }
 
