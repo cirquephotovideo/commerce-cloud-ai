@@ -119,30 +119,31 @@ Deno.serve(async (req) => {
 
     const jwt = authHeader.replace('Bearer ', '');
 
-    // Create client with user's JWT for authentication
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    
-    // Create admin client for database operations
+    // Create client with anon key for JWT verification
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
+
+    // Verify the JWT by passing it directly to getUser()
+    const { data: { user }, error: userError } = await supabase.auth.getUser(jwt);
+
     if (userError || !user) {
-      console.error('[auto-link-products] Auth error:', userError?.message || 'No user found');
+      console.error('[auto-link-products] Auth error:', userError || 'No user found');
       return new Response(JSON.stringify({ 
         error: 'Unauthorized', 
-        details: userError?.message || 'Invalid or expired token' 
+        details: userError ? String(userError) : 'Invalid or expired token' 
       }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Create service role client for database operations (bypasses RLS)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
     const body = await req.json().catch(() => ({}));
     const { mode, job_id, batch_size = 100, analysis_id, auto_mode } = body;
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
     if (!mode || auto_mode === true || analysis_id) {
       console.log('[auto-link-products] Single product link mode (backward compatibility)');
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .rpc('bulk_create_product_links_chunked', {
           p_user_id: user.id,
           p_limit: analysis_id ? 1 : 100,
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
       console.log('[auto-link-products] Starting new job for user:', user.id);
       
       // Count total products to process
-      const { count } = await supabase
+      const { count } = await supabaseAdmin
         .from('product_analyses')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
@@ -193,7 +194,7 @@ Deno.serve(async (req) => {
       console.log('[auto-link-products] Total products to process:', count);
 
       // Create job record
-      const { data: job, error: jobError } = await supabase
+      const { data: job, error: jobError } = await supabaseAdmin
         .from('auto_link_jobs')
         .insert({
           user_id: user.id,
@@ -217,14 +218,14 @@ Deno.serve(async (req) => {
         // @ts-ignore - EdgeRuntime is provided in the Edge environment
         if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
           // @ts-ignore
-          EdgeRuntime.waitUntil(processJob(job.id, supabase));
+          EdgeRuntime.waitUntil(processJob(job.id, supabaseAdmin));
         } else {
           // Fallback: fire-and-forget
           // no-await to avoid blocking the response
-          void processJob(job.id, supabase);
+          void processJob(job.id, supabaseAdmin);
         }
       } catch (_) {
-        void processJob(job.id, supabase);
+        void processJob(job.id, supabaseAdmin);
       }
 
       return new Response(
@@ -252,7 +253,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      const { data: job, error: jobError } = await supabase
+      const { data: job, error: jobError } = await supabaseAdmin
         .from('auto_link_jobs')
         .select('*')
         .eq('id', job_id)
