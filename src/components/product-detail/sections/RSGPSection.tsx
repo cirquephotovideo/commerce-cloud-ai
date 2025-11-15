@@ -32,10 +32,10 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
         .from('enrichment_queue')
         .select('status, error_message, completed_at')
         .eq('analysis_id', analysis.id)
-        .in('enrichment_type', [['rsgp_ollama']])
+        .contains('enrichment_type', ['rsgp_ollama'])
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
       
       if (error && error.code !== 'PGRST116') throw error;
       return data;
@@ -147,9 +147,10 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
       <CardContent className="space-y-4">
         {hasDetailedData ? (
           <Tabs defaultValue="summary" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="summary">Vue Résumée</TabsTrigger>
               <TabsTrigger value="detailed">Vue Détaillée</TabsTrigger>
+              <TabsTrigger value="json">JSON brut</TabsTrigger>
             </TabsList>
             
             <TabsContent value="summary" className="space-y-4 mt-4">{/* ... keep existing code */}
