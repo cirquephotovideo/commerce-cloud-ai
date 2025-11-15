@@ -112,7 +112,7 @@ export function ProductDetailModal({
   });
 
   // Hook d'enrichissement complet
-  const enrichAllMutation = useEnrichAll(analysis?.id || product?.id, () => {
+  const enrichAllMutation = useEnrichAll(product?.linked_analysis_id || analysis?.id || product?.id, () => {
     handleRefresh();
   });
 

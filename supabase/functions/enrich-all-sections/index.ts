@@ -29,15 +29,40 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    // Récupérer les données du produit
-    const { data: analysis, error: analysisError } = await supabase
+    // Résolution robuste de l'ID d'analyse (peut être un supplier_product_id)
+    let effectiveAnalysisId: string = analysisId;
+
+    // 1) Tenter avec product_analyses.id directement
+    let { data: analysis, error: analysisError } = await supabase
       .from('product_analyses')
       .select('*')
-      .eq('id', analysisId)
+      .eq('id', effectiveAnalysisId)
       .single();
 
+    // 2) Si non trouvé, essayer de résoudre via product_links (supplier_product_id -> analysis_id)
     if (analysisError || !analysis) {
-      console.error('[ENRICH-ALL] Analysis not found:', analysisError);
+      console.warn('[ENRICH-ALL] Direct analysis lookup failed, trying via product_links (supplier_product_id)');
+      const { data: linkBySupplier } = await supabase
+        .from('product_links')
+        .select('analysis_id')
+        .eq('supplier_product_id', analysisId)
+        .maybeSingle();
+
+      if (linkBySupplier?.analysis_id) {
+        effectiveAnalysisId = linkBySupplier.analysis_id as string;
+        console.log('[ENRICH-ALL] Resolved effectiveAnalysisId via product_links:', effectiveAnalysisId);
+        const resolved = await supabase
+          .from('product_analyses')
+          .select('*')
+          .eq('id', effectiveAnalysisId)
+          .single();
+        analysis = resolved.data as any;
+        analysisError = resolved.error as any;
+      }
+    }
+
+    if (analysisError || !analysis) {
+      console.error('[ENRICH-ALL] Analysis not found after resolution attempts:', analysisError);
       throw new Error('Product analysis not found');
     }
 
@@ -48,7 +73,7 @@ serve(async (req) => {
     const { data: linkedProduct } = await supabase
       .from('product_links')
       .select('supplier_products(purchase_price)')
-      .eq('analysis_id', analysisId)
+      .eq('analysis_id', effectiveAnalysisId)
       .maybeSingle();
     
     if (linkedProduct?.supplier_products) {
@@ -92,7 +117,7 @@ serve(async (req) => {
         const { data, error } = await supabase.functions.invoke(functionName, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
           body: {
-            analysisId,
+            analysisId: effectiveAnalysisId,
             productData,
             ...(section === 'pricing' && purchasePrice ? { purchasePrice } : {})
           }
