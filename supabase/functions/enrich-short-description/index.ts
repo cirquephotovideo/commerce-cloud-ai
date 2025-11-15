@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callLovableAI } from "../_shared/lovable-ai-client.ts";
+import { callOllamaWithWebSearch } from "../_shared/ollama-client.ts";
 import { parseJSONFromText } from "../_shared/json-parser.ts";
 
 const corsHeaders = {
@@ -66,10 +66,10 @@ RÉPONSE ATTENDUE (JSON uniquement):
 
 Retourne UNIQUEMENT le JSON, sans texte supplémentaire.`;
 
-    console.log('[SHORT-DESC] Calling Lovable AI...');
+    console.log('[SHORT-DESC] Calling Ollama Cloud with web search...');
     
-    const aiResponse = await callLovableAI({
-      model: 'google/gemini-2.5-flash',
+    const aiResponse = await callOllamaWithWebSearch({
+      model: 'gpt-oss:120b-cloud',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
       maxTokens: 2000
