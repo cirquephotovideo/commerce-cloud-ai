@@ -29,6 +29,8 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
+    const startTime = Date.now();
+    
     const prompt = `Tu es un expert en recherche d'images produits e-commerce. 
 
 PRODUIT À RECHERCHER:
@@ -37,12 +39,19 @@ PRODUIT À RECHERCHER:
 - EAN: ${productData?.ean || 'N/A'}
 - Catégorie: ${productData?.category || 'N/A'}
 
-INSTRUCTIONS:
-1. Recherche au minimum 8-12 images de haute qualité du produit
-2. Privilégie les sources fiables: sites officiels des fabricants, retailers majeurs (Amazon, B&H, Adorama, etc.)
-3. Vérifie que les URLs sont directes vers les images (jpg, png, webp) et non vers des pages web
-4. Évite les miniatures, privilégie les grandes résolutions
-5. Fournis des URLs complètes et valides (commence par https://)
+INSTRUCTIONS STRICTES:
+1. Recherche au minimum 8-12 images de HAUTE QUALITÉ du produit exact
+2. Privilégie UNIQUEMENT les sources fiables:
+   - Sites officiels des fabricants (${productData?.brand || 'marque'}.com)
+   - Retailers majeurs: Amazon.com, Amazon.fr, Fnac.com, Darty.com, Cdiscount.com
+   - Distributeurs spécialisés B2B
+3. URLs DIRECTES vers les images (format: .jpg, .png, .webp) - PAS de pages web
+4. Évite les miniatures - privilégie les résolutions 800px minimum
+5. Vérifie que les URLs sont complètes et accessibles (https://)
+
+EXEMPLES DE BONNES URLS:
+- https://m.media-amazon.com/images/I/71ABC123DEF._SL1500_.jpg
+- https://www.${productData?.brand || 'brand'}.com/media/catalog/product/x/y/xyz.jpg
 
 RÉPONSE ATTENDUE (JSON uniquement):
 {
@@ -50,12 +59,12 @@ RÉPONSE ATTENDUE (JSON uniquement):
     "https://exemple.com/image1.jpg",
     "https://exemple.com/image2.jpg"
   ],
-  "image_sources": ["site1.com", "site2.com"]
+  "image_sources": ["amazon.com", "site-officiel.com"]
 }
 
 Retourne UNIQUEMENT le JSON, sans texte supplémentaire.`;
 
-    console.log('[IMAGES] Calling Ollama Cloud with web search...');
+    console.log('[IMAGES] 🤖 Calling AI with web search...');
     
     const aiResponse = await callOllamaWithWebSearch({
       model: 'gpt-oss:120b-cloud',
@@ -64,27 +73,114 @@ Retourne UNIQUEMENT le JSON, sans texte supplémentaire.`;
       maxTokens: 2000
     });
 
-    console.log('[IMAGES] Parsing JSON response...');
+    const aiDuration = Date.now() - startTime;
+    console.log(`[IMAGES] ✅ AI response received in ${aiDuration}ms`);
+
+    console.log('[IMAGES] 🔍 Parsing JSON response...');
     const imageData = parseJSONFromText(aiResponse.content);
 
-    // Valider les URLs
-    const validUrls = Array.isArray(imageData.image_urls) 
-      ? imageData.image_urls.filter((url: string) => {
+    // Validation stricte des URLs avec HEAD requests
+    const validationStart = Date.now();
+    const potentialUrls = Array.isArray(imageData.image_urls) ? imageData.image_urls : [];
+    console.log(`[IMAGES] 🔍 Validating ${potentialUrls.length} URLs...`);
+    
+    const validUrls: string[] = [];
+    
+    for (const url of potentialUrls) {
+      try {
+        new URL(url);
+        if (!url.startsWith('http')) continue;
+        
+        // HEAD request pour vérifier que l'image existe
+        const headResponse = await fetch(url, { 
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000)
+        });
+        
+        const contentType = headResponse.headers.get('content-type') || '';
+        const isImage = contentType.startsWith('image/');
+        
+        if (headResponse.ok && isImage) {
+          validUrls.push(url);
+          console.log(`[IMAGES] ✅ Valid: ${url.substring(0, 60)}...`);
+        } else {
+          console.log(`[IMAGES] ❌ Invalid (status=${headResponse.status}, type=${contentType}): ${url.substring(0, 60)}...`);
+        }
+      } catch (error) {
+        console.log(`[IMAGES] ❌ Failed to validate: ${url.substring(0, 60)}...`, error instanceof Error ? error.message : '');
+      }
+    }
+    
+    const validationDuration = Date.now() - validationStart;
+    console.log(`[IMAGES] 🔍 Validation completed in ${validationDuration}ms: ${validUrls.length}/${potentialUrls.length} valid`);
+
+    // Si moins de 3 images valides, second appel AI avec prompt alternatif
+    if (validUrls.length < 3) {
+      console.log('[IMAGES] ⚠️ Insufficient valid images, trying alternative search...');
+      
+      const alternativePrompt = `Trouve des images pour ce produit en cherchant sur des sites marchands spécifiques:
+
+PRODUIT: ${productData?.name || 'N/A'}
+MARQUE: ${productData?.brand || 'N/A'}
+
+RECHERCHE SUR CES SITES:
+1. Amazon.fr/Amazon.com - Cherche le produit par nom exact
+2. Fnac.com - Section high-tech/informatique
+3. Cdiscount.com - Marketplace français
+4. Site officiel de ${productData?.brand || 'la marque'}
+
+IMPORTANT: Fournis UNIQUEMENT des URLs d'images directes (finissant par .jpg, .png, .webp)
+
+Format JSON uniquement:
+{
+  "image_urls": ["url1", "url2", "url3"]
+}`;
+
+      try {
+        const altResponse = await callOllamaWithWebSearch({
+          model: 'gpt-oss:120b-cloud',
+          messages: [{ role: 'user', content: alternativePrompt }],
+          temperature: 0.5,
+          maxTokens: 1500
+        });
+        
+        const altData = parseJSONFromText(altResponse.content);
+        const altUrls = Array.isArray(altData.image_urls) ? altData.image_urls : [];
+        
+        console.log(`[IMAGES] 🔄 Alternative search found ${altUrls.length} URLs, validating...`);
+        
+        for (const url of altUrls) {
+          if (validUrls.length >= 8) break; // Max 8 images total
+          
           try {
             new URL(url);
-            return url.startsWith('http');
-          } catch {
-            return false;
-          }
-        })
-      : [];
+            if (!url.startsWith('http')) continue;
+            
+            const headResponse = await fetch(url, { 
+              method: 'HEAD',
+              signal: AbortSignal.timeout(5000)
+            });
+            
+            const contentType = headResponse.headers.get('content-type') || '';
+            if (headResponse.ok && contentType.startsWith('image/')) {
+              validUrls.push(url);
+              console.log(`[IMAGES] ✅ Alternative valid: ${url.substring(0, 60)}...`);
+            }
+          } catch {}
+        }
+      } catch (error) {
+        console.log('[IMAGES] ⚠️ Alternative search failed:', error instanceof Error ? error.message : '');
+      }
+    }
 
     const normalizedData = {
       image_urls: validUrls,
       image_sources: Array.isArray(imageData.image_sources) ? imageData.image_sources : []
     };
 
-    console.log('[IMAGES] Found', validUrls.length, 'valid image URLs');
+    const totalDuration = Date.now() - startTime;
+    console.log(`[IMAGES] ✅ Process completed in ${totalDuration}ms: ${validUrls.length} valid images`);
+    console.log(`[IMAGES] 💾 Saving: ${JSON.stringify(validUrls.slice(0, 2))}...`);
 
     // Mettre à jour product_analyses avec les nouvelles images
     const { data: currentAnalysis } = await supabase
