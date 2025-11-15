@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callOllamaWithWebSearch } from "../_shared/ollama-client.ts";
+import { callLovableAI } from "../_shared/lovable-ai-client.ts";
 import { parseJSONFromText } from "../_shared/json-parser.ts";
 
 const corsHeaders = {
@@ -29,28 +29,50 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    const prompt = `Génère une description courte marketing professionnelle (150-200 mots) pour ce produit:
-- Produit: ${productData?.name || 'N/A'}
+    const prompt = `Tu es un expert en rédaction de fiches produits e-commerce.
+
+PRODUIT:
+- Nom: ${productData?.name || 'N/A'}
 - Catégorie: ${productData?.category || 'N/A'}
 - Marque: ${productData?.brand || 'N/A'}
-- Informations techniques: ${productData?.description || 'N/A'}
+- Description existante: ${productData?.description || 'Aucune description disponible'}
+- EAN: ${productData?.ean || 'N/A'}
 
-Fournis en JSON:
+MISSION:
+Rédige une description marketing professionnelle et engageante de 150-200 mots qui:
+1. Met en avant les caractéristiques principales du produit
+2. Explique les avantages concrets pour l'utilisateur
+3. Utilise un ton professionnel mais accessible
+4. Optimise pour la conversion (vente)
+
+Même si peu d'informations sont disponibles, utilise ta connaissance du produit/marque pour créer une description pertinente et attractive.
+
+RÉPONSE ATTENDUE (JSON uniquement):
 {
-  "suggested_description": "Description marketing engageante de 150-200 mots qui met en avant les avantages et caractéristiques principales",
-  "key_features": ["Caractéristique 1", "Caractéristique 2", ...] (5-7 points clés),
-  "main_benefits": ["Avantage 1", "Avantage 2", ...] (3-5 avantages pour le client)
+  "suggested_description": "Description marketing de 150-200 mots",
+  "key_features": [
+    "Caractéristique principale 1",
+    "Caractéristique principale 2",
+    "Caractéristique principale 3",
+    "Caractéristique principale 4",
+    "Caractéristique principale 5"
+  ],
+  "main_benefits": [
+    "Avantage client 1",
+    "Avantage client 2",
+    "Avantage client 3"
+  ]
 }
 
-IMPORTANT: La description doit être accrocheuse, professionnelle et optimisée pour la vente. Retourne UNIQUEMENT le JSON.`;
+Retourne UNIQUEMENT le JSON, sans texte supplémentaire.`;
 
-    console.log('[SHORT-DESC] Calling Ollama with web search...');
+    console.log('[SHORT-DESC] Calling Lovable AI...');
     
-    const aiResponse = await callOllamaWithWebSearch({
-      model: 'qwen3-coder:480b-cloud',
+    const aiResponse = await callLovableAI({
+      model: 'google/gemini-2.5-flash',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
-      maxTokens: 1500
+      maxTokens: 2000
     });
 
     console.log('[SHORT-DESC] Parsing JSON response...');
