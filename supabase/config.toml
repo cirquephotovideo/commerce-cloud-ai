@@ -275,6 +275,11 @@ verify_jwt = false
 [functions.enrich-all]
 verify_jwt = true
 
+[functions.unified-ollama-enrichment]
+verify_jwt = true
+timeout_sec = 180
+memory_mb = 512
+
 [functions.enrich-with-ollama-web]
 verify_jwt = false
 

@@ -432,65 +432,9 @@ export function ProductDetailModal({
               />
             </div>
 
-            {/* Actions Rapides */}
+            {/* Actions Rapides - Simplifiées */}
             <div className="flex flex-wrap gap-2 px-4">
-              <Button
-                onClick={() => setShowProviderSelector(true)}
-                disabled={reEnrichMutation.isPending}
-                variant="outline"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Re-enrichir avec IA
-              </Button>
-              <Button
-                onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai', types: ['amazon'] })}
-                disabled={reEnrichMutation.isPending}
-                variant="outline"
-                className="bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30"
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Enrichir Amazon (Manuel)
-              </Button>
-              <Button
-                onClick={handleGenerateImages}
-                disabled={enrichmentMutation.isPending}
-                variant="outline"
-              >
-                <ImageIcon className="h-4 w-4 mr-2" />
-                Générer Images IA
-              </Button>
-              <Button
-                onClick={handleGenerateVideo}
-                variant="outline"
-              >
-                <Video className="h-4 w-4 mr-2" />
-                Générer Vidéo HeyGen
-              </Button>
-              <Button
-                onClick={handleEnrichOdooAttributes}
-                variant="outline"
-                className="bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30"
-              >
-                <Database className="h-4 w-4 mr-2" />
-                Enrichir Attributs Odoo
-              </Button>
-              <Button
-                onClick={async () => {
-                  try {
-                    await enrichAllMutation.mutateAsync({
-                      sections: ['environmental', 'hs_code', 'images', 'description', 'pricing']
-                    });
-                  } catch (error: any) {
-                    // Error already handled by the hook
-                  }
-                }}
-                disabled={enrichAllMutation.isPending}
-                variant="default"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {enrichAllMutation.isPending ? 'Enrichissement...' : 'Enrichir Tout'}
-              </Button>
+              {/* BOUTON PRINCIPAL - Enrichissement unifié avec Ollama Web Search */}
               <Button
                 onClick={async () => {
                   try {
@@ -500,7 +444,7 @@ export function ProductDetailModal({
                       return;
                     }
 
-                    toast.loading("🌐 Recherche Web (Ollama) démarrée...");
+                    toast.loading("🌐 Recherche Web Complète démarrée...");
 
                     const analysisData = analysis?.analysis_result as any;
                     const productData = {
@@ -513,25 +457,44 @@ export function ProductDetailModal({
 
                     const purchasePrice = product.purchase_price || analysisData?.purchase_price || null;
 
-                    const { data: sessionData } = await supabase.auth.getSession();
-                    const { error } = await supabase.functions.invoke('enrich-all', {
-                      headers: sessionData.session ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {},
-                      body: { analysisId: product.id, productData, purchasePrice }
+                    await enrichmentMutation.mutateAsync({
+                      enrichmentType: ['unified_ollama'],
+                      provider: 'ollama',
+                      webSearchEnabled: true
                     });
 
-                    if (error) throw error;
-
-                    toast.success('✨ Recherche Web démarrée !');
-                    setTimeout(() => handleRefresh(), 2000);
+                    toast.success('✨ Enrichissement unifié terminé !');
+                    setTimeout(() => handleRefresh(), 1000);
                   } catch (error: any) {
-                    toast.error(`❌ Erreur: ${error.message}`);
+                    toast.error(`❌ ${error.message}`);
                   }
                 }}
-                variant="outline"
-                className="bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30"
+                disabled={enrichmentMutation.isPending}
+                variant="default"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
-                Recherche Web (Ollama)
+                {enrichmentMutation.isPending ? 'Enrichissement en cours...' : 'Recherche Web Complète (Ollama)'}
+              </Button>
+
+              {/* BOUTON SECONDAIRE - Amazon uniquement */}
+              <Button
+                onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai', types: ['amazon'] })}
+                disabled={reEnrichMutation.isPending}
+                variant="outline"
+                className="bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30"
+              >
+                <Package className="h-4 w-4 mr-2" />
+                Amazon uniquement
+              </Button>
+
+              {/* BOUTON TERTIAIRE - Générer Vidéo */}
+              <Button
+                onClick={handleGenerateVideo}
+                variant="outline"
+              >
+                <Video className="h-4 w-4 mr-2" />
+                Générer Vidéo
               </Button>
               {onExport && (
                 <Button
