@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { callOllamaWithWebSearch } from "../_shared/ollama-client.ts";
+import { callLovableAI } from "../_shared/lovable-ai-client.ts";
 import { parseJSONFromText } from "../_shared/json-parser.ts";
 
 const corsHeaders = {
@@ -29,28 +29,39 @@ serve(async (req) => {
       throw new Error('User not authenticated');
     }
 
-    const prompt = `Recherche des images officielles de haute qualité pour ce produit:
-- Produit: ${productData?.name || 'N/A'}
+    const prompt = `Tu es un expert en recherche d'images produits e-commerce. 
+
+PRODUIT À RECHERCHER:
+- Nom: ${productData?.name || 'N/A'}
 - Marque: ${productData?.brand || 'N/A'}
 - EAN: ${productData?.ean || 'N/A'}
+- Catégorie: ${productData?.category || 'N/A'}
 
-Trouve des URLs d'images officielles du produit (photos du fabricant, site officiel, etc.)
+INSTRUCTIONS:
+1. Recherche au minimum 8-12 images de haute qualité du produit
+2. Privilégie les sources fiables: sites officiels des fabricants, retailers majeurs (Amazon, B&H, Adorama, etc.)
+3. Vérifie que les URLs sont directes vers les images (jpg, png, webp) et non vers des pages web
+4. Évite les miniatures, privilégie les grandes résolutions
+5. Fournis des URLs complètes et valides (commence par https://)
 
-Fournis en JSON:
+RÉPONSE ATTENDUE (JSON uniquement):
 {
-  "image_urls": ["https://...", "https://..."] (array d'URLs d'images de haute qualité),
-  "image_sources": ["site1.com", "site2.com"] (array des sites sources)
+  "image_urls": [
+    "https://exemple.com/image1.jpg",
+    "https://exemple.com/image2.jpg"
+  ],
+  "image_sources": ["site1.com", "site2.com"]
 }
 
-IMPORTANT: Fournis des URLs réelles et accessibles. Retourne UNIQUEMENT le JSON.`;
+Retourne UNIQUEMENT le JSON, sans texte supplémentaire.`;
 
-    console.log('[IMAGES] Calling Ollama with web search...');
+    console.log('[IMAGES] Calling Lovable AI...');
     
-    const aiResponse = await callOllamaWithWebSearch({
-      model: 'qwen3-coder:480b-cloud',
+    const aiResponse = await callLovableAI({
+      model: 'google/gemini-2.5-flash',
       messages: [{ role: 'user', content: prompt }],
-      temperature: 0.3,
-      maxTokens: 1500
+      temperature: 0.4,
+      maxTokens: 2000
     });
 
     console.log('[IMAGES] Parsing JSON response...');
