@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     job_id = body.job_id;
     const offset = body.offset || 0;
-    const batch_size = body.batch_size || 100;
+    const batch_size = body.batch_size || 500; // Increased from 100 to 500
 
     console.log(`[AMAZON-AUTO-LINK] Starting batch - Job: ${job_id}, Offset: ${offset}, Batch: ${batch_size}`);
 
@@ -77,11 +77,19 @@ Deno.serve(async (req) => {
 
     console.log(`[AMAZON-AUTO-LINK] Found ${analyses?.length || 0} analyses to process`);
 
-    // Get Code2ASIN enrichments
+    // Extract unique EANs from the current batch
+    const batchEans = [...new Set(
+      analyses?.map(a => a.ean).filter(ean => ean) || []
+    )];
+    
+    console.log(`[AMAZON-AUTO-LINK] Batch contains ${batchEans.length} unique EANs`);
+
+    // Get Code2ASIN enrichments ONLY for this batch's EANs (optimization)
     const { data: enrichments, error: enrichmentsError } = await supabase
       .from('code2asin_enrichments')
       .select('id, ean, asin, title, brand')
       .eq('user_id', user.id)
+      .in('ean', batchEans) // ← Only load enrichments for batch EANs
       .not('ean', 'is', null);
 
     if (enrichmentsError) {
@@ -89,7 +97,7 @@ Deno.serve(async (req) => {
       throw enrichmentsError;
     }
 
-    console.log(`[AMAZON-AUTO-LINK] Found ${enrichments?.length || 0} Code2ASIN enrichments`);
+    console.log(`[AMAZON-AUTO-LINK] Found ${enrichments?.length || 0} matching Code2ASIN enrichments`);
 
     // Create EAN index for fast lookup
     const enrichmentsByEan = new Map<string, any[]>();
@@ -102,20 +110,28 @@ Deno.serve(async (req) => {
       }
     });
 
+    // Get existing links for this batch in ONE query (major optimization)
+    const analysisIds = analyses?.map(a => a.id) || [];
+    const { data: existingLinks } = await supabase
+      .from('product_amazon_links')
+      .select('analysis_id')
+      .in('analysis_id', analysisIds);
+
+    // Create a Set for O(1) lookup
+    const existingLinkSet = new Set(
+      existingLinks?.map(l => l.analysis_id) || []
+    );
+
+    console.log(`[AMAZON-AUTO-LINK] Found ${existingLinkSet.size} existing links in this batch`);
+
     const matches: MatchResult[] = [];
 
     // Match products with enrichments
     for (const analysis of analyses || []) {
       if (!analysis.ean) continue;
 
-      // Check if link already exists
-      const { data: existingLink } = await supabase
-        .from('product_amazon_links')
-        .select('id')
-        .eq('analysis_id', analysis.id)
-        .single();
-
-      if (existingLink) continue;
+      // Check if link already exists using Set lookup (O(1) instead of SQL query)
+      if (existingLinkSet.has(analysis.id)) continue;
 
       // Try to match by EAN
       const enrichmentsForEan = enrichmentsByEan.get(analysis.ean);
@@ -167,7 +183,7 @@ Deno.serve(async (req) => {
         .from('amazon_auto_link_jobs')
         .select('links_created')
         .eq('id', job_id)
-        .single();
+        .maybeSingle();
 
       const totalLinksCreated = (currentJob?.links_created || 0) + matches.length;
 
@@ -198,19 +214,19 @@ Deno.serve(async (req) => {
         console.log(`[AMAZON-AUTO-LINK] ✅ Job ${job_id} completed!`);
         
         // Send completion email notification
-        const completedJob = await supabase
+        const { data: completedJobData } = await supabase
           .from('amazon_auto_link_jobs')
           .select('*')
           .eq('id', job_id)
-          .single();
+          .maybeSingle();
 
-        if (completedJob.data) {
-          const durationMinutes = completedJob.data.started_at && completedJob.data.completed_at
-            ? Math.round((new Date(completedJob.data.completed_at).getTime() - new Date(completedJob.data.started_at).getTime()) / 60000)
+        if (completedJobData) {
+          const durationMinutes = completedJobData.started_at && completedJobData.completed_at
+            ? Math.round((new Date(completedJobData.completed_at).getTime() - new Date(completedJobData.started_at).getTime()) / 60000)
             : 0;
 
-          const successRate = completedJob.data.total_to_process > 0
-            ? Math.round((completedJob.data.links_created / completedJob.data.total_to_process) * 100)
+          const successRate = completedJobData.total_to_process > 0
+            ? Math.round((completedJobData.links_created / completedJobData.total_to_process) * 100)
             : 0;
 
           console.log(`[AMAZON-AUTO-LINK] Sending completion email to user ${user.id}`);
@@ -221,14 +237,14 @@ Deno.serve(async (req) => {
               type: 'amazon_auto_link_complete',
               data: {
                 job_id: job_id,
-                status: completedJob.data.status,
-                total_to_process: completedJob.data.total_to_process,
-                processed_count: completedJob.data.processed_count,
-                links_created: completedJob.data.links_created,
+                status: completedJobData.status,
+                total_to_process: completedJobData.total_to_process,
+                processed_count: completedJobData.processed_count,
+                links_created: completedJobData.links_created,
                 duration_minutes: durationMinutes,
                 success_rate: successRate,
-                started_at: completedJob.data.started_at,
-                completed_at: completedJob.data.completed_at
+                started_at: completedJobData.started_at,
+                completed_at: completedJobData.completed_at
               }
             }
           });
@@ -266,7 +282,7 @@ Deno.serve(async (req) => {
         })
         .eq('id', job_id)
         .select()
-        .single();
+        .maybeSingle();
 
       // Send failure email notification
       if (failedJob) {
