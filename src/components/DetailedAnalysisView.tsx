@@ -94,13 +94,19 @@ export const DetailedAnalysisView = ({ analysis }: DetailedAnalysisViewProps) =>
   // Helper to render a spec item
   const SpecItem = ({ label, value, icon }: { label: string; value: any; icon?: React.ReactNode }) => {
     if (!value || value === 'Non spécifié' || value === 'N/A') return null;
+    
+    // Convert objects to strings to avoid React rendering errors
+    const displayValue = typeof value === 'object' && value !== null
+      ? JSON.stringify(value)
+      : value;
+    
     return (
       <div className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
         <span className="text-sm text-muted-foreground flex items-center gap-2">
           {icon}
           {label}
         </span>
-        <span className="text-sm font-medium">{value}</span>
+        <span className="text-sm font-medium">{displayValue}</span>
       </div>
     );
   };
