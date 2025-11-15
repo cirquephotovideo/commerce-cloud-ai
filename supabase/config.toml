@@ -103,7 +103,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ollama-proxy]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ai-taxonomy-categorizer]
 verify_jwt = true
