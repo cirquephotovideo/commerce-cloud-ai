@@ -1442,8 +1442,10 @@ export type Database = {
           chunk_index: number
           completed_at: string | null
           created_at: string | null
+          created_count: number | null
           end_row: number
           error_message: string | null
+          failed_count: number | null
           id: string
           job_id: string
           processed_rows: number | null
@@ -1451,14 +1453,18 @@ export type Database = {
           start_row: number
           started_at: string | null
           status: string
+          success_count: number | null
           updated_at: string | null
+          updated_count: number | null
         }
         Insert: {
           chunk_index: number
           completed_at?: string | null
           created_at?: string | null
+          created_count?: number | null
           end_row: number
           error_message?: string | null
+          failed_count?: number | null
           id?: string
           job_id: string
           processed_rows?: number | null
@@ -1466,14 +1472,18 @@ export type Database = {
           start_row: number
           started_at?: string | null
           status?: string
+          success_count?: number | null
           updated_at?: string | null
+          updated_count?: number | null
         }
         Update: {
           chunk_index?: number
           completed_at?: string | null
           created_at?: string | null
+          created_count?: number | null
           end_row?: number
           error_message?: string | null
+          failed_count?: number | null
           id?: string
           job_id?: string
           processed_rows?: number | null
@@ -1481,7 +1491,9 @@ export type Database = {
           start_row?: number
           started_at?: string | null
           status?: string
+          success_count?: number | null
           updated_at?: string | null
+          updated_count?: number | null
         }
         Relationships: [
           {
