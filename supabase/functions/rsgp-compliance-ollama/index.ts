@@ -231,31 +231,37 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
 
     console.log('[RSGP-OLLAMA] Calling Ollama with web search enabled:', web_search_enabled);
 
-    // Appeler Ollama via ollama-proxy
-    const { data: ollamaResponse, error: ollamaError } = await supabaseClient.functions.invoke(
-      'ollama-proxy',
-      {
-        body: {
-          action: 'chat',
-          model: preferred_model,
-          web_search: web_search_enabled,
-          messages: [
-            { 
-              role: 'system', 
-              content: 'Tu es un expert en conformité produit. Tu réponds UNIQUEMENT en JSON valide, sans texte supplémentaire.' 
-            },
-            { role: 'user', content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 16000
-        }
-      }
-    );
+    // Appeler Ollama via ollama-proxy sans authentification (service-to-service)
+    const ollamaProxyUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ollama-proxy`;
+    const ollamaProxyResponse = await fetch(ollamaProxyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Pas de header Authorization pour les appels service-to-service
+      },
+      body: JSON.stringify({
+        action: 'chat',
+        model: preferred_model,
+        web_search: web_search_enabled,
+        messages: [
+          { 
+            role: 'system', 
+            content: 'Tu es un expert en conformité produit. Tu réponds UNIQUEMENT en JSON valide, sans texte supplémentaire.' 
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 16000
+      })
+    });
 
-    if (ollamaError) {
-      console.error('[RSGP-OLLAMA] Ollama error:', ollamaError);
-      throw new Error(`Ollama error: ${ollamaError.message}`);
+    if (!ollamaProxyResponse.ok) {
+      const errorText = await ollamaProxyResponse.text();
+      console.error('[RSGP-OLLAMA] Ollama proxy error:', errorText);
+      throw new Error(`Ollama proxy error (${ollamaProxyResponse.status}): ${errorText}`);
     }
+
+    const ollamaResponse = await ollamaProxyResponse.json();
 
     console.log('[RSGP-OLLAMA] Ollama response received');
 

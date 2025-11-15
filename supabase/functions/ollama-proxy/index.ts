@@ -22,49 +22,49 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
-    const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
-    if (authError) {
-      console.error('Auth error:', authError);
-      throw new Error(`Authentication failed: ${authError.message}`);
+    // Authentication is optional for service-to-service calls
+    let user = null;
+    if (authHeader) {
+      const token = authHeader.replace('Bearer ', '');
+      const { data: userData, error: authError } = await supabaseClient.auth.getUser(token);
+      if (!authError && userData?.user) {
+        user = userData.user;
+        console.log('User authenticated:', user.id);
+      } else {
+        console.log('[OLLAMA-PROXY] No user auth (service-to-service call)');
+      }
+    } else {
+      console.log('[OLLAMA-PROXY] No auth header (service-to-service call)');
     }
-    const user = userData?.user;
-    if (!user) {
-      console.error('No user found in token');
-      throw new Error('Not authenticated - no user found');
-    }
-    
-    console.log('User authenticated:', user.id);
 
     const { action, ollama_url, api_key, model, messages, web_search } = await req.json();
 
-    // Get user's Ollama configuration
-    const { data: configData, error: configError } = await supabaseClient
-      .from('ollama_configurations')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (configError && configError.code !== 'PGRST116') {
-      console.error('Config fetch error:', configError);
+    // Get user's Ollama configuration (skip if no user)
+    let config = null;
+    if (user) {
+      const { data: configData, error: configError } = await supabaseClient
+        .from('ollama_configurations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (configError && configError.code !== 'PGRST116') {
+        console.error('Config fetch error:', configError);
+      }
+      
+      config = configData;
     }
-    
-    const config = configData;
 
-    const targetUrl = ollama_url || config?.ollama_url;
+    const targetUrl = ollama_url || config?.ollama_url || 'https://ollama.com';
     const isCloudMode = targetUrl === 'https://ollama.com';
     const isNgrokTunnel = targetUrl?.includes('ngrok');
     
