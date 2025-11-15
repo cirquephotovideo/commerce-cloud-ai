@@ -320,3 +320,8 @@ verify_jwt = false
 [functions.import-code2asin-csv]
 verify_jwt = true
 
+[functions.rsgp-compliance-ollama]
+verify_jwt = true
+timeout_sec = 120
+memory_mb = 512
+
