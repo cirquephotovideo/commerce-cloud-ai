@@ -20,16 +20,18 @@ export const useProductEnrichmentStatus = (analysisId: string) => {
 
   const checkStatuses = async () => {
     try {
+      if (!analysisId) return;
+
       const [productAnalysis, amazonData, videoData, enrichmentQueue] = await Promise.all([
-        // ✅ Vérifier les nouvelles colonnes d'enrichissement
+        // ✅ Récupérer aussi les images pour compter correctement
         supabase
           .from('product_analyses')
-          .select('specifications, long_description, cost_analysis, rsgp_compliance, enrichment_status')
+          .select('specifications, long_description, cost_analysis, rsgp_compliance, enrichment_status, image_urls')
           .eq('id', analysisId)
           .maybeSingle(),
         supabase
           .from('amazon_product_data')
-          .select('id')
+          .select('images')
           .eq('analysis_id', analysisId)
           .maybeSingle(),
         supabase
@@ -47,17 +49,18 @@ export const useProductEnrichmentStatus = (analysisId: string) => {
       ]);
 
       const enrichmentStatus = (productAnalysis.data?.enrichment_status || {}) as Record<string, any>;
+
+      const analysisImages = Array.isArray(productAnalysis.data?.image_urls) ? productAnalysis.data?.image_urls : [];
+      const amazonImages = Array.isArray(amazonData.data?.images) ? (amazonData.data?.images as any[]) : [];
+      const imagesCount = (analysisImages?.length || 0) + (amazonImages?.length || 0);
       
       setStatus({
         ai_analysis: Boolean(productAnalysis.data),
-        amazon: Boolean(amazonData.data),
+        amazon: Boolean(amazonImages && amazonImages.length > 0 || amazonData.data),
         video: (videoData.data?.status as any) || null,
-        images: 0, // TODO: Implémenter la vérification des images
-        isEnriching: (enrichmentQueue.data?.length || 0) > 0 || 
-                     enrichmentStatus.specifications === 'processing' ||
-                     enrichmentStatus.technical_description === 'processing' ||
-                     enrichmentStatus.cost_analysis === 'processing' ||
-                     enrichmentStatus.rsgp === 'processing',
+        images: imagesCount,
+        // 🔁 Ne considère "en cours" que s'il existe des tâches actives dans la file
+        isEnriching: (enrichmentQueue.data?.length || 0) > 0,
       });
     } catch (error) {
       console.error('Error checking enrichment status:', error);
@@ -65,6 +68,7 @@ export const useProductEnrichmentStatus = (analysisId: string) => {
   };
 
   useEffect(() => {
+    if (!analysisId) return;
     checkStatuses();
 
     // Polling toutes les 10 secondes si enrichissement en cours

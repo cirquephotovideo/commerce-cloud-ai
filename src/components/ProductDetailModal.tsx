@@ -142,6 +142,7 @@ export function ProductDetailModal({
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['product-analysis', product.id] });
     queryClient.invalidateQueries({ queryKey: ['enrichment-queue', analysis?.id] });
+    queryClient.invalidateQueries({ queryKey: ['enrichment-status', analysis?.id] });
     queryClient.invalidateQueries({ queryKey: ['code2asin-enrichment', analysis?.id] });
     if (onEnrich) onEnrich();
   };
