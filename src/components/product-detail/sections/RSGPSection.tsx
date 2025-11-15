@@ -1,12 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShieldCheck, FileText, RefreshCw, CheckCircle2, AlertTriangle, Loader2, Globe } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { RSGPDetailedView } from "./RSGPDetailedView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RSGPSectionProps {
   analysis: any;
@@ -20,6 +24,29 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
   
   const hasDetailedData = rsgpData?.donnees_detaillees ? true : false;
 
+  // Query enrichment queue status for auto-refresh
+  const { data: enrichmentStatus, refetch } = useQuery({
+    queryKey: ['enrichment-status', analysis.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('enrichment_queue')
+        .select('status, error_message, completed_at')
+        .eq('analysis_id', analysis.id)
+        .in('enrichment_type', [['rsgp_ollama']])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'processing' || status === 'pending' ? 5000 : false;
+    },
+    refetchOnWindowFocus: true,
+  });
+
   if (!rsgpData) {
     return (
       <Card>
@@ -32,43 +59,71 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
             Analyse de conformité non disponible
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <Button 
-            className="w-full gap-2"
-            onClick={() => enrichMutation.mutate({ enrichmentType: ['rsgp'] })}
-            disabled={enrichMutation.isPending}
-          >
-            {enrichMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Analyse en cours...
-              </>
-            ) : (
-              <>
-                <ShieldCheck className="h-4 w-4" />
-                Analyser la conformité
-              </>
-            )}
-          </Button>
+        <CardContent className="space-y-4">
+          {/* Show processing status */}
+          {enrichmentStatus?.status === 'processing' && (
+            <Alert>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <AlertTitle>Analyse en cours...</AlertTitle>
+              <AlertDescription>
+                L'analyse RSGP approfondie prendra 1-2 minutes avec recherche web automatique. 
+                La page se mettra à jour automatiquement.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Show error if completed without data */}
+          {enrichmentStatus?.status === 'completed' && !rsgpData && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Erreur lors de l'analyse</AlertTitle>
+              <AlertDescription>
+                L'enrichissement s'est terminé mais n'a pas produit de résultats. 
+                Cliquez sur "Analyser avec IA" pour relancer.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Show failed status */}
+          {enrichmentStatus?.status === 'failed' && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Échec de l'analyse</AlertTitle>
+              <AlertDescription>
+                {enrichmentStatus.error_message || "Une erreur s'est produite. Réessayez."}
+              </AlertDescription>
+            </Alert>
+          )}
           
-          <Button 
-            className="w-full gap-2"
-            variant="outline"
-            onClick={() => enrichMutation.mutate({ enrichmentType: ['rsgp_ollama'] })}
-            disabled={enrichMutation.isPending}
-          >
-            {enrichMutation.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Recherche en cours...
-              </>
-            ) : (
-              <>
-                <Globe className="h-4 w-4" />
-                Recherche Web (Ollama)
-              </>
-            )}
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  className="w-full gap-2"
+                  onClick={() => {
+                    enrichMutation.mutate({ enrichmentType: ['rsgp_ollama'] });
+                    setTimeout(() => refetch(), 1000);
+                  }}
+                  disabled={enrichMutation.isPending || enrichmentStatus?.status === 'processing'}
+                >
+                  {enrichMutation.isPending || enrichmentStatus?.status === 'processing' ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Recherche en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="h-4 w-4" />
+                      🔍 Analyser avec IA + Recherche Web
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Analyse approfondie avec Ollama et recherche web automatique</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </CardContent>
       </Card>
     );
