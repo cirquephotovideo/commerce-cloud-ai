@@ -252,9 +252,21 @@ Deno.serve(async (req) => {
       }
 
       if (enrichments.length > 0) {
+        // Deduplicate by analysis_id to prevent "ON CONFLICT DO UPDATE" errors
+        const enrichmentMap = new Map<string, any>();
+        enrichments.forEach(enrich => {
+          enrichmentMap.set(enrich.analysis_id, enrich); // Keep last occurrence
+        });
+        const uniqueEnrichments = Array.from(enrichmentMap.values());
+
+        const duplicateCount = enrichments.length - uniqueEnrichments.length;
+        if (duplicateCount > 0) {
+          console.log(`[CHUNK-PROCESSOR] Deduplication: ${enrichments.length} → ${uniqueEnrichments.length} unique entries (${duplicateCount} duplicates removed)`);
+        }
+
         const { error: enrichError } = await supabaseClient
           .from('code2asin_enrichments')
-          .upsert(enrichments, {
+          .upsert(uniqueEnrichments, {
             onConflict: 'analysis_id',
             ignoreDuplicates: false
           });
@@ -263,17 +275,17 @@ Deno.serve(async (req) => {
           console.error('[CHUNK-PROCESSOR] Enrichment upsert error:', enrichError);
         }
 
-        for (const enrich of enrichments) {
+        for (const enrich of uniqueEnrichments) {
           await supabaseClient
             .from('product_analyses')
             .update({
-              enrichment_status: 'enriched',
-              image_url: enrich.image_urls?.[0] || null
+              code2asin_enrichment_status: 'completed',
+              image_urls: enrich.image_urls || []
             })
             .eq('id', enrich.analysis_id);
         }
 
-        updatedCount += enrichments.length - createdCount;
+        updatedCount += uniqueEnrichments.length - createdCount;
       }
 
       processedCount += batch.length;
@@ -287,17 +299,23 @@ Deno.serve(async (req) => {
         .eq('id', chunkId);
     }
 
+    console.log(`[CHUNK-PROCESSOR] Chunk stats: ${successCount} success, ${failedCount} failed, ${createdCount} created, ${updatedCount} updated`);
+
     await supabaseClient
       .from('code2asin_import_chunks')
       .update({
         status: 'completed',
         processed_rows: processedCount,
+        success_count: successCount,
+        failed_count: failedCount,
+        created_count: createdCount,
+        updated_count: updatedCount,
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', chunkId);
 
-    console.log(`[CHUNK-PROCESSOR] Chunk ${chunkId} completed: ${successCount} success, ${failedCount} failed`);
+    console.log(`[CHUNK-PROCESSOR] Chunk ${chunkId} completed and counters saved`);
 
     const { data: allChunks } = await supabaseClient
       .from('code2asin_import_chunks')
@@ -306,6 +324,11 @@ Deno.serve(async (req) => {
 
     if (allChunks) {
       const totalProcessed = allChunks.reduce((sum, c) => sum + (c.processed_rows || 0), 0);
+      const totalSuccess = allChunks.reduce((sum, c) => sum + (c.success_count || 0), 0);
+      const totalFailed = allChunks.reduce((sum, c) => sum + (c.failed_count || 0), 0);
+      const totalCreated = allChunks.reduce((sum, c) => sum + (c.created_count || 0), 0);
+      const totalUpdated = allChunks.reduce((sum, c) => sum + (c.updated_count || 0), 0);
+      
       const completedChunks = allChunks.filter(c => c.status === 'completed').length;
       const failedChunks = allChunks.filter(c => c.status === 'failed').length;
       const totalChunks = allChunks.length;
@@ -319,12 +342,16 @@ Deno.serve(async (req) => {
         .from('code2asin_import_jobs')
         .update({
           processed_rows: totalProcessed,
+          success_count: totalSuccess,
+          failed_count: totalFailed,
+          created_count: totalCreated,
+          updated_count: totalUpdated,
           status: jobStatus,
           completed_at: jobStatus === 'completed' ? new Date().toISOString() : null
         })
         .eq('id', jobId);
 
-      console.log(`[CHUNK-PROCESSOR] Updated job progress: ${totalProcessed} rows processed, ${completedChunks}/${totalChunks} chunks completed`);
+      console.log(`[CHUNK-PROCESSOR] Job ${jobId} updated: ${totalSuccess} enriched, ${totalFailed} failed, ${completedChunks}/${totalChunks} chunks done`);
     }
 
     return new Response(
