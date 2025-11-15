@@ -284,6 +284,12 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
         ''
       );
 
+      // Log si le responseText est vide pour debugging
+      if (!responseText || responseText.trim() === '') {
+        console.error('[RSGP-OLLAMA] Empty response text from Ollama!');
+        console.error('[RSGP-OLLAMA] ActualResponse structure:', JSON.stringify(actualResponse, null, 2));
+      }
+
       // Helpers de normalisation / extraction
       const normalizeText = (t: string) => t
         .replace(/\r/g, '')
@@ -394,7 +400,6 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
       .from('product_analyses')
       .update({
         rsgp_compliance: mappedData,
-        rsgp_generated_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
       .eq('id', analysisId);
@@ -405,16 +410,29 @@ RÉPONDS UNIQUEMENT AVEC LE JSON COMPLET, RIEN D'AUTRE.`;
     }
 
     // Optionnel: Sauvegarder aussi dans la table rsgp_compliance pour historique
-    const { error: rsgpInsertError } = await supabaseClient
-      .from('rsgp_compliance')
-      .insert({
-        analysis_id: analysisId,
-        user_id: analysis.user_id,
-        ...mappedData
-      });
+    try {
+      const { error: rsgpInsertError } = await supabaseClient
+        .from('rsgp_compliance')
+        .insert({
+          analysis_id: analysisId,
+          user_id: analysis.user_id,
+          nom_produit: mappedData.nom_produit ?? productData?.name ?? null,
+          ean: mappedData.ean ?? productData?.ean ?? null,
+          documents_conformite: mappedData.documents_conformite ?? [],
+          generated_at: new Date().toISOString(),
+          generation_metadata: {
+            source_recherche: mappedData.source_recherche,
+            modele_utilise: mappedData.modele_utilise,
+            date_analyse: mappedData.date_analyse,
+            rsgp_json: rsgpData
+          }
+        });
 
-    if (rsgpInsertError) {
-      console.warn('[RSGP-OLLAMA] Failed to insert in rsgp_compliance table:', rsgpInsertError);
+      if (rsgpInsertError) {
+        console.warn('[RSGP-OLLAMA] Failed to insert in rsgp_compliance table:', rsgpInsertError);
+      }
+    } catch (historyError) {
+      console.warn('[RSGP-OLLAMA] History insert non-blocking error:', historyError);
       // Non bloquant
     }
 
