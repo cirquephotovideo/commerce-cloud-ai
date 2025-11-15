@@ -38,6 +38,8 @@ serve(async (req) => {
       throw new Error('Missing analysis_id or platform');
     }
 
+    console.log(`[EXPORT] Starting export for analysis ${analysis_id} to platform ${platform}`);
+
     // Get the product analysis
     const { data: analysis, error: analysisError } = await supabaseClient
       .from('product_analyses')
@@ -50,7 +52,46 @@ serve(async (req) => {
       throw new Error('Analysis not found');
     }
 
-    // Call the appropriate export function
+    console.log(`[EXPORT] Found product: ${analysis.name}`);
+
+    // ÉTAPE 1: VALIDATION PRÉ-EXPORT
+    console.log(`[EXPORT] Step 1: Pre-export validation`);
+    const { data: validationResult, error: validationError } = await supabaseClient.functions.invoke(
+      'validate-pre-export',
+      { body: { analysis_id } }
+    );
+
+    if (validationError) {
+      console.error('[EXPORT] Validation error:', validationError);
+    }
+
+    // ÉTAPE 2: ENRICHISSEMENT POST-PROD SI NÉCESSAIRE
+    if (validationResult && validationResult.completeness_score < 80) {
+      console.log(`[EXPORT] Step 2: Post-production enrichment (score: ${validationResult.completeness_score}%)`);
+      console.log(`[EXPORT] Missing fields:`, validationResult.missing_fields);
+
+      const { data: enrichmentResult, error: enrichmentError } = await supabaseClient.functions.invoke(
+        'post-prod-enrichment',
+        {
+          body: {
+            analysis_id,
+            missing_fields: validationResult.missing_fields,
+            target_platform: platform
+          }
+        }
+      );
+
+      if (enrichmentError) {
+        console.warn('[EXPORT] Enrichment warning:', enrichmentError);
+      } else {
+        console.log(`[EXPORT] Enrichment completed: ${enrichmentResult?.completed_count || 0}/${enrichmentResult?.total_tasks || 0} tasks`);
+      }
+    } else {
+      console.log(`[EXPORT] Product is complete (${validationResult?.completeness_score || 100}%), skipping enrichment`);
+    }
+
+    // ÉTAPE 3: EXPORT VERS LA PLATEFORME
+    console.log(`[EXPORT] Step 3: Exporting to ${platform}`);
     const exportFunction = `export-to-${platform}`;
     const { data: exportResult, error: exportError } = await supabaseClient.functions.invoke(
       exportFunction,
@@ -65,9 +106,12 @@ serve(async (req) => {
       throw exportError;
     }
 
+    console.log(`[EXPORT] Export completed successfully`);
+
     return new Response(
       JSON.stringify({ 
         success: true, 
+        validation: validationResult,
         result: exportResult,
         platform 
       }),

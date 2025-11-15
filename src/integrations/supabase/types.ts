@@ -3806,6 +3806,7 @@ export type Database = {
           market_position: string | null
           normalized_ean: string | null
           odoo_attributes: Json | null
+          pre_export_validation: Json | null
           product_url: string
           purchase_currency: string | null
           purchase_price: number | null
@@ -3848,6 +3849,7 @@ export type Database = {
           market_position?: string | null
           normalized_ean?: string | null
           odoo_attributes?: Json | null
+          pre_export_validation?: Json | null
           product_url: string
           purchase_currency?: string | null
           purchase_price?: number | null
@@ -3890,6 +3892,7 @@ export type Database = {
           market_position?: string | null
           normalized_ean?: string | null
           odoo_attributes?: Json | null
+          pre_export_validation?: Json | null
           product_url?: string
           purchase_currency?: string | null
           purchase_price?: number | null
@@ -4820,14 +4823,22 @@ export type Database = {
           analysis_id: string | null
           created_at: string | null
           currency: string | null
+          enrichment_error: string | null
+          enrichment_status: string | null
           id: string
           last_updated: string | null
+          market_price: number | null
+          market_price_source: string | null
+          market_price_updated_at: string | null
           match_confidence: number | null
           match_type: string | null
+          price_competitiveness: string | null
           price_history: Json | null
           purchase_price: number | null
           selling_price: number | null
           stock_quantity: number | null
+          suggested_margin_percent: number | null
+          suggested_selling_price: number | null
           supplier_id: string | null
           supplier_product_id: string | null
           supplier_reference: string | null
@@ -4838,14 +4849,22 @@ export type Database = {
           analysis_id?: string | null
           created_at?: string | null
           currency?: string | null
+          enrichment_error?: string | null
+          enrichment_status?: string | null
           id?: string
           last_updated?: string | null
+          market_price?: number | null
+          market_price_source?: string | null
+          market_price_updated_at?: string | null
           match_confidence?: number | null
           match_type?: string | null
+          price_competitiveness?: string | null
           price_history?: Json | null
           purchase_price?: number | null
           selling_price?: number | null
           stock_quantity?: number | null
+          suggested_margin_percent?: number | null
+          suggested_selling_price?: number | null
           supplier_id?: string | null
           supplier_product_id?: string | null
           supplier_reference?: string | null
@@ -4856,14 +4875,22 @@ export type Database = {
           analysis_id?: string | null
           created_at?: string | null
           currency?: string | null
+          enrichment_error?: string | null
+          enrichment_status?: string | null
           id?: string
           last_updated?: string | null
+          market_price?: number | null
+          market_price_source?: string | null
+          market_price_updated_at?: string | null
           match_confidence?: number | null
           match_type?: string | null
+          price_competitiveness?: string | null
           price_history?: Json | null
           purchase_price?: number | null
           selling_price?: number | null
           stock_quantity?: number | null
+          suggested_margin_percent?: number | null
+          suggested_selling_price?: number | null
           supplier_id?: string | null
           supplier_product_id?: string | null
           supplier_reference?: string | null
