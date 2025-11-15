@@ -210,12 +210,19 @@ export const AnalysisResults = ({ analysis, productInput, inputType, analysisId 
               </div>
               <div className="flex-1">
                 <h3 className="text-lg font-bold">Analyse SEO</h3>
-                {analysis.seo.score && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Progress value={analysis.seo.score} className="h-2" />
-                    <span className="text-sm font-semibold">{analysis.seo.score}%</span>
-                  </div>
-                )}
+{(typeof analysis.seo.score === 'number' || typeof analysis.seo.score === 'object') && (
+  (() => {
+    const seoScoreValue = typeof analysis.seo.score === 'object'
+      ? (analysis.seo.score?.overall ?? 0)
+      : (analysis.seo.score ?? 0);
+    return (
+      <div className="flex items-center gap-2 mt-1">
+        <Progress value={seoScoreValue} className="h-2" />
+        <span className="text-sm font-semibold">{seoScoreValue}%</span>
+      </div>
+    );
+  })()
+)}
               </div>
             </div>
             
