@@ -9,6 +9,53 @@ export const useEnrichment = (productId: string, onSuccess?: () => void) => {
       provider?: string;
       webSearchEnabled?: boolean;
     }) => {
+      // Si "rsgp_ollama" est dans enrichmentType, appeler la fonction dédiée
+      if (enrichmentType.includes('rsgp_ollama')) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('Session expirée');
+        }
+
+        const { data: analysis } = await supabase
+          .from('product_analyses')
+          .select('*, analysis_result')
+          .eq('id', productId)
+          .single();
+
+        if (!analysis) {
+          throw new Error('Analyse non trouvée');
+        }
+
+        const { data, error } = await supabase.functions.invoke('rsgp-compliance-ollama', {
+          headers: {
+            Authorization: `Bearer ${sessionData.session.access_token}`
+          },
+          body: {
+            analysisId: productId,
+            productData: {
+              name: (analysis.analysis_result as any)?.description || 'Produit',
+              brand: (analysis.analysis_result as any)?.brand,
+              ean: analysis.ean,
+              supplier_reference: (analysis.analysis_result as any)?.supplier_reference
+            },
+            purchasePrice: analysis.purchase_price,
+            preferred_model: 'qwen3-coder:480b-cloud',
+            web_search_enabled: true
+          }
+        });
+
+        if (error) {
+          console.error('[useEnrichment] Erreur RSGP Ollama:', error);
+          throw new Error(error.message || 'Erreur lors de l\'analyse RSGP');
+        }
+        
+        if (data && !data.success && data.error) {
+          throw new Error(data.error);
+        }
+        
+        return data;
+      }
+      
       // Si "odoo_attributes" est dans enrichmentType, appeler la fonction dédiée
       if (enrichmentType.includes('odoo_attributes')) {
         const { data: sessionData } = await supabase.auth.getSession();
