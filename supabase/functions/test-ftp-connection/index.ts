@@ -6,28 +6,64 @@ const corsHeaders = {
 };
 
 async function testFTPConnection(host: string, port: number, username: string, password: string, path: string = '/') {
-  console.log(`[FTP-TEST] Connecting to ${host}:${port} path="${path}"...`);
-  
-  // Robust hostname cleaning
-  const cleanHost = (() => {
-    try {
-      // If it's a full URL, parse with URL
-      if (host.includes('://')) {
-        const url = new URL(host.startsWith('ftp') ? host : `ftp://${host}`);
-        return url.hostname;
+  // Robust hostname and port extraction
+  let cleanHost = '';
+  let finalPort = port;
+  let scheme = '';
+
+  try {
+    const hostValue = host.trim();
+    
+    // Detect scheme if present
+    if (hostValue.includes('://')) {
+      const url = new URL(hostValue);
+      scheme = url.protocol.replace(':', '');
+      cleanHost = url.hostname;
+      
+      // Check for SFTP
+      if (scheme === 'sftp') {
+        throw new Error('SFTP_NOT_SUPPORTED');
       }
-      // Otherwise, clean spaces and extract hostname
-      const cleaned = host.trim();
-      return cleaned.split('/')[0];
-    } catch {
-      // Fallback: manual cleaning
-      return host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+      
+      // Extract port from URL if present
+      if (url.port) {
+        finalPort = parseInt(url.port, 10);
+      }
+    } else {
+      // Manual parsing: remove any scheme prefix
+      let cleaned = hostValue.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+      
+      // Check for sftp in original value
+      if (hostValue.toLowerCase().startsWith('sftp:') || hostValue.toLowerCase().startsWith('sftp://')) {
+        throw new Error('SFTP_NOT_SUPPORTED');
+      }
+      
+      // Remove path
+      cleaned = cleaned.split('/')[0];
+      
+      // Extract port if present (host:port)
+      if (cleaned.includes(':')) {
+        const [hostPart, portPart] = cleaned.split(':');
+        cleanHost = hostPart.trim();
+        const extractedPort = parseInt(portPart, 10);
+        if (!isNaN(extractedPort)) {
+          finalPort = extractedPort;
+        }
+      } else {
+        cleanHost = cleaned.trim();
+      }
     }
-  })();
+  } catch (error) {
+    if (error instanceof Error && error.message === 'SFTP_NOT_SUPPORTED') {
+      throw error;
+    }
+    // Fallback for other parsing errors
+    cleanHost = host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+  }
   
-  console.log(`[FTP-TEST] Original host: "${host}" → Cleaned: "${cleanHost}"`);
+  console.log(`[FTP-TEST] Original: "${host}" | Scheme: "${scheme || 'none'}" | Clean: "${cleanHost}" | Port: ${finalPort}`);
   
-  const conn = await Deno.connect({ hostname: cleanHost, port });
+  const conn = await Deno.connect({ hostname: cleanHost, port: finalPort });
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   
@@ -393,53 +429,81 @@ serve(async (req) => {
       );
     }
 
-    const result = await testFTPConnection(host, port, username, password, path);
-    
-    // If path points to a CSV file, download and parse it
-    let preview = null;
-    if (path && path.toLowerCase().endsWith('.csv')) {
-      try {
-        const filename = path.split('/').pop() || path;
-        preview = await downloadCSVFile(result.conn, filename);
-        console.log(`[FTP-TEST] Created preview with ${preview.length} rows`);
-      } catch (error) {
-        console.error('[FTP-TEST] Error downloading CSV:', error);
-        // Continue without preview
-      }
-    }
-    
-    // Close connection after all operations
+    // Test connection
     try {
-      result.conn.close();
-    } catch (e) {
-      // Connection may already be closed, ignore
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `✅ ${result.files.length} fichiers et ${result.dirs.length} dossiers dans "${path}" (méthode: ${result.method})`,
-        files: result.files,
-        dirs: result.dirs,
-        method: result.method,
-        path: path,
-        preview: preview,
-      }),
-      { 
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      const result = await testFTPConnection(host, port, username, password, path);
+      
+      // If path points to a CSV file, download and parse it
+      let preview = null;
+      if (path && path.toLowerCase().endsWith('.csv')) {
+        try {
+          const filename = path.split('/').pop() || path;
+          preview = await downloadCSVFile(result.conn, filename);
+          console.log(`[FTP-TEST] Created preview with ${preview.length} rows`);
+        } catch (error) {
+          console.error('[FTP-TEST] Error downloading CSV:', error);
+          // Continue without preview
+        }
       }
-    );
+      
+      // Close connection after all operations
+      try {
+        result.conn.close();
+      } catch (e) {
+        // Connection may already be closed, ignore
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `✅ ${result.files.length} fichiers et ${result.dirs.length} dossiers dans "${path}" (méthode: ${result.method})`,
+          files: result.files,
+          dirs: result.dirs,
+          method: result.method,
+          path: path,
+          preview: preview,
+        }),
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    } catch (connectionError) {
+      // Handle SFTP detection
+      if (connectionError instanceof Error && connectionError.message === 'SFTP_NOT_SUPPORTED') {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'SFTP non supporté',
+            message: 'Ce connecteur gère FTP/FTPS uniquement. Veuillez utiliser un serveur FTP/FTPS.'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+      
+      // Handle other errors
+      console.error('[FTP-TEST] Error:', connectionError);
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          error: connectionError instanceof Error ? connectionError.message : 'Connection failed',
+          message: `❌ Échec de connexion: ${connectionError instanceof Error ? connectionError.message : 'Unknown error'}`
+        }),
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
   } catch (error) {
-    console.error('[FTP-TEST] Error:', error);
+    console.error('[FTP-TEST] Outer error:', error);
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error instanceof Error ? error.message : 'Connection failed',
-        message: `❌ Échec de connexion: ${error instanceof Error ? error.message : 'Unknown error'}`
+        error: error instanceof Error ? error.message : 'Unknown error'
       }),
       { 
-        status: 200,
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );

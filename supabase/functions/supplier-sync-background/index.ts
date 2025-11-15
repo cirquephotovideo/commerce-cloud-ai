@@ -8,21 +8,56 @@ const corsHeaders = {
 
 // Helper to connect to FTP
 async function connectFTP(host: string, port: number, username: string, password: string) {
-  // Robust hostname cleaning (same as test-ftp-connection)
-  const cleanHost = (() => {
-    try {
-      if (host.includes('://')) {
-        const url = new URL(host.startsWith('ftp') ? host : `ftp://${host}`);
-        return url.hostname;
+  // Robust hostname and port extraction (same as test-ftp-connection)
+  let cleanHost = '';
+  let finalPort = port;
+  let scheme = '';
+
+  try {
+    const hostValue = host.trim();
+    
+    if (hostValue.includes('://')) {
+      const url = new URL(hostValue);
+      scheme = url.protocol.replace(':', '');
+      cleanHost = url.hostname;
+      
+      // Check for SFTP
+      if (scheme === 'sftp') {
+        throw new Error('SFTP non supporté. Ce connecteur gère FTP/FTPS uniquement.');
       }
-      return host.trim().split('/')[0];
-    } catch {
-      return host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+      
+      if (url.port) {
+        finalPort = parseInt(url.port, 10);
+      }
+    } else {
+      let cleaned = hostValue.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '');
+      
+      if (hostValue.toLowerCase().startsWith('sftp:') || hostValue.toLowerCase().startsWith('sftp://')) {
+        throw new Error('SFTP non supporté. Ce connecteur gère FTP/FTPS uniquement.');
+      }
+      
+      cleaned = cleaned.split('/')[0];
+      
+      if (cleaned.includes(':')) {
+        const [hostPart, portPart] = cleaned.split(':');
+        cleanHost = hostPart.trim();
+        const extractedPort = parseInt(portPart, 10);
+        if (!isNaN(extractedPort)) {
+          finalPort = extractedPort;
+        }
+      } else {
+        cleanHost = cleaned.trim();
+      }
     }
-  })();
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('SFTP')) {
+      throw error;
+    }
+    cleanHost = host.replace(/^(ftp|ftps):\/\//, '').split('/')[0].trim();
+  }
   
-  console.log(`[BG-SYNC] Connecting to ${cleanHost}:${port}...`);
-  const conn = await Deno.connect({ hostname: cleanHost, port });
+  console.log(`[BG-SYNC] Original: "${host}" | Scheme: "${scheme || 'none'}" | Clean: "${cleanHost}" | Port: ${finalPort}`);
+  const conn = await Deno.connect({ hostname: cleanHost, port: finalPort });
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
   
