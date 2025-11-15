@@ -185,7 +185,7 @@ export function ProductDetailModal({
       amazon: ['amazon'],
       images: ['images'],
       video: ['video'],
-      rsgp: ['rsgp'],
+      rsgp: ['rsgp_ollama'],
       description: ['description'],
       specs: ['specifications']
     };
@@ -308,7 +308,11 @@ export function ProductDetailModal({
   const amazonImages = Array.isArray(amazonData?.images) ? amazonData.images : [];
   const imageCount = analysisImages.length + amazonImages.length;
   const hasImages = imageCount > 0;
-  const hasRSGPData = product.enrichment_status?.rsgp === 'completed';
+  const hasRSGPData = Boolean(
+    analysis?.rsgp_compliance && 
+    typeof analysis.rsgp_compliance === 'object' &&
+    Object.keys(analysis.rsgp_compliance).length > 0
+  );
   const hasCompetitors = product.analysis_result?.competitors?.length > 0;
   const hasDescription = Boolean(
     product.analysis_result?.description?.suggested_description ||
