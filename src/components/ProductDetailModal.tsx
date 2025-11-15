@@ -150,20 +150,31 @@ export function ProductDetailModal({
   useEffect(() => {
     if (!open || !analysis?.id) return;
     
-    console.log('[MODAL] 🔄 Starting enrichment polling for analysis:', analysis.id);
+    const analysisId = analysis.id; // Capture de l'ID pour éviter les problèmes de référence
+    console.log('[MODAL] 🔄 Starting enrichment polling for analysis:', analysisId);
     
     const checkEnrichmentStatus = async () => {
-      const { data: pendingEnrichments } = await supabase
-        .from('enrichment_queue')
-        .select('status')
-        .eq('analysis_id', analysis.id)
-        .in('status', ['pending', 'processing']);
+      // Double vérification de sécurité
+      if (!analysisId) {
+        console.log('[MODAL] ⚠️ Analysis ID is null, skipping check');
+        return;
+      }
       
-      if (pendingEnrichments && pendingEnrichments.length === 0) {
-        console.log('[MODAL] ✅ No pending enrichments, refreshing data...');
-        handleRefresh();
-      } else {
-        console.log(`[MODAL] ⏳ ${pendingEnrichments?.length || 0} enrichments still in progress`);
+      try {
+        const { data: pendingEnrichments } = await supabase
+          .from('enrichment_queue')
+          .select('status')
+          .eq('analysis_id', analysisId)
+          .in('status', ['pending', 'processing']);
+        
+        if (pendingEnrichments && pendingEnrichments.length === 0) {
+          console.log('[MODAL] ✅ No pending enrichments, refreshing data...');
+          handleRefresh();
+        } else {
+          console.log(`[MODAL] ⏳ ${pendingEnrichments?.length || 0} enrichments still in progress`);
+        }
+      } catch (error) {
+        console.error('[MODAL] ❌ Error checking enrichment status:', error);
       }
     };
     

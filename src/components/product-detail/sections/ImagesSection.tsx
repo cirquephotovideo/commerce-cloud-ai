@@ -11,6 +11,11 @@ interface ImagesSectionProps {
 }
 
 export const ImagesSection = ({ analysis, onEnrich }: ImagesSectionProps) => {
+  // Vérification de sécurité
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const enrichMutation = useEnrichment(analysis.id, onEnrich);
   
   const analysisImages = Array.isArray(analysis?.image_urls) ? analysis.image_urls : [];

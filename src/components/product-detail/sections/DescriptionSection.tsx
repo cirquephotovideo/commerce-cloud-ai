@@ -13,6 +13,11 @@ interface DescriptionSectionProps {
 }
 
 export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionProps) => {
+  // Vérification de sécurité
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const enrichMutation = useEnrichment(analysis.id, onEnrich);
   const [selectedEnrichments, setSelectedEnrichments] = useState<string[]>([]);
   const [showProgress, setShowProgress] = useState(false);

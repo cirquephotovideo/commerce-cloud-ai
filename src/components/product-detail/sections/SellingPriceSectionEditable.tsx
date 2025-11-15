@@ -14,6 +14,11 @@ interface SellingPriceSectionEditableProps {
 }
 
 export const SellingPriceSectionEditable = ({ analysis, onUpdate }: SellingPriceSectionEditableProps) => {
+  // Vérification de sécurité
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const { productPrice, estimatedPrice, productMargin } = extractAnalysisData(analysis);
   const [isEditing, setIsEditing] = useState(false);
   const [editedPrice, setEditedPrice] = useState(estimatedPrice || '');
@@ -23,6 +28,11 @@ export const SellingPriceSectionEditable = ({ analysis, onUpdate }: SellingPrice
   const competitorMaxPrice = analysis?.analysis_result?.pricing?.competitor_max;
 
   const handleSave = async () => {
+    if (!analysis?.id) {
+      toast.error('ID d\'analyse manquant');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('product_analyses')

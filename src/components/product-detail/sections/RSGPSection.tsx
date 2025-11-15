@@ -18,6 +18,11 @@ interface RSGPSectionProps {
 }
 
 export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
+  // Early return si analysis n'existe pas
+  if (!analysis?.id) {
+    return null;
+  }
+  
   const enrichMutation = useEnrichment(analysis.id, onEnrich);
   const rsgpData = analysis?.rsgp_compliance || analysis?.rsgp_data || analysis?.analysis_result?.rsgp_compliance;
   const rsgpGeneratedAt = analysis?.rsgp_generated_at || analysis?.analysis_result?._web_search_timestamp;
@@ -40,6 +45,7 @@ export const RSGPSection = ({ analysis, onEnrich }: RSGPSectionProps) => {
       if (error && error.code !== 'PGRST116') throw error;
       return data;
     },
+    enabled: !!analysis?.id, // Ne s'exécute que si analysis.id existe
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === 'processing' || status === 'pending' ? 5000 : false;
