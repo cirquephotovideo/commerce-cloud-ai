@@ -31,6 +31,7 @@ import UnifiedProductsManagement from "./pages/UnifiedProductsManagement";
 import GeminiRAGDashboard from "./pages/GeminiRAGDashboard";
 import MCPDashboard from "./pages/MCPDashboard";
 import MCPChat from "./pages/MCPChat";
+import GlobalSearch from "./pages/GlobalSearch";
 import AdminGeminiUsage from "./pages/AdminGeminiUsage";
 import AdminMCPLogs from "./pages/AdminMCPLogs";
 import { TrialStatus } from "./components/TrialStatus";
@@ -64,6 +65,7 @@ const App = () => {
         <Route path="/demo" element={<Demo />} />
         <Route path="/wizard" element={<ProtectedRoute><DashboardLayout><UniversalWizard /></DashboardLayout></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
+        <Route path="/search" element={<ProtectedRoute><DashboardLayout><GlobalSearch /></DashboardLayout></ProtectedRoute>} />
         <Route path="/dashboard/welcome" element={<ProtectedRoute><DashboardLayout><SubscriptionWelcome /></DashboardLayout></ProtectedRoute>} />
         <Route path="/history" element={<ProtectedRoute><DashboardLayout><History /></DashboardLayout></ProtectedRoute>} />
         <Route path="/batch-analyzer" element={<ProtectedRoute><DashboardLayout><BatchAnalyzer /></DashboardLayout></ProtectedRoute>} />
