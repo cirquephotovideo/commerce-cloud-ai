@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { FileText, Edit, Sparkles, CheckCircle2, XCircle, Loader2, Zap, ExternalLink } from "lucide-react";
 import { useEnrichment } from "@/hooks/useEnrichment";
 import { EnrichmentProgress } from "../EnrichmentProgress";
+import { PreExportValidationCard } from "@/components/export/PreExportValidationCard";
 import { useState } from "react";
 
 interface DescriptionSectionProps {
