@@ -19,6 +19,10 @@ import {
   Plug,
   MessageSquare,
   Brain,
+  Search,
+  Home,
+  Wand2,
+  LayoutGrid,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -43,12 +47,35 @@ import { useToast } from "@/hooks/use-toast";
 import { useUnlinkedProductsCount } from "@/hooks/useUnlinkedProductsCount";
 import { Badge } from "@/components/ui/badge";
 
+// Section RECHERCHE & ACTIONS en haut (prioritaire)
+const searchAndActionsNavigation = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: Home,
+    description: "Vue d'ensemble",
+  },
+  {
+    title: "Recherche Globale",
+    url: "/search",
+    icon: Search,
+    description: "Recherche universelle multi-critères",
+    badge: { text: "NEW", variant: "default" as const }
+  },
+];
+
 const mainNavigation = [
   { 
-    title: "Dashboard", 
-    url: "/dashboard", 
-    icon: LayoutDashboard,
-    description: "Vue d'ensemble de votre activité et statistiques principales"
+    title: "Gestion Unifiée", 
+    url: "/unified-products", 
+    icon: LayoutGrid,
+    description: "Gestion centralisée des produits"
+  },
+  { 
+    title: "Wizard Universel", 
+    url: "/wizard", 
+    icon: Wand2,
+    description: "Assistant intelligent"
   },
   { 
     title: "Historique", 
@@ -189,6 +216,44 @@ export function AppSidebar() {
     <TooltipProvider delayDuration={300}>
       <Sidebar collapsible="icon" className="border-r">
         <SidebarContent>
+          {/* SECTION RECHERCHE & ACTIONS RAPIDES - Prioritaire en haut */}
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-primary font-semibold flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              RECHERCHE & ACTIONS
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {searchAndActionsNavigation.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                          <NavLink to={item.url}>
+                            <item.icon />
+                            <span className="flex items-center gap-2">
+                              {item.title}
+                              {item.badge && (
+                                <Badge variant={item.badge.variant} className="h-5 px-1.5 text-xs">
+                                  {item.badge.text}
+                                </Badge>
+                              )}
+                            </span>
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[250px]">
+                        <p className="font-semibold">{item.title}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {/* Section Actions - Gestion Unifiée & Wizard */}
           <SidebarGroup>
             <SidebarGroupLabel>Actions</SidebarGroupLabel>
             <SidebarGroupContent>
