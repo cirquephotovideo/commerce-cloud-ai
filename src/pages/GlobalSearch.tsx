@@ -53,12 +53,28 @@ export default function GlobalSearch() {
           purchase_price,
           stock_quantity,
           enrichment_status,
-          supplier_configurations(name)
+          supplier_id
         `)
         .eq('user_id', user.id)
         .or(`product_name.ilike.%${query}%,ean.ilike.%${query}%,supplier_reference.ilike.%${query}%`)
         .range(0, 49)
         .order('created_at', { ascending: false });
+
+      // Récupérer les noms des fournisseurs séparément
+      const supplierIds = supplierProducts?.map(sp => sp.supplier_id).filter(Boolean) || [];
+      const { data: suppliers } = supplierIds.length > 0 
+        ? await supabase
+            .from('supplier_configurations')
+            .select('id, name')
+            .in('id', supplierIds)
+        : { data: [] };
+      
+      const supplierMap = new Map<string, string>();
+      suppliers?.forEach(s => {
+        if (s.id && s.name) {
+          supplierMap.set(s.id, s.name);
+        }
+      });
 
       if (spError) throw spError;
 
@@ -106,7 +122,7 @@ export default function GlobalSearch() {
         purchase_price: sp.purchase_price || undefined,
         stock_quantity: sp.stock_quantity || undefined,
         enrichment_status: sp.enrichment_status || undefined,
-        supplier_name: (sp.supplier_configurations as any)?.name || undefined,
+        supplier_name: (sp.supplier_id && supplierMap.has(sp.supplier_id)) ? supplierMap.get(sp.supplier_id) : undefined,
         type: 'supplier_product' as const,
       }));
 
