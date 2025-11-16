@@ -15,19 +15,45 @@ interface SearchResult {
   supplier_name?: string;
   image_url?: string;
   type: 'supplier_product' | 'product_analysis' | 'code2asin';
+  relevance_score?: number;
+  matched_fields?: string[];
 }
 
 interface SearchResultsProps {
   results: SearchResult[];
   isLoading: boolean;
   onViewDetails: (result: SearchResult) => void;
+  searchQuery?: string;
 }
 
-export const SearchResults = ({ results, isLoading, onViewDetails }: SearchResultsProps) => {
-  const [sortBy, setSortBy] = useState<'name' | 'price' | 'date'>('name');
+const HighlightText = ({ text, highlight }: { text: string; highlight: string }) => {
+  if (!highlight.trim()) return <span>{text}</span>;
+  
+  const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return (
+    <span>
+      {parts.map((part, i) => 
+        regex.test(part) ? (
+          <mark key={i} className="bg-yellow-200 dark:bg-yellow-900 font-semibold px-0.5 rounded">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  );
+};
+
+export const SearchResults = ({ results, isLoading, onViewDetails, searchQuery = '' }: SearchResultsProps) => {
+  const [sortBy, setSortBy] = useState<'relevance' | 'name' | 'price'>('relevance');
 
   const sortedResults = [...results].sort((a, b) => {
     switch (sortBy) {
+      case 'relevance':
+        return (b.relevance_score || 0) - (a.relevance_score || 0);
       case 'price':
         return (a.purchase_price || 0) - (b.purchase_price || 0);
       case 'name':
@@ -107,6 +133,13 @@ export const SearchResults = ({ results, isLoading, onViewDetails }: SearchResul
         </p>
         <div className="flex gap-2">
           <Button
+            variant={sortBy === 'relevance' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSortBy('relevance')}
+          >
+            🎯 Pertinence
+          </Button>
+          <Button
             variant={sortBy === 'name' ? 'default' : 'outline'}
             size="sm"
             onClick={() => setSortBy('name')}
@@ -129,9 +162,25 @@ export const SearchResults = ({ results, isLoading, onViewDetails }: SearchResul
           <Card key={result.id} className="hover:border-primary transition-colors group">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-base line-clamp-2 group-hover:text-primary transition-colors">
-                  {result.name || 'Sans nom'}
-                </CardTitle>
+                <div className="flex-1">
+                  <CardTitle className="text-base line-clamp-2 group-hover:text-primary transition-colors flex items-center gap-2 flex-wrap">
+                    <HighlightText text={result.name || 'Sans nom'} highlight={searchQuery} />
+                    {result.relevance_score && result.relevance_score > 50 && (
+                      <Badge variant="secondary" className="text-xs font-mono shrink-0">
+                        {result.relevance_score}% Match
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  {result.matched_fields && result.matched_fields.length > 0 && (
+                    <div className="flex gap-1 mt-2 flex-wrap">
+                      {result.matched_fields.map((field, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {field}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Badge variant="outline" className="text-xs shrink-0">
                   {getTypeLabel(result.type)}
                 </Badge>
