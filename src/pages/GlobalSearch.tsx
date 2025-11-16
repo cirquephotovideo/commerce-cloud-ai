@@ -20,6 +20,8 @@ interface SearchResult {
   supplier_name?: string;
   image_url?: string;
   type: 'supplier_product' | 'product_analysis' | 'code2asin';
+  relevance_score?: number;
+  matched_fields?: string[];
 }
 
 export default function GlobalSearch() {
@@ -310,6 +312,7 @@ export default function GlobalSearch() {
             results={filteredResults}
             isLoading={isSearching}
             onViewDetails={handleViewDetails}
+            searchQuery={searchQuery}
           />
         </TabsContent>
       </Tabs>
