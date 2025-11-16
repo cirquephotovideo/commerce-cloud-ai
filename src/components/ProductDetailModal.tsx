@@ -36,6 +36,8 @@ import { useEnrichment } from "@/hooks/useEnrichment";
 import { useEnrichAll } from "@/hooks/useEnrichAll";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
 import { EnrichmentProviderSelector, AIProvider } from "./product-detail/EnrichmentProviderSelector";
+import { MultiSupplierPricingDashboard } from "./pricing/MultiSupplierPricingDashboard";
+import { ProductExportTab } from "./product-detail/ProductExportTab";
 
 interface ProductDetailModalProps {
   open: boolean;
@@ -435,49 +437,78 @@ export function ProductDetailModal({
             {/* Actions Rapides - Simplifiées */}
             <div className="flex flex-wrap gap-2 px-4">
               {/* BOUTON PRINCIPAL - Enrichissement unifié avec Ollama Web Search */}
-              <Button
-                onClick={async () => {
-                  try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) {
-                      toast.error("Non authentifié");
-                      return;
-                    }
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const { data: { user } } = await supabase.auth.getUser();
+                          if (!user) {
+                            toast.error("Non authentifié");
+                            return;
+                          }
 
-                    toast.loading("🌐 Recherche Web Complète démarrée...");
+                          toast.loading("🌐 Recherche Web Complète démarrée...", { id: 'web-search' });
 
-                    const analysisData = analysis?.analysis_result as any;
-                    const productData = {
-                      name: product.product_name || analysisData?.name,
-                      brand: analysisData?.brand || null,
-                      supplier_reference: analysisData?.sku || analysisData?.mpn || product.supplier_reference || null,
-                      ean: product.ean || analysisData?.ean || analysisData?.barcode || null,
-                      category: product.mapped_category_name || analysisData?.category || null
-                    };
+                          const analysisData = analysis?.analysis_result as any;
+                          const productData = {
+                            name: product.product_name || analysisData?.name,
+                            brand: analysisData?.brand || null,
+                            supplier_reference: analysisData?.sku || analysisData?.mpn || product.supplier_reference || null,
+                            ean: product.ean || analysisData?.ean || analysisData?.barcode || null,
+                            category: product.mapped_category_name || analysisData?.category || null
+                          };
 
-                    const purchasePrice = product.purchase_price || analysisData?.purchase_price || null;
+                          const purchasePrice = product.purchase_price || analysisData?.purchase_price || null;
 
-                    await enrichmentMutation.mutateAsync({
-                      enrichmentType: ['unified_ollama'],
-                      provider: 'ollama',
-                      webSearchEnabled: true
-                    });
+                          await enrichmentMutation.mutateAsync({
+                            enrichmentType: ['unified_ollama'],
+                            provider: 'ollama',
+                            webSearchEnabled: true
+                          });
 
-                    toast.success('✨ Enrichissement unifié terminé !');
-                    setTimeout(() => handleRefresh(), 1000);
-                  } catch (error: any) {
-                    toast.error(`❌ ${error.message}`);
-                  }
-                }}
-                disabled={enrichmentMutation.isPending}
-                variant="default"
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                {enrichmentMutation.isPending ? 'Enrichissement en cours...' : 'Recherche Web Complète (Ollama)'}
-              </Button>
+                          // PHASE 5: Polling pour suivre le statut
+                          const pollInterval = setInterval(async () => {
+                            const { data: currentAnalysis } = await supabase
+                              .from('product_analyses')
+                              .select('enrichment_status, pre_export_validation')
+                              .eq('id', analysis?.id)
+                              .single();
+                            
+                            const status = currentAnalysis?.enrichment_status as any;
+                            const isComplete = 
+                              status?.specifications === 'completed' &&
+                              status?.cost_analysis === 'completed' &&
+                              status?.technical_description === 'completed';
+                            
+                            if (isComplete) {
+                              clearInterval(pollInterval);
+                              toast.success('✨ Enrichissement unifié terminé !', { id: 'web-search' });
+                              
+                              const score = (currentAnalysis?.pre_export_validation as any)?.completeness_score || 0;
+                              toast.info(`📊 Score de complétude : ${score}%`);
+                              
+                              setTimeout(() => handleRefresh(), 1000);
+                            }
+                          }, 2000);
 
-              {/* BOUTON SECONDAIRE - Amazon uniquement */}
+                          // Timeout après 60 secondes
+                          setTimeout(() => {
+                            clearInterval(pollInterval);
+                            toast.error('⏱️ Timeout - Vérifiez les logs', { id: 'web-search' });
+                          }, 60000);
+
+                        } catch (error: any) {
+                          toast.error(`❌ ${error.message}`, { id: 'web-search' });
+                        }
+                      }}
+                      disabled={enrichmentMutation.isPending}
+                      variant="default"
+                      className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      {enrichmentMutation.isPending ? 'Enrichissement en cours...' : 'Recherche Web Complète (Ollama)'}
+                    </Button>
+
+                    {/* BOUTON SECONDAIRE - Amazon uniquement */}
               <Button
                 onClick={() => reEnrichMutation.mutate({ provider: 'lovable-ai', types: ['amazon'] })}
                 disabled={reEnrichMutation.isPending}
@@ -603,7 +634,20 @@ export function ProductDetailModal({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* Prix de Vente */}
+                  {/* PHASE 2: Tarification Multi-Fournisseurs */}
+                  <AccordionItem value="multi_supplier_pricing" id="section-multi-pricing">
+                    <AccordionTrigger className="text-lg font-semibold">
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-5 w-5" />
+                        💰 Tarification Multi-Fournisseurs
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <MultiSupplierPricingDashboard analysisId={analysis?.id} />
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* Prix de Vente */}
                 <AccordionItem value="selling" id="section-selling">
                   <AccordionTrigger className="text-lg font-semibold">
                     <div className="flex items-center gap-2">
@@ -815,8 +859,24 @@ export function ProductDetailModal({
                       </div>
                     )}
                   </AccordionContent>
-                </AccordionItem>
-              </Accordion>
+                  </AccordionItem>
+
+                  {/* PHASE 6: Export & Validation */}
+                  <AccordionItem value="export" id="section-export">
+                    <AccordionTrigger className="text-lg font-semibold">
+                      <div className="flex items-center gap-2">
+                        <Upload className="h-5 w-5" />
+                        📤 Export & Validation
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <ProductExportTab 
+                        analysisId={analysis?.id} 
+                        productName={product.product_name || 'Produit'} 
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
             </ScrollArea>
           </div>
         </DialogContent>

@@ -312,6 +312,50 @@ Produit :
       }
     );
 
+    console.log(`[UNIFIED OLLAMA ENRICHMENT] Produit ${analysisId} enrichi avec succès`);
+
+    // PHASE 1: Appeler automatiquement enrich-market-pricing
+    try {
+      console.log('[UNIFIED OLLAMA] Calling enrich-market-pricing...');
+      const pricingResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/enrich-market-pricing`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': req.headers.get('Authorization')!,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ analysis_id: analysisId, batch: true })
+        }
+      );
+      if (pricingResponse.ok) {
+        console.log('[UNIFIED OLLAMA] Market pricing enriched successfully');
+      }
+    } catch (error) {
+      console.error('[UNIFIED OLLAMA] Error enriching market pricing:', error);
+    }
+
+    // PHASE 1: Appeler automatiquement validate-pre-export
+    try {
+      console.log('[UNIFIED OLLAMA] Calling validate-pre-export...');
+      const validationResponse = await fetch(
+        `${Deno.env.get('SUPABASE_URL')}/functions/v1/validate-pre-export`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': req.headers.get('Authorization')!,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ analysis_id: analysisId })
+        }
+      );
+      if (validationResponse.ok) {
+        console.log('[UNIFIED OLLAMA] Pre-export validation completed');
+      }
+    } catch (error) {
+      console.error('[UNIFIED OLLAMA] Error validating pre-export:', error);
+    }
+
   } catch (error: any) {
     console.error('[UNIFIED-OLLAMA] ❌ Fatal error:', error.message);
     

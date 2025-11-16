@@ -6,6 +6,7 @@ import { DollarSign, TrendingUp, Truck, Edit } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
 interface CriticalInfoSectionProps {
   product: any;
@@ -28,6 +29,24 @@ export const CriticalInfoSection = ({
     analysis?.analysis_result?.recommended_price || 
     ''
   );
+
+  // PHASE 4: Récupérer le meilleur prix fournisseur
+  const { data: bestPrice } = useQuery({
+    queryKey: ['best-supplier-price', analysis?.id],
+    queryFn: async () => {
+      if (!analysis?.id) return null;
+      const { data } = await supabase
+        .from('supplier_price_variants')
+        .select('purchase_price, suggested_selling_price, suggested_margin_percent, supplier_id, supplier_name')
+        .eq('analysis_id', analysis.id)
+        .gt('stock_quantity', 0)
+        .order('purchase_price', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!analysis?.id
+  });
 
   const calculateMargin = () => {
     const purchase = parseFloat(purchasePrice) || 0;
