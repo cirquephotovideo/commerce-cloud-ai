@@ -127,7 +127,19 @@ export const SuppliersTab = ({ searchQuery }: SuppliersTabProps) => {
               const link = sp.product_links?.[0];
               return (
                 <TableRow key={sp.id}>
-                  <TableCell className="font-medium">{sp.product_name}</TableCell>
+                  <TableCell className="font-medium">
+                    {link ? (
+                      <button
+                        type="button"
+                        className="text-primary hover:underline"
+                        onClick={() => window.open(`/product/${link.analysis_id}`, "_blank")}
+                      >
+                        {sp.product_name}
+                      </button>
+                    ) : (
+                      sp.product_name
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline">
                       {sp.supplier_configurations?.supplier_name || "Inconnu"}
