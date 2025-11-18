@@ -29,6 +29,7 @@ export default function History() {
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAnalyses, setSelectedAnalyses] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Filtres
   const [filterFavorites, setFilterFavorites] = useState(false);
@@ -596,6 +597,8 @@ export default function History() {
           onOpenChange={setIsModalOpen}
           product={selectedAnalysis}
         />
+          </TabsContent>
+        </Tabs>
       </main>
   );
 }
