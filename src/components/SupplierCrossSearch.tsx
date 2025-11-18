@@ -93,7 +93,7 @@ export function SupplierCrossSearch({ product, open, onOpenChange }: SupplierCro
         analysis_id: analysisId,
         supplier_product_id: supplierProductId,
         link_type: "manual",
-        confidence_score: 100,
+        confidence_score: 1.0,
         user_id: user.id,
       });
 

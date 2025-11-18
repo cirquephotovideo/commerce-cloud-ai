@@ -76,7 +76,7 @@ export const LinkProductDialog = ({
           analysis_id: analysisId,
           supplier_product_id: productType === 'supplier' ? productId : null,
           link_type: 'manual',
-          confidence_score: 100,
+          confidence_score: 1.0,
           user_id: user.id,
         })
         .select()

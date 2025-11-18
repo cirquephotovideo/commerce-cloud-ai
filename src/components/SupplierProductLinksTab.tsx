@@ -170,7 +170,7 @@ export function SupplierProductLinksTab() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={confidence.variant as any}>
-                        {confidence.label} ({link.confidence_score}%)
+                        {confidence.label} ({Math.round(link.confidence_score * 100)}%)
                       </Badge>
                     </TableCell>
                     <TableCell>

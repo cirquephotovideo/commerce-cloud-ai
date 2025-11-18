@@ -82,8 +82,8 @@ export function ProductLinksCard({ analysisId }: ProductLinksCardProps) {
                     <p className="font-medium truncate">
                       {link.supplier_product?.name || 'Nom inconnu'}
                     </p>
-                    <Badge variant={getConfidenceBadgeVariant(link.confidence_score)}>
-                      {link.confidence_score}%
+                    <Badge variant={getConfidenceBadgeVariant(link.confidence_score * 100)}>
+                      {Math.round(link.confidence_score * 100)}%
                     </Badge>
                     <Badge variant="outline" className="text-xs">
                       {link.link_type}
