@@ -97,7 +97,7 @@ export function SupplierLinkedTab({ analysisId }: SupplierLinkedTabProps) {
                   </Badge>
                   {link?.confidence_score && (
                     <Badge variant="outline" className="text-xs">
-                      {link.confidence_score}%
+                      {Math.round(link.confidence_score * 100)}%
                     </Badge>
                   )}
                 </div>

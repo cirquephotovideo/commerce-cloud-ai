@@ -94,7 +94,7 @@ export function BulkSupplierProductEditor({
             supplier_product_id: productId,
             analysis_id: analysis.id,
             link_type: 'auto',
-            confidence_score: 100,
+            confidence_score: 1.0,
             user_id: user.id
           }, {
             onConflict: 'supplier_product_id,analysis_id'
