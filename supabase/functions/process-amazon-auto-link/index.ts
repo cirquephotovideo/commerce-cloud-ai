@@ -62,12 +62,14 @@ Deno.serve(async (req) => {
         .eq('id', job_id);
     }
 
-    // Get product analyses without Amazon links
+    // Get product analyses without Amazon links (exclure produits sans nom)
     const { data: analyses, error: analysesError } = await supabase
       .from('product_analyses')
       .select('id, ean, analysis_result')
       .eq('user_id', user.id)
       .not('ean', 'is', null)
+      .not('analysis_result->name', 'is', null)
+      .neq('analysis_result->name', '')
       .range(offset, offset + batch_size - 1);
 
     if (analysesError) {
@@ -143,7 +145,7 @@ Deno.serve(async (req) => {
           analysis_id: analysis.id,
           enrichment_id: enrichment.id,
           matched_on: 'ean',
-          confidence_score: 100
+          confidence_score: 1.0
         });
       }
     }
@@ -156,7 +158,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         analysis_id: match.analysis_id,
         enrichment_id: match.enrichment_id,
-        link_type: 'automatic',
+        link_type: 'auto',
         confidence_score: match.confidence_score,
         matched_on: match.matched_on
       }));

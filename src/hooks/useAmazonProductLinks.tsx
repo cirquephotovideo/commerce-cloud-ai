@@ -142,7 +142,7 @@ export function useAmazonProductLinks() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Count total analyses to process
+      // Count total analyses to process (le filtrage des produits sans nom est fait backend)
       const { count: totalCount } = await supabase
         .from('product_analyses')
         .select('*', { count: 'exact', head: true })
@@ -167,7 +167,7 @@ export function useAmazonProductLinks() {
         body: {
           job_id: job.id,
           offset: 0,
-          batch_size: 100
+          batch_size: 500
         }
       });
 
