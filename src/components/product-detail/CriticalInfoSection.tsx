@@ -57,6 +57,43 @@ export const CriticalInfoSection = ({
 
   const margin = calculateMargin();
 
+  // Affichage conditionnel quand aucun fournisseur et pas de prix saisis
+  if (supplierCount === 0 && !purchasePrice && !sellingPrice) {
+    return (
+      <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20 shadow-lg">
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center justify-center py-8 text-center gap-4">
+            <DollarSign className="w-16 h-16 text-muted-foreground/40" />
+            <div className="space-y-2">
+              <h3 className="text-xl font-semibold text-foreground">
+                📊 Informations Critiques
+              </h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Aucun prix fournisseur disponible pour ce produit
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Liez des fournisseurs dans l'onglet "Fournisseurs" pour voir les prix d'achat et calculer les marges
+              </p>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                const suppliersSection = document.getElementById('section-suppliers');
+                if (suppliersSection) {
+                  suppliersSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+              }}
+              className="mt-2"
+            >
+              <Truck className="w-4 h-4 mr-2" />
+              Lier des fournisseurs
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const getMarginBadge = (marginValue: string | null) => {
     if (!marginValue) return null;
     const marginNum = parseFloat(marginValue);
