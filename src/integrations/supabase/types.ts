@@ -540,6 +540,13 @@ export type Database = {
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "amazon_product_data_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: true
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
         ]
       }
       api_keys: {
@@ -1408,6 +1415,13 @@ export type Database = {
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "code2asin_enrichments_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: true
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
         ]
       }
       code2asin_export_jobs: {
@@ -1672,6 +1686,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compatibility_matrix_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -2185,6 +2206,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "enrichment_queue_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
+          {
             foreignKeyName: "enrichment_queue_supplier_product_id_fkey"
             columns: ["supplier_product_id"]
             isOneToOne: false
@@ -2264,6 +2292,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "export_history_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -3841,6 +3876,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fk_amazon_links_analysis"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
+          {
             foreignKeyName: "fk_amazon_links_enrichment"
             columns: ["enrichment_id"]
             isOneToOne: false
@@ -4140,6 +4182,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_links_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
+          {
             foreignKeyName: "product_links_supplier_product_id_fkey"
             columns: ["supplier_product_id"]
             isOneToOne: false
@@ -4183,6 +4232,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_taxonomy_mappings_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -4245,6 +4301,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_videos_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -4319,6 +4382,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_assessments_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -4465,6 +4535,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rsgp_compliance_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: true
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -4980,6 +5057,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "supplier_price_variants_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
+          },
+          {
             foreignKeyName: "supplier_price_variants_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
@@ -5294,6 +5378,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "product_analyses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_specs_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "unified_products_materialized"
+            referencedColumns: ["analysis_id"]
           },
         ]
       }
@@ -5764,6 +5855,36 @@ export type Database = {
         }
         Relationships: []
       }
+      unified_products_materialized: {
+        Row: {
+          analysis_id: string | null
+          avg_price: number | null
+          best_price: number | null
+          brand: string | null
+          created_at: string | null
+          ean: string | null
+          enrichment_status: Json | null
+          margin_percentage: number | null
+          potential_savings: number | null
+          primary_image: string | null
+          product_name: string | null
+          selling_price: number | null
+          supplier_count: number | null
+          suppliers: Json | null
+          total_stock: number | null
+          user_id: string | null
+          worst_price: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_analyses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       auto_fix_orphan_products: { Args: never; Returns: Json }
@@ -5920,6 +6041,7 @@ export type Database = {
         Args: { p_plain_password: string; p_supplier_id: string }
         Returns: string
       }
+      refresh_unified_products_materialized: { Args: never; Returns: undefined }
       should_execute_automation_rule: {
         Args: {
           p_last_triggered_at: string
