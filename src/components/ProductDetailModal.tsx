@@ -36,7 +36,6 @@ import { useEnrichment } from "@/hooks/useEnrichment";
 import { useEnrichAll } from "@/hooks/useEnrichAll";
 import { getRepairabilityData, getEnvironmentalData, getHSCodeData } from "@/lib/analysisDataExtractors";
 import { EnrichmentProviderSelector, AIProvider } from "./product-detail/EnrichmentProviderSelector";
-import { MultiSupplierPricingDashboard } from "./pricing/MultiSupplierPricingDashboard";
 import { ProductExportTab } from "./product-detail/ProductExportTab";
 
 interface ProductDetailModalProps {
@@ -633,19 +632,6 @@ export function ProductDetailModal({
                     )}
                   </AccordionContent>
                 </AccordionItem>
-
-                  {/* PHASE 2: Tarification Multi-Fournisseurs */}
-                  <AccordionItem value="multi_supplier_pricing" id="section-multi-pricing">
-                    <AccordionTrigger className="text-lg font-semibold">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-5 w-5" />
-                        💰 Tarification Multi-Fournisseurs
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <MultiSupplierPricingDashboard analysisId={analysis?.id} />
-                    </AccordionContent>
-                  </AccordionItem>
 
                   {/* Prix de Vente */}
                 <AccordionItem value="selling" id="section-selling">

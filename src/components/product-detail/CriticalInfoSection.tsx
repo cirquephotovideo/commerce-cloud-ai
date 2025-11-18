@@ -57,8 +57,12 @@ export const CriticalInfoSection = ({
 
   const margin = calculateMargin();
 
+  // Fix: Vérifier correctement si les prix sont vides ou nuls
+  const hasPurchasePrice = purchasePrice && purchasePrice !== '' && parseFloat(purchasePrice) > 0;
+  const hasSellingPrice = sellingPrice && sellingPrice !== '' && parseFloat(sellingPrice) > 0;
+
   // Affichage conditionnel quand aucun fournisseur et pas de prix saisis
-  if (supplierCount === 0 && !purchasePrice && !sellingPrice) {
+  if (supplierCount === 0 && !hasPurchasePrice && !hasSellingPrice) {
     return (
       <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20 shadow-lg">
         <CardContent className="pt-6">

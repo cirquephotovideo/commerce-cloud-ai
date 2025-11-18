@@ -25,6 +25,7 @@ import { FloatingChatWidget } from "@/components/FloatingChatWidget";
 import { UnifiedSearchBar } from "@/components/unified-products/UnifiedSearchBar";
 import { Code2AsinTab } from "@/components/unified-products/Code2AsinTab";
 import { SuppliersTab } from "@/components/unified-products/SuppliersTab";
+import { UnifiedDashboardCard } from "@/components/dashboard/UnifiedDashboardCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Select, 
@@ -841,6 +842,11 @@ export default function Dashboard() {
             query={searchQuery} 
             onChange={setSearchQuery} 
           />
+        </div>
+
+        {/* 📊 VUE UNIFIÉE - Top Produits avec Fournisseurs */}
+        <div className="mb-6">
+          <UnifiedDashboardCard />
         </div>
 
         {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
