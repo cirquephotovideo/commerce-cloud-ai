@@ -119,13 +119,15 @@ serve(async (req) => {
 
       // 3. Créer le lien si un match suffisant est trouvé
       if (bestMatch && bestMatch.score >= threshold) {
+        const normalizedScore = bestMatch.score / 100; // Convert 0-100 to 0-1
+        
         const { error: linkError } = await supabase
           .from('product_links')
           .insert({
             supplier_product_id: product.id,
             analysis_id: bestMatch.analysisId,
-            link_type: bestMatch.score === 100 ? 'exact_ean' : 'automatic',
-            confidence_score: bestMatch.score,
+            link_type: 'auto', // Respects product_links_link_type_check constraint
+            confidence_score: normalizedScore, // Respects product_links_confidence_score_check constraint (0-1)
           });
 
         if (linkError) {

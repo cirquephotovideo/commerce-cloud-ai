@@ -265,7 +265,7 @@ serve(async (req) => {
           .insert({
             supplier_product_id: task.supplier_product_id,
             analysis_id: analysis.id,
-            link_type: 'enrichment',
+            link_type: 'auto',  // Fixed: use 'auto' instead of 'enrichment' to respect constraint
             confidence_score: 1.0,
             created_by: task.user_id,
           });
