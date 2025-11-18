@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes, Truck } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes, Truck, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -88,6 +88,13 @@ export default function Dashboard() {
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [activeProductTab, setActiveProductTab] = useState("analyses");
+  const [sortConfig, setSortConfig] = useState<{
+    column: 'name' | 'image' | 'ean' | 'suppliers' | 'quality' | null;
+    direction: 'asc' | 'desc';
+  }>({
+    column: null,
+    direction: 'asc'
+  });
 
   const handleOpenDetail = (analysis: ProductAnalysis) => {
     setSelectedAnalysis(analysis);
@@ -97,6 +104,13 @@ export default function Dashboard() {
 
   const handleOpenWizard = () => {
     navigate('/wizard');
+  };
+
+  const handleSort = (column: 'name' | 'image' | 'ean' | 'suppliers' | 'quality') => {
+    setSortConfig(prev => ({
+      column,
+      direction: prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
   };
 
   const handleReEnrich = async (analysisId: string, provider: 'lovable-ai' | 'ollama' | 'openai') => {
@@ -302,17 +316,57 @@ export default function Dashboard() {
       });
     }
 
-    // Trier les produits: mettre en avant ceux qui sont complets
-    const sorted = [...filtered].sort((a, b) => {
-      // Score de complétude (0-100)
-      const scoreA = calculateProductScore(a);
-      const scoreB = calculateProductScore(b);
-      
-      return scoreB - scoreA; // Tri décroissant (meilleurs en premier)
-    });
+    // Application du tri si une colonne est sélectionnée
+    let sorted = [...filtered];
+    if (sortConfig.column) {
+      sorted = sorted.sort((a, b) => {
+        let comparison = 0;
+        
+        switch (sortConfig.column) {
+          case 'name':
+            const nameA = a.analysis_result?.product_name || '';
+            const nameB = b.analysis_result?.product_name || '';
+            comparison = nameA.localeCompare(nameB);
+            break;
+            
+          case 'image':
+            const hasImageA = a.image_urls?.length > 0 ? 1 : 0;
+            const hasImageB = b.image_urls?.length > 0 ? 1 : 0;
+            comparison = hasImageB - hasImageA;
+            break;
+            
+          case 'ean':
+            const eanA = a.analysis_result?.ean || '';
+            const eanB = b.analysis_result?.ean || '';
+            comparison = eanA.localeCompare(eanB);
+            break;
+            
+          case 'suppliers':
+            const suppA = (a as any).supplier_count || 0;
+            const suppB = (b as any).supplier_count || 0;
+            comparison = suppB - suppA;
+            break;
+            
+          case 'quality':
+            const scoreA = calculateProductScore(a);
+            const scoreB = calculateProductScore(b);
+            comparison = scoreB - scoreA;
+            break;
+        }
+        
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      });
+    } else {
+      // Tri par défaut: mettre en avant ceux qui sont complets
+      sorted = sorted.sort((a, b) => {
+        const scoreA = calculateProductScore(a);
+        const scoreB = calculateProductScore(b);
+        return scoreB - scoreA; // Tri décroissant (meilleurs en premier)
+      });
+    }
 
     setFilteredAnalyses(sorted);
-  }, [searchQuery, searchType, analyses, chatFilteredProducts, isChatActive]);
+  }, [searchQuery, searchType, analyses, chatFilteredProducts, isChatActive, sortConfig]);
 
   // Fonction pour calculer le score de complétude d'un produit
   const calculateProductScore = (analysis: ProductAnalysis): number => {
@@ -1076,12 +1130,92 @@ export default function Dashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[50px]"></TableHead>
-                        <TableHead className="w-[80px]">Image</TableHead>
-                        <TableHead className="min-w-[200px]">Nom Produit</TableHead>
-                        <TableHead className="min-w-[120px]">EAN / Code</TableHead>
+                        <TableHead className="w-[80px]">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 hover:bg-accent"
+                            onClick={() => handleSort('image')}
+                          >
+                            Image
+                            {sortConfig.column === 'image' ? (
+                              sortConfig.direction === 'asc' ? 
+                                <ArrowUp className="ml-2 h-4 w-4" /> : 
+                                <ArrowDown className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                        </TableHead>
+                        <TableHead className="min-w-[200px]">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 hover:bg-accent"
+                            onClick={() => handleSort('name')}
+                          >
+                            Nom Produit
+                            {sortConfig.column === 'name' ? (
+                              sortConfig.direction === 'asc' ? 
+                                <ArrowUp className="ml-2 h-4 w-4" /> : 
+                                <ArrowDown className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                        </TableHead>
+                        <TableHead className="min-w-[120px]">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 hover:bg-accent"
+                            onClick={() => handleSort('ean')}
+                          >
+                            EAN / Code
+                            {sortConfig.column === 'ean' ? (
+                              sortConfig.direction === 'asc' ? 
+                                <ArrowUp className="ml-2 h-4 w-4" /> : 
+                                <ArrowDown className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                        </TableHead>
                         <TableHead>Catégorie</TableHead>
-                        <TableHead className="min-w-[100px]">Fournisseurs</TableHead>
-                        <TableHead>Qualité</TableHead>
+                        <TableHead className="min-w-[100px]">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 hover:bg-accent"
+                            onClick={() => handleSort('suppliers')}
+                          >
+                            Fournisseurs
+                            {sortConfig.column === 'suppliers' ? (
+                              sortConfig.direction === 'asc' ? 
+                                <ArrowUp className="ml-2 h-4 w-4" /> : 
+                                <ArrowDown className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                        </TableHead>
+                        <TableHead>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 hover:bg-accent"
+                            onClick={() => handleSort('quality')}
+                          >
+                            Qualité
+                            {sortConfig.column === 'quality' ? (
+                              sortConfig.direction === 'asc' ? 
+                                <ArrowUp className="ml-2 h-4 w-4" /> : 
+                                <ArrowDown className="ml-2 h-4 w-4" />
+                            ) : (
+                              <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+                            )}
+                          </Button>
+                        </TableHead>
                         <TableHead className="min-w-[280px]">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
