@@ -230,12 +230,42 @@ export default function GlobalSearch() {
             description: "Impossible de trouver le produit associé",
           });
         }
+    } else if (result.type === 'code2asin') {
+      // Chercher un lien vers une analyse
+      const { data: amazonLink } = await supabase
+        .from('product_amazon_links')
+        .select('analysis_id')
+        .eq('enrichment_id', result.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (amazonLink?.analysis_id) {
+        // Récupérer l'analyse complète
+        const { data: analysis, error: analysisError } = await supabase
+          .from('product_analyses')
+          .select('*')
+          .eq('id', amazonLink.analysis_id)
+          .maybeSingle();
+
+        if (analysisError) throw analysisError;
+        
+        if (analysis) {
+          setSelectedResult(analysis);
+          setIsModalOpen(true);
+        } else {
+          toast({
+            title: "Analyse introuvable",
+            description: "L'analyse liée à ce produit Amazon n'existe plus",
+          });
+        }
       } else {
         toast({
-          title: "Type non supporté",
-          description: "Affichage des détails Code2ASIN non disponible pour le moment",
+          title: "Produit non lié",
+          description: "Ce produit Amazon n'est pas encore lié à une analyse. Utilisez la fusion automatique ou créez un lien manuel.",
+          duration: 5000,
         });
       }
+    }
     } catch (error: any) {
       toast({
         title: "Erreur",
