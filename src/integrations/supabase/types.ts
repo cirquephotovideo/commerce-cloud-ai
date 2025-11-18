@@ -3902,6 +3902,7 @@ export type Database = {
           code2asin_enrichment_status: string | null
           competitive_cons: Json | null
           competitive_pros: Json | null
+          confidence_level: string | null
           cost_analysis: Json | null
           created_at: string | null
           description_long: string | null
@@ -3934,6 +3935,7 @@ export type Database = {
           updated_at: string | null
           use_cases: Json | null
           user_id: string
+          web_sources: Json | null
         }
         Insert: {
           amazon_enrichment_status?: string | null
@@ -3945,6 +3947,7 @@ export type Database = {
           code2asin_enrichment_status?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
+          confidence_level?: string | null
           cost_analysis?: Json | null
           created_at?: string | null
           description_long?: string | null
@@ -3977,6 +3980,7 @@ export type Database = {
           updated_at?: string | null
           use_cases?: Json | null
           user_id: string
+          web_sources?: Json | null
         }
         Update: {
           amazon_enrichment_status?: string | null
@@ -3988,6 +3992,7 @@ export type Database = {
           code2asin_enrichment_status?: string | null
           competitive_cons?: Json | null
           competitive_pros?: Json | null
+          confidence_level?: string | null
           cost_analysis?: Json | null
           created_at?: string | null
           description_long?: string | null
@@ -4020,6 +4025,7 @@ export type Database = {
           updated_at?: string | null
           use_cases?: Json | null
           user_id?: string
+          web_sources?: Json | null
         }
         Relationships: [
           {

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, Database, FileSpreadsheet } from "lucide-react";
+import { Sparkles, RefreshCw, ImageIcon, Video, Upload, Package, Truck, ShieldCheck, Trophy, FileText, Settings, DollarSign, Database, FileSpreadsheet, Globe } from "lucide-react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import { DescriptionSection } from "./product-detail/sections/DescriptionSection
 import { SpecsSection } from "./product-detail/sections/SpecsSectionUpdated";
 import { RepairabilitySection } from "./product-detail/sections/RepairabilitySection";
 import { EnvironmentalSection } from "./product-detail/sections/EnvironmentalSection";
+import { WebSourcesDisplay } from "./product-detail/WebSourcesDisplay";
 import { HSCodeSection } from "./product-detail/sections/HSCodeSection";
 import { OdooAttributesSection } from "./product-detail/sections/OdooAttributesSection";
 import { Code2AsinSection } from "./product-detail/sections/Code2AsinSection";
@@ -464,26 +465,66 @@ export function ProductDetailModal({
                             webSearchEnabled: true
                           });
 
-                          // PHASE 5: Polling pour suivre le statut
+                          // PHASE 5: Polling pour suivre le statut de toutes les sections
                           const pollInterval = setInterval(async () => {
                             const { data: currentAnalysis } = await supabase
                               .from('product_analyses')
-                              .select('enrichment_status, pre_export_validation')
+                              .select('*')
                               .eq('id', analysis?.id)
                               .single();
                             
                             const status = currentAnalysis?.enrichment_status as any;
-                            const isComplete = 
-                              status?.specifications === 'completed' &&
-                              status?.cost_analysis === 'completed' &&
-                              status?.technical_description === 'completed';
+                            
+                            // Liste complète des sections à vérifier
+                            const allSections = [
+                              'specifications',
+                              'cost_analysis',
+                              'technical_description',
+                              'images',
+                              'rsgp',
+                              'odoo_attributes',
+                              'environmental_impact'
+                            ];
+
+                            const completedSections = allSections.filter(section => status?.[section] === 'completed');
+                            const processingSections = allSections.filter(section => status?.[section] === 'processing');
+                            const isComplete = completedSections.length === allSections.length;
+
+                            // Afficher la progression en temps réel
+                            const progressPercent = Math.round((completedSections.length / allSections.length) * 100);
+
+                            if (!isComplete) {
+                              toast.loading(`🌐 Enrichissement : ${progressPercent}% (${completedSections.length}/${allSections.length} sections)`, 
+                                { id: 'web-search' }
+                              );
+                            }
                             
                             if (isComplete) {
                               clearInterval(pollInterval);
-                              toast.success('✨ Enrichissement unifié terminé !', { id: 'web-search' });
+                              
+                              // Construire le résumé détaillé
+                              const enrichmentSummary = {
+                                'Spécifications': (currentAnalysis as any)?.specifications ? '✅' : '❌',
+                                'Analyse coûts': (currentAnalysis as any)?.cost_analysis ? '✅' : '❌',
+                                'Code HS': (currentAnalysis as any)?.hs_code ? `✅ ${(currentAnalysis as any).hs_code}` : '❌',
+                                'RSGP': (currentAnalysis as any)?.rsgp_compliance ? '✅' : '❌',
+                                'Images': (currentAnalysis as any)?.official_image_urls?.length > 0 ? `✅ (${(currentAnalysis as any).official_image_urls.length})` : '❌',
+                                'Description': (currentAnalysis as any)?.long_description?.length > 100 ? '✅' : '❌',
+                                'Environnement': (currentAnalysis as any)?.environmental_impact ? '✅' : '❌'
+                              };
                               
                               const score = (currentAnalysis?.pre_export_validation as any)?.completeness_score || 0;
-                              toast.info(`📊 Score de complétude : ${score}%`);
+                              
+                              // Toast de succès avec détails
+                              const summaryText = Object.entries(enrichmentSummary)
+                                .map(([k, v]) => `${k}: ${v}`)
+                                .join('\n');
+                              
+                              toast.success('✨ Recherche Web Complète terminée !', { 
+                                id: 'web-search',
+                                description: `📊 Score de complétude : ${score}%\n\n${summaryText}`,
+                                duration: 8000
+                              });
                               
                               setTimeout(() => handleRefresh(), 1000);
                             }
@@ -559,6 +600,23 @@ export function ProductDetailModal({
                     ) : (
                       <p className="text-muted-foreground">Aucune analyse disponible</p>
                     )}
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Sources Web & Recherche */}
+                <AccordionItem value="web-sources" id="section-web-sources">
+                  <AccordionTrigger className="text-lg font-semibold">
+                    <div className="flex items-center gap-2">
+                      <Globe className="h-5 w-5" />
+                      Sources Web & Recherche
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <WebSourcesDisplay
+                      sources={(analysis as any)?.web_sources || []}
+                      confidenceLevel={(analysis as any)?.confidence_level || 'medium'}
+                      enrichmentDate={analysis?.updated_at}
+                    />
                   </AccordionContent>
                 </AccordionItem>
 
