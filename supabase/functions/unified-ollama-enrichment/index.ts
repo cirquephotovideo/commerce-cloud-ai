@@ -192,13 +192,19 @@ Produit :
           specifications: enrichedData.specifications || null,
           cost_analysis: enrichedData.cost_analysis || null,
           hs_code: enrichedData.hs_code || null,
+          short_description: enrichedData.short_description || null,
+          official_image_urls: enrichedData.image_urls || [],
+          environmental_impact: enrichedData.environmental_impact || null,
+          web_sources: enrichedData.web_sources || [],
+          confidence_level: enrichedData.confidence_level || 'medium',
           enrichment_status: {
             specifications: enrichedData.specifications ? 'completed' : 'failed',
             cost_analysis: enrichedData.cost_analysis ? 'completed' : 'failed',
             technical_description: enrichedData.long_description ? 'completed' : 'failed',
-            images: 'pending',
+            images: enrichedData.image_urls?.length > 0 ? 'completed' : 'pending',
             rsgp: enrichedData.rsgp_compliance ? 'completed' : 'failed',
-            odoo_attributes: enrichedData.odoo_attributes ? 'completed' : 'failed'
+            odoo_attributes: enrichedData.odoo_attributes ? 'completed' : 'failed',
+            environmental_impact: enrichedData.environmental_impact ? 'completed' : 'failed'
           },
           updated_at: new Date().toISOString()
         })
