@@ -77,13 +77,19 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
         <div className="text-center space-y-4">
           <ShoppingCart className="h-12 w-12 mx-auto text-muted-foreground" />
           <h3 className="text-lg font-semibold">
-            {searchQuery ? "Aucun produit Amazon trouvé" : "Aucun enrichissement Code2ASIN"}
+            {searchQuery ? "Aucun produit Amazon trouvé" : "Aucun enrichissement Amazon disponible"}
           </h3>
           <p className="text-muted-foreground">
             {searchQuery 
               ? `Aucun résultat pour "${searchQuery}"`
-              : "Importez des produits depuis Code2ASIN pour les voir ici"}
+              : "Les données Amazon (Code2ASIN) n'ont pas encore été importées pour votre compte."}
           </p>
+          {!searchQuery && (
+            <Button variant="outline" className="mt-4">
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Importer depuis Code2ASIN
+            </Button>
+          )}
         </div>
       </Card>
     );
