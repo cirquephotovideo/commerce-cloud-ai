@@ -42,7 +42,7 @@ export async function autoLinkProducts(userId: string): Promise<MatchSuggestion[
         suggestions.push({
           supplier_product_id: sp.id,
           analysis_id: exactMatch.id,
-          confidence: 100,
+          confidence: 1.0,
           match_type: 'ean',
           supplierProduct: sp,
           analysis: exactMatch,
@@ -79,7 +79,7 @@ export async function autoLinkProducts(userId: string): Promise<MatchSuggestion[
           suggestions.push({
             supplier_product_id: sp.id,
             analysis_id: nameMatches[0].analysis.id,
-            confidence: Math.round(nameMatches[0].score * 100),
+            confidence: nameMatches[0].score,
             match_type: 'brand',
             supplierProduct: sp,
             analysis: nameMatches[0].analysis,
@@ -108,7 +108,7 @@ export async function autoLinkProducts(userId: string): Promise<MatchSuggestion[
       suggestions.push({
         supplier_product_id: sp.id,
         analysis_id: nameMatches[0].analysis.id,
-        confidence: Math.round(nameMatches[0].score * 100),
+        confidence: nameMatches[0].score,
         match_type: 'name',
         supplierProduct: sp,
         analysis: nameMatches[0].analysis,
