@@ -6043,6 +6043,7 @@ export type Database = {
         Returns: boolean
       }
       is_valid_ean13: { Args: { ean: string }; Returns: boolean }
+      merge_existing_links: { Args: never; Returns: Json }
       migrate_supplier_password_to_vault: {
         Args: { p_plain_password: string; p_supplier_id: string }
         Returns: string
