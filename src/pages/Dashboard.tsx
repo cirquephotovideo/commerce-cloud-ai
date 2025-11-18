@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes } from "lucide-react";
+import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes, Truck } from "lucide-react";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { useToast } from "@/hooks/use-toast";
 import { JsonViewer } from "@/components/JsonViewer";
@@ -272,36 +272,97 @@ export default function Dashboard() {
   }, [analyses]);
 
   useEffect(() => {
-    // Filtrer les analyses en fonction de la recherche ET du chat
-    if (!searchQuery.trim() && chatFilteredProducts.length === 0) {
-      setFilteredAnalyses(analyses);
-      return;
+    // Filtrer et trier les analyses en fonction de la recherche ET du chat
+    let filtered = analyses;
+
+    // Filtre par recherche ou chat
+    if (searchQuery.trim() || chatFilteredProducts.length > 0) {
+      const query = searchQuery.toLowerCase();
+      filtered = analyses.filter(analysis => {
+        // Filtre par chat si actif
+        if (isChatActive && chatFilteredProducts.length > 0) {
+          if (!chatFilteredProducts.includes(analysis.id)) return false;
+        }
+
+        // Filtre par recherche si présent
+        if (searchQuery.trim()) {
+          if (searchType === "url") {
+            return analysis.product_url.toLowerCase().includes(query);
+          } else if (searchType === "ean") {
+            const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
+            return ean.toLowerCase().includes(query);
+          } else {
+            const name = analysis.analysis_result?.name || "";
+            return name.toLowerCase().includes(query);
+          }
+        }
+
+        return true;
+      });
     }
 
-    const query = searchQuery.toLowerCase();
-    const filtered = analyses.filter(analysis => {
-      // Filtre par chat si actif
-      if (isChatActive && chatFilteredProducts.length > 0) {
-        if (!chatFilteredProducts.includes(analysis.id)) return false;
-      }
-
-      // Filtre par recherche si présent
-      if (searchQuery.trim()) {
-        if (searchType === "url") {
-          return analysis.product_url.toLowerCase().includes(query);
-        } else if (searchType === "ean") {
-          const ean = analysis.analysis_result?.ean || analysis.analysis_result?.barcode || "";
-          return ean.toLowerCase().includes(query);
-        } else {
-          const name = analysis.analysis_result?.name || "";
-          return name.toLowerCase().includes(query);
-        }
-      }
-
-      return true;
+    // Trier les produits: mettre en avant ceux qui sont complets
+    const sorted = [...filtered].sort((a, b) => {
+      // Score de complétude (0-100)
+      const scoreA = calculateProductScore(a);
+      const scoreB = calculateProductScore(b);
+      
+      return scoreB - scoreA; // Tri décroissant (meilleurs en premier)
     });
-    setFilteredAnalyses(filtered);
+
+    setFilteredAnalyses(sorted);
   }, [searchQuery, searchType, analyses, chatFilteredProducts, isChatActive]);
+
+  // Fonction pour calculer le score de complétude d'un produit
+  const calculateProductScore = (analysis: ProductAnalysis): number => {
+    let score = 0;
+    
+    // Nom valide (+30 points)
+    const name = analysis.analysis_result?.product_name || analysis.analysis_result?.name || "";
+    if (name && name !== "Produit sans nom" && name.length > 3) {
+      score += 30;
+    }
+    
+    // Images (+25 points)
+    const hasImages = analysis.image_urls && analysis.image_urls.length > 0;
+    if (hasImages) {
+      score += 25;
+    }
+    
+    // Fournisseurs liés (+20 points)
+    const supplierCount = (analysis as any).supplier_count || 0;
+    if (supplierCount > 0) {
+      score += 20 + Math.min(supplierCount * 5, 30); // Bonus jusqu'à 6 fournisseurs
+    }
+    
+    // Prix d'achat (+15 points)
+    const hasPrice = analysis.analysis_result?.purchase_price || 
+                     analysis.analysis_result?.price || 
+                     analysis.analysis_result?.selling_price;
+    if (hasPrice) {
+      score += 15;
+    }
+    
+    // EAN/Barcode (+10 points)
+    const hasEan = analysis.analysis_result?.ean || analysis.analysis_result?.barcode;
+    if (hasEan) {
+      score += 10;
+    }
+    
+    // Brand (+10 points)
+    if (analysis.analysis_result?.brand) {
+      score += 10;
+    }
+    
+    // Enrichissements (+10 points)
+    const enrichmentStatus = analysis.enrichment_status || {};
+    const hasEnrichments = Object.keys(enrichmentStatus).length > 0;
+    if (hasEnrichments) {
+      score += 10;
+    }
+    
+    return score;
+  };
 
   const loadAnalyses = async () => {
     try {
@@ -316,8 +377,32 @@ export default function Dashboard() {
       // Convert image_urls from Json to string[]
       const processedData = (data || []).map(item => ({
         ...item,
-        image_urls: Array.isArray(item.image_urls) ? item.image_urls : []
+        image_urls: Array.isArray(item.image_urls) ? item.image_urls : [],
+        supplier_count: 0 // Sera mis à jour ci-dessous
       })) as ProductAnalysis[];
+
+      // Charger le nombre de fournisseurs liés pour chaque produit
+      if (processedData.length > 0) {
+        const analysisIds = processedData.map(a => a.id);
+        const { data: linkCounts } = await supabase
+          .from('product_links')
+          .select('analysis_id')
+          .in('analysis_id', analysisIds);
+
+        // Compter les fournisseurs par analysis_id
+        const supplierCountMap = new Map<string, number>();
+        (linkCounts || []).forEach((link: any) => {
+          supplierCountMap.set(
+            link.analysis_id, 
+            (supplierCountMap.get(link.analysis_id) || 0) + 1
+          );
+        });
+
+        // Ajouter le compteur à chaque analyse
+        processedData.forEach(item => {
+          (item as any).supplier_count = supplierCountMap.get(item.id) || 0;
+        });
+      }
       
       setAnalyses(processedData);
       setFilteredAnalyses(processedData);
@@ -1039,7 +1124,42 @@ export default function Dashboard() {
                             <span className="truncate max-w-[200px] sm:max-w-full">{analysis.product_url}</span>
                           </div>
                           
-                          <TaxonomyBadges analysisId={analysis.id} />
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <TaxonomyBadges analysisId={analysis.id} />
+                            
+                            {/* Badge nombre de fournisseurs */}
+                            {(() => {
+                              const supplierCount = (analysis as any).supplier_count || 0;
+                              if (supplierCount > 0) {
+                                return (
+                                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                    <Truck className="w-3 h-3 mr-1" />
+                                    {supplierCount} fournisseur{supplierCount > 1 ? 's' : ''}
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
+                            
+                            {/* Badge qualité produit */}
+                            {(() => {
+                              const score = calculateProductScore(analysis);
+                              if (score >= 80) {
+                                return (
+                                  <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                    ⭐ Complet
+                                  </Badge>
+                                );
+                              } else if (score >= 50) {
+                                return (
+                                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                    📊 Partiel
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </div>
 
                         <div className="flex flex-col gap-2">
