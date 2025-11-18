@@ -173,6 +173,31 @@ Deno.serve(async (req) => {
       }
       
       console.log(`[AMAZON-AUTO-LINK] ✅ Successfully created ${matches.length} Amazon links`);
+
+      // Fusion immédiate des données Amazon dans product_analyses
+      console.log(`[AMAZON-AUTO-LINK] 🔄 Merging Amazon data into product_analyses...`);
+      for (const match of matches) {
+        const enrichment = enrichments?.find(e => e.id === match.enrichment_id);
+        if (!enrichment) continue;
+
+        const { error: mergeError } = await supabase
+          .from('product_analyses')
+          .update({
+            analysis_result: {
+              name: enrichment.title,
+              brand: enrichment.brand,
+              amazon_asin: enrichment.asin
+            },
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', match.analysis_id)
+          .is('analysis_result->name', null);
+
+        if (mergeError) {
+          console.error(`[AMAZON-AUTO-LINK] Error merging data for analysis ${match.analysis_id}:`, mergeError);
+        }
+      }
+      console.log(`[AMAZON-AUTO-LINK] ✅ Merged ${matches.length} Amazon products data`);
     }
 
     // Update job progress
