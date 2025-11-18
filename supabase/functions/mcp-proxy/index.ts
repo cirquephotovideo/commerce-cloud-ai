@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,14 +43,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { mcp_url, endpoint, method = 'GET', body } = await req.json();
+    const requestBody = await req.json();
+    
+    // Validate input with strict schema
+    const mcpRequestSchema = z.object({
+      mcp_url: z.string().url().refine(
+        (url) => {
+          // Only allow known safe domains
+          const allowedDomains = ['ngrok-free.app', 'ngrok.io', 'localhost', '127.0.0.1'];
+          try {
+            const parsed = new URL(url);
+            return allowedDomains.some(domain => parsed.hostname.endsWith(domain) || parsed.hostname === domain);
+          } catch {
+            return false;
+          }
+        },
+        { message: 'URL must be from an allowed domain (ngrok, localhost)' }
+      ),
+      endpoint: z.string().regex(/^\/[a-zA-Z0-9\/_-]*$/, 'Invalid endpoint format'),
+      method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).default('GET'),
+      body: z.record(z.any()).optional()
+    });
 
-    if (!mcp_url || !endpoint) {
-      return new Response(JSON.stringify({ error: 'Missing mcp_url or endpoint' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const validationResult = mcpRequestSchema.safeParse(requestBody);
+    if (!validationResult.success) {
+      console.error('[mcp-proxy] Validation failed:', validationResult.error);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid request parameters',
+          details: validationResult.error.errors 
+        }), 
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
+
+    const { mcp_url, endpoint, method, body } = validationResult.data;
 
     console.log(`[mcp-proxy] Proxying ${method} request to ${mcp_url}${endpoint}`);
 

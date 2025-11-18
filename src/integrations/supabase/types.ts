@@ -286,6 +286,7 @@ export type Database = {
         Row: {
           client_id: string
           client_secret_encrypted: string
+          client_secret_vault_id: string | null
           created_at: string | null
           days_before_expiry_warning: number | null
           id: string
@@ -294,6 +295,7 @@ export type Database = {
           marketplace_id: string
           rdt_delegation: boolean | null
           refresh_token_encrypted: string
+          refresh_token_vault_id: string | null
           rotation_warning_sent: boolean | null
           secret_expires_at: string | null
           updated_at: string | null
@@ -301,6 +303,7 @@ export type Database = {
         Insert: {
           client_id: string
           client_secret_encrypted: string
+          client_secret_vault_id?: string | null
           created_at?: string | null
           days_before_expiry_warning?: number | null
           id?: string
@@ -309,6 +312,7 @@ export type Database = {
           marketplace_id?: string
           rdt_delegation?: boolean | null
           refresh_token_encrypted: string
+          refresh_token_vault_id?: string | null
           rotation_warning_sent?: boolean | null
           secret_expires_at?: string | null
           updated_at?: string | null
@@ -316,6 +320,7 @@ export type Database = {
         Update: {
           client_id?: string
           client_secret_encrypted?: string
+          client_secret_vault_id?: string | null
           created_at?: string | null
           days_before_expiry_warning?: number | null
           id?: string
@@ -324,6 +329,7 @@ export type Database = {
           marketplace_id?: string
           rdt_delegation?: boolean | null
           refresh_token_encrypted?: string
+          refresh_token_vault_id?: string | null
           rotation_warning_sent?: boolean | null
           secret_expires_at?: string | null
           updated_at?: string | null
@@ -3334,6 +3340,7 @@ export type Database = {
           is_active: boolean | null
           odoo_url: string
           password_encrypted: string
+          password_vault_id: string | null
           updated_at: string
           user_id: string
           username: string
@@ -3345,6 +3352,7 @@ export type Database = {
           is_active?: boolean | null
           odoo_url: string
           password_encrypted: string
+          password_vault_id?: string | null
           updated_at?: string
           user_id: string
           username: string
@@ -3356,6 +3364,7 @@ export type Database = {
           is_active?: boolean | null
           odoo_url?: string
           password_encrypted?: string
+          password_vault_id?: string | null
           updated_at?: string
           user_id?: string
           username?: string
@@ -3484,6 +3493,7 @@ export type Database = {
           access_token_encrypted: string | null
           additional_config: Json | null
           api_key_encrypted: string | null
+          api_key_vault_id: string | null
           api_secret_encrypted: string | null
           created_at: string
           id: string
@@ -3502,6 +3512,7 @@ export type Database = {
           access_token_encrypted?: string | null
           additional_config?: Json | null
           api_key_encrypted?: string | null
+          api_key_vault_id?: string | null
           api_secret_encrypted?: string | null
           created_at?: string
           id?: string
@@ -3520,6 +3531,7 @@ export type Database = {
           access_token_encrypted?: string | null
           additional_config?: Json | null
           api_key_encrypted?: string | null
+          api_key_vault_id?: string | null
           api_secret_encrypted?: string | null
           created_at?: string
           id?: string
@@ -4738,6 +4750,7 @@ export type Database = {
           dedicated_email: string | null
           email_mode: string | null
           id: string
+          imap_password_vault_id: string | null
           is_active: boolean | null
           last_preview_at: string | null
           last_sync_at: string | null
@@ -4763,6 +4776,7 @@ export type Database = {
           dedicated_email?: string | null
           email_mode?: string | null
           id?: string
+          imap_password_vault_id?: string | null
           is_active?: boolean | null
           last_preview_at?: string | null
           last_sync_at?: string | null
@@ -4788,6 +4802,7 @@ export type Database = {
           dedicated_email?: string | null
           email_mode?: string | null
           id?: string
+          imap_password_vault_id?: string | null
           is_active?: boolean | null
           last_preview_at?: string | null
           last_sync_at?: string | null
@@ -5946,6 +5961,10 @@ export type Database = {
         Args: { p_supplier_id: string }
         Returns: undefined
       }
+      get_amazon_credentials: {
+        Args: { p_credential_id: string }
+        Returns: Json
+      }
       get_amazon_links_analytics: {
         Args: { p_period?: string; p_user_id: string }
         Returns: {
@@ -5999,6 +6018,8 @@ export type Database = {
           products_count: number
         }[]
       }
+      get_odoo_password: { Args: { p_config_id: string }; Returns: string }
+      get_platform_api_key: { Args: { p_config_id: string }; Returns: string }
       get_product_enrichment_summary: {
         Args: { p_supplier_product_id: string }
         Returns: Json
@@ -6044,6 +6065,16 @@ export type Database = {
       }
       is_valid_ean13: { Args: { ean: string }; Returns: boolean }
       merge_existing_links: { Args: never; Returns: Json }
+      migrate_credential_to_vault: {
+        Args: {
+          p_description: string
+          p_encrypted_value: string
+          p_id: string
+          p_secret_name: string
+          p_table_name: string
+        }
+        Returns: string
+      }
       migrate_supplier_password_to_vault: {
         Args: { p_plain_password: string; p_supplier_id: string }
         Returns: string

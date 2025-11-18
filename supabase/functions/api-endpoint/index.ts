@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { productAnalysisSchema } from "../_shared/validation-schemas.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -96,12 +97,27 @@ serve(async (req) => {
 
         const body = await req.json();
         
-        // Create product analysis
+        // Validate input using zod schema
+        const validationResult = productAnalysisSchema.safeParse(body);
+        if (!validationResult.success) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'Invalid input data',
+              details: validationResult.error.errors 
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        // Create product analysis with validated data
         const { data, error } = await supabaseClient
           .from('product_analyses')
           .insert({
             user_id: userId,
-            analysis_result: body,
+            ...validationResult.data,
           })
           .select()
           .single();

@@ -49,16 +49,34 @@ serve(async (req) => {
       );
     }
 
-    // Verify secret token if provided
+    // Verify secret token if provided (constant-time comparison)
     const authHeader = req.headers.get('authorization');
-    if (webhook.secret_token && authHeader !== `Bearer ${webhook.secret_token}`) {
-      return new Response(
-        JSON.stringify({ error: 'Invalid authentication' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    if (webhook.secret_token) {
+      const providedToken = authHeader?.replace('Bearer ', '') || '';
+      const expectedToken = webhook.secret_token;
+      
+      // Constant-time comparison to prevent timing attacks
+      if (providedToken.length !== expectedToken.length) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Manual constant-time comparison
+      let isValid = true;
+      for (let i = 0; i < expectedToken.length; i++) {
+        if (providedToken.charCodeAt(i) !== expectedToken.charCodeAt(i)) {
+          isValid = false;
         }
-      );
+      }
+      
+      if (!isValid) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid authentication' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // Parse webhook payload
