@@ -3597,6 +3597,56 @@ export type Database = {
         }
         Relationships: []
       }
+      price_alerts: {
+        Row: {
+          alert_type: string
+          change_percent: number
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          new_price: number
+          old_price: number
+          product_name: string
+          supplier_product_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_type: string
+          change_percent: number
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          new_price: number
+          old_price: number
+          product_name: string
+          supplier_product_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_type?: string
+          change_percent?: number
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          new_price?: number
+          old_price?: number
+          product_name?: string
+          supplier_product_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_alerts_supplier_product_id_fkey"
+            columns: ["supplier_product_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_history: {
         Row: {
           created_at: string | null
@@ -5693,6 +5743,14 @@ export type Database = {
     }
     Functions: {
       auto_fix_orphan_products: { Args: never; Returns: Json }
+      bulk_create_all_supplier_links_by_ean: {
+        Args: { p_user_id: string }
+        Returns: {
+          execution_time_ms: number
+          links_created: number
+          products_matched: number
+        }[]
+      }
       bulk_create_product_links: {
         Args: { p_user_id: string }
         Returns: {
@@ -5743,6 +5801,20 @@ export type Database = {
           date: string
           links_created: number
           manual_count: number
+        }[]
+      }
+      get_best_savings_opportunities: {
+        Args: { p_limit?: number; p_user_id?: string }
+        Returns: {
+          avg_price: number
+          best_price: number
+          ean: string
+          max_savings: number
+          product_id: string
+          product_name: string
+          supplier_count: number
+          total_stock: number
+          worst_price: number
         }[]
       }
       get_enrichment_tasks_with_products: {
