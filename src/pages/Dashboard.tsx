@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Star, Trash2, Upload, Trash, Search, Barcode, Package, Video, FileCheck, Sparkles, ChevronDown, X, ShoppingCart, Boxes, Truck } from "lucide-react";
 import { DetailedAnalysisView } from "@/components/DetailedAnalysisView";
 import { useToast } from "@/hooks/use-toast";
@@ -1069,165 +1070,193 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredAnalyses.map((analysis) => {
-                      const productName = analysis.analysis_result?.product_name || 
-                                          analysis.analysis_result?.name || 
-                                          "Produit sans nom";
-                  
-                  return (
-                    <Card 
-                      key={analysis.id} 
-                      className="hover:shadow-xl hover:border-primary/50 transition-all duration-200 cursor-pointer"
-                      onClick={() => handleOpenDetail(analysis)}
-                    >
-                      <CardHeader className="pb-3 sm:pb-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <Checkbox
-                              checked={selectedIds.has(analysis.id)}
-                              onCheckedChange={() => toggleSelect(analysis.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-1 shrink-0"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <CardTitle 
-                                className="text-sm sm:text-base md:text-lg line-clamp-2"
-                              >
-                                {productName}
-                              </CardTitle>
-                              {getEnrichmentBadges(analysis)}
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleFavorite(analysis.id, analysis.is_favorite);
-                            }}
-                            className="shrink-0"
-                          >
-                            <Star className={`h-4 w-4 sm:h-5 sm:w-5 ${analysis.is_favorite ? 'fill-yellow-500 text-yellow-500' : ''}`} />
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      
-                      <CardContent className="space-y-3 sm:space-y-4">
-                        <ProductImageGallery 
-                          images={analysis.image_urls || []} 
-                          productName={productName}
-                        />
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
-                            <span className="truncate max-w-[200px] sm:max-w-full">{analysis.product_url}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <TaxonomyBadges analysisId={analysis.id} />
-                            
-                            {/* Badge nombre de fournisseurs */}
-                            {(() => {
-                              const supplierCount = (analysis as any).supplier_count || 0;
-                              if (supplierCount > 0) {
-                                return (
-                                  <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
-                                    <Truck className="w-3 h-3 mr-1" />
-                                    {supplierCount} fournisseur{supplierCount > 1 ? 's' : ''}
-                                  </Badge>
-                                );
-                              }
-                              return null;
-                            })()}
-                            
-                            {/* Badge qualité produit */}
-                            {(() => {
-                              const score = calculateProductScore(analysis);
-                              if (score >= 80) {
-                                return (
-                                  <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                                    ⭐ Complet
-                                  </Badge>
-                                );
-                              } else if (score >= 50) {
-                                return (
-                                  <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
-                                    📊 Partiel
-                                  </Badge>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        </div>
+              <Card>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]"></TableHead>
+                        <TableHead className="w-[80px]">Image</TableHead>
+                        <TableHead className="min-w-[200px]">Nom Produit</TableHead>
+                        <TableHead className="min-w-[120px]">EAN / Code</TableHead>
+                        <TableHead>Catégorie</TableHead>
+                        <TableHead className="min-w-[100px]">Fournisseurs</TableHead>
+                        <TableHead>Qualité</TableHead>
+                        <TableHead className="min-w-[280px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAnalyses.map((analysis) => {
+                        const productName = analysis.analysis_result?.product_name || 
+                                            analysis.analysis_result?.name || 
+                                            "Produit sans nom";
+                        const ean = analysis.analysis_result?.ean || 
+                                   analysis.analysis_result?.barcode || 
+                                   analysis.analysis_result?.gtin;
+                        const supplierCount = (analysis as any).supplier_count || 0;
+                        const score = calculateProductScore(analysis);
+                        const imageUrl = analysis.image_urls?.[0] || "/placeholder.svg";
 
-                        <div className="flex flex-col gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDetail(analysis);
-                            }}
+                        return (
+                          <TableRow 
+                            key={analysis.id}
+                            className="hover:bg-muted/50 cursor-pointer"
+                            onClick={() => handleOpenDetail(analysis)}
                           >
-                            <FileCheck className="w-4 h-4 mr-2" />
-                            Détails
-                          </Button>
-                          
-                          <div className="flex gap-2">
-                            <ProductExportMenu 
-                              analysisId={analysis.id}
-                              productName={productName}
-                            />
-                            
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="outline" size="sm" className="flex-1">
-                                  <Sparkles className="w-4 h-4 mr-2" />
-                                  Enrichir
+                            {/* Checkbox + Favorite */}
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <div className="flex flex-col gap-2 items-center">
+                                <Checkbox
+                                  checked={selectedIds.has(analysis.id)}
+                                  onCheckedChange={() => toggleSelect(analysis.id)}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(analysis.id, analysis.is_favorite);
+                                  }}
+                                >
+                                  <Star className={`h-4 w-4 ${analysis.is_favorite ? 'fill-yellow-500 text-yellow-500' : ''}`} />
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickEnrich(analysis.id, 'amazon');
-                                }}>
-                                  📦 Amazon
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickEnrich(analysis.id, 'heygen');
-                                }}>
-                                  🎥 HeyGen
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickEnrich(analysis.id, 'rsgp');
-                                }}>
-                                  🔧 RSGP
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteAnalysis(analysis.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                              </div>
+                            </TableCell>
+
+                            {/* Image */}
+                            <TableCell>
+                              <img 
+                                src={imageUrl} 
+                                alt={productName}
+                                className="w-16 h-16 object-cover rounded border"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = "/placeholder.svg";
+                                }}
+                              />
+                            </TableCell>
+
+                            {/* Nom Produit */}
+                            <TableCell>
+                              <div className="space-y-1">
+                                <div className="font-medium line-clamp-2">{productName}</div>
+                                {getEnrichmentBadges(analysis)}
+                              </div>
+                            </TableCell>
+
+                            {/* EAN / Code Barre */}
+                            <TableCell>
+                              {ean ? (
+                                <Badge variant="outline" className="font-mono text-xs">
+                                  {ean}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </TableCell>
+
+                            {/* Catégorie */}
+                            <TableCell>
+                              <TaxonomyBadges analysisId={analysis.id} />
+                            </TableCell>
+
+                            {/* Fournisseurs */}
+                            <TableCell>
+                              {supplierCount > 0 ? (
+                                <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+                                  <Truck className="w-3 h-3 mr-1" />
+                                  {supplierCount}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">-</span>
+                              )}
+                            </TableCell>
+
+                            {/* Qualité */}
+                            <TableCell>
+                              {score >= 80 ? (
+                                <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                  ⭐ Complet
+                                </Badge>
+                              ) : score >= 50 ? (
+                                <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                  📊 Partiel
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                  ⚠️ Incomplet
+                                </Badge>
+                              )}
+                            </TableCell>
+
+                            {/* Actions */}
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <div className="flex gap-2 flex-wrap">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenDetail(analysis);
+                                  }}
+                                >
+                                  <FileCheck className="w-4 h-4 mr-1" />
+                                  Détails
+                                </Button>
+                                
+                                <ProductExportMenu 
+                                  analysisId={analysis.id}
+                                  productName={productName}
+                                />
+                                
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                      <Sparkles className="w-4 h-4 mr-1" />
+                                      Enrichir
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleQuickEnrich(analysis.id, 'amazon');
+                                    }}>
+                                      📦 Amazon
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleQuickEnrich(analysis.id, 'heygen');
+                                    }}>
+                                      🎥 HeyGen
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleQuickEnrich(analysis.id, 'rsgp');
+                                    }}>
+                                      🔧 RSGP
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                                
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteAnalysis(analysis.id);
+                                  }}
+                                >
+                                  <Trash className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
             )}
 
             {hasMore && filteredAnalyses.length >= displayLimit && (
