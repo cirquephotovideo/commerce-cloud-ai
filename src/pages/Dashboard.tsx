@@ -777,6 +777,20 @@ export default function Dashboard() {
   return (
     <>
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-6 md:py-8">
+        {/* 🔍 RECHERCHE UNIFIÉE - En haut pour accès rapide */}
+        <div className="mb-4 sm:mb-6">
+          <UnifiedSearchBar 
+            query={searchQuery} 
+            onChange={setSearchQuery} 
+          />
+        </div>
+
+        {/* 📊 VUE UNIFIÉE - Top Produits avec Fournisseurs */}
+        <div className="mb-6">
+          <UnifiedDashboardCard />
+        </div>
+
+        {/* Grid: Wizard/Stats | Alertes/Enrichissement */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div className="lg:col-span-1 space-y-4">
             <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
@@ -834,19 +848,6 @@ export default function Dashboard() {
             <UserAlertsWidget />
             <EnrichmentProgressMonitor />
           </div>
-        </div>
-
-        {/* 🔍 RECHERCHE UNIFIÉE - Affiche les résultats des 3 bases */}
-        <div className="mb-4 sm:mb-6">
-          <UnifiedSearchBar 
-            query={searchQuery} 
-            onChange={setSearchQuery} 
-          />
-        </div>
-
-        {/* 📊 VUE UNIFIÉE - Top Produits avec Fournisseurs */}
-        <div className="mb-6">
-          <UnifiedDashboardCard />
         </div>
 
         {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
