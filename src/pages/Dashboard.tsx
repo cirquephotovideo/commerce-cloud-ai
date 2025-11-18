@@ -785,72 +785,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* 📊 VUE UNIFIÉE - Top Produits avec Fournisseurs */}
-        <div className="mb-6">
-          <UnifiedDashboardCard />
-        </div>
-
-        {/* Grid: Wizard/Stats | Alertes/Enrichissement */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <div className="lg:col-span-1 space-y-4">
-            <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-6 w-6 text-primary" />
-                  Wizard Universel
-                </CardTitle>
-                <CardDescription>
-                  Assistant intelligent pour importer, enrichir et exporter vos produits en quelques clics
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button onClick={handleOpenWizard} size="lg" className="w-full">
-                  <Sparkles className="h-5 w-5 mr-2" />
-                  Démarrer le Wizard
-                </Button>
-              </CardContent>
-            </Card>
-
-            <SubscriptionStatus />
-            <AIProviderManagement />
-            
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base sm:text-lg">Base de Données</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Vos produits</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-2 bg-primary/5 rounded">
-                    <span className="text-sm font-medium">🔍 Produits analysés</span>
-                    <span className="text-lg font-bold">
-                      {analyses.length.toLocaleString()}
-                      {hasMore && <span className="text-xs text-muted-foreground ml-1">+</span>}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-secondary/5 rounded">
-                    <span className="text-sm font-medium">📦 Produits fournisseurs</span>
-                    <span className="text-lg font-bold">{supplierCount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-accent/5 rounded">
-                    <span className="text-sm font-medium">🔗 Enrichissements Code2ASIN</span>
-                    <span className="text-lg font-bold">{code2asinCount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-2 bg-muted/30 rounded border border-muted">
-                    <span className="text-sm font-medium">⭐ Favoris</span>
-                    <span className="text-lg font-bold">{analyses.filter(a => a.is_favorite).length}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-          <div className="lg:col-span-2 space-y-4">
-            <UserAlertsWidget />
-            <EnrichmentProgressMonitor />
-          </div>
-        </div>
-
-        {/* 📊 ONGLETS DES RÉSULTATS - Toutes les bases */}
+        {/* 📊 ONGLETS DES RÉSULTATS - Accès rapide aux 3 bases */}
         <Tabs value={activeProductTab} onValueChange={setActiveProductTab} className="mb-6">
 
         {/* Section Détails de l'Analyse */}
@@ -1227,6 +1162,71 @@ export default function Dashboard() {
             <SuppliersTab searchQuery={searchQuery} />
           </TabsContent>
         </Tabs>
+
+        {/* 📊 VUE UNIFIÉE - Top Produits avec Fournisseurs */}
+        <div className="mb-6">
+          <UnifiedDashboardCard />
+        </div>
+
+        {/* Grid: Wizard/Stats | Alertes/Enrichissement */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="lg:col-span-1 space-y-4">
+            <Card className="bg-gradient-to-br from-primary/10 to-secondary/10 border-primary/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                  Wizard Universel
+                </CardTitle>
+                <CardDescription>
+                  Assistant intelligent pour importer, enrichir et exporter vos produits en quelques clics
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleOpenWizard} size="lg" className="w-full">
+                  <Sparkles className="h-5 w-5 mr-2" />
+                  Démarrer le Wizard
+                </Button>
+              </CardContent>
+            </Card>
+
+            <SubscriptionStatus />
+            <AIProviderManagement />
+            
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg">Base de Données</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Vos produits</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-2 bg-primary/5 rounded">
+                    <span className="text-sm font-medium">🔍 Produits analysés</span>
+                    <span className="text-lg font-bold">
+                      {analyses.length.toLocaleString()}
+                      {hasMore && <span className="text-xs text-muted-foreground ml-1">+</span>}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-secondary/5 rounded">
+                    <span className="text-sm font-medium">📦 Produits fournisseurs</span>
+                    <span className="text-lg font-bold">{supplierCount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-accent/5 rounded">
+                    <span className="text-sm font-medium">🔗 Enrichissements Code2ASIN</span>
+                    <span className="text-lg font-bold">{code2asinCount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center p-2 bg-muted/30 rounded border border-muted">
+                    <span className="text-sm font-medium">⭐ Favoris</span>
+                    <span className="text-lg font-bold">{analyses.filter(a => a.is_favorite).length}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="lg:col-span-2 space-y-4">
+            <UserAlertsWidget />
+            <EnrichmentProgressMonitor />
+          </div>
+        </div>
       </main>
 
       <ProductDetailModal
