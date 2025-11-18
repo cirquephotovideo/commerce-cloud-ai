@@ -62,14 +62,12 @@ Deno.serve(async (req) => {
         .eq('id', job_id);
     }
 
-    // Get product analyses without Amazon links (exclure produits sans nom)
+    // Get product analyses without Amazon links
     const { data: analyses, error: analysesError } = await supabase
       .from('product_analyses')
       .select('id, ean, analysis_result')
       .eq('user_id', user.id)
       .not('ean', 'is', null)
-      .not('analysis_result->name', 'is', null)
-      .neq('analysis_result->name', '')
       .range(offset, offset + batch_size - 1);
 
     if (analysesError) {
@@ -174,30 +172,8 @@ Deno.serve(async (req) => {
       
       console.log(`[AMAZON-AUTO-LINK] ✅ Successfully created ${matches.length} Amazon links`);
 
-      // Fusion immédiate des données Amazon dans product_analyses
-      console.log(`[AMAZON-AUTO-LINK] 🔄 Merging Amazon data into product_analyses...`);
-      for (const match of matches) {
-        const enrichment = enrichments?.find(e => e.id === match.enrichment_id);
-        if (!enrichment) continue;
-
-        const { error: mergeError } = await supabase
-          .from('product_analyses')
-          .update({
-            analysis_result: {
-              name: enrichment.title,
-              brand: enrichment.brand,
-              amazon_asin: enrichment.asin
-            },
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', match.analysis_id)
-          .is('analysis_result->name', null);
-
-        if (mergeError) {
-          console.error(`[AMAZON-AUTO-LINK] Error merging data for analysis ${match.analysis_id}:`, mergeError);
-        }
-      }
-      console.log(`[AMAZON-AUTO-LINK] ✅ Merged ${matches.length} Amazon products data`);
+      // Les triggers SQL merge_amazon_data_on_link() s'occupent automatiquement de la fusion
+      console.log(`[AMAZON-AUTO-LINK] ✅ Successfully created ${matches.length} Amazon links (triggers will merge data automatically)`);
     }
 
     // Update job progress
