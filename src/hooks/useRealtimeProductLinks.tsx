@@ -36,7 +36,10 @@ export function useRealtimeProductLinks() {
 
             const productName = (analysisResult.data?.analysis_result as any)?.name || 'Produit';
             const supplierName = supplierResult.data?.product_name || 'Fournisseur';
-            const confidenceScore = link.confidence_score || 100;
+            
+            // Convert confidence_score from 0-1 to percentage (0-100)
+            const rawScore = typeof link.confidence_score === 'number' ? link.confidence_score : 1;
+            const confidenceScore = Math.round(rawScore * 100);
 
             // Toast avec score de confiance
             if (confidenceScore === 100) {
