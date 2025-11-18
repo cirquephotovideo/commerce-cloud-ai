@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 interface SupplierPrice {
   id: string;
   supplier_name: string;
+  supplier_reference?: string;
   purchase_price: number;
   currency: string;
   stock_quantity: number | null;
@@ -27,29 +28,48 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
 
   const fetchPrices = async () => {
     try {
-      const { data, error } = await supabase
-        .from('supplier_price_variants')
+      // First get the product links to get supplier_product_id
+      const { data: links, error: linksError } = await supabase
+        .from('product_links')
+        .select('supplier_product_id')
+        .eq('analysis_id', analysisId);
+
+      if (linksError) throw linksError;
+
+      if (!links || links.length === 0) {
+        setPrices([]);
+        setBestPrice(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const supplierProductIds = links.map(l => l.supplier_product_id);
+
+      // Get supplier products with prices
+      const { data: products, error: productsError } = await supabase
+        .from('supplier_products')
         .select(`
           id,
+          supplier_reference,
           purchase_price,
-          currency,
           stock_quantity,
-          last_updated,
-          supplier_configurations(supplier_name)
+          updated_at,
+          supplier_configurations(name)
         `)
-        .eq('analysis_id', analysisId)
+        .in('id', supplierProductIds)
         .order('purchase_price', { ascending: true });
 
-      if (error) throw error;
+      if (productsError) throw productsError;
 
-      if (data && data.length > 0) {
-        const formattedPrices = data.map((item: any) => ({
+      if (products && products.length > 0) {
+        const formattedPrices = products.map((item: any) => ({
           id: item.id,
-          supplier_name: item.supplier_configurations?.supplier_name || 'Fournisseur inconnu',
-          purchase_price: item.purchase_price,
-          currency: item.currency,
+          supplier_name: item.supplier_configurations?.name || 'Fournisseur inconnu',
+          supplier_reference: item.supplier_reference,
+          purchase_price: item.purchase_price || 0,
+          currency: 'EUR',
           stock_quantity: item.stock_quantity,
-          last_updated: item.last_updated,
+          last_updated: item.updated_at,
         }));
         setPrices(formattedPrices);
         setBestPrice(formattedPrices[0]);
@@ -75,38 +95,23 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
         {
           event: '*',
           schema: 'public',
-          table: 'supplier_price_variants',
+          table: 'supplier_products',
+        },
+        (payload) => {
+          console.log('Product change detected:', payload);
+          fetchPrices();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'product_links',
           filter: `analysis_id=eq.${analysisId}`,
         },
         (payload) => {
-          console.log('Price change detected:', payload);
-
-          // Détecter les changements de prix significatifs
-          if (payload.eventType === 'UPDATE' && payload.old && payload.new) {
-            const oldPrice = (payload.old as any).purchase_price;
-            const newPrice = (payload.new as any).purchase_price;
-            
-            if (oldPrice && newPrice && oldPrice !== newPrice) {
-              const changePercentage = ((newPrice - oldPrice) / oldPrice) * 100;
-              
-              if (Math.abs(changePercentage) > 5) {
-                toast.info('🔔 Prix fournisseur mis à jour', {
-                  description: `${(payload.new as any).supplier_name}: ${newPrice}€ (${changePercentage > 0 ? '+' : ''}${changePercentage.toFixed(1)}%)`,
-                });
-
-              setRecentChanges((prev) => [
-                {
-                  supplier_name: 'Fournisseur', // Will be updated on refetch
-                  old_price: oldPrice,
-                  new_price: newPrice,
-                  change_percentage: changePercentage,
-                },
-                ...prev.slice(0, 4),
-              ]);
-              }
-            }
-          }
-
+          console.log('Link change detected:', payload);
           fetchPrices();
         }
       )
