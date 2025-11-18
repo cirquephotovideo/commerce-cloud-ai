@@ -154,13 +154,19 @@ export const Code2AsinTab = ({ searchQuery }: Code2AsinTabProps) => {
                 <TableRow key={enrich.id}>
                 <TableCell>
                     <div className="flex items-center gap-2">
-                      {(enrich as any).main_image && (
-                        <img
-                          src={(enrich as any).main_image}
-                          alt={enrich.title || "Product"}
-                          className="h-10 w-10 rounded object-cover"
-                        />
-                      )}
+                      {(() => {
+                        const images = enrich.image_urls as string[] | null;
+                        return images && Array.isArray(images) && images.length > 0 && (
+                          <img
+                            src={images[0]}
+                            alt={enrich.title || "Product"}
+                            className="h-10 w-10 rounded object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        );
+                      })()}
                       <span className="font-medium line-clamp-2 max-w-[300px]">
                         {enrich.title || "Sans titre"}
                       </span>
