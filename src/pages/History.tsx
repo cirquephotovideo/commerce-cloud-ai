@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Loader2, Trash2, Star, Download, BarChart3, Database } from "lucide-react";
+import { Loader2, Trash2, Star, Download, BarChart3, Database, Package } from "lucide-react";
+import { UnifiedProductsTable } from "@/components/unified-products/UnifiedProductsTable";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -372,6 +374,23 @@ export default function History() {
             Dashboard Import/Export
           </Button>
         </div>
+
+        <Tabs defaultValue="unified" className="mb-6">
+          <TabsList>
+            <TabsTrigger value="unified">
+              <Package className="w-4 h-4 mr-2" />
+              Vue Unifiée Multi-Fournisseurs
+            </TabsTrigger>
+            <TabsTrigger value="history">
+              Historique Détaillé
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="unified">
+            <UnifiedProductsTable searchQuery={searchQuery} />
+          </TabsContent>
+
+          <TabsContent value="history">
 
         {/* Stats Cards */}
         <div className="grid grid-cols-4 gap-4 mb-6">

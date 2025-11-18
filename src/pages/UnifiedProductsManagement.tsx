@@ -12,6 +12,7 @@ import { ProductLinksDashboard } from "@/components/unified-products/ProductLink
 import { AmazonLinksAnalytics } from "@/components/unified-products/AmazonLinksAnalytics";
 import { AmazonLinksMassValidation } from "@/components/unified-products/AmazonLinksMassValidation";
 import { ProductChatRAG } from "@/components/unified-products/ProductChatRAG";
+import { AutoSyncStatusWidget } from "@/components/AutoSyncStatusWidget";
 import { useRealtimeProductLinks } from "@/hooks/useRealtimeProductLinks";
 import { useRealtimeAmazonLinks } from "@/hooks/useRealtimeAmazonLinks";
 
@@ -38,7 +39,14 @@ export default function UnifiedProductsManagement() {
       </p>
 
       {/* Statistiques Globales */}
-      <GlobalProductStats />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2">
+          <GlobalProductStats />
+        </div>
+        <div>
+          <AutoSyncStatusWidget />
+        </div>
+      </div>
 
       {/* Panneau Fusion Automatique */}
       <AutoLinkPanel />

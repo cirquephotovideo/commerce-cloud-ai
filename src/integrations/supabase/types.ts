@@ -707,6 +707,30 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_logs: {
+        Row: {
+          action_type: string
+          created_at: string | null
+          id: string
+          result_data: Json | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string | null
+          id?: string
+          result_data?: Json | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string | null
+          id?: string
+          result_data?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       automation_master_rules: {
         Row: {
           actions: Json
@@ -5743,6 +5767,7 @@ export type Database = {
     }
     Functions: {
       auto_fix_orphan_products: { Args: never; Returns: Json }
+      auto_sync_supplier_links: { Args: never; Returns: undefined }
       bulk_create_all_supplier_links_by_ean: {
         Args: { p_user_id: string }
         Returns: {
@@ -5872,6 +5897,15 @@ export type Database = {
       get_supplier_password: {
         Args: { p_supplier_id: string }
         Returns: string
+      }
+      get_unified_products: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search_query?: string
+          p_user_id: string
+        }
+        Returns: Json
       }
       get_user_email: { Args: { _user_id: string }; Returns: string }
       has_role: {
