@@ -1,13 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Truck, Mail, ExternalLink, TrendingUp } from "lucide-react";
+import { Truck, Mail, ExternalLink, TrendingUp, Link as LinkIcon, Loader2, AlertCircle } from "lucide-react";
 import { useSupplierPricesRealtime } from "@/hooks/useSupplierPricesRealtime";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useQuery } from "@tanstack/react-query";
 
 interface SuppliersSectionProps {
   analysisId: string;
@@ -15,6 +17,43 @@ interface SuppliersSectionProps {
 
 export const SuppliersSection = ({ analysisId }: SuppliersSectionProps) => {
   const { prices: suppliers, isLoading, refetch } = useSupplierPricesRealtime(analysisId);
+  const [isLinking, setIsLinking] = useState(false);
+
+  // Get the product's EAN to check if auto-linking is possible
+  const { data: productData } = useQuery({
+    queryKey: ['product-ean', analysisId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('product_analyses')
+        .select('ean')
+        .eq('id', analysisId)
+        .single();
+      return data;
+    }
+  });
+
+  const handleAutoLink = async () => {
+    setIsLinking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('link-single-product-suppliers', {
+        body: { analysisId }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success(`${data.links_created} fournisseur(s) lié(s) automatiquement`);
+        refetch();
+      } else {
+        toast.error(data?.error || 'Aucun fournisseur trouvé');
+      }
+    } catch (error: any) {
+      console.error('Error auto-linking:', error);
+      toast.error('Erreur lors de la liaison automatique');
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   // Real-time updates
   useEffect(() => {
@@ -53,8 +92,10 @@ export const SuppliersSection = ({ analysisId }: SuppliersSectionProps) => {
   }
 
   if (!suppliers || suppliers.length === 0) {
+    const hasEan = productData?.ean && productData.ean !== '';
+    
     return (
-      <Card>
+      <Card id="section-suppliers">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5" />
@@ -64,12 +105,61 @@ export const SuppliersSection = ({ analysisId }: SuppliersSectionProps) => {
             Aucun fournisseur lié à ce produit
           </CardDescription>
         </CardHeader>
+        <CardContent className="space-y-4">
+          {!hasEan ? (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Ce produit n'a pas d'EAN</strong>
+                <p className="text-sm mt-2">
+                  Pour lier automatiquement des fournisseurs, ce produit doit avoir un code EAN valide.
+                </p>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert>
+              <LinkIcon className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Liaison automatique disponible</strong>
+                <p className="text-sm mt-2 mb-3">
+                  Ce produit a un EAN ({productData.ean}). Cliquez ci-dessous pour rechercher et lier automatiquement les fournisseurs correspondants.
+                </p>
+                <Button 
+                  onClick={handleAutoLink}
+                  disabled={isLinking}
+                  size="sm"
+                >
+                  {isLinking ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Recherche en cours...
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon className="h-4 w-4 mr-2" />
+                      Lier automatiquement par EAN
+                    </>
+                  )}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          
+          <div className="text-sm text-muted-foreground">
+            <p className="font-medium mb-2">💡 Comment lier des fournisseurs :</p>
+            <ul className="list-disc list-inside space-y-1 text-xs">
+              <li>Utilisez la <strong>Fusion Multi-Fournisseurs</strong> pour lier automatiquement tous vos produits par EAN</li>
+              <li>Ou cliquez sur "Lier automatiquement par EAN" ci-dessus pour ce produit uniquement</li>
+              <li>Les fournisseurs doivent avoir le même EAN que ce produit pour être liés</li>
+            </ul>
+          </div>
+        </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card id="section-suppliers">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Truck className="h-5 w-5" />
