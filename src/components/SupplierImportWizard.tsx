@@ -17,6 +17,7 @@ import { detectHeaderRow } from "@/lib/detectHeaderRow";
 import { RawFilePreview } from "./mapping/RawFilePreview";
 import { RowFilterConfig } from "./mapping/RowFilterConfig";
 import { ColumnSelector } from "./mapping/ColumnSelector";
+import { ImportReport } from "./ImportReport";
 
 interface SupplierImportWizardProps {
   onClose: () => void;
@@ -56,6 +57,34 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [detectedHeaderRow, setDetectedHeaderRow] = useState(0);
   const [rawRows, setRawRows] = useState<any[][]>([]);
   const [hasHeaderRow, setHasHeaderRow] = useState(true);
+  const [showImportReport, setShowImportReport] = useState(false);
+  const [importReportData, setImportReportData] = useState<any>(null);
+  const [resumableJob, setResumableJob] = useState<any>(null);
+
+  // Check for resumable jobs on mount
+  useEffect(() => {
+    const checkResumableJobs = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: stalledJobs } = await supabase
+        .from('supplier_import_chunk_jobs')
+        .select(`
+          *,
+          supplier:supplier_configurations(supplier_name)
+        `)
+        .eq('user_id', user.id)
+        .in('status', ['processing', 'stalled', 'error'])
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (stalledJobs && stalledJobs.length > 0) {
+        setResumableJob(stalledJobs[0]);
+      }
+    };
+
+    checkResumableJobs();
+  }, []);
 
   const { data: suppliers } = useQuery({
     queryKey: ["suppliers"],
@@ -140,6 +169,47 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       
       setFile(selectedFile);
       previewFile(selectedFile);
+    }
+  };
+
+  const resumeImport = async () => {
+    if (!resumableJob) return;
+    
+    setLoading(true);
+    setImportProgress({ 
+      status: 'processing', 
+      current: 0,
+      total: 0,
+      message: 'Reprise de l\'import...' 
+    });
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session expirée');
+      }
+
+      const { data, error } = await supabase.functions.invoke('resume-stuck-import', {
+        body: { jobId: resumableJob.id },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success('Import repris avec succès');
+        setResumableJob(null);
+        // The job is now marked as processing, user can continue from wizard
+      } else {
+        toast.error(data.error || 'Impossible de reprendre l\'import');
+      }
+    } catch (error) {
+      console.error('[WIZARD] Resume error:', error);
+      toast.error('Échec de la reprise de l\'import');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -402,12 +472,56 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         const chunkSize = 100;
         const totalChunks = Math.ceil(totalRows / chunkSize);
 
+        // Helper function for retry with exponential backoff
+        const sendChunkWithRetry = async (chunkIndex: number, chunkData: any[][], maxRetries = 3) => {
+          for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                throw new Error('Session expirée, veuillez vous reconnecter');
+              }
+
+              const { data: chunkResult, error: chunkError } = await supabase.functions.invoke('supplier-import-data-chunk', {
+                body: {
+                  jobId: job.id,
+                  chunkIndex,
+                  chunkData,
+                  columnMapping,
+                  supplierId,
+                },
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`
+                }
+              });
+
+              if (chunkError) throw chunkError;
+              return chunkResult;
+            } catch (error) {
+              console.error(`[WIZARD] Chunk ${chunkIndex} attempt ${attempt}/${maxRetries} failed:`, error);
+              
+              if (attempt === maxRetries) {
+                // Log final failure
+                await supabase.from('import_chunk_errors').insert({
+                  job_id: job.id,
+                  chunk_index: chunkIndex,
+                  error_message: error.message,
+                  retry_count: maxRetries,
+                });
+                throw error;
+              }
+              
+              // Exponential backoff: 2s, 5s, 10s
+              const delay = attempt === 1 ? 2000 : attempt === 2 ? 5000 : 10000;
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        };
+
         for (let i = 0; i < totalChunks; i++) {
           const start = i * chunkSize;
           const end = Math.min(start + chunkSize, totalRows);
           const chunkData = dataRows.slice(start, end);
           
-          const progressPct = Math.round(15 + (85 * (i + 1) / totalChunks));
           setImportProgress({
             current: end,
             total: totalRows,
@@ -415,29 +529,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             message: `Import: ${end}/${totalRows} lignes (chunk ${i + 1}/${totalChunks})`,
           });
 
-          // Get fresh session for auth
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error('Session expirée, veuillez vous reconnecter');
-          }
-
-          const { data: chunkResult, error: chunkError } = await supabase.functions.invoke('supplier-import-data-chunk', {
-            body: {
-              jobId: job.id,
-              chunkIndex: i,
-              chunkData,
-              columnMapping,
-              supplierId,
-            },
-            headers: {
-              Authorization: `Bearer ${session.access_token}`
-            }
-          });
-
-          if (chunkError) {
-            console.error('[WIZARD] Chunk error:', chunkError);
-            throw chunkError;
-          }
+          const chunkResult = await sendChunkWithRetry(i, chunkData);
 
           console.log('[WIZARD] Chunk', i + 1, '/', totalChunks, 'processed');
 
@@ -448,25 +540,57 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
               status: 'complete',
               message: `Terminé: ${chunkResult.stats.new} nouveaux, ${chunkResult.stats.matched} mises à jour`,
             });
-            toast.success(`Import réussi: ${chunkResult.stats.new} nouveaux produits, ${chunkResult.stats.matched} mises à jour`);
             
-            // Fetch linking stats from job
+            // Fetch linking stats and errors from job
             setCurrentJobId(job.id);
             setTimeout(async () => {
               const { data: jobData } = await supabase
                 .from('supplier_import_chunk_jobs')
-                .select('links_created, unlinked_products')
+                .select(`
+                  *,
+                  supplier:supplier_configurations(supplier_name)
+                `)
                 .eq('id', job.id)
                 .single();
               
+              const { data: errors } = await supabase
+                .from('import_chunk_errors')
+                .select('*')
+                .eq('job_id', job.id);
+
               if (jobData) {
                 setLinkingStats({
                   linked: jobData.links_created || 0,
                   unlinked: jobData.unlinked_products || 0,
                 });
+
+                // Generate import report
+                const duration = (new Date(jobData.updated_at).getTime() - new Date(jobData.created_at).getTime()) / 60000;
+                setImportReportData({
+                  job_id: job.id,
+                  supplier_name: jobData.supplier?.supplier_name || 'Unknown',
+                  total_rows: jobData.total_rows,
+                  processed_rows: jobData.processed_rows,
+                  matched: jobData.matched || 0,
+                  new_products: jobData.new_products || 0,
+                  failed: jobData.failed || 0,
+                  links_created: jobData.links_created || 0,
+                  unlinked_products: jobData.unlinked_products || 0,
+                  duration_minutes: Math.round(duration),
+                  chunks_failed: errors?.length || 0,
+                  status: jobData.status === 'completed' ? 'completed' : 
+                          jobData.processed_rows > 0 ? 'partial' : 'failed',
+                  errors: errors?.map(e => ({
+                    chunk: e.chunk_index,
+                    message: e.error_message,
+                    retry_count: e.retry_count,
+                  })) || []
+                });
+                setShowImportReport(true);
               }
-            }, 2000); // Wait 2s for auto-link to complete
+            }, 2000);
             
+            toast.success(`Import réussi: ${chunkResult.stats.new} nouveaux produits, ${chunkResult.stats.matched} mises à jour`);
             break;
           }
         }
@@ -570,16 +694,40 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const canImport = columnMapping.product_name !== null && columnMapping.purchase_price !== null;
 
   return (
-    <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            📥 Assistant d'import CSV/XLSX - Étape {step}/3
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              📥 Assistant d'import CSV/XLSX - Étape {step}/3
+            </DialogTitle>
+          </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Step 1: Select Supplier & File */}
+          <div className="space-y-6">
+            {/* Resume Import Banner */}
+            {resumableJob && (
+              <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="flex items-center justify-between">
+                  <div>
+                    <strong>Import incomplet détecté</strong>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {resumableJob.supplier?.supplier_name}: {resumableJob.processed_rows || 0}/{resumableJob.total_rows} lignes traitées
+                    </p>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={resumeImport}
+                    disabled={loading}
+                  >
+                    Reprendre l'import →
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Step 1: Select Supplier & File */}
           {step === 1 && (
             <Card>
               <CardContent className="pt-6 space-y-4">
@@ -989,5 +1137,16 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Import Report Dialog */}
+    <ImportReport 
+      open={showImportReport}
+      onClose={() => {
+        setShowImportReport(false);
+        setImportReportData(null);
+      }}
+      data={importReportData}
+    />
+  </>
   );
 }
