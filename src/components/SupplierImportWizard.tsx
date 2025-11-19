@@ -374,10 +374,10 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         
         let errorMessage = `Erreur lors de l'importation: ${error.message}`;
         
-        if (error.message?.includes('Memory limit exceeded')) {
-          errorMessage = '❌ Fichier trop volumineux. Veuillez le diviser en plusieurs fichiers.';
-        } else if (error.message?.includes('timeout')) {
-          errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit.';
+        if (error.message?.includes('Memory limit exceeded') || error.message?.includes('WORKER_LIMIT')) {
+          errorMessage = '❌ Fichier trop volumineux. Veuillez le diviser en plusieurs fichiers plus petits (max 100 lignes).';
+        } else if (error.message?.includes('timeout') || error.message?.includes('CPU Time exceeded')) {
+          errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit (max 100 lignes).';
         } else if (error.message?.includes('Failed to start chunk processing')) {
           errorMessage = '❌ Échec du démarrage du traitement. Vérifiez le format du fichier.';
         }
@@ -386,6 +386,11 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       }
 
       console.log('[WIZARD] Import response:', data);
+      
+      // Warn if file too large
+      if (data.hasMoreRows) {
+        toast.warning(`⚠️ Seules ${data.processedRows} lignes sur ${data.totalRows} ont été traitées. Divisez votre fichier pour traiter plus de données.`);
+      }
       
       // Check if 0 products processed
       if (data.processedCount === 0 || data.message?.includes('0 produits')) {
