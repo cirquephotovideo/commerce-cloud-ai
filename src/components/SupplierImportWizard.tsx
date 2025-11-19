@@ -350,7 +350,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
       
       // 2. Call Edge Function with file path only
-      const functionName = isXLSX ? 'supplier-import-xlsx' : 'supplier-import-csv';
+      const functionName = isXLSX ? 'supplier-import-chunked' : 'supplier-import-csv';
       const body: any = {
         supplierId,
         filePath,  // ✅ Just the path, not the content
@@ -375,9 +375,9 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         let errorMessage = `Erreur lors de l'importation: ${error.message}`;
         
         if (error.message?.includes('Memory limit exceeded') || error.message?.includes('WORKER_LIMIT')) {
-          errorMessage = '❌ Fichier trop volumineux. Veuillez le diviser en plusieurs fichiers plus petits (max 100 lignes).';
+          errorMessage = '❌ Fichier trop volumineux. Le traitement par chunks a été lancé en arrière-plan.';
         } else if (error.message?.includes('timeout') || error.message?.includes('CPU Time exceeded')) {
-          errorMessage = '⏱️ Le traitement a pris trop de temps. Essayez avec un fichier plus petit (max 100 lignes).';
+          errorMessage = '⏱️ Le traitement a pris trop de temps. Le traitement par chunks a été lancé.';
         } else if (error.message?.includes('Failed to start chunk processing')) {
           errorMessage = '❌ Échec du démarrage du traitement. Vérifiez le format du fichier.';
         }
@@ -387,9 +387,15 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
       console.log('[WIZARD] Import response:', data);
       
-      // Warn if file too large
-      if (data.hasMoreRows) {
-        toast.warning(`⚠️ Seules ${data.processedRows} lignes sur ${data.totalRows} ont été traitées. Divisez votre fichier pour traiter plus de données.`);
+      // For chunked imports, show progress info
+      if (data.jobId && !data.isComplete) {
+        toast.success(`✅ Import démarré: ${data.progress.percentage}% (${data.progress.processed}/${data.progress.total} lignes)`);
+        setImportProgress({ 
+          current: data.progress.percentage, 
+          total: 100, 
+          status: 'processing', 
+          message: `Traitement en cours: ${data.progress.processed}/${data.progress.total} lignes` 
+        });
       }
       
       // Check if 0 products processed
