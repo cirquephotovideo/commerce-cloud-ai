@@ -199,6 +199,55 @@ Deno.serve(async (req) => {
         new: job.new_products + newProducts,
         failed: job.failed + failed,
       });
+
+      // Auto-link imported products
+      try {
+        console.log('[DATA-CHUNK] Starting auto-link process...');
+        
+        // Get IDs of products created/updated in this import
+        const { data: importedProducts } = await supabase
+          .from('supplier_products')
+          .select('id')
+          .eq('supplier_id', supplierId)
+          .gte('updated_at', job.created_at);
+
+        if (importedProducts && importedProducts.length > 0) {
+          const linkingResponse = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/auto-link-after-import`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                supplierId,
+                userId: user.id,
+                productIds: importedProducts.map(p => p.id),
+              }),
+            }
+          );
+
+          if (linkingResponse.ok) {
+            const linkingResult = await linkingResponse.json();
+            console.log('[DATA-CHUNK] Auto-link completed:', linkingResult);
+            
+            // Update job with linking stats
+            await supabase
+              .from('supplier_import_chunk_jobs')
+              .update({
+                links_created: linkingResult.linked || 0,
+                unlinked_products: linkingResult.unlinked || 0,
+              })
+              .eq('id', jobId);
+          } else {
+            console.error('[DATA-CHUNK] Auto-link failed:', await linkingResponse.text());
+          }
+        }
+      } catch (linkError) {
+        console.error('[DATA-CHUNK] Auto-link error:', linkError);
+        // Don't fail the import if linking fails
+      }
     }
 
     return new Response(

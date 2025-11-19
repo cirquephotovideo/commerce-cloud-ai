@@ -42,6 +42,11 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
     status: 'idle' as 'idle' | 'processing' | 'complete' | 'error',
     message: '',
   });
+  const [linkingStats, setLinkingStats] = useState<{
+    linked: number;
+    unlinked: number;
+  } | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   
   // Unified mapper states
   const [skipRowsTop, setSkipRowsTop] = useState(0);
@@ -444,6 +449,24 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
               message: `Terminé: ${chunkResult.stats.new} nouveaux, ${chunkResult.stats.matched} mises à jour`,
             });
             toast.success(`Import réussi: ${chunkResult.stats.new} nouveaux produits, ${chunkResult.stats.matched} mises à jour`);
+            
+            // Fetch linking stats from job
+            setCurrentJobId(job.id);
+            setTimeout(async () => {
+              const { data: jobData } = await supabase
+                .from('supplier_import_chunk_jobs')
+                .select('links_created, unlinked_products')
+                .eq('id', job.id)
+                .single();
+              
+              if (jobData) {
+                setLinkingStats({
+                  linked: jobData.links_created || 0,
+                  unlinked: jobData.unlinked_products || 0,
+                });
+              }
+            }, 2000); // Wait 2s for auto-link to complete
+            
             break;
           }
         }
@@ -852,12 +875,61 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
           )}
 
           {importProgress.status === 'complete' && (
-            <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800 dark:text-green-200">
-                {importProgress.message}
-              </AlertDescription>
-            </Alert>
+            <>
+              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800 dark:text-green-200">
+                  {importProgress.message}
+                </AlertDescription>
+              </Alert>
+
+              {linkingStats && (
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <Card className="border-green-200 bg-green-50 dark:bg-green-950">
+                    <CardContent className="p-4">
+                      <div className="text-sm text-muted-foreground">Produits liés</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        {linkingStats.linked}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Associés automatiquement au catalogue
+                      </div>
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className={linkingStats.unlinked > 0 ? "border-orange-200 bg-orange-50 dark:bg-orange-950" : "border-gray-200"}>
+                    <CardContent className="p-4">
+                      <div className="text-sm text-muted-foreground">Produits non liés</div>
+                      <div className={`text-2xl font-bold ${linkingStats.unlinked > 0 ? 'text-orange-600' : 'text-muted-foreground'}`}>
+                        {linkingStats.unlinked}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {linkingStats.unlinked > 0 ? 'Nécessitent une liaison manuelle' : 'Tous les produits sont liés'}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {linkingStats && linkingStats.unlinked > 0 && (
+                <Alert className="mt-4 border-orange-200 bg-orange-50 dark:bg-orange-950">
+                  <AlertCircle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800 dark:text-orange-200">
+                    {linkingStats.unlinked} produits n'ont pas pu être liés automatiquement.
+                    <Button 
+                      variant="link" 
+                      className="ml-2 p-0 h-auto text-orange-600 hover:text-orange-700"
+                      onClick={() => {
+                        onClose();
+                        window.location.href = '/suppliers';
+                      }}
+                    >
+                      Voir les produits fournisseurs →
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
           )}
 
           {importProgress.status === 'error' && (
