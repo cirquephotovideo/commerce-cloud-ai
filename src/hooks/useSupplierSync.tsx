@@ -34,17 +34,26 @@ export const useSupplierSync = () => {
 
   const fixStuckEnrichments = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('fix-stuck-enrichments');
+      const { data, error } = await supabase.functions.invoke('emergency-recover-enrichments');
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
-      toast.success(`✅ ${data.fixed} produits débloqués, ${data.tasks_created} tâches créées`);
       queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
       queryClient.invalidateQueries({ queryKey: ['enrichment-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['supplier-health'] });
+      
+      // Show detailed success message
+      if (data?.success) {
+        toast.success(data.message || 'Récupération d\'urgence terminée', {
+          description: `${data.final_status?.products_pending || 0} produits réinitialisés, ${data.final_status?.queue_tasks || 0} tâches en file`
+        });
+      }
     },
     onError: (error: Error) => {
-      toast.error(`❌ Erreur : ${error.message}`);
+      toast.error('Erreur lors de la récupération d\'urgence', {
+        description: error.message
+      });
     }
   });
 
