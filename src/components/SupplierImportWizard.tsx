@@ -350,7 +350,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
       
       // 2. Call Edge Function with file path only
-      const functionName = isXLSX ? 'supplier-import-chunked' : 'supplier-import-csv';
+      const functionName = isXLSX ? 'supplier-import-xlsx' : 'supplier-import-csv';
       const body: any = {
         supplierId,
         filePath,  // ✅ Just the path, not the content
@@ -374,32 +374,52 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
         
         let errorMessage = `Erreur lors de l'importation: ${error.message}`;
         
-        if (error.message?.includes('Memory limit exceeded') || error.message?.includes('WORKER_LIMIT')) {
-          errorMessage = '❌ Fichier trop volumineux. Le traitement par chunks a été lancé en arrière-plan.';
-        } else if (error.message?.includes('timeout') || error.message?.includes('CPU Time exceeded')) {
-          errorMessage = '⏱️ Le traitement a pris trop de temps. Le traitement par chunks a été lancé.';
+        if (error.message?.includes('Memory limit exceeded') || error.message?.includes('WORKER_LIMIT') || error.message?.includes('CPU Time exceeded')) {
+          // Try chunked import for large files
+          console.log('[WIZARD] File too large, trying chunked import...');
+          const { data: chunkData, error: chunkError } = await supabase.functions.invoke('supplier-import-chunked', {
+            body,
+          });
+          
+          if (chunkError) {
+            errorMessage = `❌ Fichier trop volumineux. Veuillez le diviser en plusieurs fichiers plus petits.`;
+            throw new Error(errorMessage);
+          }
+          
+          // Chunked import started successfully
+          toast.success(`✅ Import volumineux démarré en arrière-plan`);
+          setImportProgress({ 
+            current: 50, 
+            total: 100, 
+            status: 'processing', 
+            message: `Traitement par chunks en cours...` 
+          });
+          
+          // Use chunk data for the rest of the flow
+          Object.assign(data || {}, chunkData);
         } else if (error.message?.includes('Failed to start chunk processing')) {
           errorMessage = '❌ Échec du démarrage du traitement. Vérifiez le format du fichier.';
+          throw new Error(errorMessage);
+        } else {
+          throw new Error(errorMessage);
         }
-        
-        throw new Error(errorMessage);
       }
 
       console.log('[WIZARD] Import response:', data);
       
       // For chunked imports, show progress info
-      if (data.jobId && !data.isComplete) {
-        toast.success(`✅ Import démarré: ${data.progress.percentage}% (${data.progress.processed}/${data.progress.total} lignes)`);
+      if (data?.jobId && !data.isComplete) {
+        toast.success(`✅ Import démarré: ${data.progress?.percentage || 0}% (${data.progress?.processed || 0}/${data.progress?.total || 0} lignes)`);
         setImportProgress({ 
-          current: data.progress.percentage, 
+          current: data.progress?.percentage || 50, 
           total: 100, 
           status: 'processing', 
-          message: `Traitement en cours: ${data.progress.processed}/${data.progress.total} lignes` 
+          message: `Traitement en cours: ${data.progress?.processed || 0}/${data.progress?.total || 0} lignes` 
         });
       }
       
       // Check if 0 products processed
-      if (data.processedCount === 0 || data.message?.includes('0 produits')) {
+      if (data?.processedCount === 0 || data?.message?.includes('0 produits')) {
         const helpMessage = `
 ⚠️ 0 produits traités. Vérifications :
 • Votre mapping utilise des indices numériques : ✓ supporté
