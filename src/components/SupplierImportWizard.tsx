@@ -321,109 +321,162 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
           onConflict: 'supplier_id,is_default'
         });
       
-      // Save column mapping to supplier configuration (for backward compatibility)
+      // Save column mapping to supplier configuration
       await supabase
         .from('supplier_configurations')
         .update({ column_mapping: columnMapping })
         .eq('id', supplierId);
       
-      setImportProgress({ current: 10, total: 100, status: 'processing', message: 'Upload du fichier vers Storage...' });
+      setImportProgress({ current: 5, total: 100, status: 'processing', message: 'Lecture du fichier...' });
       
-      // 1. Upload file to Storage
-      const timestamp = Date.now();
-      const filePath = `${user.id}/${timestamp}_${file.name}`;
-      
-      console.log('[WIZARD] Uploading file to Storage:', filePath, `Size: ${(file.size / 1024 / 1024).toFixed(2)} MB`);
-      
-      const { error: uploadError } = await supabase.storage
-        .from('supplier-imports')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
+      // Parse file client-side for XLSX
+      if (isXLSX) {
+        console.log('[WIZARD] Parsing XLSX file client-side...');
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer);
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+        
+        // Apply skip rows
+        const dataRows = skipRowsTop > 0 ? rawData.slice(skipRowsTop) : rawData;
+        const totalRows = dataRows.length;
+        
+        console.log('[WIZARD] Parsed', totalRows, 'rows');
+        
+        setImportProgress({ current: 10, total: 100, status: 'processing', message: 'Upload du fichier...' });
+        
+        // Upload file to storage for record keeping
+        const timestamp = Date.now();
+        const filePath = `${user.id}/${timestamp}_${file.name}`;
+        
+        await supabase.storage
+          .from('supplier-imports')
+          .upload(filePath, file, { upsert: false });
+        
+        setImportProgress({ current: 15, total: 100, status: 'processing', message: 'Création du job d\'import...' });
+        
+        // Create import job
+        const { data: job, error: jobError } = await supabase
+          .from('supplier_import_chunk_jobs')
+          .insert({
+            user_id: user.id,
+            supplier_id: supplierId,
+            file_path: filePath,
+            total_rows: totalRows,
+            processed_rows: 0,
+            current_chunk: 0,
+            chunk_size: 100,
+            skip_rows: skipRowsTop,
+            column_mapping: columnMapping,
+            status: 'processing',
+            matched: 0,
+            new_products: 0,
+            failed: 0,
+          })
+          .select()
+          .single();
+
+        if (jobError || !job) {
+          throw new Error('Échec de la création du job d\'import');
+        }
+
+        console.log('[WIZARD] Job created:', job.id);
+        
+        // Send chunks
+        const chunkSize = 100;
+        const totalChunks = Math.ceil(totalRows / chunkSize);
+
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, totalRows);
+          const chunkData = dataRows.slice(start, end);
+          
+          const progressPct = Math.round(15 + (85 * (i + 1) / totalChunks));
+          setImportProgress({
+            current: end,
+            total: totalRows,
+            status: 'processing',
+            message: `Import: ${end}/${totalRows} lignes (chunk ${i + 1}/${totalChunks})`,
+          });
+
+          const { data: chunkResult, error: chunkError } = await supabase.functions.invoke('supplier-import-data-chunk', {
+            body: {
+              jobId: job.id,
+              chunkIndex: i,
+              chunkData,
+              columnMapping,
+              supplierId,
+            }
+          });
+
+          if (chunkError) {
+            console.error('[WIZARD] Chunk error:', chunkError);
+            throw chunkError;
+          }
+
+          console.log('[WIZARD] Chunk', i + 1, '/', totalChunks, 'processed');
+
+          if (chunkResult?.isComplete) {
+            setImportProgress({
+              current: totalRows,
+              total: totalRows,
+              status: 'complete',
+              message: `Terminé: ${chunkResult.stats.new} nouveaux, ${chunkResult.stats.matched} mises à jour`,
+            });
+            toast.success(`Import réussi: ${chunkResult.stats.new} nouveaux produits, ${chunkResult.stats.matched} mises à jour`);
+            break;
+          }
+        }
+      } else {
+        // For CSV, use direct import
+        setImportProgress({ current: 10, total: 100, status: 'processing', message: 'Upload du fichier...' });
+        
+        const timestamp = Date.now();
+        const filePath = `${user.id}/${timestamp}_${file.name}`;
+        
+        await supabase.storage
+          .from('supplier-imports')
+          .upload(filePath, file, { upsert: false });
+        
+        setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
+
+        const { data, error } = await supabase.functions.invoke('supplier-import-csv', {
+          body: {
+            supplierId,
+            filePath,
+            columnMapping,
+            skipRows,
+            delimiter: delimiter || ',',
+            hasHeaderRow,
+          },
         });
 
-      if (uploadError) {
-        console.error('[WIZARD] Upload error:', uploadError);
-        throw new Error(`Erreur lors de l'upload: ${uploadError.message}`);
-      }
-      
-      setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
-      
-      // Use chunked import for XLSX files to avoid memory/worker limits
-      const functionName = isXLSX ? 'supplier-import-chunked' : 'supplier-import-csv';
-      const body: any = {
-        supplierId,
-        filePath,  // ✅ Just the path, not the content
-        columnMapping,
-        skipRows,
-        hasHeaderRow, // ✅ Indicate if file has header row
-      };
-      
-      if (!isXLSX) {
-        body.delimiter = delimiter || ',';
-      }
-
-      console.log('[WIZARD] Calling function:', functionName, 'with filePath:', filePath);
-
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body,
-      });
-
-      if (error) {
-        console.error('[WIZARD] Function error:', error);
-        const errorMessage = `Erreur lors de l'importation: ${error.message}`;
-        throw new Error(errorMessage);
-      }
-      
-      if (isXLSX) {
-        toast.success('✅ Import démarré en arrière-plan');
+        if (error) {
+          throw new Error(`Erreur lors de l'importation: ${error.message}`);
+        }
+        
+        console.log('[WIZARD] CSV Import response:', data);
+        toast.success('✅ Import CSV démarré en arrière-plan');
         setImportProgress({
-          current: 25,
+          current: 80,
           total: 100,
           status: 'processing',
-          message: 'Traitement en cours...'
-        });
-      }
-
-      console.log('[WIZARD] Import response:', data);
-      
-      // For chunked imports, show progress info
-      if (data?.jobId && !data.isComplete) {
-        toast.success(`✅ Import démarré: ${data.progress?.percentage || 0}% (${data.progress?.processed || 0}/${data.progress?.total || 0} lignes)`);
-        setImportProgress({ 
-          current: data.progress?.percentage || 50, 
-          total: 100, 
-          status: 'processing', 
-          message: `Traitement en cours: ${data.progress?.processed || 0}/${data.progress?.total || 0} lignes` 
+          message: 'Traitement du CSV en cours...'
         });
       }
       
-      // Check if 0 products processed
-      if (data?.processedCount === 0 || data?.message?.includes('0 produits')) {
-        const helpMessage = `
-⚠️ 0 produits traités. Vérifications :
-• Votre mapping utilise des indices numériques : ✓ supporté
-• Assurez-vous de mapper au moins "Nom du produit"
-• Vérifiez que votre fichier ${hasHeaderRow ? 'a bien' : "n'a pas"} d'en-tête
-• Délimiteur utilisé : "${delimiter || 'détection auto'}"
-• Nombre de lignes ignorées : ${skipRows}
-        `.trim();
-        
-        toast.error(helpMessage, { duration: 10000 });
-        setImportProgress({ current: 100, total: 100, status: 'error', message: '⚠️ 0 produits traités' });
-        return;
-      }
+      queryClient.invalidateQueries({ queryKey: ["supplier-products"] });
       
-      setImportProgress({ current: 100, total: 100, status: 'complete', message: `✅ ${data.message}` });
-      toast.success(`✅ ${data.message || 'Import démarré avec succès'}`);
-      
-      setTimeout(() => onClose(), 2000);
-    } catch (error: any) {
+    } catch (error) {
       console.error('[WIZARD] Import error:', error);
-      
-      const errorMessage = error.message || 'Une erreur est survenue lors de l\'importation';
-      toast.error(errorMessage);
-      setImportProgress(prev => ({ ...prev, status: 'error', message: errorMessage }));
+      setImportProgress({ 
+        current: 0, 
+        total: 0, 
+        status: 'error', 
+        message: error instanceof Error ? error.message : 'Erreur inconnue' 
+      });
+      toast.error(`Erreur d'import: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     } finally {
       setLoading(false);
     }
