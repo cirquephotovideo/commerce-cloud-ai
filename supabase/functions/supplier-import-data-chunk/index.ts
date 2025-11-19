@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
     // Authenticate user using proper method
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('[DATA-CHUNK] Missing authorization header');
       throw new Error('Missing authorization header');
     }
 
@@ -33,7 +34,12 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      throw new Error('Authentication failed');
+      console.error('[DATA-CHUNK] Auth error:', authError?.message || 'No user found', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+        errorDetails: authError
+      });
+      throw new Error(`Authentication failed: ${authError?.message || 'No user found'}`);
     }
 
     const { jobId, chunkIndex, chunkData, columnMapping, supplierId }: ImportChunkRequest = await req.json();
