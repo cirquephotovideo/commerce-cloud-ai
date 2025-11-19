@@ -183,6 +183,40 @@ export function ImportReport({ open, onClose, data }: ImportReportProps) {
             </CardContent>
           </Card>
 
+          {/* Technical Details / Debug Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>🔍 Détails Techniques</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-1">
+                  <span className="text-muted-foreground">Job ID:</span>
+                  <code className="ml-2 text-xs bg-muted px-2 py-1 rounded">{data.job_id}</code>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-muted-foreground">Linking Status:</span>
+                  <div className="ml-2">
+                    {data.links_created > 0 ? (
+                      <span className="text-green-600 font-semibold">✓ Actif</span>
+                    ) : (
+                      <span className="text-red-600 font-semibold">✗ Jamais exécuté</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {data.links_created === 0 && data.new_products > 0 && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    ⚠️ Linking automatique n'a pas fonctionné pour cet import.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Errors Table */}
           {data.errors.length > 0 && (
             <Card>
