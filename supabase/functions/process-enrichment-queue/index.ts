@@ -66,29 +66,8 @@ serve(async (req) => {
       );
     }
 
-    // Phase 1: Charger les préférences Ollama de l'utilisateur
-    let ollamaPreferences = { 
-      preferredModel: 'gpt-oss:20b-cloud', 
-      webSearchEnabled: false 
-    };
-
-    if (tasks.length > 0 && tasks[0].user_id) {
-      const { data: ollamaConfig } = await supabase
-        .from('ollama_configurations')
-        .select('default_model, web_search_enabled')
-        .eq('user_id', tasks[0].user_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (ollamaConfig) {
-        ollamaPreferences = {
-          preferredModel: ollamaConfig.default_model || 'gpt-oss:20b-cloud',
-          webSearchEnabled: ollamaConfig.web_search_enabled || false
-        };
-        console.log('[ENRICHMENT-QUEUE] Loaded Ollama preferences:', ollamaPreferences);
-      }
-    }
+    // Phase 1: Configuration AI unifiée (Lovable AI uniquement)
+    console.log('[ENRICHMENT-QUEUE] Using unified Lovable AI for all enrichments');
 
     let successCount = 0;
     let errorCount = 0;
