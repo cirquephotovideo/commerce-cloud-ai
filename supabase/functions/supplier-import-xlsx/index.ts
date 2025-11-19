@@ -72,15 +72,19 @@ serve(async (req) => {
 
     const dataRows = skipRows > 0 ? data.slice(skipRows) : data;
 
+    // Limit processing to 100 rows max per invocation to avoid timeout
+    const MAX_ROWS_PER_INVOCATION = 100;
+    const rowsToProcess = dataRows.slice(0, MAX_ROWS_PER_INVOCATION);
+
     const products = [];
     let matched = 0;
     let newProducts = 0;
     let failed = 0;
 
-    // Process in batches to avoid timeout
-    const batchSize = 50;
-    for (let i = 0; i < dataRows.length; i += batchSize) {
-      const batch = dataRows.slice(i, i + batchSize);
+    // Process in smaller batches with bulk operations
+    const batchSize = 10;
+    for (let i = 0; i < rowsToProcess.length; i += batchSize) {
+      const batch = rowsToProcess.slice(i, i + batchSize);
       
       for (const row of batch) {
         try {
@@ -189,19 +193,32 @@ serve(async (req) => {
       }
     }
 
+    const totalRows = dataRows.length;
+    const hasMoreRows = totalRows > MAX_ROWS_PER_INVOCATION;
+    const importStatus = failed === 0 ? 'success' : failed < rowsToProcess.length ? 'partial' : 'failed';
+
     // Log the import
     await supabase.from('supplier_import_logs').insert([{
       user_id: userId,
       supplier_id: supplierId,
       import_type: 'manual',
       source_file: 'xlsx_upload',
-      products_found: dataRows.length,
+      products_found: rowsToProcess.length,
       products_matched: matched,
       products_new: newProducts,
       products_updated: matched,
       products_failed: failed,
-      import_status: failed === 0 ? 'success' : failed < dataRows.length ? 'partial' : 'failed',
+      import_status: hasMoreRows ? 'partial' : importStatus,
     }]);
+
+    console.log('[supplier-import-xlsx] Processed:', {
+      processed: rowsToProcess.length,
+      total: totalRows,
+      matched,
+      new: newProducts,
+      failed,
+      hasMore: hasMoreRows
+    });
 
     // Update supplier last sync
     await supabase
@@ -214,8 +231,14 @@ serve(async (req) => {
         success: true,
         imported: products.length,
         matched,
-        newProducts,
+        new: newProducts,
         failed,
+        totalRows,
+        processedRows: rowsToProcess.length,
+        hasMoreRows,
+        message: hasMoreRows 
+          ? `Processed ${rowsToProcess.length}/${totalRows} rows. Large file detected - please use chunked import for better performance.`
+          : `Import completed: ${products.length} products processed.`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

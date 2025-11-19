@@ -209,15 +209,24 @@ export const UniversalWizardProvider = ({ children }: { children: ReactNode }) =
     const { data, error } = await supabase.functions.invoke(functionName, { body });
 
     if (error || data?.error) {
-      addLog(`❌ Erreur: ${error?.message || data?.error}`);
+      const errorMsg = error?.message || data?.error;
+      if (errorMsg?.includes('WORKER_LIMIT') || errorMsg?.includes('CPU Time exceeded')) {
+        addLog(`❌ Fichier trop volumineux - max 100 lignes par import`);
+      } else {
+        addLog(`❌ Erreur: ${errorMsg}`);
+      }
       setStatus('error');
       return;
     }
 
+    if (data?.hasMoreRows) {
+      addLog(`⚠️ ${data.processedRows}/${data.totalRows} lignes traitées (limite: 100 lignes)`);
+    }
+    
     addLog(`✅ Import terminé avec succès`);
-    if (data?.processed) addLog(`📊 ${data.processed} produits traités`);
-    if (data?.created) addLog(`➕ ${data.created} créés`);
-    if (data?.updated) addLog(`🔄 ${data.updated} mis à jour`);
+    if (data?.imported) addLog(`📊 ${data.imported} produits traités`);
+    if (data?.new) addLog(`➕ ${data.new} créés`);
+    if (data?.matched) addLog(`🔄 ${data.matched} mis à jour`);
   };
 
   const handleFtpImport = async (
