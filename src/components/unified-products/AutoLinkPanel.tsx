@@ -22,6 +22,7 @@ export const AutoLinkPanel = () => {
   const handleAutoLink = async () => {
     setIsLinking(true);
     setProgress(0);
+    setSummary({ linksCreated: 0, executionTime: 0, potentialMatches: 0 });
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -31,29 +32,84 @@ export const AutoLinkPanel = () => {
         return;
       }
 
-      const { data, error } = await supabase.rpc('bulk_create_all_supplier_links_by_ean', {
-        p_user_id: user.id
-      });
-
-      if (error) throw error;
-
-      const result = data[0];
+      const startTime = Date.now();
       
-      setSummary({
-        linksCreated: result.links_created,
-        executionTime: result.execution_time_ms,
-        potentialMatches: result.products_matched,
-      });
-      
-      setProgress(100);
-      setShowSummary(true);
-      toast.success(`✅ ${result.links_created} liens créés pour ${result.products_matched} produits !`);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bulk-link-suppliers`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: user.id }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.error) {
+              throw new Error(data.error);
+            }
+            
+            if (data.complete) {
+              const executionTime = Date.now() - startTime;
+              setSummary({
+                linksCreated: data.totalLinks,
+                executionTime,
+                potentialMatches: data.totalProcessed,
+              });
+              setProgress(100);
+              setShowSummary(true);
+              toast.success(
+                `✅ ${data.totalLinks} liens créés pour ${data.totalProcessed} produits en ${Math.round(executionTime/1000)}s !`
+              );
+              break;
+            }
+            
+            if (data.batch) {
+              const estimatedProgress = Math.min(95, (data.batch * 2));
+              setProgress(estimatedProgress);
+              setSummary(prev => ({
+                ...prev,
+                linksCreated: data.totalLinks,
+                potentialMatches: data.totalProcessed,
+              }));
+              
+              if (data.batch % 10 === 0) {
+                toast.info(`Batch ${data.batch}: ${data.totalLinks} liens créés...`, {
+                  duration: 2000,
+                });
+              }
+            }
+          }
+        }
+      }
       
       queryClient.invalidateQueries({ queryKey: ['product-links'] });
       queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
       queryClient.invalidateQueries({ queryKey: ['unified-products'] });
       
     } catch (error: any) {
+      console.error('[AUTO-LINK] Error:', error);
       toast.error(error.message || "Erreur lors de la liaison automatique");
     } finally {
       setIsLinking(false);
@@ -77,6 +133,11 @@ export const AutoLinkPanel = () => {
           {isLinking && (
             <div className="space-y-2">
               <Progress value={progress} className="h-2" />
+              {summary.linksCreated > 0 && (
+                <div className="text-sm text-muted-foreground text-center">
+                  {summary.linksCreated} liens créés sur {summary.potentialMatches} produits traités...
+                </div>
+              )}
             </div>
           )}
 
