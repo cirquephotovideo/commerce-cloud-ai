@@ -117,7 +117,6 @@ serve(async (req) => {
             stock_quantity: columnMapping.stock_quantity !== null ? parseInt(String(row[columnMapping.stock_quantity] || 0)) : (row[4] ? parseInt(String(row[4])) : null),
             currency: 'EUR',
             description: columnMapping.description !== null ? String(row[columnMapping.description] || '') : null,
-            brand: columnMapping.brand !== null ? String(row[columnMapping.brand] || '') : null,
             category: columnMapping.category !== null ? String(row[columnMapping.category] || '') : null,
           };
 
