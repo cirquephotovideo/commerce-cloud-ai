@@ -21,15 +21,18 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Authenticate user using proper method
+    
+    // Authenticate user - use service role client with user's JWT
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       console.error('[DATA-CHUNK] Missing authorization header');
       throw new Error('Missing authorization header');
     }
 
+    // Create service role client for operations
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Verify user token
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
@@ -41,6 +44,8 @@ Deno.serve(async (req) => {
       });
       throw new Error(`Authentication failed: ${authError?.message || 'No user found'}`);
     }
+
+    console.log('[DATA-CHUNK] User authenticated:', user.id);
 
     const { jobId, chunkIndex, chunkData, columnMapping, supplierId }: ImportChunkRequest = await req.json();
 
