@@ -172,6 +172,61 @@ Deno.serve(async (req) => {
       console.error('[DATA-CHUNK] Failed to update job:', updateError);
     }
 
+    // Run linking incrementally every 20 chunks or at completion
+    const shouldRunLinking = (
+      chunkIndex % 20 === 0 || // Every 20 chunks (2000 products)
+      isComplete // Or at the end
+    );
+
+    if (shouldRunLinking) {
+      try {
+        console.log('[DATA-CHUNK] Starting incremental auto-link...');
+        
+        // Get products created/updated in the last 10 minutes (max 2000)
+        const lastChunkTime = new Date(Date.now() - 10 * 60 * 1000);
+        const { data: recentProducts } = await supabase
+          .from('supplier_products')
+          .select('id')
+          .eq('supplier_id', supplierId)
+          .gte('updated_at', lastChunkTime.toISOString())
+          .limit(2000);
+
+        if (recentProducts && recentProducts.length > 0) {
+          const linkingResponse = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/auto-link-after-import`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                supplierId,
+                userId: user.id,
+                productIds: recentProducts.map(p => p.id),
+              }),
+            }
+          );
+
+          if (linkingResponse.ok) {
+            const linkingResult = await linkingResponse.json();
+            console.log('[DATA-CHUNK] Incremental linking:', linkingResult);
+            
+            // Update cumulative stats
+            await supabase
+              .from('supplier_import_chunk_jobs')
+              .update({
+                links_created: (job.links_created || 0) + (linkingResult.linked || 0),
+                unlinked_products: (job.unlinked_products || 0) + (linkingResult.unlinked || 0),
+              })
+              .eq('id', jobId);
+          }
+        }
+      } catch (linkError) {
+        console.error('[DATA-CHUNK] Incremental linking error:', linkError);
+      }
+    }
+
     // Update supplier last_sync_at if complete
     if (isComplete) {
       await supabase
@@ -199,55 +254,6 @@ Deno.serve(async (req) => {
         new: job.new_products + newProducts,
         failed: job.failed + failed,
       });
-
-      // Auto-link imported products
-      try {
-        console.log('[DATA-CHUNK] Starting auto-link process...');
-        
-        // Get IDs of products created/updated in this import
-        const { data: importedProducts } = await supabase
-          .from('supplier_products')
-          .select('id')
-          .eq('supplier_id', supplierId)
-          .gte('updated_at', job.created_at);
-
-        if (importedProducts && importedProducts.length > 0) {
-          const linkingResponse = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/auto-link-after-import`,
-            {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                supplierId,
-                userId: user.id,
-                productIds: importedProducts.map(p => p.id),
-              }),
-            }
-          );
-
-          if (linkingResponse.ok) {
-            const linkingResult = await linkingResponse.json();
-            console.log('[DATA-CHUNK] Auto-link completed:', linkingResult);
-            
-            // Update job with linking stats
-            await supabase
-              .from('supplier_import_chunk_jobs')
-              .update({
-                links_created: linkingResult.linked || 0,
-                unlinked_products: linkingResult.unlinked || 0,
-              })
-              .eq('id', jobId);
-          } else {
-            console.error('[DATA-CHUNK] Auto-link failed:', await linkingResponse.text());
-          }
-        }
-      } catch (linkError) {
-        console.error('[DATA-CHUNK] Auto-link error:', linkError);
-        // Don't fail the import if linking fails
-      }
     }
 
     return new Response(

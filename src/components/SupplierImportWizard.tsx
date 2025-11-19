@@ -60,6 +60,7 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
   const [showImportReport, setShowImportReport] = useState(false);
   const [importReportData, setImportReportData] = useState<any>(null);
   const [resumableJob, setResumableJob] = useState<any>(null);
+  const [isRetryingLink, setIsRetryingLink] = useState(false);
 
   // Check for resumable jobs on mount
   useEffect(() => {
@@ -349,6 +350,84 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       });
       return obj;
     });
+  };
+
+  const retryLinking = async (jobId: string) => {
+    setIsRetryingLink(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Session expirée');
+        return;
+      }
+
+      const { data: job } = await supabase
+        .from('supplier_import_chunk_jobs')
+        .select(`
+          *,
+          supplier:supplier_configurations(id, supplier_name)
+        `)
+        .eq('id', jobId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (!job) {
+        toast.error('Job non trouvé');
+        return;
+      }
+
+      // Get products from this import
+      const { data: products } = await supabase
+        .from('supplier_products')
+        .select('id')
+        .eq('supplier_id', job.supplier.id)
+        .gte('created_at', job.created_at);
+
+      if (!products || products.length === 0) {
+        toast.error('Aucun produit à lier');
+        return;
+      }
+
+      const response = await supabase.functions.invoke('auto-link-after-import', {
+        body: {
+          supplierId: job.supplier.id,
+          userId: user.id,
+          productIds: products.map(p => p.id),
+        }
+      });
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      if (response.data) {
+        toast.success(`${response.data.linked} produits liés avec succès`);
+        
+        // Refresh job data
+        const { data: updatedJob } = await supabase
+          .from('supplier_import_chunk_jobs')
+          .select(`
+            *,
+            supplier:supplier_configurations(supplier_name)
+          `)
+          .eq('id', jobId)
+          .single();
+
+        if (updatedJob && importReportData) {
+          setImportReportData({
+            ...importReportData,
+            links_created: response.data.linked || 0,
+            unlinked_products: response.data.unlinked || 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[RETRY-LINK] Error:', error);
+      toast.error('Échec de la liaison automatique');
+    } finally {
+      setIsRetryingLink(false);
+    }
   };
 
   const handleImport = async () => {
