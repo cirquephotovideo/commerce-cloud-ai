@@ -11,6 +11,7 @@ interface SupplierPrice {
   stock_quantity: number | null;
   last_updated: string;
   price_change_percentage?: number;
+  is_price_missing?: boolean;
 }
 
 interface RecentChange {
@@ -68,8 +69,9 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           supplier_reference: item.supplier_reference,
           purchase_price: item.purchase_price || 0,
           currency: 'EUR',
-          stock_quantity: item.stock_quantity,
+          stock_quantity: item.stock_quantity ?? 0,
           last_updated: item.updated_at,
+          is_price_missing: !item.purchase_price || item.purchase_price === 0,
         }));
         setPrices(formattedPrices);
         setBestPrice(formattedPrices[0]);
