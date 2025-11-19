@@ -2640,6 +2640,41 @@ export type Database = {
           },
         ]
       }
+      import_chunk_errors: {
+        Row: {
+          chunk_index: number
+          created_at: string | null
+          error_message: string | null
+          id: string
+          job_id: string | null
+          retry_count: number | null
+        }
+        Insert: {
+          chunk_index: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_id?: string | null
+          retry_count?: number | null
+        }
+        Update: {
+          chunk_index?: number
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          job_id?: string | null
+          retry_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_chunk_errors_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_import_chunk_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_errors: {
         Row: {
           created_at: string | null
@@ -4866,6 +4901,7 @@ export type Database = {
           matched: number
           new_products: number
           processed_rows: number
+          retry_count: number | null
           skip_rows: number
           status: string
           supplier_id: string
@@ -4887,6 +4923,7 @@ export type Database = {
           matched?: number
           new_products?: number
           processed_rows?: number
+          retry_count?: number | null
           skip_rows?: number
           status?: string
           supplier_id: string
@@ -4908,6 +4945,7 @@ export type Database = {
           matched?: number
           new_products?: number
           processed_rows?: number
+          retry_count?: number | null
           skip_rows?: number
           status?: string
           supplier_id?: string
@@ -6021,6 +6059,7 @@ export type Database = {
         Returns: Json
       }
       check_enrichment_timeouts: { Args: never; Returns: undefined }
+      check_stuck_import_jobs: { Args: never; Returns: undefined }
       cleanup_old_amazon_logs: { Args: never; Returns: undefined }
       cleanup_stuck_amazon_jobs: { Args: never; Returns: undefined }
       decrypt_email_password: {
