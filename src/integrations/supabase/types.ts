@@ -4852,6 +4852,74 @@ export type Database = {
           },
         ]
       }
+      supplier_import_chunk_jobs: {
+        Row: {
+          chunk_size: number
+          column_mapping: Json | null
+          created_at: string
+          current_chunk: number
+          error_message: string | null
+          failed: number
+          file_path: string
+          id: string
+          matched: number
+          new_products: number
+          processed_rows: number
+          skip_rows: number
+          status: string
+          supplier_id: string
+          total_rows: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          chunk_size?: number
+          column_mapping?: Json | null
+          created_at?: string
+          current_chunk?: number
+          error_message?: string | null
+          failed?: number
+          file_path: string
+          id?: string
+          matched?: number
+          new_products?: number
+          processed_rows?: number
+          skip_rows?: number
+          status?: string
+          supplier_id: string
+          total_rows?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          chunk_size?: number
+          column_mapping?: Json | null
+          created_at?: string
+          current_chunk?: number
+          error_message?: string | null
+          failed?: number
+          file_path?: string
+          id?: string
+          matched?: number
+          new_products?: number
+          processed_rows?: number
+          skip_rows?: number
+          status?: string
+          supplier_id?: string
+          total_rows?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_import_chunk_jobs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_import_logs: {
         Row: {
           created_at: string | null

@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
       .from('supplier_products')
       .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
-      .limit(2000);
+      .limit(20000); // Increased from 2000 to handle large batches
 
     if (enrichingError) throw enrichingError;
 
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'enriching')
       .lt('last_updated', new Date(Date.now() - 10 * 60 * 1000).toISOString())
-      .limit(100);
+      .limit(5000); // Increased from 100
 
     if (stuckError) throw stuckError;
 
@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
       .from('supplier_products')
       .select('id, supplier_id, user_id, ean, product_name')
       .eq('enrichment_status', 'failed')
-      .limit(1000);
+      .limit(5000); // Increased from 1000
 
     if (failedError) throw failedError;
 
@@ -90,20 +90,25 @@ Deno.serve(async (req) => {
     let fixedCount = 0;
     let createdTasks = 0;
 
-    for (const product of allProductsToFix) {
-      // Vérifier si une tâche existe déjà
-      const { data: existingTask } = await supabaseClient
-        .from('enrichment_queue')
-        .select('id')
-        .eq('supplier_product_id', product.id)
-        .in('status', ['pending', 'processing'])
-        .maybeSingle();
-
-      if (!existingTask) {
-        // Créer une tâche d'enrichissement
-        const { error: insertError } = await supabaseClient
+    // Process in batches to avoid timeout
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < allProductsToFix.length; i += BATCH_SIZE) {
+      const batch = allProductsToFix.slice(i, i + BATCH_SIZE);
+      
+      for (const product of batch) {
+        // Vérifier si une tâche existe déjà
+        const { data: existingTask } = await supabaseClient
           .from('enrichment_queue')
-          .insert({
+          .select('id')
+          .eq('supplier_product_id', product.id)
+          .in('status', ['pending', 'processing'])
+          .maybeSingle();
+
+        if (!existingTask) {
+          // Créer une tâche d'enrichissement
+          const { error: insertError } = await supabaseClient
+            .from('enrichment_queue')
+            .insert({
             user_id: product.user_id,
             supplier_product_id: product.id,
             enrichment_type: ['ai_analysis', 'amazon_data', 'specifications'],
@@ -135,8 +140,12 @@ Deno.serve(async (req) => {
         console.error(`❌ Erreur mise à jour produit ${product.id}:`, updateError);
       }
     }
+    
+    // End of batch processing
+    console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1} processed`);
+  }
 
-    console.log(`✅ ${fixedCount} produits débloqués/réinitialisés, ${createdTasks} tâches créées`);
+  console.log(`✅ ${fixedCount} produits débloqués/réinitialisés, ${createdTasks} tâches créées`);
 
     // 4. Déclencher le traitement de la queue
     if (createdTasks > 0) {
