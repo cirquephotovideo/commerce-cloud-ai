@@ -349,8 +349,8 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       
       setImportProgress({ current: 40, total: 100, status: 'processing', message: 'Traitement en cours...' });
       
-      // 2. Call Edge Function with file path only
-      const functionName = isXLSX ? 'supplier-import-xlsx' : 'supplier-import-csv';
+      // Use chunked import for XLSX files to avoid memory/worker limits
+      const functionName = isXLSX ? 'supplier-import-chunked' : 'supplier-import-csv';
       const body: any = {
         supplierId,
         filePath,  // ✅ Just the path, not the content
@@ -371,49 +371,18 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
 
       if (error) {
         console.error('[WIZARD] Function error:', error);
-        
-        let errorMessage = `Erreur lors de l'importation: ${error.message}`;
-
-        const isEdgeLimitError =
-          error.message?.includes('Memory limit exceeded') ||
-          error.message?.includes('WORKER_LIMIT') ||
-          error.message?.includes('CPU Time exceeded') ||
-          error.message?.includes('Edge Function returned a non-2xx status code') ||
-          error.message?.includes('Failed to send a request to the Edge Function') ||
-          (error as any)?.name === 'FunctionsHttpError';
-        
-        if (isXLSX && isEdgeLimitError) {
-          // Fallback: try chunked import for large/unresponsive XLSX files
-          console.log('[WIZARD] Falling back to chunked import for XLSX file...');
-          const { data: chunkData, error: chunkError } = await supabase.functions.invoke('supplier-import-chunked', {
-            body,
-          });
-          
-          if (chunkError) {
-            console.error('[WIZARD] Chunked import error:', chunkError);
-            errorMessage =
-              '❌ Fichier trop volumineux ou service temporairement indisponible. ' +
-              'Veuillez réessayer plus tard ou diviser votre fichier en plusieurs fichiers plus petits.';
-            throw new Error(errorMessage);
-          }
-          
-          // Chunked import started successfully
-          toast.success('✅ Import volumineux démarré en arrière-plan');
-          setImportProgress({
-            current: 50,
-            total: 100,
-            status: 'processing',
-            message: 'Traitement par chunks en cours...'
-          });
-          
-          // Use chunk data for the rest of the flow (progress infos)
-          Object.assign(data || {}, chunkData);
-        } else if (error.message?.includes('Failed to start chunk processing')) {
-          errorMessage = '❌ Échec du démarrage du traitement. Vérifiez le format du fichier.';
-          throw new Error(errorMessage);
-        } else {
-          throw new Error(errorMessage);
-        }
+        const errorMessage = `Erreur lors de l'importation: ${error.message}`;
+        throw new Error(errorMessage);
+      }
+      
+      if (isXLSX) {
+        toast.success('✅ Import démarré en arrière-plan');
+        setImportProgress({
+          current: 25,
+          total: 100,
+          status: 'processing',
+          message: 'Traitement en cours...'
+        });
       }
 
       console.log('[WIZARD] Import response:', data);
