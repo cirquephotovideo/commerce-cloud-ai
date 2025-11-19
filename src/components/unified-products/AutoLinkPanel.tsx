@@ -72,6 +72,10 @@ export const AutoLinkPanel = () => {
             
             if (data.complete) {
               const executionTime = Date.now() - startTime;
+              const mergeInfo = data.merged > 0 
+                ? ` et ${data.merged} produits fusionnés`
+                : '';
+              
               setSummary({
                 linksCreated: data.totalLinks,
                 executionTime,
@@ -80,9 +84,15 @@ export const AutoLinkPanel = () => {
               setProgress(100);
               setShowSummary(true);
               toast.success(
-                `✅ ${data.totalLinks} liens créés pour ${data.totalProcessed} produits en ${Math.round(executionTime/1000)}s !`
+                `✅ ${data.totalLinks} liens créés${mergeInfo} en ${Math.round(executionTime/1000)}s !`
               );
               break;
+            }
+
+            if (data.merging) {
+              toast.info('🔄 Fusion des données en cours...', {
+                duration: 3000,
+              });
             }
             
             if (data.batch) {

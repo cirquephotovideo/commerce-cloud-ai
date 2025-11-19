@@ -81,13 +81,32 @@ Deno.serve(async (req) => {
               await new Promise(resolve => setTimeout(resolve, 100));
             }
           }
+
+          // Execute global merge after all batches complete
+          console.log('[BULK-LINK] All links created, starting global merge...');
+          
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({
+              merging: true
+            })}\n\n`)
+          );
+
+          const { data: mergeResult, error: mergeError } = await supabase
+            .rpc('merge_existing_links');
+
+          if (mergeError) {
+            console.error('[BULK-LINK] Merge error:', mergeError);
+          } else {
+            console.log('[BULK-LINK] Merge completed:', mergeResult);
+          }
           
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({
               complete: true,
               totalLinks: totalLinksCreated,
               totalProcessed: totalProcessed,
-              batches: batchNumber
+              batches: batchNumber,
+              merged: mergeResult?.supplier_links_merged || 0
             })}\n\n`)
           );
           

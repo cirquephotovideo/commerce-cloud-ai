@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ShoppingCart, Loader2, Link2, CheckCircle, XCircle } from "lucide-react";
+import { ShoppingCart, Loader2, Link2, CheckCircle, XCircle, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { useAmazonProductLinks } from "@/hooks/useAmazonProductLinks";
 import { useAmazonAutoLinkJob } from "@/hooks/useAmazonAutoLinkJob";
 import { useState, useEffect } from "react";
@@ -12,6 +13,7 @@ export function AmazonAutoLinkPanel() {
   const { startAutoLink } = useAmazonProductLinks();
   const { currentJob, isJobRunning, progress, reloadJob } = useAmazonAutoLinkJob();
   const [isStarting, setIsStarting] = useState(false);
+  const { toast } = useToast();
   const [stats, setStats] = useState({
     total_analyses: 0,
     total_enrichments: 0,
@@ -35,12 +37,13 @@ export function AmazonAutoLinkPanel() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Count analyses with EAN
+      // Count analyses with non-empty EAN
       const { count: analysesCount } = await supabase
         .from('product_analyses')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
-        .not('ean', 'is', null);
+        .not('ean', 'is', null)
+        .neq('ean', '');
 
       // Count enrichments
       const { count: enrichmentsCount } = await supabase
@@ -54,11 +57,15 @@ export function AmazonAutoLinkPanel() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id);
 
+      const potentialMatches = Math.max(0, 
+        Math.min(analysesCount || 0, enrichmentsCount || 0) - (linksCount || 0)
+      );
+
       setStats({
         total_analyses: analysesCount || 0,
         total_enrichments: enrichmentsCount || 0,
         linked_count: linksCount || 0,
-        potential_matches: Math.min(analysesCount || 0, enrichmentsCount || 0) - (linksCount || 0)
+        potential_matches: potentialMatches
       });
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -74,6 +81,33 @@ export function AmazonAutoLinkPanel() {
       console.error('Error starting auto-link:', error);
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  const cancelJob = async () => {
+    if (!currentJob?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('amazon_auto_link_jobs')
+        .update({
+          status: 'failed',
+          error_message: 'Annulé par l\'utilisateur',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', currentJob.id);
+      
+      if (error) throw error;
+      
+      await reloadJob();
+      await loadStats();
+      
+      toast({
+        title: "Job annulé",
+        description: "Vous pouvez maintenant relancer la fusion",
+      });
+    } catch (error) {
+      console.error('Error canceling job:', error);
     }
   };
 
@@ -134,6 +168,16 @@ export function AmazonAutoLinkPanel() {
                 <span className="font-medium ml-2 text-green-600">{currentJob?.links_created || 0}</span>
               </div>
             </div>
+
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={cancelJob}
+              className="mt-2 w-full"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Annuler ce Job
+            </Button>
           </div>
         ) : currentJob?.status === 'completed' ? (
           <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">

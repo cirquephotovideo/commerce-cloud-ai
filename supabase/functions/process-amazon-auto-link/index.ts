@@ -13,6 +13,12 @@ interface MatchResult {
 }
 
 Deno.serve(async (req) => {
+  console.log('[AMAZON-AUTO-LINK] 🚀 Function invoked!', {
+    method: req.method,
+    url: req.url,
+    timestamp: new Date().toISOString()
+  });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -27,6 +33,7 @@ Deno.serve(async (req) => {
     // Get user from auth header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
+      console.error('[AMAZON-AUTO-LINK] ❌ No authorization header');
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -37,16 +44,19 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('[AMAZON-AUTO-LINK] ❌ Unauthorized:', authError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('[AMAZON-AUTO-LINK] ✅ User authenticated:', user.id);
+
     const body = await req.json();
     job_id = body.job_id;
     const offset = body.offset || 0;
-    const batch_size = body.batch_size || 500; // Increased from 100 to 500
+    const batch_size = body.batch_size || 500;
 
     console.log(`[AMAZON-AUTO-LINK] Starting batch - Job: ${job_id}, Offset: ${offset}, Batch: ${batch_size}`);
 
@@ -60,6 +70,36 @@ Deno.serve(async (req) => {
           started_at: new Date().toISOString()
         })
         .eq('id', job_id);
+    }
+
+    // Check for job timeout (1 hour safety)
+    if (job_id) {
+      const { data: existingJob } = await supabase
+        .from('amazon_auto_link_jobs')
+        .select('started_at, status')
+        .eq('id', job_id)
+        .single();
+
+      if (existingJob?.started_at) {
+        const startedAt = new Date(existingJob.started_at).getTime();
+        const now = Date.now();
+        const elapsed = now - startedAt;
+        
+        // If job running for more than 1 hour, mark as failed
+        if (elapsed > 60 * 60 * 1000 && existingJob.status === 'processing') {
+          console.error('[AMAZON-AUTO-LINK] ⚠️ Job timeout detected!');
+          await supabase
+            .from('amazon_auto_link_jobs')
+            .update({
+              status: 'failed',
+              error_message: 'Job timeout après 1 heure',
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', job_id);
+          
+          throw new Error('Job timeout');
+        }
+      }
     }
 
     // Get product analyses without Amazon links
