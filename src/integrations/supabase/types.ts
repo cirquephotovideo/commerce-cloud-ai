@@ -4862,6 +4862,7 @@ export type Database = {
           failed: number
           file_path: string
           id: string
+          links_created: number | null
           matched: number
           new_products: number
           processed_rows: number
@@ -4869,6 +4870,7 @@ export type Database = {
           status: string
           supplier_id: string
           total_rows: number
+          unlinked_products: number | null
           updated_at: string
           user_id: string
         }
@@ -4881,6 +4883,7 @@ export type Database = {
           failed?: number
           file_path: string
           id?: string
+          links_created?: number | null
           matched?: number
           new_products?: number
           processed_rows?: number
@@ -4888,6 +4891,7 @@ export type Database = {
           status?: string
           supplier_id: string
           total_rows?: number
+          unlinked_products?: number | null
           updated_at?: string
           user_id: string
         }
@@ -4900,6 +4904,7 @@ export type Database = {
           failed?: number
           file_path?: string
           id?: string
+          links_created?: number | null
           matched?: number
           new_products?: number
           processed_rows?: number
@@ -4907,6 +4912,7 @@ export type Database = {
           status?: string
           supplier_id?: string
           total_rows?: number
+          unlinked_products?: number | null
           updated_at?: string
           user_id?: string
         }
