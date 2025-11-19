@@ -41,6 +41,7 @@ Deno.serve(async (req) => {
 
     // Get or create job
     let job: ChunkJob;
+    let dataRows: any[][] | null = null;
     
     if (jobId) {
       const { data: existingJob, error } = await supabase
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
       }
       job = existingJob;
     } else {
-      // First call - download file and count rows
+      // First call - download file, count rows and keep data in memory for first chunk
       const { data: fileData, error: downloadError } = await supabase.storage
         .from('supplier-imports')
         .download(filePath);
@@ -69,6 +70,7 @@ Deno.serve(async (req) => {
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
       const totalRows = Math.max(0, data.length - skipRows);
+      dataRows = skipRows > 0 ? data.slice(skipRows) : data;
 
       // Get user ID from auth
       const authHeader = req.headers.get('Authorization');
@@ -108,21 +110,23 @@ Deno.serve(async (req) => {
       job = newJob;
     }
 
-    // Download and process chunk
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('supplier-imports')
-      .download(job.file_path);
+    // Download and prepare data for this chunk if not already loaded
+    if (!dataRows) {
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('supplier-imports')
+        .download(job.file_path);
 
-    if (downloadError || !fileData) {
-      throw new Error(`Failed to download file: ${downloadError?.message}`);
+      if (downloadError || !fileData) {
+        throw new Error(`Failed to download file: ${downloadError?.message}`);
+      }
+
+      const arrayBuffer = await fileData.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      const workbook = XLSX.read(bytes, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+      dataRows = job.skip_rows > 0 ? data.slice(job.skip_rows) : data;
     }
-
-    const arrayBuffer = await fileData.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const workbook = XLSX.read(bytes, { type: 'array' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
-    const dataRows = job.skip_rows > 0 ? data.slice(job.skip_rows) : data;
 
     // Process current chunk
     const startIdx = job.current_chunk * job.chunk_size;
