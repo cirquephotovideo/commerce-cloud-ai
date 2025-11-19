@@ -65,13 +65,14 @@ Deno.serve(async (req) => {
       try {
         // Extract values using column mapping
         const ean = columnMapping.ean !== null ? row[columnMapping.ean] : null;
-        const name = columnMapping.name !== null ? row[columnMapping.name] : null;
+        const product_name = columnMapping.product_name !== null ? row[columnMapping.product_name] : null;
         const purchase_price = columnMapping.purchase_price !== null ? parseFloat(row[columnMapping.purchase_price]) : null;
         const description = columnMapping.description !== null ? row[columnMapping.description] : null;
-        const reference = columnMapping.reference !== null ? row[columnMapping.reference] : null;
+        const supplier_reference = columnMapping.supplier_reference !== null ? row[columnMapping.supplier_reference] : null;
         const stock_quantity = columnMapping.stock_quantity !== null ? parseInt(row[columnMapping.stock_quantity]) : null;
 
-        if (!ean && !reference) {
+        if (!ean && !supplier_reference) {
+          console.error('[DATA-CHUNK] Row skipped: no EAN or reference', { row });
           failed++;
           continue;
         }
@@ -85,8 +86,8 @@ Deno.serve(async (req) => {
 
         if (ean) {
           query = query.eq('ean', ean);
-        } else if (reference) {
-          query = query.eq('reference', reference);
+        } else if (supplier_reference) {
+          query = query.eq('supplier_reference', supplier_reference);
         }
 
         const { data: existing } = await query.single();
@@ -96,16 +97,16 @@ Deno.serve(async (req) => {
           const { error: updateError } = await supabase
             .from('supplier_products')
             .update({
-              name: name || undefined,
+              product_name: product_name || undefined,
               purchase_price: purchase_price || undefined,
               description: description || undefined,
               stock_quantity: stock_quantity || undefined,
-              last_sync_at: new Date().toISOString(),
+              last_updated: new Date().toISOString(),
             })
             .eq('id', existing.id);
 
           if (updateError) {
-            console.error('[DATA-CHUNK] Update error:', updateError);
+            console.error('[DATA-CHUNK] Update error:', updateError, { ean, product_name });
             failed++;
           } else {
             matched++;
@@ -118,16 +119,16 @@ Deno.serve(async (req) => {
               supplier_id: supplierId,
               user_id: user.id,
               ean: ean || null,
-              name: name || 'Unknown',
+              product_name: product_name || 'Unknown',
               purchase_price: purchase_price || 0,
               description: description || null,
-              reference: reference || null,
+              supplier_reference: supplier_reference || null,
               stock_quantity: stock_quantity || 0,
               enrichment_status: 'pending',
             });
 
           if (insertError) {
-            console.error('[DATA-CHUNK] Insert error:', insertError);
+            console.error('[DATA-CHUNK] Insert error:', insertError, { ean, product_name, supplier_reference });
             failed++;
           } else {
             newProducts++;
