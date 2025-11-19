@@ -291,6 +291,16 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
       return;
     }
 
+    // Log mapping for debugging
+    console.log('[IMPORT] Column mapping:', {
+      product_name: columnMapping.product_name,
+      purchase_price: columnMapping.purchase_price,
+      ean: columnMapping.ean,
+      supplier_reference: columnMapping.supplier_reference,
+      description: columnMapping.description,
+      stock_quantity: columnMapping.stock_quantity
+    });
+
     setLoading(true);
     setImportProgress({ current: 0, total: 100, status: 'processing', message: 'Préparation de l\'import...' });
     
