@@ -410,6 +410,12 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
             message: `Import: ${end}/${totalRows} lignes (chunk ${i + 1}/${totalChunks})`,
           });
 
+          // Get fresh session for auth
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('Session expirée, veuillez vous reconnecter');
+          }
+
           const { data: chunkResult, error: chunkError } = await supabase.functions.invoke('supplier-import-data-chunk', {
             body: {
               jobId: job.id,
@@ -417,6 +423,9 @@ export function SupplierImportWizard({ onClose }: SupplierImportWizardProps) {
               chunkData,
               columnMapping,
               supplierId,
+            },
+            headers: {
+              Authorization: `Bearer ${session.access_token}`
             }
           });
 
