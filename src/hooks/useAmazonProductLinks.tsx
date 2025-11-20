@@ -142,12 +142,21 @@ export function useAmazonProductLinks() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Count total analyses to process (le filtrage des produits sans nom est fait backend)
+      // Count total analyses to process
       const { count: totalCount } = await supabase
         .from('product_analyses')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .not('ean', 'is', null);
+
+      // Check if there's any data to process
+      if (!totalCount || totalCount === 0) {
+        toast({
+          title: "Aucune donnée à fusionner",
+          description: "Vous n'avez pas encore de produits analysés avec un EAN. Analysez d'abord des produits avant de lancer la fusion Amazon.",
+        });
+        return null;
+      }
 
       // Create job
       const { data: job, error: jobError } = await supabase
@@ -155,7 +164,7 @@ export function useAmazonProductLinks() {
         .insert({
           user_id: user.id,
           status: 'pending',
-          total_to_process: totalCount || 0
+          total_to_process: totalCount
         })
         .select()
         .single();
@@ -181,9 +190,16 @@ export function useAmazonProductLinks() {
       return job.id;
     } catch (err: any) {
       console.error('Error starting auto-link:', err);
+      
+      // Extract better error message from edge function response
+      const description = 
+        err?.message?.includes('non-2xx') && err?.context?.response?.error
+          ? "Impossible de démarrer la fusion: " + err.context.response.error
+          : "Impossible de démarrer la fusion: " + (err.message || 'Erreur inconnue');
+
       toast({
         title: "Erreur",
-        description: "Impossible de démarrer la fusion: " + err.message,
+        description,
         variant: "destructive",
       });
       return null;
