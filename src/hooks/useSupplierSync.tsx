@@ -136,31 +136,56 @@ export const useSupplierSync = () => {
       const odooSynced = Array.isArray(data.odooSyncResults)
         ? data.odooSyncResults.filter((r: any) => r.success).length
         : 0;
+      
+      // Check if merge was partial due to timeout
+      const isPartial = data.mergeResult?.partial === true;
 
-      toast.success(
-        `✅ Nettoyage terminé`,
-        {
-          description: `${merged} doublons fusionnés, ${variants} prix restaurés${odooSynced > 0 ? `, ${odooSynced} produits Odoo synchronisés` : ''}`
-        }
-      );
+      if (isPartial) {
+        toast.warning(
+          '⚠️ Nettoyage partiel effectué',
+          {
+            description: `Timeout sur la fusion des doublons. ${variants} prix restaurés${odooSynced > 0 ? `, ${odooSynced} produits Odoo synchronisés` : ''}. Cliquez à nouveau sur Réparer pour continuer la fusion.`,
+            duration: 6000
+          }
+        );
+      } else {
+        toast.success(
+          `✅ Nettoyage terminé`,
+          {
+            description: `${merged} doublons fusionnés, ${variants} prix restaurés${odooSynced > 0 ? `, ${odooSynced} produits Odoo synchronisés` : ''}`
+          }
+        );
+      }
       
       queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
       queryClient.invalidateQueries({ queryKey: ['supplier-prices'] });
       queryClient.invalidateQueries({ queryKey: ['product-analyses'] });
+      queryClient.invalidateQueries({ queryKey: ['supplier_price_variants'] });
     },
     onError: (error: Error) => {
       console.error('❌ Cleanup mutation error:', error);
       
-      // Extraire un message plus clair
+      // Extraire un message plus clair et spécifique
       let errorMessage = error.message;
-      if (errorMessage.includes('Failed to send')) {
-        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
-      } else if (errorMessage.includes('timeout')) {
-        errorMessage = 'Opération trop longue. Réessayez avec moins de données.';
+      let errorTitle = '❌ Erreur nettoyage';
+      
+      if (errorMessage.includes('Failed to send') || errorMessage.includes('fetch')) {
+        errorTitle = '🔌 Erreur réseau';
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion internet.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('57014')) {
+        errorTitle = '⏱️ Timeout';
+        errorMessage = 'Opération trop longue. La base a trop de doublons, cliquez plusieurs fois sur Réparer.';
+      } else if (errorMessage.includes('non-2xx status code')) {
+        errorTitle = '⚠️ Erreur serveur';
+        errorMessage = 'Le serveur a renvoyé une erreur. Réessayez dans quelques instants.';
+      } else if (errorMessage.includes('Not Found')) {
+        errorTitle = '🔍 Fonction introuvable';
+        errorMessage = 'La fonction de nettoyage n\'a pas été trouvée. Contactez le support.';
       }
       
-      toast.error(`❌ Erreur nettoyage`, {
-        description: errorMessage
+      toast.error(errorTitle, {
+        description: errorMessage,
+        duration: 5000
       });
     },
   });

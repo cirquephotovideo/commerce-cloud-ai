@@ -30,17 +30,48 @@ Deno.serve(async (req) => {
 
     console.log('🧹 Starting cleanup for user:', userId);
 
-    // 1. Merge duplicate analyses by EAN
+    // 1. Merge duplicate analyses by EAN (with timeout tolerance)
     console.log('📊 Step 1: Merging duplicate analyses...');
-    const { data: mergeResult, error: mergeError } = await supabaseClient
-      .rpc('merge_duplicate_analyses_by_ean', { p_user_id: userId });
+    let mergeResult: any = null;
+    
+    try {
+      const { data, error: mergeError } = await supabaseClient
+        .rpc('merge_duplicate_analyses_by_ean', { p_user_id: userId });
 
-    if (mergeError) {
-      console.error('❌ Merge error:', mergeError);
-      throw mergeError;
+      if (mergeError) {
+        // Check if it's a SQL timeout (code 57014)
+        if (mergeError.code === '57014' || mergeError.message?.includes('timeout')) {
+          console.warn('⚠️ Merge timed out, continuing with partial cleanup', mergeError);
+          mergeResult = { 
+            success: false, 
+            partial: true, 
+            merged_eans: 0, 
+            deleted_analyses: 0,
+            reason: 'timeout' 
+          };
+        } else {
+          console.error('❌ Merge error:', mergeError);
+          throw mergeError;
+        }
+      } else {
+        mergeResult = data;
+        console.log('✅ Merge result:', mergeResult);
+      }
+    } catch (error: any) {
+      // Handle unexpected errors during merge
+      if (error.code === '57014' || error.message?.includes('timeout')) {
+        console.warn('⚠️ Merge exception (timeout), continuing with partial cleanup', error);
+        mergeResult = { 
+          success: false, 
+          partial: true, 
+          merged_eans: 0, 
+          deleted_analyses: 0,
+          reason: 'timeout' 
+        };
+      } else {
+        throw error;
+      }
     }
-
-    console.log('✅ Merge result:', mergeResult);
 
     // 2. Rebuild supplier_price_variants from product_links
     console.log('🔗 Step 2: Rebuilding supplier_price_variants...');
