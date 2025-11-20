@@ -8,6 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const requestStartTime = Date.now(); // Définir au début pour l'avoir dans le catch
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -15,8 +17,11 @@ serve(async (req) => {
   try {
     const { analysisId, enrichment_type, productData, purchasePrice } = await req.json();
 
-    const startTime = Date.now();
-    console.log(`[UNIFIED-LOVABLE] ⏱️ Starting ${enrichment_type} at ${new Date().toISOString()}`);
+    console.log(`[UNIFIED-LOVABLE] 🚀 ============ REQUEST START ============`);
+    console.log(`[UNIFIED-LOVABLE] ⏱️ Timestamp: ${new Date().toISOString()}`);
+    console.log(`[UNIFIED-LOVABLE] 📊 Type: ${enrichment_type}`);
+    console.log(`[UNIFIED-LOVABLE] 🆔 Analysis ID: ${analysisId}`);
+    console.log(`[UNIFIED-LOVABLE] 📦 Product: ${productData?.product_name || 'Unknown'}`);
 
     // Validate enrichment_type
     const validTypes = ['description', 'specifications', 'cost_analysis', 'images', 'rsgp'];
@@ -64,7 +69,8 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
 
     const systemPrompt = `Tu es un expert en catalogage produit e-commerce utilisant ${AI_CONFIG.model}. Tu réponds UNIQUEMENT en JSON valide sans texte additionnel.`;
 
-    console.log(`[UNIFIED-LOVABLE] Calling Lovable AI with model ${AI_CONFIG.model}`);
+    console.log(`[UNIFIED-LOVABLE] 🤖 Calling Lovable AI with model ${AI_CONFIG.model}`);
+    const aiStartTime = Date.now();
 
     // Call Lovable AI with retry logic
     let result;
@@ -72,20 +78,27 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
     
     for (let attempt = 1; attempt <= AI_CONFIG.retry_attempts; attempt++) {
       try {
+        console.log(`[UNIFIED-LOVABLE] 🔄 AI Attempt ${attempt}/${AI_CONFIG.retry_attempts}...`);
         result = await callLovableAI(contextPrompt, systemPrompt);
-        console.log(`[UNIFIED-LOVABLE] AI response received on attempt ${attempt}`);
+        const aiDuration = Date.now() - aiStartTime;
+        console.log(`[UNIFIED-LOVABLE] ✅ AI response received in ${aiDuration}ms`);
+        console.log(`[UNIFIED-LOVABLE] 📄 Response preview:`, JSON.stringify(result).substring(0, 200) + '...');
         break;
       } catch (error) {
         lastError = error;
-        console.error(`[UNIFIED-LOVABLE] Attempt ${attempt}/${AI_CONFIG.retry_attempts} failed:`, error);
+        const aiDuration = Date.now() - aiStartTime;
+        console.error(`[UNIFIED-LOVABLE] ❌ Attempt ${attempt} failed after ${aiDuration}ms:`, error);
         if (attempt < AI_CONFIG.retry_attempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000 * attempt)); // Exponential backoff
+          const backoffMs = 2000 * attempt;
+          console.log(`[UNIFIED-LOVABLE] ⏳ Retrying in ${backoffMs}ms...`);
+          await new Promise(resolve => setTimeout(resolve, backoffMs));
         }
       }
     }
 
     if (!result) {
-      throw new Error(`Failed after ${AI_CONFIG.retry_attempts} attempts: ${lastError}`);
+      const totalAiDuration = Date.now() - aiStartTime;
+      throw new Error(`Failed after ${AI_CONFIG.retry_attempts} attempts (${totalAiDuration}ms total): ${lastError}`);
     }
 
     // Update database based on enrichment_type
@@ -159,10 +172,17 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
       .update(updateData)
       .eq('id', analysisId);
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      console.error(`[UNIFIED-LOVABLE] ❌ Database update failed:`, updateError);
+      throw updateError;
+    }
 
-    const duration = Date.now() - startTime;
-    console.log(`[UNIFIED-LOVABLE] ✅ ${enrichment_type} completed in ${duration}ms`);
+    const duration = Date.now() - requestStartTime;
+    console.log(`[UNIFIED-LOVABLE] ✅ ============ REQUEST SUCCESS ============`);
+    console.log(`[UNIFIED-LOVABLE] ⏱️ Total duration: ${duration}ms`);
+    console.log(`[UNIFIED-LOVABLE] 📊 Type: ${enrichment_type}`);
+    console.log(`[UNIFIED-LOVABLE] 🆔 Analysis ID: ${analysisId}`);
+    console.log(`[UNIFIED-LOVABLE] 🎯 Model: ${AI_CONFIG.model}`);
 
     return new Response(
       JSON.stringify({
@@ -176,13 +196,19 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
     );
 
   } catch (error: any) {
-    console.error('[UNIFIED-LOVABLE] Error:', error);
+    const duration = Date.now() - requestStartTime;
+    console.error(`[UNIFIED-LOVABLE] ❌ ============ REQUEST FAILED ============`);
+    console.error(`[UNIFIED-LOVABLE] ⏱️ Failed after: ${duration}ms`);
+    console.error(`[UNIFIED-LOVABLE] 🔥 Error:`, error);
+    console.error(`[UNIFIED-LOVABLE] 📚 Stack:`, error.stack);
+    
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message,
         provider: 'lovable-ai',
         model: AI_CONFIG.model,
+        duration_ms: duration,
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
