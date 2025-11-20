@@ -59,7 +59,16 @@ export const SupplierPricesTable = ({ analysisId, compact = false }: SupplierPri
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-semibold">
-                  {price.purchase_price.toFixed(2)} {price.currency}
+                  {price.is_price_missing ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-muted-foreground">N/A</span>
+                      <Badge variant="outline" className="text-xs text-warning">
+                        ⚠️ Prix manquant
+                      </Badge>
+                    </div>
+                  ) : (
+                    `${price.purchase_price.toFixed(2)} ${price.currency}`
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">

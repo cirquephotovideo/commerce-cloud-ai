@@ -55,17 +55,17 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           purchase_price,
           stock_quantity,
           updated_at,
-          supplier_configurations(name)
+          supplier_configurations(supplier_name)
         `)
         .in('id', supplierProductIds)
-        .order('purchase_price', { ascending: true });
+        .order('purchase_price', { ascending: true, nullsFirst: false });
 
       if (productsError) throw productsError;
 
       if (products && products.length > 0) {
         const formattedPrices = products.map((item: any) => ({
           id: item.id,
-          supplier_name: item.supplier_configurations?.name || 'Fournisseur inconnu',
+          supplier_name: item.supplier_configurations?.supplier_name || 'Fournisseur inconnu',
           supplier_reference: item.supplier_reference,
           purchase_price: item.purchase_price || 0,
           currency: 'EUR',
@@ -74,7 +74,8 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           is_price_missing: !item.purchase_price || item.purchase_price === 0,
         }));
         setPrices(formattedPrices);
-        setBestPrice(formattedPrices[0]);
+        // Le meilleur prix est le premier avec un prix > 0, sinon le premier de la liste
+        setBestPrice(formattedPrices.find(p => p.purchase_price > 0) || formattedPrices[0]);
       } else {
         setPrices([]);
         setBestPrice(null);
