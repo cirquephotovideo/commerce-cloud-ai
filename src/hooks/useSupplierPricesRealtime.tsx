@@ -5,6 +5,9 @@ import { toast } from 'sonner';
 interface SupplierPrice {
   id: string;
   supplier_name: string;
+  supplier_id: string;
+  supplier_product_id?: string;
+  supplier_type?: string;
   supplier_reference?: string;
   purchase_price: number;
   currency: string;
@@ -57,11 +60,12 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
         .from('supplier_products')
         .select(`
           id,
+          supplier_id,
           supplier_reference,
           purchase_price,
           stock_quantity,
           last_updated,
-          supplier_configurations(supplier_name)
+          supplier_configurations(supplier_name, supplier_type)
         `)
         .in('id', supplierProductIds)
         .order('purchase_price', { ascending: true, nullsFirst: false });
@@ -73,7 +77,10 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
       if (products && products.length > 0) {
         const formattedPrices = products.map((item: any) => ({
           id: item.id,
+          supplier_id: item.supplier_id,
+          supplier_product_id: item.id,
           supplier_name: item.supplier_configurations?.supplier_name || 'Fournisseur inconnu',
+          supplier_type: item.supplier_configurations?.supplier_type,
           supplier_reference: item.supplier_reference,
           purchase_price: item.purchase_price || 0,
           currency: 'EUR',
@@ -118,7 +125,7 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           table: 'supplier_products',
         },
         (payload) => {
-          console.log('Product change detected:', payload);
+          console.log('Supplier product change detected:', payload);
           fetchPrices();
         }
       )
@@ -142,5 +149,11 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
     };
   }, [analysisId]);
 
-  return { prices, bestPrice, recentChanges, isLoading, refetch: fetchPrices };
+  return { 
+    prices, 
+    bestPrice, 
+    recentChanges, 
+    isLoading, 
+    refetch: fetchPrices 
+  };
 };

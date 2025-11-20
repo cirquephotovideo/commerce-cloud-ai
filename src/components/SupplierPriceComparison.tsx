@@ -2,20 +2,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Store, TrendingDown, Package, Calendar, Copy, AlertCircle } from "lucide-react";
+import { Store, TrendingDown, Package, Calendar, Copy, AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { useSupplierPricesRealtime } from "@/hooks/useSupplierPricesRealtime";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 
 interface SupplierPriceComparisonProps {
   analysisId: string;
 }
 
 export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonProps) => {
-  const { prices, bestPrice, isLoading } = useSupplierPricesRealtime(analysisId);
+  const { prices, bestPrice, isLoading, refetch } = useSupplierPricesRealtime(analysisId);
+  const [isSyncing, setIsSyncing] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -64,6 +67,25 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
   const totalStock = prices.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
   const maxSavings = bestPrice && prices.length > 1 ? avgPrice - bestPrice.purchase_price! : 0;
 
+  const handleResyncSupplier = async (supplierProductId: string, supplierName: string) => {
+    setIsSyncing(supplierProductId);
+    try {
+      const { error } = await supabase.functions.invoke('supplier-sync-single-product', {
+        body: { productId: supplierProductId }
+      });
+
+      if (error) throw error;
+
+      toast.success(`Fournisseur "${supplierName}" resynchronisé avec succès`);
+      refetch();
+    } catch (error: any) {
+      console.error('Error syncing supplier:', error);
+      toast.error(`Erreur lors de la synchronisation: ${error.message}`);
+    } finally {
+      setIsSyncing(null);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -80,6 +102,7 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
           <TableHeader>
             <TableRow>
               <TableHead>Fournisseur</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Code</TableHead>
               <TableHead className="text-right">Prix</TableHead>
               <TableHead className="text-right">Stock</TableHead>
@@ -105,22 +128,35 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
                   )}
                 >
                   <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {price.supplier_name || 'Fournisseur inconnu'}
-                      </span>
-                      {isBestPrice && (
-                        <Badge variant="default" className="gap-1 bg-green-600">
-                          <TrendingDown className="w-3 h-3" />
-                          Meilleur prix
-                        </Badge>
-                      )}
-                      {priceVariation > 10 && !isBestPrice && (
-                        <Badge variant="destructive">
-                          +{priceVariation.toFixed(0)}%
-                        </Badge>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {price.supplier_name || 'Fournisseur inconnu'}
+                        </span>
+                        {isBestPrice && (
+                          <Badge variant="default" className="gap-1 bg-green-600">
+                            <TrendingDown className="w-3 h-3" />
+                            Meilleur prix
+                          </Badge>
+                        )}
+                        {priceVariation > 10 && !isBestPrice && (
+                          <Badge variant="destructive">
+                            +{priceVariation.toFixed(0)}%
+                          </Badge>
+                        )}
+                      </div>
+                      {price.purchase_price === 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          Prix manquant (0 dans la source)
+                        </span>
                       )}
                     </div>
+                  </TableCell>
+                  
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">
+                      {price.supplier_type || 'N/A'}
+                    </Badge>
                   </TableCell>
                   
                   <TableCell>
@@ -194,19 +230,33 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
                     </div>
                   </TableCell>
                   
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2"
-                      onClick={() => {
-                        const info = `${price.supplier_name}\nRéf: ${price.supplier_reference}\nPrix: ${price.purchase_price}€\nStock: ${price.stock_quantity}`;
-                        navigator.clipboard.writeText(info);
-                        toast.success('Infos copiées');
-                      }}
-                    >
-                      📋
-                    </Button>
+                  <TableCell className="text-right">
+                    <div className="flex items-center gap-2 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleResyncSupplier(price.supplier_product_id!, price.supplier_name)}
+                        disabled={isSyncing === price.supplier_product_id}
+                      >
+                        {isSyncing === price.supplier_product_id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={() => {
+                          const info = `${price.supplier_name}\nRéf: ${price.supplier_reference}\nPrix: ${price.purchase_price}€\nStock: ${price.stock_quantity}`;
+                          navigator.clipboard.writeText(info);
+                          toast.success('Infos copiées');
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );

@@ -35,14 +35,16 @@ export const SuppliersSection = ({ analysisId }: SuppliersSectionProps) => {
   const handleAutoLink = async () => {
     setIsLinking(true);
     try {
-      const { data, error } = await supabase.functions.invoke('link-single-product-suppliers', {
+      const { data, error } = await supabase.functions.invoke('link-all-suppliers-by-ean', {
         body: { analysisId }
       });
 
       if (error) throw error;
 
       if (data?.success) {
-        toast.success(`${data.links_created} fournisseur(s) lié(s) automatiquement`);
+        toast.success(
+          `${data.links_created} fournisseur(s) lié(s) sur ${data.total_suppliers_found} trouvé(s) (EAN: ${data.ean})`
+        );
         refetch();
       } else {
         toast.error(data?.error || 'Aucun fournisseur trouvé');
