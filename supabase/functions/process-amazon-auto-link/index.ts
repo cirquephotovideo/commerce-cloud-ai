@@ -115,29 +115,68 @@ Deno.serve(async (req) => {
       throw analysesError;
     }
 
-    console.log(`[AMAZON-AUTO-LINK] Found ${analyses?.length || 0} analyses to process`);
+    // Handle case where no analyses found
+    if (!analyses || analyses.length === 0) {
+      console.log('[AMAZON-AUTO-LINK] No analyses found for this batch');
+
+      // Mark job as completed if first batch and no data
+      if (job_id && offset === 0) {
+        await supabase
+          .from('amazon_auto_link_jobs')
+          .update({
+            processed_count: 0,
+            links_created: 0,
+            current_offset: 0,
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', job_id);
+
+        console.log(`[AMAZON-AUTO-LINK] Job ${job_id} completed immediately (no data to process)`);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          matches_found: 0,
+          processed: 0,
+          offset,
+          message: 'No analyses to process for this user'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[AMAZON-AUTO-LINK] Found ${analyses.length} analyses to process`);
 
     // Extract unique EANs from the current batch
     const batchEans = [...new Set(
-      analyses?.map(a => a.ean).filter(ean => ean) || []
+      analyses.map(a => a.ean).filter(ean => ean)
     )];
     
     console.log(`[AMAZON-AUTO-LINK] Batch contains ${batchEans.length} unique EANs`);
 
-    // Get Code2ASIN enrichments ONLY for this batch's EANs (optimization)
-    const { data: enrichments, error: enrichmentsError } = await supabase
-      .from('code2asin_enrichments')
-      .select('id, ean, asin, title, brand')
-      .eq('user_id', user.id)
-      .in('ean', batchEans) // ← Only load enrichments for batch EANs
-      .not('ean', 'is', null);
+    // Get Code2ASIN enrichments ONLY if we have EANs
+    let enrichments: any[] = [];
 
-    if (enrichmentsError) {
-      console.error('[AMAZON-AUTO-LINK] Error fetching enrichments:', enrichmentsError);
-      throw enrichmentsError;
+    if (batchEans.length > 0) {
+      const { data, error: enrichmentsError } = await supabase
+        .from('code2asin_enrichments')
+        .select('id, ean, asin, title, brand')
+        .eq('user_id', user.id)
+        .in('ean', batchEans)
+        .not('ean', 'is', null);
+
+      if (enrichmentsError) {
+        console.error('[AMAZON-AUTO-LINK] Error fetching enrichments:', enrichmentsError);
+        throw enrichmentsError;
+      }
+
+      enrichments = data || [];
+      console.log(`[AMAZON-AUTO-LINK] Found ${enrichments.length} matching Code2ASIN enrichments`);
+    } else {
+      console.log('[AMAZON-AUTO-LINK] No EANs in this batch, skipping enrichment lookup');
     }
-
-    console.log(`[AMAZON-AUTO-LINK] Found ${enrichments?.length || 0} matching Code2ASIN enrichments`);
 
     // Create EAN index for fast lookup
     const enrichmentsByEan = new Map<string, any[]>();
@@ -151,18 +190,25 @@ Deno.serve(async (req) => {
     });
 
     // Get existing links for this batch in ONE query (major optimization)
-    const analysisIds = analyses?.map(a => a.id) || [];
-    const { data: existingLinks } = await supabase
-      .from('product_amazon_links')
-      .select('analysis_id')
-      .in('analysis_id', analysisIds);
+    const analysisIds = analyses.map(a => a.id);
+    let existingLinkSet = new Set<string>();
 
-    // Create a Set for O(1) lookup
-    const existingLinkSet = new Set(
-      existingLinks?.map(l => l.analysis_id) || []
-    );
+    if (analysisIds.length > 0) {
+      const { data: existingLinks, error: existingLinksError } = await supabase
+        .from('product_amazon_links')
+        .select('analysis_id')
+        .in('analysis_id', analysisIds);
 
-    console.log(`[AMAZON-AUTO-LINK] Found ${existingLinkSet.size} existing links in this batch`);
+      if (existingLinksError) {
+        console.error('[AMAZON-AUTO-LINK] Error fetching existing links:', existingLinksError);
+        throw existingLinksError;
+      }
+
+      existingLinkSet = new Set(existingLinks?.map(l => l.analysis_id) || []);
+      console.log(`[AMAZON-AUTO-LINK] Found ${existingLinkSet.size} existing links in this batch`);
+    } else {
+      console.log('[AMAZON-AUTO-LINK] No analyses in this batch, skipping existing links lookup');
+    }
 
     const matches: MatchResult[] = [];
 
