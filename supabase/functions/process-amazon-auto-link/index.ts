@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         analysis_id: match.analysis_id,
         enrichment_id: match.enrichment_id,
-        link_type: 'auto',
+        link_type: 'automatic',
         confidence_score: match.confidence_score,
         matched_on: match.matched_on
       }));
