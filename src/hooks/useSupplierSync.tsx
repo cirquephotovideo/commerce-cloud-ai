@@ -111,8 +111,12 @@ export const useSupplierSync = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
+      // Appel avec timeout étendu pour les grosses bases
       const { data, error } = await supabase.functions.invoke('cleanup-and-resync', {
         body: { userId: user.id, resyncOdoo },
+        headers: {
+          'x-custom-timeout': '120000' // 2 minutes
+        }
       });
 
       if (error) throw error;
