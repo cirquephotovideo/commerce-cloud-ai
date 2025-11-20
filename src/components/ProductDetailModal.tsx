@@ -614,7 +614,12 @@ export function ProductDetailModal({
                   <AccordionContent>
                     <WebSourcesDisplay
                       sources={(analysis as any)?.web_sources || []}
-                      confidenceLevel={(analysis as any)?.confidence_level || 'medium'}
+                      confidenceLevel={(() => {
+                        const level = (analysis as any)?.confidence_level;
+                        if (typeof level === 'string') return level;
+                        if (typeof level === 'object' && level?.overall) return level.overall;
+                        return 'medium';
+                      })()}
                       enrichmentDate={analysis?.updated_at}
                     />
                   </AccordionContent>
