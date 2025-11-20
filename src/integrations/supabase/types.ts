@@ -5104,7 +5104,7 @@ export type Database = {
       }
       supplier_price_variants: {
         Row: {
-          analysis_id: string | null
+          analysis_id: string
           created_at: string | null
           currency: string | null
           enrichment_error: string | null
@@ -5124,13 +5124,13 @@ export type Database = {
           suggested_margin_percent: number | null
           suggested_selling_price: number | null
           supplier_id: string | null
-          supplier_product_id: string | null
+          supplier_product_id: string
           supplier_reference: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          analysis_id?: string | null
+          analysis_id: string
           created_at?: string | null
           currency?: string | null
           enrichment_error?: string | null
@@ -5150,13 +5150,13 @@ export type Database = {
           suggested_margin_percent?: number | null
           suggested_selling_price?: number | null
           supplier_id?: string | null
-          supplier_product_id?: string | null
+          supplier_product_id: string
           supplier_reference?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          analysis_id?: string | null
+          analysis_id?: string
           created_at?: string | null
           currency?: string | null
           enrichment_error?: string | null
@@ -5176,7 +5176,7 @@ export type Database = {
           suggested_margin_percent?: number | null
           suggested_selling_price?: number | null
           supplier_id?: string | null
-          supplier_product_id?: string | null
+          supplier_product_id?: string
           supplier_reference?: string | null
           updated_at?: string | null
           user_id?: string
