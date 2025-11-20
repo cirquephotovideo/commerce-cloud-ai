@@ -26,22 +26,52 @@ export function SupplierLogsPanel() {
     queryFn: async () => {
       const logs: LogEntry[] = [];
 
-      // Fetch recent enrichment errors
+      // Fetch recent enrichment errors with detailed error messages
       const { data: enrichmentErrors } = await supabase
         .from('supplier_products')
-        .select('id, product_name, last_updated, supplier_id, supplier_configurations(supplier_name)')
+        .select('id, product_name, last_updated, enrichment_error_message, supplier_id, supplier_configurations(supplier_name)')
         .eq('enrichment_status', 'failed')
         .order('last_updated', { ascending: false })
         .limit(10);
 
       enrichmentErrors?.forEach(error => {
+        let errorDetails = 'Enrichissement échoué';
+        let errorCode = 'UNKNOWN';
+        
+        // Parse structured error if available
+        if (error.enrichment_error_message) {
+          try {
+            const parsed = JSON.parse(error.enrichment_error_message);
+            errorCode = parsed.code || 'UNKNOWN';
+            errorDetails = parsed.message || error.enrichment_error_message;
+            
+            // Add actionable suggestions
+            switch (parsed.code) {
+              case 'JSON_PARSE_ERROR':
+                errorDetails += ' → L\'IA a retourné une réponse invalide. Réessayez avec un autre modèle.';
+                break;
+              case 'INCOMPLETE_ANALYSIS':
+                errorDetails += ' → Données incomplètes. Vérifiez les informations produit.';
+                break;
+              case 'AI_CALL_FAILED':
+                errorDetails += ` → Erreur ${parsed.provider || 'AI'}. Vérifiez la configuration.`;
+                break;
+              case 'EMPTY_AI_RESPONSE':
+                errorDetails += ' → Réponse vide de l\'IA. Réessayez plus tard.';
+                break;
+            }
+          } catch {
+            errorDetails = error.enrichment_error_message;
+          }
+        }
+        
         logs.push({
           id: `enrich-${error.id}`,
           type: 'error',
           icon: <AlertCircle className="h-4 w-4" />,
-          message: `Erreur enrichissement: "${error.product_name}"`,
+          message: `[${errorCode}] "${error.product_name}"`,
           timestamp: new Date(error.last_updated),
-          details: 'Enrichissement échoué'
+          details: errorDetails
         });
       });
 

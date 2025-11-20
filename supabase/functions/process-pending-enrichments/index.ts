@@ -89,20 +89,29 @@ serve(async (req) => {
           if (!analyzerResponse.ok) {
             let errorMessage = 'Enrichment failed';
             let structuredError = null;
+            let shouldRetry = true;
             
             try {
               const errorBody = await analyzerResponse.json();
               
-              // Parse structured error from product-analyzer
+              // ✅ Parse structured error from product-analyzer
               if (errorBody.success === false && errorBody.code) {
                 structuredError = {
                   code: errorBody.code,
-                  http_status: errorBody.http_status,
+                  http_status: analyzerResponse.status,
                   provider: errorBody.provider,
-                  message: errorBody.message
+                  message: errorBody.message,
+                  details: errorBody.details
                 };
+                
                 errorMessage = `[${errorBody.code}] ${errorBody.message}`;
                 if (errorBody.provider) errorMessage += ` (provider: ${errorBody.provider})`;
+                
+                // ❌ Don't retry on JSON parse errors (AI issue, not transient)
+                if (errorBody.code === 'JSON_PARSE_ERROR' || errorBody.code === 'INCOMPLETE_ANALYSIS') {
+                  shouldRetry = false;
+                  console.log(`🚫 Non-retryable error: ${errorBody.code}`);
+                }
               } else {
                 errorMessage = errorBody?.error?.message || errorBody?.error || errorMessage;
               }
@@ -115,6 +124,7 @@ serve(async (req) => {
             // Store structured error for better debugging
             const error = new Error(errorMessage);
             (error as any).structuredError = structuredError;
+            (error as any).shouldRetry = shouldRetry;
             throw error;
           }
 
@@ -174,11 +184,38 @@ serve(async (req) => {
         retries++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         const structuredError = (error as any)?.structuredError;
+        const shouldRetry = (error as any)?.shouldRetry !== false;
         
         console.error(`❌ Error enriching ${product.id} (attempt ${retries}/${maxRetries}):`, {
           message: errorMessage,
-          structured: structuredError
+          structured: structuredError,
+          shouldRetry
         });
+        
+        // ❌ If error is non-retryable, fail immediately
+        if (!shouldRetry) {
+          console.error(`🚫 Non-retryable error detected, failing immediately`);
+          
+          const finalErrorMessage = structuredError ? JSON.stringify({
+            message: errorMessage,
+            code: structuredError.code,
+            provider: structuredError.provider,
+            http_status: structuredError.http_status,
+            details: structuredError.details,
+            retryable: false
+          }) : errorMessage;
+          
+          await supabaseClient
+            .from('supplier_products')
+            .update({ 
+              enrichment_status: 'failed',
+              enrichment_progress: 0,
+              enrichment_error_message: finalErrorMessage
+            })
+            .eq('id', product.id);
+          errors++;
+          break; // Exit retry loop
+        }
         
         if (retries < maxRetries) {
           // Backoff exponentiel avec jitter : 2s±20%, 4s±20%, 8s±20%
@@ -189,24 +226,23 @@ serve(async (req) => {
           await new Promise(resolve => setTimeout(resolve, waitTime));
         } else {
           // Dernier retry échoué - store detailed error
-          console.error(`❌ All retries failed for ${product.id}`);
+          console.error(`❌ All retries exhausted for ${product.id}`);
           
-          let finalErrorMessage = errorMessage;
-          if (structuredError) {
-            finalErrorMessage = JSON.stringify({
-              message: errorMessage,
-              code: structuredError.code,
-              provider: structuredError.provider,
-              http_status: structuredError.http_status
-            });
-          }
+          const finalErrorMessage = structuredError ? JSON.stringify({
+            message: errorMessage,
+            code: structuredError.code,
+            provider: structuredError.provider,
+            http_status: structuredError.http_status,
+            details: structuredError.details,
+            retriesExhausted: true
+          }) : errorMessage;
           
           await supabaseClient
             .from('supplier_products')
             .update({ 
               enrichment_status: 'failed',
               enrichment_progress: 0,
-              error_message: finalErrorMessage
+              enrichment_error_message: finalErrorMessage
             })
             .eq('id', product.id);
           errors++;
