@@ -8,7 +8,6 @@ interface SupplierPrice {
   supplier_id: string;
   supplier_product_id?: string;
   supplier_type?: string;
-  supplier_logo?: string;
   supplier_reference?: string;
   purchase_price: number;
   currency: string;
@@ -66,7 +65,7 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           purchase_price,
           stock_quantity,
           last_updated,
-          supplier_configurations(supplier_name, supplier_type, supplier_logo)
+          supplier_configurations(supplier_name, supplier_type)
         `)
         .in('id', supplierProductIds)
         .order('purchase_price', { ascending: true, nullsFirst: false });
@@ -82,7 +81,6 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           supplier_product_id: item.id,
           supplier_name: item.supplier_configurations?.supplier_name || 'Fournisseur inconnu',
           supplier_type: item.supplier_configurations?.supplier_type,
-          supplier_logo: item.supplier_configurations?.supplier_logo,
           supplier_reference: item.supplier_reference,
           purchase_price: item.purchase_price || 0,
           currency: 'EUR',

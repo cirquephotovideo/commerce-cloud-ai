@@ -152,16 +152,6 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        {price.supplier_logo && (
-                          <img 
-                            src={price.supplier_logo} 
-                            alt={price.supplier_name}
-                            className="w-6 h-6 rounded object-contain"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        )}
                         <span className="font-medium">
                           {price.supplier_name || 'Fournisseur inconnu'}
                         </span>
