@@ -29,6 +29,8 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
 
   const fetchPrices = async () => {
     try {
+      console.log('[useSupplierPricesRealtime] 🔍 Fetching prices for analysisId:', analysisId);
+      
       // First get the product links to get supplier_product_id
       const { data: links, error: linksError } = await supabase
         .from('product_links')
@@ -37,7 +39,10 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
 
       if (linksError) throw linksError;
 
+      console.log('[useSupplierPricesRealtime] 📦 Product links found:', links?.length || 0);
+
       if (!links || links.length === 0) {
+        console.log('[useSupplierPricesRealtime] ⚠️ No product links found');
         setPrices([]);
         setBestPrice(null);
         setIsLoading(false);
@@ -45,6 +50,7 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
       }
 
       const supplierProductIds = links.map(l => l.supplier_product_id);
+      console.log('[useSupplierPricesRealtime] 🔗 Supplier product IDs:', supplierProductIds);
 
       // Get supplier products with prices
       const { data: products, error: productsError } = await supabase
@@ -62,6 +68,8 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
 
       if (productsError) throw productsError;
 
+      console.log('[useSupplierPricesRealtime] 📊 Supplier products found:', products?.length || 0);
+
       if (products && products.length > 0) {
         const formattedPrices = products.map((item: any) => ({
           id: item.id,
@@ -73,15 +81,24 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           last_updated: item.updated_at,
           is_price_missing: !item.purchase_price || item.purchase_price === 0,
         }));
+        
+        console.log('[useSupplierPricesRealtime] ✅ Formatted prices:', formattedPrices.map(p => ({
+          supplier: p.supplier_name,
+          price: p.purchase_price,
+          is_missing: p.is_price_missing,
+          stock: p.stock_quantity
+        })));
+        
         setPrices(formattedPrices);
         // Le meilleur prix est le premier avec un prix > 0, sinon le premier de la liste
         setBestPrice(formattedPrices.find(p => p.purchase_price > 0) || formattedPrices[0]);
       } else {
+        console.log('[useSupplierPricesRealtime] ⚠️ No supplier products returned');
         setPrices([]);
         setBestPrice(null);
       }
     } catch (error) {
-      console.error('Error fetching supplier prices:', error);
+      console.error('[useSupplierPricesRealtime] ❌ Error fetching supplier prices:', error);
     } finally {
       setIsLoading(false);
     }

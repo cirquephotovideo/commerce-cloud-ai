@@ -34,6 +34,15 @@ export const CriticalInfoSection = ({
   // Récupérer les données des fournisseurs en temps réel
   const { prices: supplierPrices, isLoading: isLoadingSuppliers } = useSupplierPricesRealtime(analysis?.id);
 
+  // Logs de débogage
+  console.log('[CriticalInfoSection] 🔍 Debug Info:', {
+    analysisId: analysis?.id,
+    supplierCount,
+    supplierPrices: supplierPrices?.length || 0,
+    isLoadingSuppliers,
+    prices: supplierPrices
+  });
+
   // PHASE 4: Récupérer le meilleur prix fournisseur
   const { data: bestPrice } = useQuery({
     queryKey: ['best-supplier-price', analysis?.id],
@@ -224,35 +233,66 @@ export const CriticalInfoSection = ({
             {isLoadingSuppliers ? (
               <div className="text-sm text-muted-foreground">Chargement...</div>
             ) : !supplierPrices || supplierPrices.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                Aucun fournisseur lié
+              <div className="space-y-2">
+                <div className="text-sm text-muted-foreground">
+                  Aucun fournisseur lié
+                </div>
+                {supplierCount > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="destructive" className="text-xs">
+                      ⚠️ Erreur de chargement
+                    </Badge>
+                    <button 
+                      onClick={() => window.location.reload()} 
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Recharger
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="space-y-1">
-                {supplierPrices.slice(0, 3).map((s) => {
+              <div className="space-y-1.5">
+                {supplierPrices.map((s) => {
                   const hasPrice = !!s.purchase_price && s.purchase_price > 0;
+                  const hasStock = (s.stock_quantity ?? 0) > 0;
+                  const lowStock = hasStock && (s.stock_quantity ?? 0) < 5;
+                  
                   return (
-                    <div key={s.id} className="flex items-center justify-between text-xs border-b border-border/50 pb-1">
-                      <div className="truncate max-w-[120px] font-medium" title={s.supplier_name}>
-                        {s.supplier_name}
+                    <div key={s.id} className="flex items-start justify-between text-xs border-b border-border/50 pb-1.5 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate font-medium" title={s.supplier_name}>
+                          {s.supplier_name}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          {!hasPrice && (
+                            <Badge variant="destructive" className="text-[10px] h-4 px-1">
+                              ⚠️ Prix manquant
+                            </Badge>
+                          )}
+                          {!hasStock && (
+                            <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-muted">
+                              Pas de stock
+                            </Badge>
+                          )}
+                          {lowStock && (
+                            <Badge variant="outline" className="text-[10px] h-4 px-1 border-orange-500 text-orange-500">
+                              Stock faible
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px]">
-                        <span className="font-semibold text-primary">
+                      <div className="flex flex-col items-end text-[10px] whitespace-nowrap">
+                        <span className={`font-semibold ${hasPrice ? 'text-primary' : 'text-muted-foreground'}`}>
                           {hasPrice ? `${s.purchase_price.toFixed(2)}€` : "N/A"}
                         </span>
                         <span className="text-muted-foreground">
-                          Stock: {s.stock_quantity ?? "?"}
+                          Stock: {s.stock_quantity ?? 0}
                         </span>
                       </div>
                     </div>
                   );
                 })}
-
-                {supplierPrices.length > 3 && (
-                  <div className="text-[10px] text-muted-foreground pt-1">
-                    + {supplierPrices.length - 3} autre(s)
-                  </div>
-                )}
               </div>
             )}
           </div>
