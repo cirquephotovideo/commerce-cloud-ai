@@ -267,9 +267,9 @@ export const CriticalInfoSection = ({
               >
                 <AlertCircle className={cn(
                   "h-3 w-3 mr-1",
-                  isCleaning && "animate-pulse"
+                  isCleaning && "animate-spin"
                 )} />
-                Réparer
+                {isCleaning ? 'Réparation...' : 'Réparer'}
               </Button>
                   </div>
                 )}

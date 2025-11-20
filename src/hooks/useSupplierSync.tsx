@@ -111,29 +111,57 @@ export const useSupplierSync = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Non authentifié");
 
-      // Appel avec timeout étendu pour les grosses bases
+      console.log('🧹 Starting cleanup-and-resync...');
+
       const { data, error } = await supabase.functions.invoke('cleanup-and-resync', {
-        body: { userId: user.id, resyncOdoo },
-        headers: {
-          'x-custom-timeout': '120000' // 2 minutes
-        }
+        body: { userId: user.id, resyncOdoo }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Edge function error:', error);
+        throw new Error(error.message || 'Erreur lors du nettoyage');
+      }
+
+      if (!data?.success) {
+        console.error('❌ Cleanup failed:', data);
+        throw new Error(data?.error || 'Échec du nettoyage');
+      }
+
+      console.log('✅ Cleanup success:', data);
       return data;
     },
     onSuccess: (data) => {
-      console.log('✅ Cleanup success:', data);
+      const merged = data.mergeResult?.merged_eans || 0;
+      const variants = data.variantsCreated || 0;
+      const odooSynced = Array.isArray(data.odooSyncResults)
+        ? data.odooSyncResults.filter((r: any) => r.success).length
+        : 0;
+
       toast.success(
-        `Nettoyage terminé: ${data.mergeResult?.merged_eans || 0} doublons fusionnés, ${data.variantsCreated} prix restaurés`
+        `✅ Nettoyage terminé`,
+        {
+          description: `${merged} doublons fusionnés, ${variants} prix restaurés${odooSynced > 0 ? `, ${odooSynced} produits Odoo synchronisés` : ''}`
+        }
       );
+      
       queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
       queryClient.invalidateQueries({ queryKey: ['supplier-prices'] });
       queryClient.invalidateQueries({ queryKey: ['product-analyses'] });
     },
     onError: (error: Error) => {
-      console.error('❌ Cleanup error:', error);
-      toast.error(`Erreur nettoyage: ${error.message}`);
+      console.error('❌ Cleanup mutation error:', error);
+      
+      // Extraire un message plus clair
+      let errorMessage = error.message;
+      if (errorMessage.includes('Failed to send')) {
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion.';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Opération trop longue. Réessayez avec moins de données.';
+      }
+      
+      toast.error(`❌ Erreur nettoyage`, {
+        description: errorMessage
+      });
     },
   });
 
