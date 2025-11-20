@@ -227,12 +227,37 @@ serve(async (req) => {
         
         console.log('[ENRICHMENT-QUEUE] Insert payload prepared');
 
-        // Create product_analyses entry
-        const { data: analysis, error: insertError } = await supabase
+        // Try to update existing or create new product_analyses entry
+        let analysis;
+        let insertError;
+        
+        // First try to find existing
+        const { data: existing } = await supabase
           .from('product_analyses')
-          .insert(insertPayload)
-          .select()
-          .single();
+          .select('id')
+          .eq('supplier_product_id', task.supplier_product_id)
+          .maybeSingle();
+        
+        if (existing) {
+          // Update existing
+          const { data: updated, error: updateError } = await supabase
+            .from('product_analyses')
+            .update(insertPayload)
+            .eq('id', existing.id)
+            .select()
+            .single();
+          analysis = updated;
+          insertError = updateError;
+        } else {
+          // Create new
+          const { data: created, error: createError } = await supabase
+            .from('product_analyses')
+            .insert(insertPayload)
+            .select()
+            .single();
+          analysis = created;
+          insertError = createError;
+        }
 
         if (insertError) throw insertError;
 
