@@ -32,7 +32,7 @@ export const CriticalInfoSection = ({
   );
 
   // Récupérer les données des fournisseurs en temps réel
-  const { prices: supplierPrices, isLoading: isLoadingSuppliers } = useSupplierPricesRealtime(analysis?.id);
+  const { prices: supplierPrices, isLoading: isLoadingSuppliers, refetch } = useSupplierPricesRealtime(analysis?.id);
 
   // Logs de débogage
   console.log('[CriticalInfoSection] 🔍 Debug Info:', {
@@ -239,15 +239,15 @@ export const CriticalInfoSection = ({
                 </div>
                 {supplierCount > 0 && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="destructive" className="text-xs">
-                      ⚠️ Erreur de chargement
-                    </Badge>
-                    <button 
-                      onClick={() => window.location.reload()} 
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Recharger
-                    </button>
+              <Badge variant="destructive" className="text-xs">
+                ⚠️ Erreur de chargement
+              </Badge>
+              <button 
+                onClick={() => refetch()} 
+                className="text-xs text-primary hover:underline"
+              >
+                Recharger
+              </button>
                   </div>
                 )}
               </div>

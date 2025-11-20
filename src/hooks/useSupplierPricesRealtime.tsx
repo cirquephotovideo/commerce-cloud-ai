@@ -60,7 +60,7 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           supplier_reference,
           purchase_price,
           stock_quantity,
-          updated_at,
+          last_updated,
           supplier_configurations(supplier_name)
         `)
         .in('id', supplierProductIds)
@@ -78,7 +78,7 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
           purchase_price: item.purchase_price || 0,
           currency: 'EUR',
           stock_quantity: item.stock_quantity ?? 0,
-          last_updated: item.updated_at,
+          last_updated: item.last_updated,
           is_price_missing: !item.purchase_price || item.purchase_price === 0,
         }));
         
