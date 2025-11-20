@@ -15,7 +15,8 @@ serve(async (req) => {
   try {
     const { analysisId, enrichment_type, productData, purchasePrice } = await req.json();
 
-    console.log(`[UNIFIED-LOVABLE] Starting ${enrichment_type} enrichment for analysis ${analysisId}`);
+    const startTime = Date.now();
+    console.log(`[UNIFIED-LOVABLE] ⏱️ Starting ${enrichment_type} at ${new Date().toISOString()}`);
 
     // Validate enrichment_type
     const validTypes = ['description', 'specifications', 'cost_analysis', 'images', 'rsgp'];
@@ -106,10 +107,6 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
       case 'specifications':
         if (result.specifications) {
           updateData.specifications = result.specifications;
-          updateData.analysis_result = {
-            ...analysis.analysis_result,
-            specifications: result.specifications,
-          };
         }
         break;
 
@@ -119,32 +116,35 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
           updateData.analysis_result = {
             ...analysis.analysis_result,
             recommended_price: result.cost_analysis.recommended_selling_price,
-            margin_percentage: result.cost_analysis.margin_percentage,
           };
         }
         break;
 
       case 'images':
         if (result.official_image_urls && Array.isArray(result.official_image_urls)) {
-          // Merge with existing images
-          const existingImages = analysis.official_image_urls || [];
-          const newImages = result.official_image_urls.filter(
-            (url: string) => !existingImages.includes(url)
-          );
-          updateData.official_image_urls = [...existingImages, ...newImages].slice(0, 10);
+          updateData.official_image_urls = result.official_image_urls;
         }
         break;
 
       case 'rsgp':
         if (result.rsgp_compliance) {
           updateData.rsgp_compliance = result.rsgp_compliance;
+          
+          // IMPORTANT : Remplir analysis_result pour l'UI
           updateData.analysis_result = {
             ...analysis.analysis_result,
+            repairability: result.repairability,
+            environmental_impact: result.environmental_impact,
+            hs_code: result.hs_code,
             repairability_score: result.rsgp_compliance.repairability_score,
           };
         }
         break;
     }
+
+    // Ajouter web_sources et confidence_level pour TOUS les types
+    updateData.web_sources = result.web_sources || analysis.web_sources || [];
+    updateData.confidence_level = result.confidence_level || 'medium';
 
     // Update product_analyses
     const { error: updateError } = await supabase
@@ -154,15 +154,16 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
 
     if (updateError) throw updateError;
 
-    console.log(`[UNIFIED-LOVABLE] Successfully enriched ${enrichment_type} for analysis ${analysisId}`);
+    const duration = Date.now() - startTime;
+    console.log(`[UNIFIED-LOVABLE] ✅ ${enrichment_type} completed in ${duration}ms`);
 
     return new Response(
       JSON.stringify({
         success: true,
         enrichment_type,
+        model_used: AI_CONFIG.model,
+        duration_ms: duration,
         data: result,
-        provider: 'lovable-ai',
-        model: AI_CONFIG.model,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

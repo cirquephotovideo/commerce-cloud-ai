@@ -18,112 +18,107 @@ export const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completio
  * Prompts unifiés optimisés pour chaque type d'enrichissement
  */
 export const UNIFIED_PROMPTS = {
-  description: `Tu es un expert en rédaction de fiches produits e-commerce professionnelles.
+  description: `Tu es un expert en rédaction de fiches produits e-commerce.
 
-Objectif : Créer une description longue, détaillée et engageante pour le produit.
+CONTEXTE : Les données ci-dessous proviennent d'une recherche web sur le produit.
 
-Instructions :
-1. Rédige une description en français de 200-300 mots
-2. Structure : Introduction attrayante → Caractéristiques principales → Avantages utilisateur → Appel à l'action
-3. Utilise un ton professionnel mais accessible
-4. Mets en avant les bénéfices concrets pour l'utilisateur
-5. Inclus des mots-clés SEO naturellement intégrés
-6. Évite le jargon technique excessif
-7. Ne mentionne JAMAIS de prix ou de disponibilité
+INSTRUCTION : Génère une description longue et détaillée (200-300 mots) en français, optimisée SEO.
 
-Format de réponse JSON strict :
+IMPORTANT : Réponds UNIQUEMENT en JSON avec cette structure exacte :
 {
-  "long_description": "Description complète et engageante du produit..."
+  "long_description": "Description complète et engageante du produit...",
+  "web_sources": ["url1", "url2"],
+  "confidence_level": "high"
 }`,
 
-  specifications: `Tu es un expert en spécifications techniques produits pour e-commerce.
+  specifications: `Tu es un expert en spécifications techniques e-commerce.
 
-Objectif : Extraire et structurer les spécifications techniques détaillées.
+CONTEXTE : Données produit issues d'une recherche web.
 
-Instructions :
-1. Liste TOUTES les spécifications techniques pertinentes
-2. Organise par catégories logiques (Dimensions, Poids, Matériaux, Performance, etc.)
-3. Utilise des unités de mesure standards (cm, kg, W, V, etc.)
-4. Sois précis et factuel
-5. N'invente AUCUNE donnée - si une info est manquante, ne la liste pas
+INSTRUCTION : Extrais TOUTES les spécifications techniques pertinentes.
 
-Format de réponse JSON strict :
+IMPORTANT : Réponds UNIQUEMENT en JSON avec cette structure :
 {
   "specifications": {
-    "dimensions": { "hauteur": "X cm", "largeur": "Y cm", "profondeur": "Z cm" },
-    "poids": "X kg",
-    "materiau": "...",
-    "couleur": "...",
-    "garantie": "X ans",
-    "autres": { "cle": "valeur" }
-  }
+    "Dimensions": "...",
+    "Poids": "...",
+    "Matériaux": "...",
+    "Couleur": "...",
+    "Garantie": "..."
+  },
+  "web_sources": ["url1", "url2"],
+  "confidence_level": "high"
 }`,
 
-  cost_analysis: `Tu es un expert en analyse de coûts et pricing pour e-commerce.
+  cost_analysis: `Tu es un expert en analyse de coûts et pricing e-commerce.
 
-Objectif : Analyser les coûts et recommander un prix de vente optimal.
+CONTEXTE : Données produit + prix d'achat fourni.
 
-Instructions :
-1. Calcule une marge recommandée de 30-50% selon le type de produit
-2. Analyse les coûts Amazon si disponibles (FBA fees, prep fees, etc.)
-3. Estime les frais logistiques (5-10% du prix d'achat)
-4. Suggère un prix psychologique attractif (X,99 ou X,90)
-5. Fournis une fourchette de prix concurrentiel
+INSTRUCTION : Calcule un prix de vente recommandé avec marge réaliste (25-40%).
 
-Format de réponse JSON strict :
+IMPORTANT : Réponds UNIQUEMENT en JSON avec cette structure :
 {
   "cost_analysis": {
-    "purchase_price": 0.00,
-    "recommended_selling_price": 0.00,
-    "margin_percentage": 0.00,
-    "estimated_logistics_cost": 0.00,
-    "price_range": { "min": 0.00, "max": 0.00 },
-    "competitive_position": "low|medium|high"
-  }
+    "recommended_selling_price": 99.99,
+    "margin_percentage": 35,
+    "competitor_price_range": "80-120 EUR",
+    "justification": "Explication de la stratégie pricing..."
+  },
+  "web_sources": ["url1", "url2"],
+  "confidence_level": "high"
 }`,
 
-  images: `Tu es un expert en recherche d'images produits haute qualité pour e-commerce.
+  images: `Tu es un expert en recherche d'images produits officielles.
 
-Objectif : Trouver 3-5 URLs d'images produit officielles et pertinentes.
+CONTEXTE : Informations produit fournies.
 
-Instructions :
-1. Cherche UNIQUEMENT des images officielles du produit (pas de mockups)
-2. Privilégie les images haute résolution (min 800x800px)
-3. Vérifie que les URLs sont accessibles et fonctionnelles
-4. Cherche sur les sites officiels du fabricant, Amazon, revendeurs agréés
-5. Inclus différents angles si possible (face, profil, détails)
+INSTRUCTION : Trouve 3-5 URLs d'images haute qualité (officielles ou professionnelles).
 
-Format de réponse JSON strict :
+IMPORTANT : Réponds UNIQUEMENT en JSON avec cette structure :
 {
   "official_image_urls": [
     "https://example.com/image1.jpg",
     "https://example.com/image2.jpg"
-  ]
+  ],
+  "web_sources": ["source1", "source2"],
+  "confidence_level": "high"
 }`,
 
-  rsgp: `Tu es un expert en conformité RSGP (Règlement Général sur la Prévention) et analyse environnementale.
+  rsgp: `Tu es un expert en conformité RSGP et impact environnemental.
 
-Objectif : Évaluer la réparabilité, durabilité et impact environnemental du produit.
+CONTEXTE : Données produit fournies.
 
-Instructions :
-1. Estime l'indice de réparabilité (0-10) selon les critères officiels français
-2. Évalue la durabilité du produit (durée de vie estimée)
-3. Analyse l'impact environnemental (recyclabilité, consommation énergétique)
-4. Liste les pièces détachées généralement disponibles
-5. Identifie les défis de réparation potentiels
-6. Sois réaliste et factuel
+INSTRUCTION : Évalue la réparabilité ET l'impact environnemental du produit.
 
-Format de réponse JSON strict :
+IMPORTANT : Réponds UNIQUEMENT en JSON avec cette structure COMPLÈTE :
 {
   "rsgp_compliance": {
-    "repairability_score": 0.0,
-    "estimated_lifespan_years": 0,
-    "environmental_impact": "low|medium|high",
-    "recyclable": true|false,
-    "available_spare_parts": ["piece1", "piece2"],
-    "repair_challenges": ["difficulté1", "difficulté2"]
-  }
-}`,
+    "repairability_score": 7.5,
+    "compliance_level": "compliant",
+    "documentation_available": true,
+    "repair_guide_url": "https://...",
+    "spare_parts_availability": "Disponible sous 2 semaines",
+    "durability_years": "5-7 ans"
+  },
+  "repairability": {
+    "score": 7.5,
+    "ease": "Démontage facile avec outils standards",
+    "spareParts": "Disponible sous 2 semaines",
+    "durability": "5-7 ans"
+  },
+  "environmental_impact": {
+    "eco_score": 75,
+    "carbon_footprint": "12kg CO2eq",
+    "recyclability": "85% recyclable",
+    "certifications": ["Energy Star", "EU Ecolabel"]
+  },
+  "hs_code": {
+    "code": "8471.30",
+    "description": "Machines automatiques de traitement de l'information portatives"
+  },
+  "web_sources": ["url1", "url2"],
+  "confidence_level": "high"
+}`
 };
 
 /**

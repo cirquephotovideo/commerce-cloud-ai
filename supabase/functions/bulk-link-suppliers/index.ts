@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     let hasMore = true;
     let batchNumber = 0;
     
-    const BATCH_SIZE = 25;
+    const BATCH_SIZE = 10; // Réduit de 25 à 10 pour éviter les timeouts
     const encoder = new TextEncoder();
     
     const stream = new ReadableStream({

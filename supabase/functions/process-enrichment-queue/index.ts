@@ -255,11 +255,8 @@ serve(async (req) => {
           .update({ analysis_id: analysis.id })
           .eq('id', task.id);
 
-        // Phase 6: Logs de débogage
-        console.log('[ENRICHMENT-QUEUE] Using Ollama preferences:', {
-          model: ollamaPreferences.preferredModel,
-          webSearch: ollamaPreferences.webSearchEnabled
-        });
+        // Phase 6: Configuration AI unifiée (Lovable AI)
+        console.log('[ENRICHMENT-QUEUE] Using unified Lovable AI (Gemini 2.5 Flash)');
 
         // Phase 3: Process additional enrichments EN PARALLÈLE
         const enrichmentTypes = task.enrichment_type || [];
@@ -272,49 +269,14 @@ serve(async (req) => {
 
             switch (type) {
               case 'amazon':
-                if (supplierProduct.ean || supplierProduct.product_name) {
-                  console.log('[ENRICHMENT-QUEUE] Using Amazon MCP for enrichment');
-                  
-                  const { data: mcpResult, error: mcpError } = await supabase.functions.invoke('mcp-proxy', {
-                    body: {
-                      packageId: 'amazon-seller-mcp',
-                      toolName: 'search_catalog',
-                      args: { 
-                        keywords: supplierProduct.ean || supplierProduct.product_name 
-                      }
-                    }
-                  });
-                  
-                  if (mcpError) {
-                    console.error('[ENRICHMENT-QUEUE] MCP Amazon error:', mcpError);
-                  } else if (mcpResult?.success && mcpResult?.data?.items?.length > 0) {
-                    const amazonItem = mcpResult.data.items[0];
-                    console.log(`[ENRICHMENT-QUEUE] Found Amazon product: ${amazonItem.asin}`);
-                    
-                    try {
-                      await supabase.from('amazon_product_data').upsert({
-                        analysis_id: analysis.id,
-                        user_id: task.user_id,
-                        asin: amazonItem.asin,
-                        title: amazonItem.summaries?.[0]?.itemName,
-                        ean: supplierProduct.ean,
-                        brand: amazonItem.summaries?.[0]?.brand,
-                        manufacturer: amazonItem.summaries?.[0]?.manufacturer,
-                        product_type: amazonItem.productTypes?.[0],
-                        images: amazonItem.images || [],
-                        sales_rank: amazonItem.salesRanks?.[0],
-                        buy_box_price: amazonItem.summaries?.[0]?.buyBoxPrices?.[0]?.listingPrice?.amount,
-                        list_price: amazonItem.summaries?.[0]?.listPrice?.amount,
-                        marketplace: mcpResult.data.marketplaceId || 'A13V1IB3VIYZZH',
-                        raw_data: amazonItem
-                      });
-                      console.log('[ENRICHMENT-QUEUE] Amazon data saved successfully');
-                    } catch (upsertError) {
-                      console.error('[ENRICHMENT-QUEUE] Error saving Amazon data:', upsertError);
-                    }
+                console.log('[ENRICHMENT-QUEUE] ⚠️ Amazon disabled - using Lovable AI instead');
+                return supabase.functions.invoke('unified-lovable-enrichment', {
+                  body: {
+                    analysisId: analysis.id,
+                    enrichment_type: 'description',
+                    productData: supplierProduct
                   }
-                }
-                return { success: true, type: 'amazon' };
+                });
 
               case 'images':
               case 'ai_images':
@@ -328,35 +290,34 @@ serve(async (req) => {
 
               case 'specifications':
                 console.log('[ENRICHMENT-QUEUE] Generating specifications');
-                return supabase.functions.invoke('enrich-specifications', {
-                  body: { 
+                return supabase.functions.invoke('unified-lovable-enrichment', {
+                  body: {
                     analysisId: analysis.id,
-                    productData: supplierProduct,
-                    preferred_model: ollamaPreferences.preferredModel,
-                    web_search_enabled: ollamaPreferences.webSearchEnabled
+                    enrichment_type: 'specifications',
+                    productData: supplierProduct
                   }
                 });
 
               case 'cost_analysis':
                 console.log('[ENRICHMENT-QUEUE] Generating cost analysis');
-                return supabase.functions.invoke('enrich-cost-analysis', {
-                  body: { 
+                return supabase.functions.invoke('unified-lovable-enrichment', {
+                  body: {
                     analysisId: analysis.id,
+                    enrichment_type: 'cost_analysis',
                     productData: supplierProduct,
-                    purchasePrice: supplierProduct?.purchase_price,
-                    preferred_model: ollamaPreferences.preferredModel,
-                    web_search_enabled: ollamaPreferences.webSearchEnabled
+                    purchasePrice: supplierProduct?.purchase_price
                   }
                 });
 
+              case 'description':
+              case 'ai_analysis':
               case 'technical_description':
-                console.log('[ENRICHMENT-QUEUE] Generating technical description');
-                return supabase.functions.invoke('enrich-technical-description', {
-                  body: { 
+                console.log('[ENRICHMENT-QUEUE] Generating AI description');
+                return supabase.functions.invoke('unified-lovable-enrichment', {
+                  body: {
                     analysisId: analysis.id,
-                    productData: supplierProduct,
-                    preferred_model: ollamaPreferences.preferredModel,
-                    web_search_enabled: ollamaPreferences.webSearchEnabled
+                    enrichment_type: 'description',
+                    productData: supplierProduct
                   }
                 });
 
@@ -370,12 +331,11 @@ serve(async (req) => {
 
               case 'rsgp':
                 console.log('[ENRICHMENT-QUEUE] Generating RSGP compliance');
-                return supabase.functions.invoke('rsgp-compliance-generator', {
-                  body: { 
-                    analysis_id: analysis.id,
-                    productData: analysisData,
-                    preferred_model: ollamaPreferences.preferredModel,
-                    web_search_enabled: ollamaPreferences.webSearchEnabled
+                return supabase.functions.invoke('unified-lovable-enrichment', {
+                  body: {
+                    analysisId: analysis.id,
+                    enrichment_type: 'rsgp',
+                    productData: supplierProduct
                   }
                 });
 
@@ -385,8 +345,7 @@ serve(async (req) => {
                   body: { 
                     analysisId: analysis.id,
                     provider: 'lovable',
-                    preferred_model: ollamaPreferences.preferredModel,
-                    webSearchEnabled: ollamaPreferences.webSearchEnabled
+                    webSearchEnabled: true
                   }
                 });
               
