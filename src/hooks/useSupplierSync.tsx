@@ -106,16 +106,45 @@ export const useSupplierSync = () => {
     }
   });
 
+  const cleanupAndResync = useMutation({
+    mutationFn: async ({ resyncOdoo = true }: { resyncOdoo?: boolean }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Non authentifié");
+
+      const { data, error } = await supabase.functions.invoke('cleanup-and-resync', {
+        body: { userId: user.id, resyncOdoo },
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      console.log('✅ Cleanup success:', data);
+      toast.success(
+        `Nettoyage terminé: ${data.mergeResult?.merged_eans || 0} doublons fusionnés, ${data.variantsCreated} prix restaurés`
+      );
+      queryClient.invalidateQueries({ queryKey: ['supplier-products'] });
+      queryClient.invalidateQueries({ queryKey: ['supplier-prices'] });
+      queryClient.invalidateQueries({ queryKey: ['product-analyses'] });
+    },
+    onError: (error: Error) => {
+      console.error('❌ Cleanup error:', error);
+      toast.error(`Erreur nettoyage: ${error.message}`);
+    },
+  });
+
   return {
     syncSingleProduct,
     fixStuckEnrichments,
     retryFailedEnrichments,
     pauseEnrichments,
     skipFailedProducts,
+    cleanupAndResync,
     isSyncing: syncSingleProduct.isPending,
     isFixing: fixStuckEnrichments.isPending,
     isRetrying: retryFailedEnrichments.isPending,
     isPausing: pauseEnrichments.isPending,
     isSkipping: skipFailedProducts.isPending,
+    isCleaning: cleanupAndResync.isPending,
   };
 };
