@@ -18,7 +18,7 @@ interface SupplierProduct {
   minimum_order_quantity?: number;
   supplier_url?: string;
   metadata?: Record<string, any>;
-  updated_at?: string;
+  last_updated?: string;
 }
 
 Deno.serve(async (req) => {
@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
       .from('supplier_products')
       .update({
         ...updatedData,
-        updated_at: new Date().toISOString(),
+        last_updated: new Date().toISOString(),
       })
       .eq('id', productId)
       .select()
