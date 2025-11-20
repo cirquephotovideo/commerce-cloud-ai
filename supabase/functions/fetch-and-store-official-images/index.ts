@@ -288,35 +288,48 @@ Return ONLY valid, tested URLs in JSON:
       return [];
     }
 
-    // ✅ ROBUST JSON PARSING with fallbacks
+    // ✅ ROBUST JSON PARSING with multiple strategies
     let parsed: any = null;
     
     try {
-      // Try 1: Direct JSON parse (if response is clean JSON)
+      // Strategy 1: Direct JSON parse
       parsed = JSON.parse(result.content);
+      console.log('[OLLAMA-WEB] ✅ Direct JSON parse succeeded');
     } catch (directError) {
+      console.log('[OLLAMA-WEB] Direct parse failed, trying extraction...');
+      
       try {
-        // Try 2: Extract JSON from mixed text using regex
+        // Strategy 2: Extract JSON object from text
         const jsonMatch = result.content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          // Clean up common issues before parsing
+          // Clean common issues
           let jsonString = jsonMatch[0]
-            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control chars
-            .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+            .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Control chars
+            .replace(/,(\s*[}\]])/g, '$1') // Trailing commas
+            .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":'); // Unquoted keys
           
           parsed = JSON.parse(jsonString);
+          console.log('[OLLAMA-WEB] ✅ Extracted and cleaned JSON parsed');
         }
-      } catch (regexError) {
-        console.error('[OLLAMA-WEB] JSON parsing failed:', {
+      } catch (extractError) {
+        console.error('[OLLAMA-WEB] ❌ All JSON parsing strategies failed:', {
           directError: directError instanceof Error ? directError.message : String(directError),
-          regexError: regexError instanceof Error ? regexError.message : String(regexError),
-          contentPreview: result.content.substring(0, 200)
+          extractError: extractError instanceof Error ? extractError.message : String(extractError),
+          contentLength: result.content.length,
+          contentPreview: result.content.substring(0, 300)
         });
+        
+        // Log full raw response for debugging
+        console.error('[OLLAMA-WEB] Full raw response:', result.content);
       }
     }
     
-    if (!parsed || !parsed.images) {
-      console.log('[OLLAMA-WEB] No valid images in response');
+    if (!parsed || !parsed.images || !Array.isArray(parsed.images)) {
+      console.log('[OLLAMA-WEB] ⚠️ No valid images array in response:', { 
+        hasParsed: !!parsed,
+        hasImages: !!parsed?.images,
+        isArray: Array.isArray(parsed?.images)
+      });
       return [];
     }
     

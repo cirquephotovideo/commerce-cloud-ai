@@ -146,22 +146,31 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       web_search: true, // Enable Ollama native web search
     }, ['lovable_ai']); // Skip Lovable AI to avoid 429 rate limits
 
-    if (!aiResponse.success) {
-      console.error('[PRODUCT-ANALYZER] ❌ All providers failed:', aiResponse.errorCode);
-      // Return 200 with structured error for better client UX
+    if (!aiResponse.success || !aiResponse.content) {
+      console.error('[PRODUCT-ANALYZER] ❌ AI call failed:', aiResponse.error);
       return new Response(
         JSON.stringify({ 
           success: false,
-          code: aiResponse.errorCode || 'PROVIDER_DOWN',
-          http_status: 503,
-          message: 'Tous les providers IA sont indisponibles. Veuillez réessayer plus tard.',
+          code: aiResponse.errorCode || 'AI_CALL_FAILED',
+          message: aiResponse.error || 'AI processing failed',
           provider: aiResponse.provider,
-          details: aiResponse.error
+          http_status: 500
         }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200, // Normalize to 200 for structured errors
-        }
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ✅ VALIDATE RESPONSE BEFORE PARSING
+    if (!aiResponse.content || aiResponse.content.trim().length === 0) {
+      console.error('[PRODUCT-ANALYZER] ❌ Empty AI response');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          code: 'EMPTY_AI_RESPONSE',
+          message: 'AI returned empty response',
+          provider: aiResponse.provider
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -228,7 +237,7 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
       const repairedContent = repairJSON(analysisContent);
       analysisResult = JSON.parse(repairedContent);
       
-      console.log('[PRODUCT-ANALYZER] ✅ JSON parsed successfully on first attempt');
+      console.log('[PRODUCT-ANALYZER] ✅ JSON parsed successfully');
       console.log('[PRODUCT-ANALYZER] 🔍 Parsed analysis structure:', {
         has_product_name: !!analysisResult.product_name,
         has_images: !!analysisResult.images,
@@ -237,75 +246,58 @@ TOUS les champs manquants doivent avoir "N/A" ou [] ou {} selon le type attendu,
         top_level_keys: Object.keys(analysisResult).slice(0, 10)
       });
     } catch (parseError) {
-      console.error('[PRODUCT-ANALYZER] ❌ JSON parse failed after repair, attempting cleanup...', parseError);
-      console.log('[PRODUCT-ANALYZER] Content preview:', analysisContent.substring(0, 300));
-      isPartialParse = true;
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parse error';
+      console.error('[PRODUCT-ANALYZER] ❌ JSON parsing failed:', {
+        error: errorMessage,
+        contentLength: analysisContent.length,
+        contentPreview: analysisContent.substring(0, 300),
+        provider: aiResponse.provider
+      });
       
-      // Tentative 1: Extraire le JSON entre premiers { et derniers }
-      const jsonMatch = analysisContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const repairedMatch = repairJSON(jsonMatch[0]);
-          analysisResult = JSON.parse(repairedMatch);
-          console.log('[PRODUCT-ANALYZER] ✅ Successfully parsed extracted JSON');
-        } catch (secondError) {
-          console.error('[PRODUCT-ANALYZER] Second parse failed, trying truncation');
-          
-          // Tentative 2: Tronquer à 8000 chars et réessayer
-          const truncated = analysisContent.slice(0, 8000);
-          const truncMatch = truncated.match(/\{[\s\S]*\}/);
-          if (truncMatch) {
-            try {
-              analysisResult = JSON.parse(repairJSON(truncMatch[0]));
-              console.log('[PRODUCT-ANALYZER] ✅ Parsed truncated JSON');
-            } catch (thirdError) {
-              console.error('[PRODUCT-ANALYZER] All JSON parsing attempts failed, using fallback');
-              // Continue to fallback extraction
-            }
-          }
-          
-          if (!analysisResult) {
-            console.error('[PRODUCT-ANALYZER] ❌ All parsing attempts failed, extracting partial data');
-            
-            // Phase 3: Better fallback extraction
-            analysisResult = {
-            product_name: extractField(analysisContent, 'product_name') || productInput,
-            description: extractField(analysisContent, 'description') || 'N/A',
-            description_long: extractField(analysisContent, 'description_long') || extractField(analysisContent, 'description') || 'Description non disponible',
-            images: extractField(analysisContent, 'images') || [],
-            seo: {
-              score: 50,
-              keywords: extractField(analysisContent, 'keywords') || []
-            },
-            pricing: {
-              estimated_price: extractField(analysisContent, 'estimated_price') || 'N/A'
-            },
-            global_report: {
-              overall_score: 50
-            },
-              raw_analysis: analysisContent,
-              parsing_error: true
-            };
-            
-            console.log('[PRODUCT-ANALYZER] 🔍 Fallback extraction result:', {
-              product_name: analysisResult.product_name,
-              has_description: !!analysisResult.description,
-              has_images: Array.isArray(analysisResult.images) && analysisResult.images.length > 0
-            });
-          }
-        }
-      } else {
-        throw new Error('No valid JSON found in AI response');
-      }
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          code: 'JSON_PARSE_ERROR',
+          message: 'Failed to parse AI response as valid JSON',
+          details: {
+            parseError: errorMessage,
+            contentPreview: analysisContent.substring(0, 200),
+            contentLength: analysisContent.length
+          },
+          provider: aiResponse.provider
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
-    // Validate completeness
+    // ✅ CRITICAL VALIDATION: Check completeness
     const validation = validateAnalysisCompleteness(analysisResult);
+    
+    // If critical fields are missing, return structured error
+    if (!analysisResult.product_name) {
+      console.error('[PRODUCT-ANALYZER] ❌ Critical field missing: product_name');
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          code: 'INCOMPLETE_ANALYSIS',
+          message: 'AI response missing critical field: product_name',
+          details: {
+            missingFields: validation.missingFields,
+            hasDescription: !!analysisResult.description,
+            hasBrand: !!analysisResult.brand,
+            receivedKeys: Object.keys(analysisResult)
+          },
+          provider: aiResponse.provider
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     if (validation.incomplete || isPartialParse) {
       analysisResult._incomplete = true;
       analysisResult._missing_fields = validation.missingFields;
       analysisResult._needs_reanalysis = true;
-      console.warn('[PRODUCT-ANALYZER] ⚠️ Analysis incomplete:', {
+      console.warn('[PRODUCT-ANALYZER] ⚠️ Analysis incomplete but acceptable:', {
         missing_fields: validation.missingFields,
         partial_parse: isPartialParse
       });
