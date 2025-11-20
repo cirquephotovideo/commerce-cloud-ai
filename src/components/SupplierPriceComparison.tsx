@@ -63,6 +63,8 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
     );
   }
 
+  const pricesMissing = prices.filter(p => p.is_price_missing).length;
+  const hasAllPricesMissing = pricesMissing === prices.length;
   const avgPrice = prices.reduce((sum, p) => sum + (p.purchase_price || 0), 0) / prices.length;
   const totalStock = prices.reduce((sum, p) => sum + (p.stock_quantity || 0), 0);
   const maxSavings = bestPrice && prices.length > 1 ? avgPrice - bestPrice.purchase_price! : 0;
@@ -93,9 +95,29 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
           <Store className="w-5 h-5" />
           Comparaison des Fournisseurs ({prices.length})
         </CardTitle>
-        <CardDescription>
-          Meilleur prix: {bestPrice?.purchase_price?.toFixed(2)}€ • Stock total: {totalStock} unités
-        </CardDescription>
+        {hasAllPricesMissing && (
+          <CardDescription className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">Tous les fournisseurs ont un prix à 0</p>
+              <p className="text-xs mt-1">
+                Les prix sont à 0 <strong>dans vos sources de données</strong> (Odoo, fichiers Excel). 
+                Vérifiez et corrigez vos catalogues, puis cliquez sur <RefreshCw className="inline w-3 h-3" />.
+              </p>
+            </div>
+          </CardDescription>
+        )}
+        {!hasAllPricesMissing && pricesMissing > 0 && (
+          <CardDescription className="flex items-center gap-2 text-amber-600">
+            <AlertCircle className="w-4 h-4" />
+            {pricesMissing} fournisseur{pricesMissing > 1 ? 's ont' : ' a'} un prix à 0 dans leur catalogue source.
+          </CardDescription>
+        )}
+        {!hasAllPricesMissing && (
+          <CardDescription>
+            Meilleur prix: {bestPrice?.purchase_price?.toFixed(2)}€ • Stock total: {totalStock} unités
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         <Table>
@@ -130,6 +152,16 @@ export const SupplierPriceComparison = ({ analysisId }: SupplierPriceComparisonP
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
+                        {price.supplier_logo && (
+                          <img 
+                            src={price.supplier_logo} 
+                            alt={price.supplier_name}
+                            className="w-6 h-6 rounded object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
                         <span className="font-medium">
                           {price.supplier_name || 'Fournisseur inconnu'}
                         </span>
