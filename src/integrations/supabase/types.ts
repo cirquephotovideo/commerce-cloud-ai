@@ -6205,6 +6205,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      sync_supplier_price_variants_for_analysis: {
+        Args: { p_analysis_id: string }
+        Returns: Json
+      }
       trigger_stuck_import_jobs: { Args: never; Returns: undefined }
     }
     Enums: {
