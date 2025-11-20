@@ -14,6 +14,21 @@ export const WebSourcesDisplay = ({
   confidenceLevel = 'medium',
   enrichmentDate 
 }: WebSourcesDisplayProps) => {
+  // S'assurer que confidenceLevel est une valeur valide
+  const safeConfidenceLevel = (() => {
+    if (typeof confidenceLevel === 'string' && ['high', 'medium', 'low'].includes(confidenceLevel)) {
+      return confidenceLevel as 'high' | 'medium' | 'low';
+    }
+    // Si c'est un objet, essayer d'extraire la valeur overall
+    if (typeof confidenceLevel === 'object' && confidenceLevel !== null) {
+      const level = (confidenceLevel as any).overall;
+      if (typeof level === 'string' && ['high', 'medium', 'low'].includes(level)) {
+        return level as 'high' | 'medium' | 'low';
+      }
+    }
+    return 'medium' as const;
+  })();
+
   const confidenceConfig = {
     high: { label: 'Haute', color: 'bg-green-500' },
     medium: { label: 'Moyenne', color: 'bg-yellow-500' },
@@ -26,8 +41,8 @@ export const WebSourcesDisplay = ({
         <CardTitle className="flex items-center gap-2">
           <Globe className="h-5 w-5" />
           Sources Web & Confiance
-          <Badge className={confidenceConfig[confidenceLevel].color}>
-            Confiance {confidenceConfig[confidenceLevel].label}
+          <Badge className={confidenceConfig[safeConfidenceLevel].color}>
+            Confiance {confidenceConfig[safeConfidenceLevel].label}
           </Badge>
         </CardTitle>
       </CardHeader>

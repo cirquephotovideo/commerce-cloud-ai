@@ -51,7 +51,18 @@ export const DescriptionSection = ({ analysis, onEnrich }: DescriptionSectionPro
        'Aucune description disponible pour ce produit, car aucune information précise n\'a pu être trouvée lors de la recherche web.');
   
   const webSources = analysis?.analysis_result?._web_sources || [];
-  const confidenceLevel = analysis?.analysis_result?._confidence_level;
+  const confidenceLevel = (() => {
+    const level = analysis?.analysis_result?._confidence_level || analysis?.confidence_level;
+    // S'assurer que c'est une string valide
+    if (typeof level === 'string' && ['high', 'medium', 'low'].includes(level)) {
+      return level;
+    }
+    // Si c'est un objet, essayer d'extraire la valeur overall
+    if (typeof level === 'object' && level !== null) {
+      return level.overall || 'medium';
+    }
+    return undefined;
+  })();
   
   const strengths = analysis?.analysis_result?.strengths || 
                     analysis?.analysis_result?.pros || [];

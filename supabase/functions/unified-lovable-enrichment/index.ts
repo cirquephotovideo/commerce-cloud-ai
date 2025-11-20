@@ -144,7 +144,14 @@ ${UNIFIED_PROMPTS[enrichment_type as keyof typeof UNIFIED_PROMPTS]}
 
     // Ajouter web_sources et confidence_level pour TOUS les types
     updateData.web_sources = result.web_sources || analysis.web_sources || [];
-    updateData.confidence_level = result.confidence_level || 'medium';
+    
+    // S'assurer que confidence_level est toujours une string simple
+    let confidenceValue = result.confidence_level || 'medium';
+    if (typeof confidenceValue === 'object' && confidenceValue !== null) {
+      // Si c'est un objet, extraire la valeur 'overall' ou utiliser 'medium'
+      confidenceValue = confidenceValue.overall || 'medium';
+    }
+    updateData.confidence_level = confidenceValue;
 
     // Update product_analyses
     const { error: updateError } = await supabase
