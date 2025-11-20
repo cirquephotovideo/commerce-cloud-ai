@@ -95,6 +95,41 @@ Deno.serve(async (req) => {
       }
 
       updatedData = apiData?.updatedProduct || {};
+    } else if (supplierConfig.supplier_type === 'odoo') {
+      // Cas Odoo : Re-importer depuis Odoo
+      console.log('🔄 Re-sync Odoo en cours...');
+      
+      // Vérifier si un mapping personnalisé existe
+      const { data: mappingProfile } = await supabaseClient
+        .from('supplier_mapping_profiles')
+        .select('column_mapping')
+        .eq('supplier_id', product.supplier_id)
+        .eq('is_default', true)
+        .maybeSingle();
+      
+      console.log('📋 Mapping profile:', mappingProfile);
+      
+      const { data: odooData, error: odooError } = await supabaseClient.functions.invoke('import-from-odoo', {
+        body: {
+          supplier_id: product.supplier_id,
+          mode: 'refresh_single',
+          supplier_reference: product.supplier_reference,
+        },
+      });
+
+      if (odooError) {
+        console.error('❌ Erreur Odoo sync:', odooError);
+        throw new Error(`Erreur Odoo: ${odooError.message}`);
+      }
+
+      updatedData = odooData?.updatedProduct || {};
+    } else if (supplierConfig.supplier_type === 'file') {
+      // Cas File : Retourner les données actuelles (pas de re-sync possible)
+      console.log('ℹ️ Type "file" : pas de synchronisation automatique possible');
+      updatedData = {
+        purchase_price: product.purchase_price,
+        stock_quantity: product.stock_quantity,
+      };
     } else {
       throw new Error(`Type de fournisseur non supporté: ${supplierConfig.supplier_type}`);
     }
