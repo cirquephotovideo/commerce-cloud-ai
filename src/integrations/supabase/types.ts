@@ -6177,6 +6177,10 @@ export type Database = {
         Returns: boolean
       }
       is_valid_ean13: { Args: { ean: string }; Returns: boolean }
+      merge_duplicate_analyses_by_ean: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       merge_existing_links: { Args: never; Returns: Json }
       migrate_credential_to_vault: {
         Args: {

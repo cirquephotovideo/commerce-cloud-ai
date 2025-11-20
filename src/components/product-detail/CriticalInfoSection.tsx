@@ -2,12 +2,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, Truck, Edit } from "lucide-react";
+import { DollarSign, TrendingUp, Truck, Edit, AlertCircle, RefreshCcw } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { useSupplierPricesRealtime } from "@/hooks/useSupplierPricesRealtime";
+import { useSupplierSync } from "@/hooks/useSupplierSync";
+import { cn } from "@/lib/utils";
 
 interface CriticalInfoSectionProps {
   product: any;
@@ -33,6 +35,7 @@ export const CriticalInfoSection = ({
 
   // Récupérer les données des fournisseurs en temps réel
   const { prices: supplierPrices, isLoading: isLoadingSuppliers, refetch } = useSupplierPricesRealtime(analysis?.id);
+  const { cleanupAndResync, isCleaning } = useSupplierSync();
 
   // Logs de débogage
   console.log('[CriticalInfoSection] 🔍 Debug Info:', {
@@ -242,12 +245,32 @@ export const CriticalInfoSection = ({
               <Badge variant="destructive" className="text-xs">
                 ⚠️ Erreur de chargement
               </Badge>
-              <button 
-                onClick={() => refetch()} 
-                className="text-xs text-primary hover:underline"
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => refetch()}
+                disabled={isLoadingSuppliers}
+                className="h-6 px-2 text-xs"
               >
+                <RefreshCcw className={cn(
+                  "h-3 w-3 mr-1",
+                  isLoadingSuppliers && "animate-spin"
+                )} />
                 Recharger
-              </button>
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => cleanupAndResync.mutate({ resyncOdoo: true })}
+                disabled={isCleaning}
+                className="h-6 px-2 text-xs"
+              >
+                <AlertCircle className={cn(
+                  "h-3 w-3 mr-1",
+                  isCleaning && "animate-pulse"
+                )} />
+                Réparer
+              </Button>
                   </div>
                 )}
               </div>
