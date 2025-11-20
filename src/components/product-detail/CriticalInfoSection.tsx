@@ -7,6 +7,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
+import { useSupplierPricesRealtime } from "@/hooks/useSupplierPricesRealtime";
 
 interface CriticalInfoSectionProps {
   product: any;
@@ -29,6 +30,9 @@ export const CriticalInfoSection = ({
     analysis?.analysis_result?.recommended_price || 
     ''
   );
+
+  // Récupérer les données des fournisseurs en temps réel
+  const { prices: supplierPrices, isLoading: isLoadingSuppliers } = useSupplierPricesRealtime(analysis?.id);
 
   // PHASE 4: Récupérer le meilleur prix fournisseur
   const { data: bestPrice } = useQuery({
@@ -209,11 +213,48 @@ export const CriticalInfoSection = ({
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Truck className="h-4 w-4" />
-              <span>Fournisseurs Liés</span>
+              <span>Fournisseurs</span>
+              {supplierPrices && supplierPrices.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {supplierPrices.length} lié(s)
+                </Badge>
+              )}
             </div>
-            <div className="text-3xl font-bold text-primary">
-              {supplierCount}
-            </div>
+
+            {isLoadingSuppliers ? (
+              <div className="text-sm text-muted-foreground">Chargement...</div>
+            ) : !supplierPrices || supplierPrices.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                Aucun fournisseur lié
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {supplierPrices.slice(0, 3).map((s) => {
+                  const hasPrice = !!s.purchase_price && s.purchase_price > 0;
+                  return (
+                    <div key={s.id} className="flex items-center justify-between text-xs border-b border-border/50 pb-1">
+                      <div className="truncate max-w-[120px] font-medium" title={s.supplier_name}>
+                        {s.supplier_name}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="font-semibold text-primary">
+                          {hasPrice ? `${s.purchase_price.toFixed(2)}€` : "N/A"}
+                        </span>
+                        <span className="text-muted-foreground">
+                          Stock: {s.stock_quantity ?? "?"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {supplierPrices.length > 3 && (
+                  <div className="text-[10px] text-muted-foreground pt-1">
+                    + {supplierPrices.length - 3} autre(s)
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
