@@ -67,29 +67,42 @@ Deno.serve(async (req) => {
 
     console.log(`📋 Found ${links?.length || 0} links to rebuild`);
 
-    // Insert/update supplier_price_variants for each link
+    // Batch insert/update supplier_price_variants (100 at a time)
     let variantsCreated = 0;
-    for (const link of links || []) {
-      const sp = link.supplier_products as any;
-      if (!sp) continue;
-
-      const { error: variantError } = await supabaseClient
-        .from('supplier_price_variants')
-        .upsert({
-          analysis_id: link.analysis_id,
-          supplier_product_id: link.supplier_product_id,
-          supplier_id: sp.supplier_id,
-          purchase_price: sp.purchase_price || 0,
-          stock_quantity: sp.stock_quantity || 0,
-          currency: 'EUR',
-          user_id: sp.user_id,
-          last_updated: new Date().toISOString(),
-        }, {
-          onConflict: 'analysis_id,supplier_product_id',
+    const batchSize = 100;
+    
+    for (let i = 0; i < (links?.length || 0); i += batchSize) {
+      const batch = links!.slice(i, i + batchSize);
+      
+      const variantsToUpsert = batch
+        .filter(link => link.supplier_products)
+        .map(link => {
+          const sp = link.supplier_products as any;
+          return {
+            analysis_id: link.analysis_id,
+            supplier_product_id: link.supplier_product_id,
+            supplier_id: sp.supplier_id,
+            purchase_price: sp.purchase_price || 0,
+            stock_quantity: sp.stock_quantity || 0,
+            currency: 'EUR',
+            user_id: sp.user_id,
+            last_updated: new Date().toISOString(),
+          };
         });
 
-      if (!variantError) {
-        variantsCreated++;
+      if (variantsToUpsert.length > 0) {
+        const { error: variantError, data } = await supabaseClient
+          .from('supplier_price_variants')
+          .upsert(variantsToUpsert, {
+            onConflict: 'analysis_id,supplier_product_id',
+          });
+
+        if (!variantError) {
+          variantsCreated += variantsToUpsert.length;
+          console.log(`✅ Batch ${Math.floor(i / batchSize) + 1}: ${variantsToUpsert.length} variants upserted`);
+        } else {
+          console.error(`❌ Batch ${Math.floor(i / batchSize) + 1} error:`, variantError);
+        }
       }
     }
 
