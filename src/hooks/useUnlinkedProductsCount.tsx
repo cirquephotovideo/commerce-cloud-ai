@@ -9,63 +9,44 @@ export const useUnlinkedProductsCount = () => {
       if (!user) return 0;
 
       try {
-        // Stratégie simplifiée: requête directe sans typage complexe
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/count_unlinked_products`,
+        // Calcul manuel via JOIN avec supplier_products
+        const linkedResult = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/product_links?select=supplier_product_id,supplier_products!inner(user_id)&supplier_products.user_id=eq.${user.id}`,
           {
-            method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
               'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
               'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
             },
           }
         );
-
-        if (!response.ok) {
-          // Fallback: calcul manuel via JOIN avec supplier_products
-          const linkedResult = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/product_links?select=supplier_product_id,supplier_products!inner(user_id)&supplier_products.user_id=eq.${user.id}`,
-            {
-              headers: {
-                'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-              },
-            }
-          );
-          const linkedData = await linkedResult.json();
-          
-          // ✅ Vérifier que linkedData est bien un tableau
-          if (!Array.isArray(linkedData)) {
-            console.warn('[useUnlinkedProductsCount] linkedData is not an array:', linkedData);
-            return 0;
-          }
-          
-          const linkedIds = new Set(linkedData.map((p: any) => p.supplier_product_id));
-
-          const totalResult = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/supplier_products?select=id&user_id=eq.${user.id}`,
-            {
-              headers: {
-                'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-              },
-            }
-          );
-          const totalData = await totalResult.json();
-          
-          if (!Array.isArray(totalData)) {
-            console.warn('[useUnlinkedProductsCount] totalData is not an array:', totalData);
-            return 0;
-          }
-          
-          const totalCount = totalData.length;
-          const unlinkedCount = totalCount - linkedIds.size;
-          return unlinkedCount > 0 ? unlinkedCount : 0;
+        const linkedData = await linkedResult.json();
+        
+        if (!Array.isArray(linkedData)) {
+          console.warn('[useUnlinkedProductsCount] linkedData is not an array:', linkedData);
+          return 0;
         }
+        
+        const linkedIds = new Set(linkedData.map((p: any) => p.supplier_product_id));
 
-        const count = await response.json();
-        return count > 0 ? count : 0;
+        const totalResult = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/supplier_products?select=id&user_id=eq.${user.id}`,
+          {
+            headers: {
+              'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            },
+          }
+        );
+        const totalData = await totalResult.json();
+        
+        if (!Array.isArray(totalData)) {
+          console.warn('[useUnlinkedProductsCount] totalData is not an array:', totalData);
+          return 0;
+        }
+        
+        const totalCount = totalData.length;
+        const unlinkedCount = totalCount - linkedIds.size;
+        return unlinkedCount > 0 ? unlinkedCount : 0;
       } catch (error) {
         console.error("Error counting unlinked products:", error);
         return 0;
