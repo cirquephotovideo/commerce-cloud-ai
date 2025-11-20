@@ -31,6 +31,15 @@ export const useSupplierPricesRealtime = (analysisId: string) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchPrices = async () => {
+    // Guard clause: vérifier que analysisId est valide
+    if (!analysisId) {
+      console.log('[useSupplierPricesRealtime] ⚠️ No valid analysisId provided, skipping fetch');
+      setPrices([]);
+      setBestPrice(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       console.log('[useSupplierPricesRealtime] 🔍 Fetching prices for analysisId:', analysisId);
       
