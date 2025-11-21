@@ -226,7 +226,12 @@ export function SupplierConfiguration({ supplierId, onClose }: SupplierConfigura
                 <SupplierConnectionConfig
                   supplierType={formData.supplier_type}
                   config={formData.connection_config}
-                  onConfigChange={(config) => setFormData({ ...formData, connection_config: config })}
+                  onConfigChange={(newConfig) => 
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      connection_config: { ...prev.connection_config, ...newConfig }
+                    }))
+                  }
                 />
               )}
             </TabsContent>
