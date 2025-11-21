@@ -1,11 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Link2, TrendingUp, CheckCircle, AlertCircle, Trash2, Eye, ShoppingCart, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Link2, TrendingUp, CheckCircle, AlertCircle, Trash2, Eye, ShoppingCart, Loader2, Plus } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -230,18 +231,98 @@ export function ProductLinksDashboard() {
     return <Badge variant="destructive">Faible ({scorePercent}%)</Badge>;
   };
 
+  // Create analyses mutation
+  const createAnalysesMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('bulk-create-analyses', {
+        body: { userId: (await supabase.auth.getUser()).data.user?.id, limit: 5000 }
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.created} analyses créées! Vous pouvez maintenant lier par EAN.`);
+      refetch();
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    }
+  });
+
+  // Bulk link mutation with SSE support
+  const bulkLinkMutation = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/bulk-link-suppliers`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
+          body: JSON.stringify({ userId: user.id })
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to start bulk linking');
+      
+      return { success: true };
+    },
+    onSuccess: () => {
+      toast.success('Liaison automatique lancée!');
+      refetch();
+    },
+    onError: (error: Error) => {
+      toast.error(`Erreur: ${error.message}`);
+    }
+  });
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5" />
-            Dashboard des Liens Produits
-          </CardTitle>
-          <CardDescription>
-            Vue d'ensemble complète de vos liens entre produits analysés et fournisseurs
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Link2 className="h-5 w-5" />
+                Dashboard des Liens Produits
+              </CardTitle>
+              <CardDescription>
+                Vue d'ensemble complète de vos liens entre produits analysés et fournisseurs
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                onClick={() => createAnalysesMutation.mutate()}
+                disabled={createAnalysesMutation.isPending}
+                variant="outline"
+                className="gap-2"
+              >
+                {createAnalysesMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Création...</>
+                ) : (
+                  <><Plus className="h-4 w-4" /> Créer Analyses</>
+                )}
+              </Button>
+              <Button 
+                onClick={() => bulkLinkMutation.mutate()}
+                disabled={bulkLinkMutation.isPending || stats.total_links === 0}
+                className="gap-2"
+              >
+                {bulkLinkMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Liaison...</>
+                ) : (
+                  <><Link2 className="h-4 w-4" /> Lier par EAN</>
+                )}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="all-links" className="space-y-6">
@@ -254,6 +335,18 @@ export function ProductLinksDashboard() {
 
             {/* Overview Tab */}
             <TabsContent value="overview" className="space-y-4">
+              {stats.total_links === 0 && (
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>Aucun lien trouvé.</strong> Pour unifier vos 2 fournisseurs:
+                    <ol className="list-decimal ml-4 mt-2 space-y-1">
+                      <li>Cliquez sur <strong>"Créer Analyses"</strong> pour analyser vos produits fournisseurs</li>
+                      <li>Puis cliquez sur <strong>"Lier par EAN"</strong> pour créer les liens automatiquement</li>
+                    </ol>
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <Card>
                   <CardHeader className="pb-3">
