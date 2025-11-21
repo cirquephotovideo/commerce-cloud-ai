@@ -11,7 +11,7 @@ import { AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const Step3Configuration = () => {
-  const { goToStep, state, updateConfiguration } = useWizard();
+  const { goToStep, state, updateConfiguration, updateSource } = useWizard();
 
   const validateConfiguration = () => {
     // Import validations
@@ -112,8 +112,22 @@ export const Step3Configuration = () => {
           return (
             <SupplierConnectionConfig
               supplierType={state.source.type}
-              config={state.configuration}
-              onConfigChange={(config) => updateConfiguration(config)}
+              config={state.source.config?.connectionConfig || state.configuration}
+              onConfigChange={(newConfig) => {
+                if (state.source.config?.connectionConfig) {
+                  updateSource({
+                    config: {
+                      ...state.source.config,
+                      connectionConfig: { 
+                        ...(state.source.config?.connectionConfig || {}), 
+                        ...newConfig 
+                      }
+                    }
+                  });
+                } else {
+                  updateConfiguration(newConfig);
+                }
+              }}
             />
           );
         

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,9 +22,22 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
   const [connectionSuccess, setConnectionSuccess] = useState(false);
   const [currentPath, setCurrentPath] = useState('/');
 
+  // Debug logs for config changes
+  useEffect(() => {
+    console.log('🔍 [SupplierConnectionConfig] config updated:', {
+      host: config?.host || '❌ missing',
+      username: config?.username || '❌ missing',
+      password: config?.password ? '✅ set' : '❌ missing',
+      fullConfig: config
+    });
+  }, [config]);
+
   const updateConfig = (key: string, value: any) => {
     onConfigChange({ ...config, [key]: value });
   };
+  
+  // Validation for FTP/SFTP configuration
+  const isValidFTPConfig = config?.host && config?.username && config?.password;
 
   const handleTestFTPConnection = async (customPath?: string) => {
     if (!config?.host || !config?.username || !config?.password) {
@@ -289,10 +302,15 @@ export function SupplierConnectionConfig({ supplierType, config, onConfigChange 
             type="button"
             variant={connectionSuccess ? "default" : "outline"}
             onClick={() => handleTestFTPConnection()}
-            disabled={testing}
+            disabled={testing || !isValidFTPConfig}
             className="flex-1"
           >
-            {testing ? (
+            {!isValidFTPConfig ? (
+              <>❌ Configuration incomplète ({
+                [!config?.host && 'host', !config?.username && 'username', !config?.password && 'password']
+                  .filter(Boolean).join(', ')
+              })</>
+            ) : testing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Test en cours...

@@ -61,8 +61,17 @@ export function FTPMappingWizard({ supplierId, open, onClose, onComplete }: FTPM
     }
   };
 
+  const [connectionConfig, setConnectionConfig] = useState<any>({});
+
+  useEffect(() => {
+    if (supplier?.connection_config) {
+      setConnectionConfig(supplier.connection_config);
+    }
+  }, [supplier]);
+
   const handleConfigChange = (newConfig: any) => {
-    setConfig(newConfig);
+    setConnectionConfig(prev => ({ ...prev, ...newConfig }));
+    setConfig(prev => ({ ...prev, ...newConfig }));
   };
 
   const handleTestConnection = async () => {
@@ -242,8 +251,10 @@ export function FTPMappingWizard({ supplierId, open, onClose, onComplete }: FTPM
               <CardContent className="space-y-4">
                 <SupplierConnectionConfig
                   supplierType={supplier?.supplier_type || 'ftp'}
-                  config={config}
-                  onConfigChange={handleConfigChange}
+                  config={connectionConfig}
+                  onConfigChange={(newConfig) => 
+                    setConnectionConfig(prev => ({ ...prev, ...newConfig }))
+                  }
                 />
                 <Button 
                   onClick={handleTestConnection} 
