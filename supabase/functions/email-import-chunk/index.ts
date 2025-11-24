@@ -262,15 +262,24 @@ serve(async (req) => {
         }
       }
 
-      // Batch update
+      // ✅ OPTIMIZED: Batch update with single upsert query
       if (toUpdate.length > 0) {
-        for (const update of toUpdate) {
-          await supabase
-            .from('product_analyses')
-            .update({ purchase_price: update.purchase_price })
-            .eq('id', update.id);
+        const { error: batchUpdateError } = await supabase
+          .from('product_analyses')
+          .upsert(
+            toUpdate.map(u => ({
+              id: u.id,
+              purchase_price: u.purchase_price,
+              updated_at: new Date().toISOString()
+            })),
+            { onConflict: 'id' }
+          );
+
+        if (batchUpdateError) {
+          console.error(`[IMPORT-CHUNK][${correlation_id}] Batch update error:`, batchUpdateError);
+        } else {
+          console.log(`[IMPORT-CHUNK][${correlation_id}] ✅ Batch updated ${toUpdate.length} product_analyses in single query`);
         }
-        console.log(`[IMPORT-CHUNK] Updated ${toUpdate.length} product_analyses`);
       }
 
       // Batch insert
