@@ -142,23 +142,75 @@ serve(async (req) => {
         });
         
       } else {
-        // Max retries reached - mark as failed
+        // ✅ Max retries reached - move to Dead Letter Queue
         const failReason = isTimeoutOrNetworkError 
           ? `Failed after 5 timeout retries at offset ${offset}`
           : `Failed after ${retryCount} retries: ${errorDetails.user_message || error.message}`;
         
-        console.error('[CHUNK-PROCESSOR] Max retries reached or non-timeout error, marking job as failed');
+        console.log(`[CHUNK-PROCESSOR] ⚠️ Moving chunk to DLQ: offset=${offset}`);
+        
+        // Insert chunk into dead letter queue
+        await supabaseClient
+          .from('import_dead_letters')
+          .insert({
+            job_id: import_job_id,
+            chunk_data: {
+              supplier_id,
+              platform,
+              offset,
+              limit,
+              options,
+              correlation_id: job.metadata?.correlation_id
+            },
+            error_details: {
+              message: errorDetails.user_message || error.message,
+              error_code: errorDetails.error_code,
+              stack: error.stack,
+              retry_count: retryCount
+            },
+            retry_count: retryCount,
+            max_retries_exceeded: true
+          });
+        
+        await writeLog(supabaseClient, {
+          jobId: import_job_id,
+          userId: job.user_id,
+          supplierId: supplier_id,
+          functionName: 'process-import-chunk',
+          step: 'dlq_insert',
+          level: 'error',
+          message: `Chunk moved to DLQ after ${retryCount} retries: ${failReason}`,
+          context: { offset, limit, error: errorDetails }
+        });
+        
+        // ✅ IMPORTANT: Don't throw - continue processing remaining chunks
+        // Mark progress_current to skip this failed chunk
+        const processed = limit; // Count as processed even if failed
         await supabaseClient
           .from('import_jobs')
           .update({
-            status: 'failed',
-            error_message: failReason,
-            completed_at: new Date().toISOString(),
+            progress_current: (job.progress_current || 0) + processed,
+            products_errors: (job.products_errors || 0) + processed,
+            metadata: {
+              ...job.metadata,
+              has_dlq_entries: true,
+              last_dlq_at: new Date().toISOString()
+            },
+            updated_at: new Date().toISOString()
           })
           .eq('id', import_job_id);
+        
+        // Return success to continue with next chunk
+        return new Response(JSON.stringify({ 
+          success: false,
+          moved_to_dlq: true,
+          chunk: { offset, limit },
+          message: failReason
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 // ✅ Return 200 to continue processing
+        });
       }
-      
-      throw error;
     }
 
     console.log('[CHUNK-PROCESSOR] Chunk completed:', data);

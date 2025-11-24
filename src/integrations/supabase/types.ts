@@ -2675,6 +2675,50 @@ export type Database = {
           },
         ]
       }
+      import_dead_letters: {
+        Row: {
+          chunk_data: Json
+          created_at: string | null
+          error_details: Json | null
+          id: string
+          job_id: string | null
+          max_retries_exceeded: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          retry_count: number | null
+        }
+        Insert: {
+          chunk_data: Json
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          job_id?: string | null
+          max_retries_exceeded?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          retry_count?: number | null
+        }
+        Update: {
+          chunk_data?: Json
+          created_at?: string | null
+          error_details?: Json | null
+          id?: string
+          job_id?: string | null
+          max_retries_exceeded?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          retry_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_dead_letters_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_errors: {
         Row: {
           created_at: string | null
@@ -6129,6 +6173,19 @@ export type Database = {
         Returns: {
           minute: string
           products_count: number
+        }[]
+      }
+      get_import_metrics: {
+        Args: { p_user_id?: string; time_window?: unknown }
+        Returns: {
+          active_jobs: number
+          avg_chunk_duration_seconds: number
+          dlq_entries: number
+          error_rate: number
+          imports_per_minute: number
+          stalled_jobs: number
+          total_errors: number
+          total_processed: number
         }[]
       }
       get_odoo_password: { Args: { p_config_id: string }; Returns: string }
