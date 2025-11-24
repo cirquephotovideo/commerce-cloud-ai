@@ -25,8 +25,11 @@ export async function retryWithBackoff<T>(
       
       if (attempt < maxRetries) {
         const delay = initialDelay * Math.pow(2, attempt);
-        console.warn(`[RETRY] ${context}: Failed, retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        // ✅ Add jitter ±20% to prevent thundering herd
+        const jitter = delay * 0.2 * (Math.random() - 0.5);
+        const delayWithJitter = Math.floor(delay + jitter);
+        console.warn(`[RETRY] ${context}: Failed, retrying in ${delayWithJitter}ms (base: ${delay}ms)...`);
+        await new Promise(resolve => setTimeout(resolve, delayWithJitter));
       }
     }
   }
