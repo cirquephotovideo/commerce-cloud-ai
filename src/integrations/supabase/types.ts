@@ -4675,6 +4675,45 @@ export type Database = {
         }
         Relationships: []
       }
+      security_audit_logs: {
+        Row: {
+          created_at: string | null
+          details: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          ip_address: unknown
+          performed_by: string | null
+          severity: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          ip_address?: unknown
+          performed_by?: string | null
+          severity?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: unknown
+          performed_by?: string | null
+          severity?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       social_media_accounts: {
         Row: {
           access_token: string | null
@@ -6234,6 +6273,16 @@ export type Database = {
         Returns: boolean
       }
       is_valid_ean13: { Args: { ean: string }; Returns: boolean }
+      log_security_event: {
+        Args: {
+          p_details?: Json
+          p_entity_id?: string
+          p_entity_type?: string
+          p_event_type: string
+          p_severity?: string
+        }
+        Returns: string
+      }
       merge_duplicate_analyses_by_ean: {
         Args: { p_user_id: string }
         Returns: Json

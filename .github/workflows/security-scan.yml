@@ -1,0 +1,139 @@
+name: Security Vulnerability Scan
+
+on:
+  schedule:
+    # Run every Monday at 2 AM UTC
+    - cron: '0 2 * * 1'
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          npm audit --audit-level=moderate --json > audit-results.json || true
+          cat audit-results.json
+        continue-on-error: true
+
+      - name: Check for high/critical vulnerabilities
+        id: check-vulns
+        run: |
+          HIGH_COUNT=$(jq '.metadata.vulnerabilities.high // 0' audit-results.json)
+          CRITICAL_COUNT=$(jq '.metadata.vulnerabilities.critical // 0' audit-results.json)
+          
+          echo "High vulnerabilities: $HIGH_COUNT"
+          echo "Critical vulnerabilities: $CRITICAL_COUNT"
+          
+          if [ "$CRITICAL_COUNT" -gt 0 ]; then
+            echo "::error::Found $CRITICAL_COUNT critical vulnerabilities!"
+            exit 1
+          fi
+          
+          if [ "$HIGH_COUNT" -gt 5 ]; then
+            echo "::warning::Found $HIGH_COUNT high-severity vulnerabilities (threshold: 5)"
+          fi
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+      - name: Create Issue on Critical Vulnerabilities
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const audit = JSON.parse(fs.readFileSync('audit-results.json', 'utf8'));
+            const critical = audit.metadata.vulnerabilities.critical || 0;
+            const high = audit.metadata.vulnerabilities.high || 0;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Critical Security Vulnerabilities Detected`,
+              body: `## Security Scan Results
+              
+**Critical vulnerabilities:** ${critical}
+**High-severity vulnerabilities:** ${high}
+
+Please run \`npm audit fix\` to address these issues.
+
+View full report in [Actions](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+              labels: ['security', 'critical']
+            });
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Severity | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Critical | $(jq '.metadata.vulnerabilities.critical // 0' audit-results.json) |" >> $GITHUB_STEP_SUMMARY
+          echo "| High | $(jq '.metadata.vulnerabilities.high // 0' audit-results.json) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Moderate | $(jq '.metadata.vulnerabilities.moderate // 0' audit-results.json) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Low | $(jq '.metadata.vulnerabilities.low // 0' audit-results.json) |" >> $GITHUB_STEP_SUMMARY
+
+  supabase-functions-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Scan Edge Functions
+        run: |
+          echo "## Edge Functions Security Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check for common security issues in edge functions
+          if grep -r "SUPABASE_SERVICE_ROLE_KEY" supabase/functions/*/index.ts 2>/dev/null; then
+            echo "✅ Service role key usage detected (ensure proper access control)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if grep -r "console.log.*password\|console.log.*secret\|console.log.*key" supabase/functions/*/index.ts 2>/dev/null; then
+            echo "⚠️ WARNING: Potential sensitive data logging detected!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ No sensitive data logging detected" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check for hardcoded secrets (basic pattern matching)
+          if grep -rE "(api_key|apikey|secret|password|token).*=.*['\"][a-zA-Z0-9]{20,}['\"]" supabase/functions/ 2>/dev/null; then
+            echo "⚠️ WARNING: Potential hardcoded secrets detected!" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ No hardcoded secrets detected" >> $GITHUB_STEP_SUMMARY
+          fi
