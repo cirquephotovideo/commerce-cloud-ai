@@ -39,12 +39,16 @@ serve(async (req) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysBack);
 
-    // Fetch analyses from the period
+    // ✅ OPTIMIZED: Fetch only necessary columns with limit to prevent timeout
+    // For quality metrics, sample recent data instead of loading everything
+    const sampleSize = Math.min(5000, daysBack * 1000); // Max 5k products or 1k/day
+    
     const { data: analyses, error } = await supabase
       .from('product_analyses')
-      .select('*')
+      .select('id, created_at, updated_at, analysis_result')
       .gte('created_at', startDate.toISOString())
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(sampleSize);
 
     if (error) throw error;
 
@@ -178,7 +182,19 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error generating quality report:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
+    
+    // Better error handling with details
+    const errorDetails = {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      hint: (error as any)?.hint,
+      details: (error as any)?.details
+    };
+    
+    return new Response(JSON.stringify({ 
+      error: 'Failed to generate quality report',
+      details: errorDetails
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
