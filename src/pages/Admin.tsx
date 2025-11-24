@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImportMetricsDashboard } from "@/components/admin/ImportMetricsDashboard";
 import { DeadLetterQueueManager } from "@/components/admin/DeadLetterQueueManager";
-import { Shield, Activity, AlertTriangle } from "lucide-react";
+import { MaterializedViewRefresh } from "@/components/admin/MaterializedViewRefresh";
+import { Shield, Activity, AlertTriangle, Database } from "lucide-react";
 
 export default function Admin() {
   return (
@@ -17,7 +18,7 @@ export default function Admin() {
       </div>
 
       <Tabs defaultValue="metrics" className="space-y-6">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="metrics" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             Metrics
@@ -25,6 +26,10 @@ export default function Admin() {
           <TabsTrigger value="dlq" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             DLQ
+          </TabsTrigger>
+          <TabsTrigger value="database" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            Database
           </TabsTrigger>
         </TabsList>
 
@@ -34,6 +39,10 @@ export default function Admin() {
 
         <TabsContent value="dlq" className="space-y-6">
           <DeadLetterQueueManager />
+        </TabsContent>
+
+        <TabsContent value="database" className="space-y-6">
+          <MaterializedViewRefresh />
         </TabsContent>
       </Tabs>
     </div>
