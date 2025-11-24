@@ -34,6 +34,7 @@ import MCPChat from "./pages/MCPChat";
 import GlobalSearch from "./pages/GlobalSearch";
 import AdminGeminiUsage from "./pages/AdminGeminiUsage";
 import AdminMCPLogs from "./pages/AdminMCPLogs";
+import Admin from "./pages/Admin";
 import { TrialStatus } from "./components/TrialStatus";
 import { TrialExpiredModal } from "./components/TrialExpiredModal";
 import { useSubscription } from "./contexts/SubscriptionContext";
@@ -88,6 +89,7 @@ const App = () => {
         <Route path="/admin/quality" element={<AdminRoute><DashboardLayout><AdminQuality /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/gemini-usage" element={<AdminRoute><DashboardLayout><AdminGeminiUsage /></DashboardLayout></AdminRoute>} />
         <Route path="/admin/mcp-logs" element={<AdminRoute><DashboardLayout><AdminMCPLogs /></DashboardLayout></AdminRoute>} />
+        <Route path="/admin/monitoring" element={<AdminRoute><DashboardLayout><Admin /></DashboardLayout></AdminRoute>} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
